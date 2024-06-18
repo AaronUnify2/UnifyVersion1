@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Money Lending Agreement</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .section {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #f9f9f9;
+        }
+        .section-title {
+            display: flex;
+            justify-content: space-between;
+            cursor: pointer;
+            padding: 10px;
+            background-color: #e9e9e9;
+            border-bottom: 1px solid #ccc;
+            font-weight: bold;
+        }
+        .form-container {
+            display: none;
+            padding: 10px;
+        }
+        .form-container.active {
+            display: block;
+        }
+        .form-container label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .form-container input[type="text"], 
+        .form-container input[type="number"], 
+        .form-container input[type="date"], 
+        .form-container select,
+        .form-container textarea {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+        .form-container button {
+            padding: 10px;
+            color: white;
+            background-color: #4CAF50;
+            border: none;
+            cursor: pointer;
+        }
+        .contract-preview {
+            display: none;
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #fff;
+        }
+        .signature-pad {
+            border: 1px solid #ccc;
+            margin-bottom: 10px;
+            width: 100%;
+            height: 200px;
+            box-sizing: border-box;
+            background-color: #f0f0f0; /* Very light grey color */
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@2.3.2/dist/signature_pad.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.section-title').forEach(sectionTitle => {
+                sectionTitle.addEventListener('click', () => {
+                    const formContainer = sectionTitle.nextElementSibling;
+                    formContainer.classList.toggle('active');
+                    const arrow = sectionTitle.querySelector('span:last-child');
+                    arrow.innerHTML = formContainer.classList.contains('active') ? '&#9650;' : '&#9654;';
+                });
+            });
+
+            const signaturePads = {
+                lender: new SignaturePad(document.getElementById('lenderSignaturePad')),
+                borrower: new SignaturePad(document.getElementById('borrowerSignaturePad')),
+                guarantor: new SignaturePad(document.getElementById('guarantorSignaturePad')),
+                witness: new SignaturePad(document.getElementById('witnessSignaturePad')) // Added witness signature pad
+            };
+
+            function clearSignature(type) {
+                signaturePads[type].clear();
+            }
+
+            document.getElementById('generatePDFReview').addEventListener('click', function() {
+                generatePDF();
+            });
+
+            document.getElementById('generatePDFSignature').addEventListener('click', function() {
+                generatePDF();
+            });
+
+            function generatePDF() {
+                var previewDiv = document.getElementById('contractPreview');
+                previewDiv.style.display = 'block';
+
+                // Populate the contract preview with user inputs
+                document.getElementById('previewLenderName').textContent = document.getElementById('lenderName').value;
+                document.getElementById('previewLenderContact').textContent = document.getElementById('lenderContact').value;
+                document.getElementById('previewLenderAddress').textContent = document.getElementById('lenderAddress').value;
+                document.getElementById('previewBorrowerName').textContent = document.getElementById('borrowerName').value;
+                document.getElementById('previewBorrowerContact').textContent = document.getElementById('borrowerContact').value;
+                document.getElementById('previewBorrowerAddress').textContent = document.getElementById('borrowerAddress').value;
+                document.getElementById('previewLoanTransferDate').textContent = document.getElementById('loanTransferDate').value;
+                document.getElementById('previewFirstPaymentDate').textContent = document.getElementById('firstPaymentDate').value;
+                document.getElementById('previewLastPaymentDate').textContent = document.getElementById('lastPaymentDate').value;
+                document.getElementById('previewRepaymentType').textContent = document.getElementById('repaymentType').value;
+                document.getElementById('previewNumRepayments').textContent = document.getElementById('numRepayments').value;
+                document.getElementById('previewRepaymentValue').textContent = document.getElementById('repaymentValue').value;
+                document.getElementById('previewLoanAmount').textContent = document.getElementById('loanAmount').value;
+                document.getElementById('previewInterestRate').textContent = document.getElementById('interestRate').value;
+                document.getElementById('previewTotalRepayment').textContent = document.getElementById('totalRepayment').value;
+                document.getElementById('previewCollateralDescription').textContent = document.getElementById('collateralDescription').value;
+                document.getElementById('previewCollateralTransfer').textContent = document.getElementById('collateralTransfer').value;
+                document.getElementById('previewCollateralCondition').textContent = document.getElementById('collateralCondition').value;
+                document.getElementById('previewMissedPayment').textContent = document.getElementById('missedPayments').value;
+                document.getElementById('previewSignatureLenderName').textContent = document.getElementById('signatureLenderName').value;
+                document.getElementById('previewSignatureBorrowerName').textContent = document.getElementById('signatureBorrowerName').value;
+                document.getElementById('previewSignatureGuarantorName').textContent = document.getElementById('signatureGuarantorName').value;
+                document.getElementById('previewGuarantorEmail').textContent = document.getElementById('guarantorEmail').value;
+                document.getElementById('previewWitnessName').textContent = document.getElementById('witnessName').value;
+                document.getElementById('previewWitnessEmail').textContent = document.getElementById('witnessEmail').value;
+
+                var lenderSignature = signaturePads.lender.toDataURL();
+                var borrowerSignature = signaturePads.borrower.toDataURL();
+                var guarantorSignature = signaturePads.guarantor.toDataURL();
+                var witnessSignature = signaturePads.witness.toDataURL(); // Added witness signature
+
+                document.getElementById('previewLenderSignature').src = lenderSignature;
+                document.getElementById('previewBorrowerSignature').src = borrowerSignature;
+                document.getElementById('previewGuarantorSignature').src = guarantorSignature;
+                document.getElementById('previewWitnessSignature').src = witnessSignature; // Display witness signature
+
+                printContractPreview();
+            }
+
+            function printContractPreview() {
+                var printContents = document.getElementById('contractPreview').outerHTML;
+                var originalContents = document.body.innerHTML;
+                var printWindow = window.open('', '', 'height=600,width=800');
+                printWindow.document.write('<html><head><title>Print Contract</title>');
+                printWindow.document.write('</head><body>');
+                printWindow.document.write(printContents);
+                printWindow.document.write('</body></html>');
+                printWindow.document.close();
+                printWindow.print();
+                document.getElementById('contractPreview').style.display = 'none';
+            }
+
+            document.querySelectorAll('.form-container button[onclick*="clearSignature"]').forEach(button => {
+                button.addEventListener('click', function() {
+                    const type = button.getAttribute('onclick').match(/clearSignature\('(\w+)'\)/)[1];
+                    clearSignature(type);
+                });
+            });
+        });
+    </script>
+</head>
+<body>
+
+<div class="section">
+    <div class="section-title">
+        <span>1. Contact Details for Both Parties</span>
+        <span>&#9654;</span>
+    </div>
+    <div class="form-container">
+        <label>Lender Name: <input type="text" id="lenderName"></label>
+        <label>Lender Address: <input type="text" id="lenderAddress"></label>
+        <label>Lender Contact #/Email: <input type="text" id="lenderContact"></label>
+        <hr>
+        <label>Borrower Name: <input type="text" id="borrowerName"></label>
+        <label>Borrower Address: <input type="text" id="borrowerAddress"></label>
+        <label>Borrower Contact #/Email: <input type="text" id="borrowerContact"></label>
+        <hr>
+    </div>
+</div>
+
+<div class="section">
+    <div class="section-title">
+        <span>2. Details for Loan</span>
+        <span>&#9654;</span>
+    </div>
+    <div class="form-container">
+        <label>Loan Amount ($): <input type="number" id="loanAmount"></label>
+        <label>Interest Rate (%): <input type="number" id="interestRate"></label>
+        <label>Total Repayment ($): <input type="number" id="totalRepayment"></label>
+        <hr>
+        <label>Repayment Type: 
+            <select id="repaymentType">
+                <option>Lump Sum</option>
+                <option>Weekly</option>
+                <option>Monthly</option>
+                <option>Annual</option>
+            </select>
+        </label>
+        <label>Date of Loan Transfer: <input type="date" id="loanTransferDate"></label>
+        <label>Date of First Payment: <input type="date" id="firstPaymentDate"></label>
+        <label>Date of Last Payment: <input type="date" id="lastPaymentDate"></label>
+        <label>Number of Repayments: <input type="number" id="numRepayments"></label>
+        <label>Repayment Value ($): <input type="number" id="repaymentValue"></label>
+        <hr>
+    </div>
+</div>
+
+<div class="section">
+    <div class="section-title">
+        <span>3. Details for Collateral</span>
+        <span>&#9654;</span>
+    </div>
+    <div class="form-container">
+        <label>Is possession of the capital to be transferred on the start date of the loan or in the event of a missed payment?
+            <select id="collateralTransfer">
+                <option value="Possession of the collateral is to be transferred from the Borrower to the Lender upon the initial transfer of the loan amount">Start Date</option>
+                <option value="Possession of the collateral is to be transferred from the Borrower to the Lender with ownership upon the specified number of missed payments">Missed Payment</option>
+            </select>
+        </label>
+        <label>Description of Collateral: <textarea id="collateralDescription"></textarea></label>
+        <label>Condition of Capital until loan conclusion: <textarea id="collateralCondition"></textarea></label>
+        <label>Ownership of the collateral is transferred after how many missed payments? <input type="number" id="missedPayments"></label>
+        <hr>
+    </div>
+</div>
+
+<div class="section">
+    <div class="section-title">
+        <span>4. Guarantor Details</span>
+        <span>&#9654;</span>
+    </div>
+    <div class="form-container">
+        <label>Is there a guarantor for the loan?
+            <select id="hasGuarantor">
+                <option>Yes</option>
+                <option>No</option>
+            </select>
+        </label>
+        <hr>
+        <label>Guarantor Name: <input type="text" id="guarantorName"></label>
+        <label>Guarantor Address: <input type="text" id="guarantorAddress"></label>
+        <label>Guarantor Contact: <input type="text" id="guarantorEmail"></label>
+        <hr>
+    </div>
+</div>
+
+<div class="section">
+    <div class="section-title">
+        <span>5. Review Contract</span>
+        <span>&#9654;</span>
+    </div>
+    <div class="form-container">
+        <button id="generatePDFReview">Generate PDF</button>
+        <hr>
+    </div>
+</div>
+
+<div class="section">
+    <div class="section-title">
+        <span>6. Signature</span>
+        <span>&#9654;</span>
+    </div>
+    <div class="form-container">
+        <label>Lender Name: <input type="text" id="signatureLenderName"></label>
+        <canvas class="signature-pad" id="lenderSignaturePad"></canvas>
+        <button onclick="clearSignature('lender')">Clear Signature</button>
+        <hr>
+        <label>Borrower Name: <input type="text" id="signatureBorrowerName"></label>
+        <canvas class="signature-pad" id="borrowerSignaturePad"></canvas>
+        <button onclick="clearSignature('borrower')">Clear Signature</button>
+        <hr>
+        <label>Guarantor Name: <input type="text" id="signatureGuarantorName"></label>
+        <canvas class="signature-pad" id="guarantorSignaturePad"></canvas>
+        <button onclick="clearSignature('guarantor')">Clear Signature</button>
+        <hr>
+        <label>Witness Name: <input type="text" id="witnessName"></label>
+        <label>Witness Email/#: <input type="text" id="witnessEmail"></label>
+        <canvas class="signature-pad" id="witnessSignaturePad"></canvas> <!-- Added witness signature pad -->
+        <button onclick="clearSignature('witness')">Clear Signature</button>
+      <br><br>  <button id="generatePDFSignature">Generate PDF</button>
+    </div>
+</div>
+
+<div class="contract-preview" id="contractPreview">
+    <h1 style="text-align: center;">Unify - Contracts</h1>
+    <h2 style="text-align: center;">Money Lending Agreement</h2>
+    <p>
+        I. ACKNOWLEDGMENT<br>
+        The Lender (<span id="previewLenderName"></span>) agrees to lend to the Borrower (<span id="previewBorrowerName"></span>) under these terms. The Borrower acknowledges the total repayment amount including interest defined in this contract.
+    </p>
+    <p>
+        II. PAYMENT PLAN<br>
+        The full loan amount will be transferred by the Lender to the Borrower by <span id="previewLoanTransferDate"></span>. Payments will be made via cash or bank transfer. If payments are made via cash, it is the responsibility of the Borrower to record evidence of the payment.
+    </p>
+    <p>
+        The first payment will be paid on <span id="previewFirstPaymentDate"></span>. The final payment will be paid on <span id="previewLastPaymentDate"></span>. The Loan is to be repaid <span id="previewRepaymentType"></span>. The total number of repayments is <span id="previewNumRepayments"></span>. The value of each repayment is $<span id="previewRepaymentValue"></span>.
+    </p>
+    <p>
+        III. PROMISE TO PAY<br>
+        The Borrower promises to pay the Lender $<span id="previewLoanAmount"></span> and <span id="previewInterestRate"></span>% interest within the established timeframe of the loan. This will result in a total transfer from the Borrower to the Lender of $<span id="previewTotalRepayment"></span>.
+    </p>
+    <p>
+        IV. LATE CHARGES<br>
+        Late charges of 5% will be applied for any late payments at the discretion of the Lender. 5 days after the payment due date will be considered as late.
+    </p>
+    <p>
+        V. SECURITY / COLLATERAL<br>
+        For security and protection of the Lender, the Borrower gives the following security interest or mortgage:<br><br>
+        <span id="previewCollateralDescription"></span>
+    </p>
+    <p>
+        <span id="previewCollateralTransfer"></span>. If the collateral is in the possession of the Lender, possession is to be transferred from the Lender to the Borrower upon receiving the total payment of the loan.
+        <br><br>
+        In the event of missed payments, ownership of the collateral is to be transferred from the Borrower to the Lender in the event of <span id="previewMissedPayment"></span> missed payments. Upon the Lender receiving ownership and possession of the collateral, the loan is considered repaid, and the contract is concluded.
+    </p>
+    <p>
+        Until the conclusion of the loan, the person with possession of the collateral agrees to be responsible to keep the collateral in the following condition:<br><br>
+        <span id="previewCollateralCondition"></span>
+    </p>
+    <p>
+        VI. DEFAULT<br>
+        The following instances indicate default of this Loan Agreement, which means the remaining balance should be paid immediately; otherwise, ownership of the collateral transfers to the Lender:
+    </p>
+    <p>
+        (a) If the Borrower fails to pay by the due date;<br>
+        (b) Borrower's inability to pay debts;<br>
+        (c) The Borrower is deceased or incompetent;<br>
+        (d) The Borrower is filing for bankruptcy;
+    </p>
+    <p>
+        In the event that the Borrower defaults on the loan and the guarantor pays the remaining balance of the loan within the repayment date, ownership of the collateral cannot be claimed by the Lender.
+    </p>
+    <p>
+        VII. AMENDMENT<br>
+        This loan agreement can only be changed or modified through the written consent of both parties.
+    </p>
+    <p>
+        VIII. GOVERNING LAW<br>
+        This agreement shall be governed under the laws of the residing state and nation of the Lender.
+    </p>
+    <p>
+        IX. OWNERSHIP<br>
+        This Loan Agreement is not transferable without the written consent of both parties.
+    </p>
+    <p>
+        X. SIGNED<br>
+        Lender:<span id="previewSignatureLenderName"></span>
+        <br>
+        Contact #/Email: <span id="previewLenderContact"></span><br>
+        Address: <span id="previewLenderAddress"></span><br>
+         (Signature)<br>
+        <img id="previewLenderSignature" alt="Lender Signature"><br>
+    </p>
+    <p>
+        Borrower:<span id="previewSignatureBorrowerName"></span><br>
+        Contact #/Email: <span id="previewBorrowerContact"></span><br>
+        Address: <span id="previewBorrowerAddress"></span><br>
+         (Signature)<br>
+        <img id="previewBorrowerSignature" alt="Borrower Signature"><br>
+    </p>
+    <p>
+        Guarantor:<span id="previewSignatureGuarantorName"></span><br>
+        Contact #/Email: <span id="previewGuarantorEmail"></span><br>
+         (Signature)<br>
+        <img id="previewGuarantorSignature" alt="Guarantor Signature"><br>
+    </p>
+    <p>
+        Witness:<span id="previewWitnessName"></span><br>
+        Contact #/Email: <span id="previewWitnessEmail"></span><br>
+        <img id="previewWitnessSignature" alt="Witness Signature"><br>
+    </p>
+</div>
+
+</body>
+</html>
