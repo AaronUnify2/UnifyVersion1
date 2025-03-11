@@ -1,0 +1,4445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Brick Breaker - With Terrain and Jumps</title>
+
+ <style>
+    #gameContainer {
+        position: relative;
+        width: 95%;
+        height: 85vh;
+        margin: 20px auto;
+        border: 2px solid #444;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    }
+    canvas { 
+        display: block; 
+        width: 100%; 
+        height: 100%; 
+    }    
+
+   body { margin: 0; overflow: hidden; touch-action: none; background-color: #000033; }
+        
+        #score { 
+            position: absolute; 
+            top: 10px; 
+            left: 10px; 
+            color: white; 
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            z-index: 10;
+        }
+        #cash {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #33cc33;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            z-index: 10;
+        }
+        #instructions {
+            position: absolute;
+            top: 40px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            z-index: 10;
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 36px;
+            display: none;
+            text-align: center;
+            z-index: 10;
+        }
+        #startButton {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            display: none;
+            z-index: 10;
+        }
+        #launchButton {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 30px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 100;
+            user-select: none;
+        }
+        #levelSelector {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #levelSelector select {
+            padding: 5px;
+            border-radius: 5px;
+        }
+        /* New pause button styles */
+        #pauseButton {
+            position: absolute;
+            top: 10px;
+            right: 120px;
+            background-color: #555;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 10px;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #pauseButton:hover {
+            background-color: #777;
+        }
+        /* Pause overlay styles */
+        #pauseOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 50, 0.7);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        #pauseOverlay h2 {
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        #resumeButton {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        #resumeButton:hover {
+            background-color: #45a049;
+        }
+        /* Pause icon styles */
+        .pause-icon {
+            width: 12px;
+            height: 14px;
+            position: relative;
+            margin-right: 5px;
+        }
+        .pause-icon::before, .pause-icon::after {
+            content: '';
+            position: absolute;
+            background-color: white;
+            width: 4px;
+            height: 14px;
+        }
+        .pause-icon::before {
+            left: 0;
+        }
+        .pause-icon::after {
+            right: 0;
+        }
+        /* Play icon styles for when game is paused */
+        .play-icon {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 7px 0 7px 12px;
+            border-color: transparent transparent transparent white;
+            margin-right: 5px;
+        }
+        
+        /* Store styles */
+        #storeContainer {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 20;
+            background-color: rgba(0, 0, 50, 0.7);
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 90%;
+        }
+        
+        .store-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            padding: 5px;
+            border: 1px solid #666;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .store-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            border-color: #aaa;
+        }
+        
+        .store-item-disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .store-item-disabled:hover {
+            transform: none;
+            box-shadow: none;
+            border-color: #666;
+        }
+        
+        .item-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 5px;
+        }
+        
+        .item-cost {
+            color: #33cc33;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .item-name {
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            text-align: center;
+        }
+        
+        .notification {
+            position: absolute;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 0 5px black;
+            opacity: 1;
+            transition: opacity 1s, transform 1s;
+            z-index: 100;
+            pointer-events: none;
+        }
+        
+        /* Responsive store adjustments */
+        @media (max-width: 600px) {
+            #storeContainer {
+                bottom: 70px;
+                padding: 8px;
+            }
+            
+            .item-icon {
+                width: 30px;
+                height: 30px;
+            }
+            
+            .item-cost {
+                font-size: 12px;
+            }
+            
+            .item-name {
+                font-size: 10px;
+            }
+        }
+        
+        /* Speedometer styles */
+        #speedometer {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+        
+        /* Jump meter styles */
+        #jumpMeter {
+            position: absolute;
+            bottom: 60px;
+            right: 20px;
+            width: 100px;
+            height: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            overflow: hidden;
+            z-index: 100;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        #jumpMeterFill {
+            height: 100%;
+            width: 100%;
+            background-color: #4CAF50;
+            transition: width 0.3s, background-color 0.3s;
+        }
+        
+        /* Jump button styles */
+        #jumpButton {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 30px;
+            font-size: 20px;
+            font-weight: bold;
+            background-color: #FF6600;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 100;
+            box-shadow: 0 0 15px rgba(255, 102, 0, 0.5);
+            transition: all 0.2s ease;
+        }
+        
+        #jumpButton:hover {
+            background-color: #FF8833;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 102, 0, 0.7);
+        }
+        
+        #jumpButton:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 10px rgba(255, 102, 0, 0.6);
+        }
+        
+        /* Jump cooldown indicator */
+        .jump-cooldown {
+            opacity: 0.5;
+            cursor: not-allowed !important;
+        }
+        
+        /* Jump effect for the button when activated */
+        @keyframes jumpPulse {
+            0% { transform: scale(1); box-shadow: 0 0 15px rgba(255, 102, 0, 0.5); }
+            50% { transform: scale(1.1); box-shadow: 0 0 20px rgba(255, 102, 0, 0.8); }
+            100% { transform: scale(1); box-shadow: 0 0 15px rgba(255, 102, 0, 0.5); }
+        }
+        
+        .jumping {
+            animation: jumpPulse 0.5s infinite;
+            background-color: #FF9933 !important;
+        }
+        
+        /* 3D game UI adjustments */
+        #launchButton {
+            background-color: #ff6600;
+            box-shadow: 0 0 15px #ff9933;
+            animation: pulse 1.5s infinite alternate;
+        }
+        
+        @keyframes pulse {
+            0% { transform: translateX(-50%) scale(1); }
+            100% { transform: translateX(-50%) scale(1.1); }
+        }
+        
+        #score, #cash {
+            background-color: rgba(0, 0, 50, 0.7);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.7);
+        }
+        
+        /* Speedometer for visual feedback */
+        #speedometer {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 80px;
+            height: 40px;
+            background-color: rgba(0, 0, 50, 0.7);
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            z-index: 10;
+        }
+        
+        .speed-bar {
+            width: 70px;
+            height: 10px;
+            background-color: #333;
+            border-radius: 5px;
+            margin-top: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .speed-value {
+            height: 100%;
+            background-color: #00ff00;
+            width: 30%;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+
+    <div id="score">Score: 0</div>
+    <div id="cash">Cash: $3</div>
+    <div id="levelSelector">
+        <span>Level:</span>
+        <select id="levelSelect">
+            <option value="1">Level 1</option>
+            <option value="2">Level 2</option>
+            <option value="3">Level 3</option>
+        </select>
+    </div>
+    <button id="pauseButton"><span class="pause-icon"></span>Pause</button>
+    
+    <div id="gameOver">Game Over</div>
+    <button id="startButton">Restart Game</button>
+    <button id="launchButton">TAP TO LAUNCH</button>
+    
+    <!-- New terrain-related UI elements -->
+    <div id="speedometer">Speed: 0</div>
+    <div id="jumpMeter">
+        <div id="jumpMeterFill"></div>
+    </div>
+    <button id="jumpButton">BOOST</button>
+    
+    <!-- Store container -->
+    <div id="storeContainer">
+        <div class="store-item" data-item="multiball" data-cost="3">
+            <div class="item-icon">
+                <svg width="32" height="32" viewBox="0 0 32 32">
+                    <circle cx="16" cy="16" r="10" fill="#00ffff" />
+                    <circle cx="10" cy="14" r="5" fill="#00cccc" />
+                    <circle cx="20" cy="12" r="4" fill="#00aaaa" />
+                </svg>
+            </div>
+            <div class="item-cost">$3</div>
+            <div class="item-name">Multiball</div>
+        </div>
+        
+        <div class="store-item" data-item="bomb" data-cost="5">
+            <div class="item-icon">
+                <svg width="32" height="32" viewBox="0 0 32 32">
+                    <circle cx="16" cy="16" r="10" fill="#ff3333" />
+                    <path d="M16 8 L16 12" stroke="black" stroke-width="2" />
+                    <path d="M12 12 L20 12" stroke="black" stroke-width="2" />
+                    <path d="M21 17 L24 14" stroke="#ffcc00" stroke-width="2" />
+                    <path d="M11 17 L8 14" stroke="#ffcc00" stroke-width="2" />
+                </svg>
+            </div>
+            <div class="item-cost">$5</div>
+            <div class="item-name">Bomb</div>
+        </div>
+        
+        <div class="store-item" data-item="tenball" data-cost="10">
+            <div class="item-icon">
+                <svg width="32" height="32" viewBox="0 0 32 32">
+                    <text x="7" y="20" font-family="Arial" font-size="10" fill="white">10x</text>
+                    <circle cx="16" cy="10" r="4" fill="#aa00ff" />
+                    <circle cx="22" cy="16" r="4" fill="#aa00ff" />
+                    <circle cx="10" cy="16" r="4" fill="#aa00ff" />
+                </svg>
+            </div>
+            <div class="item-cost">$10</div>
+            <div class="item-name">10x Ball</div>
+        </div>
+        
+        <!-- New turbo boost item -->
+        <div class="store-item" data-item="turbo" data-cost="7">
+            <div class="item-icon">
+                <svg width="32" height="32" viewBox="0 0 32 32">
+                    <path d="M5 16 L27 16" stroke="#ff9900" stroke-width="4" />
+                    <path d="M20 10 L27 16 L20 22" stroke="#ff9900" stroke-width="4" fill="none" />
+                    <path d="M5 12 L5 20" stroke="#ff9900" stroke-width="2" />
+                </svg>
+            </div>
+            <div class="item-cost">$7</div>
+            <div class="item-name">Turbo</div>
+        </div>
+    </div>
+    
+    <!-- Pause overlay -->
+    <div id="pauseOverlay">
+        <h2>GAME PAUSED</h2>
+        <button id="resumeButton">Resume Game</button>
+    </div>
+</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+
+// Game variables
+let scene, camera, renderer;
+let paddle, ball;
+let bricks = [];
+let powerups = [];
+let balls = [];
+let lasers = [];
+let paddleMultiballTimer = null;
+let remainingPaddleBalls = 0;
+let laserTimer = null;
+let activeLasers = 0;
+let paddleSpeed = 0.15;
+let ballSpeed = 0.08;
+let ballDirection = new THREE.Vector3(0.5, -1, 0).normalize();
+let score = 0;
+let cash = 3;
+let level = 1;
+let gameActive = true;
+let ballLaunched = false;
+let keysPressed = {};
+let touchX = 0;
+let launchButton;
+let isJumping = false;
+let jumpHeight = 0;
+let maxJumpHeight = 5;
+let jumpSpeed = 0.1;
+let jumpCooldown = false;
+let jumpMeterFill = null;
+let defaultPaddleY = 0; // Store the default paddle Y position
+let ballTracker = null; // Add a ball tracker object
+
+// Audio context for sound effects
+let audioContext;
+let fungusSpreadSound;
+let brickBreakSound;
+
+// Pause system variables
+let gamePaused = false;
+let animationFrameId = null;
+
+// Bomb queue system variables
+let bombQueue = [];
+let activeBomb = null;
+let totalBombsCollected = 0;
+let totalBricksDestroyedByBombs = 0;
+
+// Game boundaries - WILL BE DYNAMICALLY ADJUSTED BASED ON LEVEL
+let gameWidth = 32;
+let gameHeight = 32;
+let leftBound, rightBound, topBound, bottomBound;
+
+// 3D-specific variables
+let cameraPivot;
+let roadWidth;
+let roadMarkings = [];
+let road = null;
+let paddleDefaultZ;
+let paddleCollisionDepth = 0;
+
+// ASCII Level Design
+const brickSymbols = {
+    'R': { color: 0xff0000, points: 10 },  // Red
+    'O': { color: 0xff7700, points: 20 },  // Orange
+    'Y': { color: 0xffff00, points: 30 },  // Yellow
+    'G': { color: 0x00ff00, points: 40 },  // Green
+    'B': { color: 0x0077ff, points: 50 },  // Blue
+    'P': { color: 0xaa00ff, points: 60 },  // Purple
+    'W': { color: 0xffffff, points: 70 },  // White
+    'M': { color: 0xff00ff, points: 100 }, // Magenta (special brick)
+    'C': { color: 0x00ffff, points: 80 },  // Cyan
+    'X': { color: 0x888888, points: 0, indestructible: true }, // Gray (indestructible)
+    'F': { color: 0x33cc33, points: 150, fungus: true }, // Green fungus brick
+    'Z': { color: 0x8800bb, points: 200, phaze: true }, // Phaze brick - purple with blue tint
+    ' ': null  // Empty space (no brick)
+};
+
+// Pre-defined ASCII Levels (Optimized)
+const asciiLevels = [
+    // Level 1 - Classic rows with fungus bricks (reduced size and 80% less fungus bricks)
+    `
+RRRRRRRRRRRRRRRRRRR
+OOOOOOOOOOOOOOOOOOO
+RROORROYYYYYYYYYYO
+RROYORRROGGGGGGGGYO
+RROYGOYRROBBBBBBBGYO
+
+   RBPCYYYPCPBR
+   RBPCCCCCPBR
+   RBPPPPPPPBR
+   RRBBBBBBBR
+     RRBBBBR
+       RRBBR
+         RR
+`
+];
+
+// Initialize the game
+function init() {
+    // Scene setup
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000033);
+    
+    // Add fog for depth perception
+    scene.fog = new THREE.Fog(0x000033, 20, 100);
+    
+    // Get container dimensions for aspect ratio
+    const container = document.getElementById('gameContainer');
+    
+    // Create camera with perspective projection
+    camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+    
+    // Create a camera pivot that will be attached to the paddle later
+    cameraPivot = new THREE.Object3D();
+    scene.add(cameraPivot);
+
+    // Position the camera within the pivot to create the right viewpoint
+    // Adjusted for better visibility during jumps
+    camera.position.set(0, 5, 8); // Even higher and further back for a wider view
+    camera.lookAt(0, 0, -15); // Look further ahead
+    cameraPivot.add(camera);
+    
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+   
+    // Enhanced lighting for 3D environment
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(0, 10, 5);
+    scene.add(directionalLight);
+    
+    // Add spotlights for better visual cues
+    const spotLight = new THREE.SpotLight(0xaaaaff, 0.8);
+    spotLight.position.set(0, 10, 5);
+    spotLight.angle = Math.PI / 4;
+    spotLight.penumbra = 0.1;
+    spotLight.decay = 1;
+    spotLight.distance = 50;
+    scene.add(spotLight);
+    
+    // Setup game boundaries based on ASCII level
+    setupGameBoundaries();
+    
+    // Create 3D environment elements
+    createEnvironment();
+    
+    // Create the paddle with car-like features
+    createPaddle();
+    
+    // Create the main ball
+    createBall();
+    
+    // Create the ground/road
+    createRoad();
+    
+    // Create bricks based on ASCII layout
+    createBricks();
+    
+    // Event listeners
+    launchButton = document.getElementById('launchButton');
+    const startButton = document.getElementById('startButton');
+    const pauseButton = document.getElementById('pauseButton');
+    const resumeButton = document.getElementById('resumeButton');
+    const pauseOverlay = document.getElementById('pauseOverlay');
+    
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('resize', handleResize);
+    
+    renderer.domElement.addEventListener('touchstart', handleTouchStart, { passive: false });
+    renderer.domElement.addEventListener('touchmove', handleTouchMove, { passive: false });
+    renderer.domElement.addEventListener('touchend', handleTouchEnd, { passive: false });
+    
+    startButton.addEventListener('click', restartGame);
+    
+    // Pause button event listeners
+    pauseButton.addEventListener('click', togglePause);
+    resumeButton.addEventListener('click', resumeGame);
+    
+    launchButton.addEventListener('click', function(event) {
+        event.preventDefault();
+        launchBall();
+        return false;
+    });
+    
+    launchButton.addEventListener('touchstart', function(event) {
+        event.stopPropagation();
+    }, { passive: false });
+    
+    launchButton.addEventListener('touchend', function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        launchBall();
+        return false;
+    }, { passive: false });
+    
+    // Initialize store
+    initializeStore();
+    updateStoreItemAvailability();
+    
+    // Initial setup
+    score = 0;
+    cash = 3;
+    updateScore();
+    updateCash();
+    ballLaunched = false;
+    document.getElementById('gameOver').style.display = 'none';
+    document.getElementById('startButton').style.display = 'none';
+    document.getElementById('launchButton').style.display = 'block';
+    
+    // Initialize bomb queue system variables
+    bombQueue = [];
+    activeBomb = null;
+    totalBombsCollected = 0;
+    totalBricksDestroyedByBombs = 0;
+    
+    gameActive = true;
+    gamePaused = false;
+    
+    // Update UI for 3D mode
+    updateUIFor3D();
+    
+    // Initialize jump mechanics
+    initializeJumpMeter();
+    
+    // Initialize ball tracker
+    initBallTracker();
+    
+    // Add enhanced mobile controls
+    enhanceMobileControls();
+    
+    // Start animation loop
+    animate();
+    
+    // Initialize bomb queue system
+    integrateFullBombQueueSystem();
+    
+    // Initialize audio
+    initAudio();
+    
+    // Start the fungus animation
+    animateFungusBricks();
+    
+    // Start the phaze brick animation
+    animatePhazeBricks();
+}
+
+function setupGameBoundaries() {
+    const levelIndex = level - 1;
+    if (levelIndex < 0 || levelIndex >= asciiLevels.length) return;
+    
+    const asciiLevel = asciiLevels[levelIndex];
+    const rows = asciiLevel.trim().split('\n');
+    
+    // Calculate the width of the ASCII level based on the longest row
+    const maxRowLength = Math.max(...rows.map(row => row.length));
+    
+    // Calculate required game dimensions to fit all bricks
+    const brickWidth = 1.3;
+    const brickHeight = 0.8;
+    const spacing = 0.15;
+    
+    // Calculate minimum required width and height
+    const minRequiredWidth = maxRowLength * (brickWidth + spacing);
+    const minRequiredHeight = rows.length * (brickHeight + spacing) + 15; // Extra space for paddle
+    
+    // Set game dimensions with some padding
+    gameWidth = Math.max(32, minRequiredWidth + 10);
+    gameHeight = Math.max(32, minRequiredHeight + 10);
+    
+    // For 3D mode, we need to use different boundary calculations
+    // The "road" width is now the key factor
+    roadWidth = 20; // Width of the playable area ("road")
+    
+    // Set game boundaries - these are the invisible walls
+    leftBound = -roadWidth/2;
+    rightBound = roadWidth/2;
+    
+    // In 3D perspective, the top and bottom bounds are distances from the player
+    bottomBound = 0; // This is now the z-position closest to the player
+    topBound = 100; // This is the furthest visible z-position
+    
+    // Always keep paddle at a fixed distance from bottom
+    paddleDefaultZ = 0; // The z-position of the paddle
+    
+    console.log(`Level ${level} dimensions: ${gameWidth} x ${gameHeight}`);
+    console.log(`Game boundaries: L:${leftBound.toFixed(2)} R:${rightBound.toFixed(2)} T:${topBound.toFixed(2)} B:${bottomBound.toFixed(2)}`);
+}
+
+// First modify the createPaddle function to ensure the cameraPivot is correctly attached
+function createPaddle(customWidth) {
+    // Remove current paddle if it exists
+    if (paddle) {
+        // Store the cameraPivot before removing the paddle
+        scene.add(cameraPivot);
+        scene.remove(paddle);
+    }
+    
+    // Create a more car-like paddle
+    paddle = new THREE.Group(); // Use a group to hold all paddle parts
+    
+    // Create the main paddle body
+    const paddleWidth = customWidth || 3.5; // Use customWidth if provided, otherwise default
+    const paddleHeight = 0.5;
+    const paddleDepth = 1.5;
+    
+    const paddleGeometry = new THREE.BoxGeometry(paddleWidth, paddleHeight, paddleDepth);
+    const paddleMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0x00ff00,
+        shininess: 30
+    });
+    
+    const paddleBody = new THREE.Mesh(paddleGeometry, paddleMaterial);
+    paddle.add(paddleBody);
+    
+    // Add paddle details (car-like features)
+    // Windshield
+    const windshieldGeometry = new THREE.BoxGeometry(paddleWidth * 0.7, 0.4, 0.8);
+    const windshieldMaterial = new THREE.MeshPhongMaterial({
+        color: 0x88ccff,
+        transparent: true,
+        opacity: 0.7,
+        shininess: 90
+    });
+    const windshield = new THREE.Mesh(windshieldGeometry, windshieldMaterial);
+    windshield.position.set(0, paddleHeight/2 + 0.2, -0.2);
+    windshield.rotation.x = -Math.PI * 0.1;
+    paddle.add(windshield);
+    
+    // Headlights
+    const headlightGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+    const headlightMaterial = new THREE.MeshPhongMaterial({
+        color: 0xffffcc,
+        emissive: 0xffffaa,
+        shininess: 100
+    });
+    
+    const headlightLeft = new THREE.Mesh(headlightGeometry, headlightMaterial);
+    headlightLeft.position.set(-paddleWidth/2 + 0.3, 0, paddleDepth/2 - 0.1);
+    paddle.add(headlightLeft);
+    
+    const headlightRight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+    headlightRight.position.set(paddleWidth/2 - 0.3, 0, paddleDepth/2 - 0.1);
+    paddle.add(headlightRight);
+    
+    // Add actual light sources
+    const headlightLightLeft = new THREE.PointLight(0xffffcc, 0.5, 10);
+    headlightLightLeft.position.copy(headlightLeft.position);
+    paddle.add(headlightLightLeft);
+    
+    const headlightLightRight = new THREE.PointLight(0xffffcc, 0.5, 10);
+    headlightLightRight.position.copy(headlightRight.position);
+    paddle.add(headlightLightRight);
+    
+    // Position the paddle in 3D space
+    paddle.position.set(0, 0, paddleDefaultZ);
+    
+    // Add to scene
+    scene.add(paddle);
+    
+    // Attach the camera pivot to the paddle
+    paddle.add(cameraPivot);
+    
+    return paddle;
+}
+
+function createEnvironment() {
+    // Create a skybox
+    const skyboxGeometry = new THREE.BoxGeometry(500, 500, 500);
+    const skyboxMaterials = [
+        new THREE.MeshBasicMaterial({ color: 0x000022, side: THREE.BackSide }), // Right
+        new THREE.MeshBasicMaterial({ color: 0x000033, side: THREE.BackSide }), // Left
+        new THREE.MeshBasicMaterial({ color: 0x000066, side: THREE.BackSide }), // Top
+        new THREE.MeshBasicMaterial({ color: 0x000011, side: THREE.BackSide }), // Bottom
+        new THREE.MeshBasicMaterial({ color: 0x000055, side: THREE.BackSide }), // Front
+        new THREE.MeshBasicMaterial({ color: 0x000044, side: THREE.BackSide })  // Back
+    ];
+    const skybox = new THREE.Mesh(skyboxGeometry, skyboxMaterials);
+    scene.add(skybox);
+    
+    // Add distant mountains for horizon
+    createDistantMountains();
+    
+    // Add stars in the distance
+    createStars();
+}
+
+function createDistantMountains() {
+    const mountainGeometry = new THREE.BufferGeometry();
+    const mountainVertices = [];
+    const mountainColors = [];
+    
+    // Create multiple mountain shapes
+    for (let i = 0; i < 5; i++) {
+        const mountainWidth = 30 + Math.random() * 70;
+        const mountainHeight = 10 + Math.random() * 20;
+        const mountainX = -100 + Math.random() * 200;
+        const mountainZ = -topBound - 20 - Math.random() * 30;
+        
+        // Create mountain shape (triangle)
+        mountainVertices.push(
+            mountainX - mountainWidth/2, 0, mountainZ,
+            mountainX + mountainWidth/2, 0, mountainZ,
+            mountainX, mountainHeight, mountainZ
+        );
+        
+        // Add colors (dark blue/purple gradient)
+        const r = 0.1 + Math.random() * 0.1;
+        const g = 0.1 + Math.random() * 0.1;
+        const b = 0.2 + Math.random() * 0.3;
+        
+        mountainColors.push(
+            r, g, b,
+            r, g, b,
+            r * 1.5, g * 1.5, b * 1.2
+        );
+    }
+    
+    // Set geometry attributes
+    mountainGeometry.setAttribute('position', new THREE.Float32BufferAttribute(mountainVertices, 3));
+    mountainGeometry.setAttribute('color', new THREE.Float32BufferAttribute(mountainColors, 3));
+    
+    // Create mountain mesh
+    const mountainMaterial = new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        side: THREE.DoubleSide
+    });
+    
+    const mountains = new THREE.Mesh(mountainGeometry, mountainMaterial);
+    scene.add(mountains);
+}
+
+function createStars() {
+    const starsGeometry = new THREE.BufferGeometry();
+    const starVertices = [];
+    
+    // Create random stars
+    for (let i = 0; i < 1000; i++) {
+        const x = Math.random() * 400 - 200;
+        const y = Math.random() * 150;
+        const z = -topBound - 10 - Math.random() * 50;
+        
+        starVertices.push(x, y, z);
+    }
+    
+    starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+    
+    // Create star material
+    const starsMaterial = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.5,
+        transparent: true,
+        opacity: 0.8
+    });
+    
+    // Create stars mesh
+    const stars = new THREE.Points(starsGeometry, starsMaterial);
+    scene.add(stars);
+    
+    // Animate stars twinkling
+    const animateStars = () => {
+        if (gamePaused) {
+            requestAnimationFrame(animateStars);
+            return;
+        }
+        
+        starsMaterial.size = 0.3 + Math.sin(Date.now() * 0.001) * 0.2;
+        starsMaterial.opacity = 0.6 + Math.sin(Date.now() * 0.002) * 0.3;
+        
+        requestAnimationFrame(animateStars);
+    };
+    
+    animateStars();
+}
+
+function createRoad() {
+    // Remove existing road if any
+    if (road) scene.remove(road);
+    
+    // Create the road/ground - a long plane extending into the distance
+    const roadGeometry = new THREE.PlaneGeometry(roadWidth, topBound * 1.2);
+    const roadMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0x222266,
+        shininess: 10
+    });
+    
+    road = new THREE.Mesh(roadGeometry, roadMaterial);
+    road.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+    road.position.y = -0.5; // Position just below the paddle
+    road.position.z = -topBound / 2; // Center it in front of the player
+    
+    scene.add(road);
+    
+    // Add road markings for better depth perception
+    addRoadMarkings();
+    
+    // Add side barriers
+    addSideBarriers();
+}
+
+function addRoadMarkings() {
+    // Clear any existing markings
+    roadMarkings.forEach(marking => scene.remove(marking));
+    roadMarkings = [];
+    
+    // Create road center line
+    const lineCount = 20;
+    const lineLength = 2;
+    const lineGap = 2;
+    const lineWidth = 0.2;
+    
+    for (let i = 0; i < lineCount; i++) {
+        const lineGeometry = new THREE.PlaneGeometry(lineWidth, lineLength);
+        const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const line = new THREE.Mesh(lineGeometry, lineMaterial);
+        
+        line.rotation.x = -Math.PI / 2;
+        line.position.y = -0.49; // Just above the road
+        line.position.z = -(i * (lineLength + lineGap) + 5); // Position down the road
+        line.isCenterLine = true; // Tag for animation
+        
+        scene.add(line);
+        roadMarkings.push(line);
+    }
+    
+    // Add edge lines
+    const edgeLineLeft = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.3, topBound),
+        new THREE.MeshBasicMaterial({ color: 0xffff00 })
+    );
+    edgeLineLeft.rotation.x = -Math.PI / 2;
+    edgeLineLeft.position.x = leftBound + 0.5;
+    edgeLineLeft.position.y = -0.49;
+    edgeLineLeft.position.z = -topBound / 2;
+    scene.add(edgeLineLeft);
+    roadMarkings.push(edgeLineLeft);
+    
+    const edgeLineRight = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.3, topBound),
+        new THREE.MeshBasicMaterial({ color: 0xffff00 })
+    );
+    edgeLineRight.rotation.x = -Math.PI / 2;
+    edgeLineRight.position.x = rightBound - 0.5;
+    edgeLineRight.position.y = -0.49;
+    edgeLineRight.position.z = -topBound / 2;
+    scene.add(edgeLineRight);
+    roadMarkings.push(edgeLineRight);
+}
+
+function addSideBarriers() {
+    // Left barrier
+    const barrierLeftGeometry = new THREE.BoxGeometry(1, 1, topBound);
+    const barrierMaterial = new THREE.MeshPhongMaterial({ color: 0x444444 });
+    const barrierLeft = new THREE.Mesh(barrierLeftGeometry, barrierMaterial);
+    barrierLeft.position.x = leftBound - 0.5;
+    barrierLeft.position.y = 0;
+    barrierLeft.position.z = -topBound / 2;
+    scene.add(barrierLeft);
+    roadMarkings.push(barrierLeft);
+    
+    // Right barrier
+    const barrierRightGeometry = new THREE.BoxGeometry(1, 1, topBound);
+    const barrierRight = new THREE.Mesh(barrierRightGeometry, barrierMaterial);
+    barrierRight.position.x = rightBound + 0.5;
+    barrierRight.position.y = 0;
+    barrierRight.position.z = -topBound / 2;
+    scene.add(barrierRight);
+    roadMarkings.push(barrierRight);
+}function createBall() {
+    // Create the main ball
+    const ballGeometry = new THREE.SphereGeometry(0.4, 32, 32);
+    const ballMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xffffff,
+        shininess: 100
+    });
+    
+    ball = new THREE.Mesh(ballGeometry, ballMaterial);
+    
+    // Position the ball in front of the paddle
+    ball.position.set(0, 0.5, -2);
+    
+    // Set initial direction (will be updated on launch)
+    ball.direction = new THREE.Vector3(0.5, 0.2, -1).normalize();
+    
+    scene.add(ball);
+    balls = [ball]; // Store in the balls array
+    
+    return ball;
+}
+
+function addBallTrail(ball) {
+    ball.userData.hasTrail = true;
+    
+    // Initialize trail particles array
+    ball.userData.trailParticles = [];
+    
+    // Create update function for the trail
+    ball.userData.updateTrail = () => {
+        // Create a new trail particle
+        if (Math.random() < 0.5) { // Only create particles occasionally
+            const trailGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+            const trailMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.5
+            });
+            
+            const trail = new THREE.Mesh(trailGeometry, trailMaterial);
+            trail.position.copy(ball.position);
+            scene.add(trail);
+            
+            // Store creation time
+            trail.userData.creationTime = Date.now();
+            
+            // Add to trail particles array
+            ball.userData.trailParticles.push(trail);
+            
+            // Limit number of particles
+            if (ball.userData.trailParticles.length > 10) {
+                const oldestParticle = ball.userData.trailParticles.shift();
+                scene.remove(oldestParticle);
+            }
+        }
+        
+        // Update existing trail particles
+        ball.userData.trailParticles.forEach((particle, index) => {
+            const age = (Date.now() - particle.userData.creationTime) / 1000;
+            
+            // Fade out based on age
+            particle.material.opacity = Math.max(0, 0.5 - age);
+            
+            // Shrink based on age
+            const scale = Math.max(0.1, 1 - age);
+            particle.scale.set(scale, scale, scale);
+            
+            // Remove if completely faded
+            if (particle.material.opacity <= 0) {
+                scene.remove(particle);
+                ball.userData.trailParticles.splice(index, 1);
+            }
+        });
+    };
+}
+
+function createBricks() {
+    // Remove existing bricks
+    bricks.forEach(brick => scene.remove(brick));
+    bricks = [];
+    
+    // Get the ASCII layout for the current level
+    const levelIndex = level - 1;
+    if (levelIndex < 0 || levelIndex >= asciiLevels.length) return;
+    
+    const asciiLevel = asciiLevels[levelIndex];
+    const rows = asciiLevel.trim().split('\n');
+    
+    // Brick dimensions
+    const brickWidth = 1.3;
+    const brickHeight = 0.8;
+    const brickDepth = 0.5;
+    const spacing = 0.4;
+    
+    // In 3D perspective, we position the bricks in a curved wall formation up ahead
+    const rowCount = rows.length;
+    const horizSpacing = roadWidth / 20; // Horizontal spacing between bricks
+    
+    // Base position for the first row of bricks
+    const startZ = 15; // Distance from player
+    const brickStartY = 1; // Height off the ground
+    
+    // Calculate the width of each row based on the road width
+    const maxRowWidth = roadWidth * 0.8;
+    
+    console.log(`Creating bricks for level ${level}.`);
+    
+    // Create bricks based on ASCII layout
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+        const row = rows[rowIndex];
+        const rowLength = row.length;
+        
+        // Calculate position for this row
+        // Rows further back are positioned higher and farther
+        const rowZ = startZ + rowIndex * 1.5; // Each row is further back
+        const rowY = brickStartY + rowIndex * 0.4; // Each row is higher up
+        
+        // Calculate how wide this row should be (to create curved wall effect)
+        const rowWidth = Math.min(maxRowWidth, rowLength * (brickWidth + horizSpacing));
+        const startX = -rowWidth / 2;
+        
+        for (let colIndex = 0; colIndex < row.length; colIndex++) {
+            const symbol = row[colIndex];
+            
+            // Skip if the symbol is a space or not defined
+            if (symbol === ' ' || !brickSymbols[symbol]) continue;
+            
+            const brickInfo = brickSymbols[symbol];
+            
+            // Calculate x position with proper centering
+            const xPos = startX + colIndex * (brickWidth + horizSpacing);
+            
+            // Skip creating bricks that would be outside the road width
+            if (xPos < leftBound || xPos > rightBound) {
+                continue;
+            }
+            
+            // Special handling for phaze bricks
+            if (symbol === 'Z') {
+                const phazeBrick = createPhazeBrick(xPos, rowY, -rowZ);
+                scene.add(phazeBrick);
+                bricks.push(phazeBrick);
+                continue;
+            }
+            
+      // Normal brick creation
+            const brickGeometry = new THREE.BoxGeometry(brickWidth, brickHeight, brickDepth);
+            const brickMaterial = new THREE.MeshPhongMaterial({ 
+                color: brickInfo.color,
+                shininess: 50
+            });
+            const brick = new THREE.Mesh(brickGeometry, brickMaterial);
+            
+            // Position the brick in 3D space
+            brick.position.x = xPos;
+            brick.position.y = rowY;
+            brick.position.z = -rowZ; // Negative because we're looking down -Z axis
+            
+            // Add subtle rotation to face the player better
+            brick.rotation.x = Math.PI * 0.05;
+            
+            // Store brick properties in userData
+            brick.userData = {
+                points: brickInfo.points,
+                indestructible: brickInfo.indestructible || false,
+                fungus: brickInfo.fungus || false
+            };
+            
+            // Enhanced visual for fungus bricks
+            if (brickInfo.fungus) {
+                // Add a subtle glow effect
+                const glowMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x33ff33,
+                    transparent: true,
+                    opacity: 0.3
+                });
+                const glowMesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(brickWidth * 1.2, brickHeight * 1.2, brickDepth),
+                    glowMaterial
+                );
+                brick.add(glowMesh);
+                
+                // Add a spore pattern on the brick
+                const sporePatterns = [
+                    [-0.3, -0.2, 0.1],
+                    [0.2, 0.1, 0.1],
+                    [-0.1, 0.2, 0.1],
+                    [0.3, -0.1, 0.1]
+                ];
+                
+                sporePatterns.forEach(pattern => {
+                    const sporeGeometry = new THREE.SphereGeometry(pattern[2], 8, 8);
+                    const sporeMaterial = new THREE.MeshBasicMaterial({ color: 0x44ff44 });
+                    const spore = new THREE.Mesh(sporeGeometry, sporeMaterial);
+                    spore.position.set(pattern[0], pattern[1], brickDepth/2 + 0.01);
+                    brick.add(spore);
+                });
+            }
+            
+            scene.add(brick);
+            bricks.push(brick);
+        }
+    }
+    
+    console.log(`Created ${bricks.length} bricks for level ${level}`);
+}
+
+function createPhazeBrick(x, y, z) {
+    const brickWidth = 1.3;
+    const brickHeight = 0.8;
+    const brickDepth = 0.5;
+    
+    // Create the brick with initial phaze appearance
+    const brickGeometry = new THREE.BoxGeometry(brickWidth, brickHeight, brickDepth);
+    const brickMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0x8800bb,
+        transparent: true,
+        opacity: 0.9
+    });
+    
+    const brick = new THREE.Mesh(brickGeometry, brickMaterial);
+    brick.position.x = x;
+    brick.position.y = y;
+    brick.position.z = z;
+    
+    // Add subtle rotation to face the player better
+    brick.rotation.x = Math.PI * 0.05;
+    
+    // Set the initial state (0 = normal, 1 = ghost/transparent, 2 = indestructible)
+    brick.userData = {
+        points: 200,
+        phaze: true,
+        phazeState: 0,
+        hitCount: 0
+    };
+    
+    // Add visual effect for phaze brick
+    const glowMaterial = new THREE.MeshBasicMaterial({
+        color: 0xaa00ff,
+        transparent: true,
+        opacity: 0.2,
+        side: THREE.DoubleSide
+    });
+    
+    const glowMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(brickWidth * 1.1, brickHeight * 1.1, brickDepth * 1.2),
+        glowMaterial
+    );
+    
+    brick.add(glowMesh);
+    
+    // Add circular pattern on the brick to distinguish it
+    const patternMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.6
+    });
+    
+    // Add three small circles in a triangle pattern
+    const circleGeometry = new THREE.CircleGeometry(0.1, 16);
+    
+    const circle1 = new THREE.Mesh(circleGeometry, patternMaterial);
+    circle1.position.set(0, 0, 0.26);
+    circle1.rotation.x = -Math.PI * 0.05; // Counteract brick rotation
+    brick.add(circle1);
+    
+    const circle2 = new THREE.Mesh(circleGeometry, patternMaterial);
+    circle2.position.set(-0.3, 0, 0.26);
+    circle2.rotation.x = -Math.PI * 0.05;
+    brick.add(circle2);
+    
+    const circle3 = new THREE.Mesh(circleGeometry, patternMaterial);
+    circle3.position.set(0.3, 0, 0.26);
+    circle3.rotation.x = -Math.PI * 0.05;
+    brick.add(circle3);
+    
+    return brick;
+}
+
+function movePaddle() {
+    // Skip if game is paused
+    if (gamePaused) return;
+    
+    // Get paddle half width for boundary checking
+    const paddleHalfWidth = paddle.children[0].geometry.parameters.width / 2;
+    const paddleLeftLimit = leftBound + paddleHalfWidth;
+    const paddleRightLimit = rightBound - paddleHalfWidth;
+    
+    // Horizontal movement
+    if (keysPressed['ArrowLeft'] || keysPressed['a']) {
+        paddle.position.x -= paddleSpeed;
+        if (paddle.position.x < paddleLeftLimit) paddle.position.x = paddleLeftLimit;
+    }
+    if (keysPressed['ArrowRight'] || keysPressed['d']) {
+        paddle.position.x += paddleSpeed;
+        if (paddle.position.x > paddleRightLimit) paddle.position.x = paddleRightLimit;
+    }
+    
+    // Make paddle slightly tilt in the direction of movement
+    // for visual feedback
+    if (keysPressed['ArrowLeft'] || keysPressed['a']) {
+        // Tilt left (rotate around Z axis)
+        paddle.rotation.z = Math.min(paddle.rotation.z + 0.05, 0.15);
+    } else if (keysPressed['ArrowRight'] || keysPressed['d']) {
+        // Tilt right (negative rotation around Z axis)
+        paddle.rotation.z = Math.max(paddle.rotation.z - 0.05, -0.15);
+    } else if (paddle.rotation.z !== 0) {
+        // Return to neutral position
+        if (paddle.rotation.z > 0) {
+            paddle.rotation.z = Math.max(0, paddle.rotation.z - 0.03);
+        } else {
+            paddle.rotation.z = Math.min(0, paddle.rotation.z + 0.03);
+        }
+    }
+    
+    // If ball is not launched, it follows the paddle
+    if (!ballLaunched && balls.length > 0) {
+        balls[0].position.x = paddle.position.x;
+        balls[0].position.y = paddle.position.y + 0.5; // Just above paddle
+        balls[0].position.z = paddle.position.z - 2; // In front of paddle
+    }
+}
+
+// Add this to the movement logic
+function updateJump() {
+    if (!isJumping) return;
+    
+    if (jumpHeight < maxJumpHeight) {
+        // Calculate a gradually increasing speed for hover effect
+        // Start slower and gradually increase to create a boost feeling
+        const progress = jumpHeight / maxJumpHeight;
+        const accelerationCurve = 1 - Math.pow(1 - progress, 2); // Quadratic ease-in
+        const currentJumpSpeed = jumpSpeed * (0.3 + 0.7 * accelerationCurve);
+        
+        // Move paddle upward with the calculated speed
+        paddle.position.y += currentJumpSpeed;
+        jumpHeight += currentJumpSpeed;
+        
+        // Update camera pivot to follow
+        cameraPivot.position.y = jumpHeight;
+        
+        // Update jump meter
+        updateJumpMeter(progress);
+        
+        // If the ball is launched, check if we can hit it while jumping
+        if (ballLaunched && balls.length > 0) {
+            balls.forEach(ball => {
+                // If the ball is high above the player, try to hit it while jumping
+                if (ball.position.y > paddle.position.y + 1 && 
+                    ball.position.y < paddle.position.y + 3 &&
+                    Math.abs(ball.position.x - paddle.position.x) < 2 &&
+                    ball.position.z > paddle.position.z - 3 && 
+                    ball.position.z < paddle.position.z + 2) {
+                    
+                    // Create a "mid-air hit" effect
+                    const hitEffect = new THREE.PointLight(0xffffff, 1, 5);
+                    hitEffect.position.copy(ball.position);
+                    scene.add(hitEffect);
+                    
+                    // Bounce the ball with a slight upward angle
+                    const hitDirection = new THREE.Vector3(
+                        (ball.position.x - paddle.position.x) * 0.5,
+                        0.5, // Upward bounce
+                        -1  // Forward direction
+                    ).normalize();
+                    
+                    ball.direction.copy(hitDirection);
+                    
+                    // Fade out the hit effect
+                    setTimeout(() => {
+                        scene.remove(hitEffect);
+                    }, 200);
+                }
+            });
+        }
+    } else {
+        // End jump phase, start falling
+        isJumping = false;
+        startFalling();
+    }
+}
+
+function startFalling() {
+    // Start cooldown
+    jumpCooldown = true;
+    
+    // Update jump button to show cooldown
+    const jumpButton = document.getElementById('jumpButton');
+    if (jumpButton) {
+        jumpButton.classList.add('jump-cooldown');
+        jumpButton.textContent = 'COOLING';
+    }
+    
+    // Create a falling interval
+    const fallInterval = setInterval(() => {
+        if (gamePaused) return;
+        
+        // Move paddle downward
+        paddle.position.y -= jumpSpeed * 0.7;
+        
+        // Camera pivot is attached to paddle, so no need to update it separately
+        
+        // Check if we've returned to the ground
+        if (paddle.position.y <= defaultPaddleY) {
+            paddle.position.y = defaultPaddleY;
+            // No need to adjust cameraPivot.position.y as it will follow the paddle
+            clearInterval(fallInterval);
+            
+            // Add delay before allowing jump again
+            setTimeout(() => {
+                jumpCooldown = false;
+                updateJumpMeter(1); // Reset jump meter to full
+                
+                // Reset jump button appearance
+                if (jumpButton) {
+                    jumpButton.classList.remove('jump-cooldown');
+                    jumpButton.textContent = 'BOOST';
+                }
+            }, 500);
+        }
+    }, 16);
+}
+
+function moveBall() {
+    if (!ballLaunched) return;
+    
+    // Handle multiple balls
+    for (let i = balls.length - 1; i >= 0; i--) {
+        const currentBall = balls[i];
+        
+        // Move the ball based on its direction and speed
+        currentBall.position.x += currentBall.direction.x * ballSpeed;
+        currentBall.position.y += currentBall.direction.y * ballSpeed;
+        currentBall.position.z += currentBall.direction.z * ballSpeed;
+        
+        // Update ball trail if it has one
+        if (currentBall.userData.hasTrail && currentBall.userData.updateTrail) {
+            currentBall.userData.updateTrail();
+        }
+        
+        const ballRadius = 0.4;
+        
+        // Wall collisions (left/right boundaries)
+        if (currentBall.position.x > rightBound - ballRadius || currentBall.position.x < leftBound + ballRadius) {
+            currentBall.direction.x = -currentBall.direction.x;
+            // Correct position to prevent sticking to the wall
+            if (currentBall.position.x > rightBound - ballRadius) {
+                currentBall.position.x = rightBound - ballRadius;
+            } else if (currentBall.position.x < leftBound + ballRadius) {
+                currentBall.position.x = leftBound + ballRadius;
+            }
+        }
+        
+        // Floor/ceiling collisions
+        if (currentBall.position.y < -0.5 + ballRadius) {
+            // Bounce off the floor
+            currentBall.direction.y = -currentBall.direction.y;
+            currentBall.position.y = -0.5 + ballRadius;
+        } else if (currentBall.position.y > 10) {
+            // Bounce off an invisible ceiling
+            currentBall.direction.y = -currentBall.direction.y;
+        }
+        
+        // Forward/backward boundaries
+        if (currentBall.position.z < -topBound) {
+            // Bounce off the far wall
+            currentBall.direction.z = -currentBall.direction.z;
+            currentBall.position.z = -topBound;
+        }
+        
+        // Ball goes behind the paddle (player loses)
+        if (currentBall.position.z > 3) {
+            // For additional balls, just remove them
+            if (i > 0) {
+                scene.remove(currentBall);
+                balls.splice(i, 1);
+            } else if (balls.length === 1) {
+                // Only lose cash if it's the last ball
+                spendCash();
+            }
+            continue;
+        }
+        
+        // Paddle collision
+        if (checkPaddleCollision(currentBall)) {
+            // Ball hits the paddle - bounce it forward
+            const paddleHalfWidth = paddle.children[0].geometry.parameters.width / 2;
+            const hitPosition = (currentBall.position.x - paddle.position.x) / paddleHalfWidth;
+            
+            // Calculate new direction based on where ball hit the paddle
+            // Hit on center = straight forward, hit on sides = angle deflection
+            const deflectionX = hitPosition * 0.8; // X deflection based on hit position
+            const deflectionY = 0.2 + Math.random() * 0.1; // Slight upward bounce
+            const deflectionZ = -1; // Forward direction (negative Z)
+            
+            // Set the new direction and normalize it
+            currentBall.direction.set(deflectionX, deflectionY, deflectionZ);
+            currentBall.direction.normalize();
+            
+            // Move the ball slightly forward to prevent multiple collisions
+            currentBall.position.z = paddle.position.z - 1 - ballRadius;
+        }
+        
+        // Brick collisions
+        for (let j = 0; j < bricks.length; j++) {
+            const brick = bricks[j];
+            // Skip bricks that have already been hit
+            if (!brick.parent) continue;
+            
+            // Skip ghost phaze bricks - ball passes through
+            if (brick.userData.isGhost) continue;
+            
+            if (checkBrickCollision(currentBall, brick)) {
+                // Handle the collision
+                handleBrickCollision(currentBall, brick, j);
+                break; // Only handle one brick collision per frame
+            }
+        }
+    }
+}
+
+function checkPaddleCollision(ball) {
+    const paddleWidth = paddle.children[0].geometry.parameters.width;
+    const paddleHeight = paddle.children[0].geometry.parameters.height;
+    const paddleDepth = paddle.children[0].geometry.parameters.depth;
+    
+    // Calculate the bounds of the paddle
+    const paddleMinX = paddle.position.x - paddleWidth/2;
+    const paddleMaxX = paddle.position.x + paddleWidth/2;
+    const paddleMinY = paddle.position.y - paddleHeight/2;
+    const paddleMaxY = paddle.position.y + paddleHeight/2;
+    const paddleMinZ = paddle.position.z - paddleDepth/2;
+    const paddleMaxZ = paddle.position.z + paddleDepth/2;
+    
+    // Store the paddle collision depth for use in bounce calculations
+    paddleCollisionDepth = paddleMinZ;
+    
+    // Check if the ball intersects with the paddle
+    const ballRadius = 0.4;
+    
+    return (
+        ball.position.x + ballRadius > paddleMinX &&
+        ball.position.x - ballRadius < paddleMaxX &&
+        ball.position.y + ballRadius > paddleMinY &&
+        ball.position.y - ballRadius < paddleMaxY &&
+        ball.position.z + ballRadius > paddleMinZ &&
+        ball.position.z - ballRadius < paddleMaxZ
+    );
+}
+
+function checkBrickCollision(ball, brick) {
+    const brickWidth = brick.geometry.parameters.width;
+    const brickHeight = brick.geometry.parameters.height;
+    const brickDepth = brick.geometry.parameters.depth;
+    
+    // Calculate the bounds of the brick
+    const brickMinX = brick.position.x - brickWidth/2;
+    const brickMaxX = brick.position.x + brickWidth/2;
+    const brickMinY = brick.position.y - brickHeight/2;
+    const brickMaxY = brick.position.y + brickHeight/2;
+    const brickMinZ = brick.position.z - brickDepth/2;
+    const brickMaxZ = brick.position.z + brickDepth/2;
+    
+    // Check if the ball intersects with the brick
+    const ballRadius = 0.4;
+    
+    return (
+        ball.position.x + ballRadius > brickMinX &&
+        ball.position.x - ballRadius < brickMaxX &&
+        ball.position.y + ballRadius > brickMinY &&
+        ball.position.y - ballRadius < brickMaxY &&
+        ball.position.z + ballRadius > brickMinZ &&
+        ball.position.z - ballRadius < brickMaxZ
+    );
+}function handleBrickCollision(ball, brick, brickIndex) {
+    // Determine bounce direction based on which face was hit
+    const brickWidth = brick.geometry.parameters.width;
+    const brickHeight = brick.geometry.parameters.height;
+    const brickDepth = brick.geometry.parameters.depth;
+    
+    // Calculate distances to each face
+    const dx1 = Math.abs(ball.position.x - (brick.position.x - brickWidth/2)); // Distance to left face
+    const dx2 = Math.abs(ball.position.x - (brick.position.x + brickWidth/2)); // Distance to right face
+    const dy1 = Math.abs(ball.position.y - (brick.position.y - brickHeight/2)); // Distance to bottom face
+    const dy2 = Math.abs(ball.position.y - (brick.position.y + brickHeight/2)); // Distance to top face
+    const dz1 = Math.abs(ball.position.z - (brick.position.z - brickDepth/2)); // Distance to front face
+    const dz2 = Math.abs(ball.position.z - (brick.position.z + brickDepth/2)); // Distance to back face
+    
+    // Find the minimum distance to determine which face was hit
+    const minDistance = Math.min(dx1, dx2, dy1, dy2, dz1, dz2);
+    
+    if (minDistance === dx1 || minDistance === dx2) {
+        // Hit left or right face - bounce in X direction
+        ball.direction.x = -ball.direction.x;
+    } else if (minDistance === dy1 || minDistance === dy2) {
+        // Hit top or bottom face - bounce in Y direction
+        ball.direction.y = -ball.direction.y;
+    } else {
+        // Hit front or back face - bounce in Z direction
+        ball.direction.z = -ball.direction.z;
+    }
+    
+    // Handle indestructible bricks
+    if (brick.userData.indestructible) {
+        return; // Skip removing the brick
+    }
+    
+    // Handle phaze brick state transitions
+    if (brick.userData.phaze) {
+        // Only remove the brick if it's in normal state (not ghost or indestructible)
+        if (brick.userData.phazeState !== 0) {
+            return; // Skip removing the brick
+        }
+    }
+    
+    // Remove the brick
+    scene.remove(brick);
+    score += brick.userData.points || 10;
+    updateScore();
+    
+    // Play brick break sound
+    if (brickBreakSound) {
+        brickBreakSound();
+    }
+    
+    // Add visual effect for breaking
+    createBreakingEffect(brick.position);
+    
+    // Trigger fungus bricks to react when any normal brick is destroyed
+    if (!brick.userData.fungus) {
+        fungusBrickReact();
+    }
+    
+    // Update all phaze bricks when any brick is destroyed
+    const phazeBricks = bricks.filter(b => 
+        b.parent && b.userData.phaze
+    );
+    
+    if (phazeBricks.length > 0) {
+        phazeBricks.forEach(phazeBrick => {
+            updatePhazeBrickState(phazeBrick);
+        });
+    }
+    
+    // Chance to spawn a powerup (higher chance for special bricks)
+    const powerupChance = brick.userData.points >= 80 ? 0.5 : 0.3;
+    if (Math.random() < powerupChance) {
+        spawnPowerup(brick.position.x, brick.position.y, brick.position.z);
+    }
+    
+    // Check if all non-indestructible bricks are cleared
+    const remainingBricks = bricks.filter(b => 
+        b.parent && (!b.userData.indestructible)
+    );
+    
+    if (remainingBricks.length === 0) {
+        // Use the nextLevel function to handle level transition properly
+        nextLevel();
+    }
+}
+
+function createBreakingEffect(position) {
+    // Create particles at the brick's position
+    const particleCount = 15;
+    const particles = [];
+    
+    for (let i = 0; i < particleCount; i++) {
+        const particle = new THREE.Mesh(
+            new THREE.BoxGeometry(0.1, 0.1, 0.1),
+            new THREE.MeshBasicMaterial({ color: 0xffffff })
+        );
+        
+        // Position at the brick's location
+        particle.position.copy(position);
+        
+        // Give random velocity
+        particle.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.1,
+            (Math.random() - 0.5) * 0.1,
+            (Math.random() - 0.5) * 0.1
+        );
+        
+        scene.add(particle);
+        particles.push(particle);
+        
+        // Remove after animation
+        setTimeout(() => {
+            scene.remove(particle);
+        }, 1000);
+    }
+    
+    // Animate particles
+    const animateParticles = () => {
+        for (const particle of particles) {
+            if (!particle.parent) continue;
+            
+            particle.position.x += particle.velocity.x;
+            particle.position.y += particle.velocity.y;
+            particle.position.z += particle.velocity.z;
+            
+            // Add gravity
+            particle.velocity.y -= 0.001;
+            
+            // Rotate particle
+            particle.rotation.x += 0.1;
+            particle.rotation.y += 0.1;
+        }
+        
+        if (particles.some(p => p.parent)) {
+            requestAnimationFrame(animateParticles);
+        }
+    };
+    
+    animateParticles();
+}
+
+// Function to initialize the jump meter
+function initializeJumpMeter() {
+    jumpMeterFill = document.getElementById('jumpMeterFill');
+    
+    // Reset the jump meter
+    if (jumpMeterFill) {
+        jumpMeterFill.style.width = '100%';
+    }
+    
+    // Add click event for jump button
+    const jumpButton = document.getElementById('jumpButton');
+    if (jumpButton) {
+        jumpButton.addEventListener('click', activateJump);
+        jumpButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            activateJump();
+        });
+    }
+    
+    // Add keyboard control for jump (spacebar)
+    window.addEventListener('keydown', function(e) {
+        if (e.code === 'KeyJ' || e.key === 'j') {
+            activateJump();
+        }
+    });
+    
+    // Store default paddle Y position
+    defaultPaddleY = 0;
+}
+
+// Function to activate jump/boost
+function activateJump() {
+    // Don't jump if game is paused or not active
+    if (gamePaused || !gameActive) return;
+    
+    // Don't jump if on cooldown
+    if (jumpCooldown) return;
+    
+    // Start jumping
+    isJumping = true;
+    jumpHeight = 0;
+    
+    // Visual feedback
+    createJumpEffect();
+    
+    // Update the jump meter
+    updateJumpMeter(0);
+    
+    // Add visual effect to the button
+    const jumpButton = document.getElementById('jumpButton');
+    if (jumpButton) {
+        jumpButton.classList.add('jumping');
+        
+        // Remove the effect after jumping is done
+        setTimeout(() => {
+            jumpButton.classList.remove('jumping');
+        }, 1000);
+    }
+}
+    
+
+    // Visual feedback
+ function createJumpEffect() {
+    // Add a point light for thruster glow
+    const thrusterLight = new THREE.PointLight(0x33ff99, 2, 5);
+    thrusterLight.position.set(
+        paddle.position.x,
+        paddle.position.y - 0.5,
+        paddle.position.z
+    );
+    scene.add(thrusterLight);
+    
+    // Animate the light
+    let lightIntensity = 2;
+    const animateLight = () => {
+        if (!thrusterLight.parent || gamePaused) {
+            if (thrusterLight.parent) scene.remove(thrusterLight);
+            return;
+        }
+        
+        // Update light position to follow paddle
+        thrusterLight.position.set(
+            paddle.position.x,
+            paddle.position.y - 0.5,
+            paddle.position.z
+        );
+        
+        // Flicker the light intensity
+        lightIntensity = 1.5 + Math.random() * 1;
+        thrusterLight.intensity = lightIntensity;
+        
+        // Continue until jumping is done
+        if (isJumping) {
+            requestAnimationFrame(animateLight);
+        } else {
+            // Fade out light
+            const fadeOut = () => {
+                lightIntensity -= 0.1;
+                if (lightIntensity <= 0) {
+                    scene.remove(thrusterLight);
+                    return;
+                }
+                thrusterLight.intensity = lightIntensity;
+                requestAnimationFrame(fadeOut);
+            };
+            fadeOut();
+        }
+    };
+    animateLight();
+    
+    // Create thruster particles below the paddle
+    const emitParticles = () => {
+        // Don't emit if not jumping anymore
+        if (!isJumping) return;
+        
+        // Create 5 particles in each burst
+        for (let i = 0; i < 5; i++) {
+            // Randomize particle color (green to cyan)
+            const colors = [0x33ff33, 0x33ffaa, 0x33ffff];
+            const particleColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            const particle = new THREE.Mesh(
+                new THREE.SphereGeometry(0.1, 8, 8),
+                new THREE.MeshBasicMaterial({
+                    color: particleColor,
+                    transparent: true,
+                    opacity: 0.7
+                })
+            );
+            
+            // Position at the bottom of the paddle with some randomness
+            particle.position.set(
+                paddle.position.x + (Math.random() - 0.5) * 2,
+                paddle.position.y - 0.3,
+                paddle.position.z + (Math.random() - 0.5) * 1.5
+            );
+            
+            // Give velocity downward
+            particle.velocity = new THREE.Vector3(
+                (Math.random() - 0.5) * 0.05,
+                -0.1 - Math.random() * 0.2,
+                (Math.random() - 0.5) * 0.05
+            );
+            
+            scene.add(particle);
+            
+            // Animate and remove after short time
+            let lifetime = 20;
+            const animateParticle = () => {
+                if (!particle.parent || gamePaused) {
+                    if (particle.parent) scene.remove(particle);
+                    return;
+                }
+                
+                lifetime--;
+                
+                // Move particle
+                particle.position.x += particle.velocity.x;
+                particle.position.y += particle.velocity.y;
+                particle.position.z += particle.velocity.z;
+                
+                // Fade out
+                particle.material.opacity = lifetime / 20;
+                
+                // Remove when lifecycle is complete
+                if (lifetime <= 0) {
+                    scene.remove(particle);
+                    return;
+                }
+                
+                requestAnimationFrame(animateParticle);
+            };
+            
+            animateParticle();
+        }
+        
+        // Continue emitting particles while jumping
+        if (isJumping) {
+            setTimeout(emitParticles, 50);
+        }
+    };
+    
+    // Start emitting particles
+    emitParticles();
+    
+    // Add a sound effect for the jump
+    if (audioContext) {
+        try {
+            // Create oscillator for jump sound
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(220, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.2);
+            
+            gainNode.gain.setValueAtTime(0.05, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.02, audioContext.currentTime + 0.3);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.3);
+        } catch (e) {
+            console.warn('Could not play jump sound', e);
+        }
+    }
+}
+
+// Then update the jump functions to properly handle the camera
+function updateJump() {
+    if (!isJumping) return;
+    
+    if (jumpHeight < maxJumpHeight) {
+        // Move paddle upward
+        paddle.position.y += jumpSpeed;
+        jumpHeight += jumpSpeed;
+        
+        // Camera pivot is now attached to the paddle, so it will follow automatically
+        // No need to manually update cameraPivot.position.y
+        
+        // Update jump meter
+        const jumpProgress = jumpHeight / maxJumpHeight;
+        updateJumpMeter(jumpProgress);
+        
+        // If the ball is launched, check if we can hit it while jumping
+        if (ballLaunched && balls.length > 0) {
+            balls.forEach(ball => {
+                // If the ball is high above the player, try to hit it while jumping
+                if (ball.position.y > paddle.position.y + 1 && 
+                    ball.position.y < paddle.position.y + 3 &&
+                    Math.abs(ball.position.x - paddle.position.x) < 2 &&
+                    ball.position.z > paddle.position.z - 3 && 
+                    ball.position.z < paddle.position.z + 2) {
+                    
+                    // Create a "mid-air hit" effect
+                    const hitEffect = new THREE.PointLight(0xffffff, 1, 5);
+                    hitEffect.position.copy(ball.position);
+                    scene.add(hitEffect);
+                    
+                    // Bounce the ball with a slight upward angle
+                    const hitDirection = new THREE.Vector3(
+                        (ball.position.x - paddle.position.x) * 0.5,
+                        0.5, // Upward bounce
+                        -1  // Forward direction
+                    ).normalize();
+                    
+                    ball.direction.copy(hitDirection);
+                    
+                    // Fade out the hit effect
+                    setTimeout(() => {
+                        scene.remove(hitEffect);
+                    }, 200);
+                }
+            });
+        }
+    } else {
+        // End jump phase, start falling
+        isJumping = false;
+        startFalling();
+    }
+}
+
+// Add this function to create the ball tracker
+function createBallTracker() {
+    // Remove existing tracker if any
+    if (ballTracker) {
+        scene.remove(ballTracker);
+        ballTracker = null;
+    }
+    
+    // Create a line that will connect the paddle to the ball
+    const trackerGeometry = new THREE.BufferGeometry();
+    const trackerMaterial = new THREE.LineBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.3,
+        linewidth: 1, // Note: linewidth > 1 not supported in WebGLRenderer
+    });
+    
+    // Initial points (will be updated)
+    const points = [
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, -5)
+    ];
+    
+    trackerGeometry.setFromPoints(points);
+    ballTracker = new THREE.Line(trackerGeometry, trackerMaterial);
+    ballTracker.visible = false; // Initially hidden
+    
+    scene.add(ballTracker);
+}
+
+// Add this function to update the ball tracker
+function updateBallTracker() {
+    if (!ballTracker || !ballLaunched || balls.length === 0) return;
+    
+    // Find the closest ball (if multiple)
+    let closestBall = balls[0];
+    let closestDistance = Infinity;
+    
+    if (balls.length > 1) {
+        for (const ball of balls) {
+            const distance = new THREE.Vector3().subVectors(paddle.position, ball.position).length();
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestBall = ball;
+            }
+        }
+    }
+    
+    // Only show tracker for balls above a certain height or velocity
+    const ballVelocityY = closestBall.direction.y || 0;
+    const ballHeight = closestBall.position.y || 0;
+    
+    // Get the tracker geometry
+    const points = [
+        new THREE.Vector3(paddle.position.x, paddle.position.y + 0.5, paddle.position.z - 0.5),
+        new THREE.Vector3(closestBall.position.x, closestBall.position.y, closestBall.position.z)
+    ];
+    
+    // Update the tracker line
+    ballTracker.geometry.dispose();
+    ballTracker.geometry = new THREE.BufferGeometry().setFromPoints(points);
+    
+    // Show the tracker when the ball is high or has an upward velocity
+    if (ballHeight > 2 || ballVelocityY > 0.2) {
+        ballTracker.visible = true;
+        
+        // Calculate distance to determine opacity
+        const distance = closestDistance;
+        const opacity = Math.min(0.3, 5 / distance); // Fade out with distance
+        ballTracker.material.opacity = opacity;
+        
+        // Indicate when jump is recommended (green for good jump timing)
+        if (ballHeight > 1.5 && ballHeight < maxJumpHeight + 1 && ballVelocityY < 0) {
+            // Ball falling and in jump range - good time to jump
+            ballTracker.material.color.set(0x00ff00);
+        } else {
+            ballTracker.material.color.set(0x00ffff);
+        }
+    } else {
+        ballTracker.visible = false;
+    }
+}
+
+// Add this function to remove the tracker
+function removeBallTracker() {
+    if (ballTracker) {
+        scene.remove(ballTracker);
+        ballTracker = null;
+    }
+}
+
+// Add ball tracker creation to the game initialization
+function initBallTracker() {
+    createBallTracker();
+    
+    // Add option to toggle tracker visibility
+    document.addEventListener('keydown', function(e) {
+        if (e.code === 'KeyT' || e.key === 't') {
+            if (ballTracker) {
+                ballTracker.visible = !ballTracker.visible;
+            }
+        }
+    });
+}
+
+function updateUIFor3D() {
+    // Add speedometer for visual feedback
+    if (!document.getElementById('speedometer')) {
+        const speedometer = document.createElement('div');
+        speedometer.id = 'speedometer';
+        speedometer.innerHTML = `
+            <span>SPEED</span>
+            <div class="speed-bar">
+                <div class="speed-value"></div>
+            </div>
+        `;
+        document.getElementById('gameContainer').appendChild(speedometer);
+    }
+    
+    // Update level selector text
+    const levelSelector = document.getElementById('levelSelector');
+    if (levelSelector) {
+        const span = levelSelector.querySelector('span');
+        if (span) span.textContent = 'Track:';
+    }
+    
+    // Update game instructions
+    const instructions = document.getElementById('instructions');
+    if (instructions) {
+        instructions.innerHTML = 'Use <strong>arrow keys</strong> or <strong>touch</strong> to steer. <strong>Space</strong> or <strong>tap button</strong> to launch. Press <strong>J</strong> or tap <strong>BOOST</strong> to boost upward.';
+    }
+    
+    // Ensure jump meter is visible and properly styled
+    const jumpMeter = document.getElementById('jumpMeter');
+    const jumpMeterFill = document.getElementById('jumpMeterFill');
+    
+    if (jumpMeter && jumpMeterFill) {
+        jumpMeter.style.display = 'block';
+        jumpMeterFill.style.width = '100%';
+    }
+    
+    // Make sure jump button is visible and properly styled
+    const jumpButton = document.getElementById('jumpButton');
+    if (jumpButton) {
+        jumpButton.style.display = 'block';
+        jumpButton.textContent = 'BOOST';
+        jumpButton.style.backgroundColor = '#FF6600';
+        jumpButton.style.animation = 'none';
+        
+        // Add hover effect
+        jumpButton.addEventListener('mouseenter', function() {
+            this.style.backgroundColor = '#FF8833';
+        });
+        jumpButton.addEventListener('mouseleave', function() {
+            this.style.backgroundColor = '#FF6600';
+        });
+    }
+}
+
+function shootLasers() {
+    // Calculate positions for lasers based on paddle width
+    const paddleWidth = paddle.children[0].geometry.parameters.width;
+    const laserCount = activeLasers;
+    
+    // Create a laser beam for each active laser powerup
+    for (let i = 0; i < laserCount; i++) {
+        const laserGeometry = new THREE.BoxGeometry(0.2, 0.2, 2);
+        const laserMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xffff00, 
+            emissive: 0xffff00 
+        });
+        const laser = new THREE.Mesh(laserGeometry, laserMaterial);
+        
+        let offsetX = 0;
+        
+        if (laserCount === 1) {
+            // Single laser in center
+            offsetX = 0;
+        } else {
+            // Multiple lasers spread across paddle width
+            const spacing = paddleWidth * 0.8 / (laserCount - 1);
+            offsetX = (i * spacing) - (paddleWidth * 0.4);
+        }
+        
+        // Position the laser at the paddle plus offset
+        laser.position.x = paddle.position.x + offsetX;
+        laser.position.y = paddle.position.y;
+        laser.position.z = paddle.position.z - 2; // Start just in front of the paddle
+        laser.direction = new THREE.Vector3(0, 0, -1); // Move forward (negative Z)
+        laser.speed = 0.4; // Faster than the ball
+        laser.lifespan = 100; // Frames the laser will exist
+        
+        scene.add(laser);
+        lasers.push(laser);
+        
+        // Add a point light to the laser for visual effect
+        const laserLight = new THREE.PointLight(0xffff00, 0.5, 3);
+        laserLight.position.copy(laser.position);
+        laser.add(laserLight);
+    }
+}
+
+function removeLaserCannonsFromPaddle() {
+    // Find and remove any laser cannon objects from the paddle
+    if (paddle) {
+        const cannonsToRemove = [];
+        
+        paddle.children.forEach(child => {
+            if (child.userData && child.userData.isLaserCannon) {
+                cannonsToRemove.push(child);
+            }
+        });
+        
+        cannonsToRemove.forEach(cannon => {
+            paddle.remove(cannon);
+        });
+    }
+}
+
+function removeMultiballEffectFromPaddle() {
+    // Find and remove any multiball emitter objects from the paddle
+    if (paddle) {
+        const effectsToRemove = [];
+        
+        paddle.children.forEach(child => {
+            if (child.userData && child.userData.isMultiballEmitter) {
+                effectsToRemove.push(child);
+            }
+        });
+        
+        effectsToRemove.forEach(effect => {
+            paddle.remove(effect);
+        });
+    }
+}
+
+function spawnPowerup(x, y, z) {
+    const powerupGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+    
+    // Powerup types
+    const powerupTypes = [
+        { type: 'multiball', color: 0x00ffff },
+        { type: 'extraCash', color: 0x33cc33 },
+        { type: 'widePaddle', color: 0xffffff },
+        { type: 'laser', color: 0xffff00 },
+        { type: 'paddleMultiball', color: 0xaa00ff },
+        { type: 'bomb', color: 0xcc0000 }
+    ];
+    
+    // Choose a powerup type with weighted probabilities
+    let powerupRoll = Math.random();
+    let powerupInfo;
+    
+    if (powerupRoll < 0.30) {
+        powerupInfo = powerupTypes[0]; // 30% chance for multiball
+    } else if (powerupRoll < 0.45) {
+        powerupInfo = powerupTypes[2]; // 15% chance for wide paddle
+    } else if (powerupRoll < 0.60) {
+        powerupInfo = powerupTypes[1]; // 15% chance for extra cash
+    } else if (powerupRoll < 0.75) {
+        powerupInfo = powerupTypes[3]; // 15% chance for laser
+    } else if (powerupRoll < 0.90) {
+        powerupInfo = powerupTypes[4]; // 15% chance for paddle multiball
+    } else {
+        powerupInfo = powerupTypes[5]; // 10% chance for bomb
+    }
+    
+    const powerupMaterial = new THREE.MeshPhongMaterial({ 
+        color: powerupInfo.color,
+        emissive: powerupInfo.color,
+        emissiveIntensity: 0.3,
+        shininess: 90
+    });
+    
+    const powerup = new THREE.Mesh(powerupGeometry, powerupMaterial);
+    powerup.position.set(x, y, z);
+    
+    // Add a glow effect to make powerups more visible
+    const glowGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+        color: powerupInfo.color,
+        transparent: true,
+        opacity: 0.3
+    });
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    powerup.add(glow);
+    
+    // Add rotation animation
+    powerup.rotation.set(Math.PI/4, Math.PI/4, 0);
+    powerup.userData.rotationSpeed = {
+        x: 0.02 + Math.random() * 0.02,
+        y: 0.02 + Math.random() * 0.02,
+        z: 0.02 + Math.random() * 0.02
+    };
+    
+    powerup.type = powerupInfo.type;
+    scene.add(powerup);
+    powerups.push(powerup);
+    
+    // Add a point light for better visibility
+    const powerupLight = new THREE.PointLight(powerupInfo.color, 0.5, 3);
+    powerup.add(powerupLight);
+}
+
+function updatePowerups() {
+    const powerupSpeed = 0.05;
+    const powerupSize = 0.4;
+    
+    for (let i = powerups.length - 1; i >= 0; i--) {
+        const powerup = powerups[i];
+        
+        // Move powerup toward the player
+        powerup.position.z += powerupSpeed;
+        
+        // Rotate the powerup for visual effect
+        if (powerup.userData.rotationSpeed) {
+            powerup.rotation.x += powerup.userData.rotationSpeed.x;
+            powerup.rotation.y += powerup.userData.rotationSpeed.y;
+            powerup.rotation.z += powerup.userData.rotationSpeed.z;
+        }
+        
+        // Remove if it goes past the player
+        if (powerup.position.z > 3) {
+            scene.remove(powerup);
+            powerups.splice(i, 1);
+            continue;
+        }
+        
+        // Check for paddle collision
+        if (checkPowerupPaddleCollision(powerup, paddle)) {
+            // Activate the powerup
+            if (powerup.type === 'multiball') {
+                activateMultiball();
+            } else if (powerup.type === 'extraCash') {
+                cash++;
+                updateCash();
+                updateStoreItemAvailability();
+            } else if (powerup.type === 'widePaddle') {
+                activateWidePaddle();
+            } else if (powerup.type === 'laser') {
+                activateLaser();
+            } else if (powerup.type === 'paddleMultiball') {
+                activatePaddleMultiball();
+            } else if (powerup.type === 'bomb') {
+                activateBomb();
+            }
+            
+            scene.remove(powerup);
+            powerups.splice(i, 1);
+        }
+    }
+}
+
+function enhanceMobileControls() {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const swipeThreshold = 50; // Minimum distance for a swipe
+    
+    // Detect swipe up for ball launch
+    renderer.domElement.addEventListener('touchstart', function(e) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    
+    renderer.domElement.addEventListener('touchend', function(e) {
+        if (e.target === launchButton) return;
+        
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+        
+        const deltaX = touchEndX - touchStartX;
+        const deltaY = touchEndY - touchStartY;
+        
+        // If it's a significant upward swipe
+        if (Math.abs(deltaY) > swipeThreshold && deltaY < 0) {
+            // Launch the ball on upward swipe
+            launchBall();
+        }
+    }, { passive: true });
+}
+
+function handleTouchStart(event) {
+    if (event.target === launchButton) return;
+    event.preventDefault();
+    if (event.touches.length > 0) {
+        touchX = event.touches[0].clientX;
+    }
+}
+
+function handleTouchMove(event) {
+    if (event.target === launchButton) return;
+    event.preventDefault();
+    if (event.touches.length > 0) {
+        const newTouchX = event.touches[0].clientX;
+        const deltaX = newTouchX - touchX;
+        
+        // Updated scaling factor based on container width
+        const container = document.getElementById('gameContainer');
+        const moveScale = 14 / container.clientWidth;
+        
+        paddle.position.x += deltaX * moveScale;
+        
+        // Ensure paddle stays within bounds
+        const paddleHalfWidth = paddle.children[0].geometry.parameters.width / 2;
+        const paddleLeftLimit = leftBound + paddleHalfWidth;
+        const paddleRightLimit = rightBound - paddleHalfWidth;
+        
+        if (paddle.position.x < paddleLeftLimit) paddle.position.x = paddleLeftLimit;
+        if (paddle.position.x > paddleRightLimit) paddle.position.x = paddleRightLimit;
+        
+        // Add tilt effect based on movement direction
+        if (deltaX < 0) {
+            // Tilt left
+            paddle.rotation.z = Math.min(paddle.rotation.z + 0.05, 0.15);
+        } else if (deltaX > 0) {
+            // Tilt right
+            paddle.rotation.z = Math.max(paddle.rotation.z - 0.05, -0.15);
+        }
+        
+        // If ball is not launched, update its position
+        if (!ballLaunched && balls.length > 0) {
+            balls[0].position.x = paddle.position.x;
+            balls[0].position.y = paddle.position.y + 0.5;
+            balls[0].position.z = paddle.position.z - 2;
+        }
+        
+        touchX = newTouchX;
+    }
+}
+
+function handleTouchEnd(event) {
+    if (event.target === launchButton) return;
+    event.preventDefault();
+    
+    // Gradually reset paddle tilt back to zero
+    const resetTilt = () => {
+        if (paddle.rotation.z !== 0) {
+            if (paddle.rotation.z > 0) {
+                paddle.rotation.z = Math.max(0, paddle.rotation.z - 0.03);
+            } else {
+                paddle.rotation.z = Math.min(0, paddle.rotation.z + 0.03);
+            }
+            
+            if (Math.abs(paddle.rotation.z) > 0.01) {
+                requestAnimationFrame(resetTilt);
+            } else {
+                paddle.rotation.z = 0;
+            }
+        }
+    };
+    
+    resetTilt();
+}
+
+function launchBall() {
+    if (!ballLaunched && gameActive && !gamePaused) {
+        ballLaunched = true;
+        
+        // Launch with slight random angle in 3D
+        const horizontalAngle = (Math.random() * Math.PI / 4) - (Math.PI / 8); // -22.5° to 22.5°
+        const verticalAngle = Math.PI / 12; // Slight upward angle (15°)
+        
+        // Update the first ball's direction (main ball)
+        if (balls.length > 0) {
+            balls[0].direction.x = Math.sin(horizontalAngle);
+            balls[0].direction.y = Math.sin(verticalAngle);
+            balls[0].direction.z = -Math.cos(horizontalAngle) * Math.cos(verticalAngle);
+            balls[0].direction.normalize();
+            
+            // Add trail effect to the ball
+            addBallTrail(balls[0]);
+        }
+        
+        document.getElementById('launchButton').style.display = 'none';
+        
+        // Create launch effect
+        if (balls.length > 0) {
+            createBallLaunchEffect(balls[0].position);
+        }
+    }
+}
+
+function createBallLaunchEffect(position) {
+    // Create particles at the ball's position
+    const particleCount = 20;
+    
+    for (let i = 0; i < particleCount; i++) {
+        const particle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.1, 8, 8),
+            new THREE.MeshBasicMaterial({
+                color: 0x88ccff,
+                transparent: true,
+                opacity: 0.7
+            })
+        );
+        
+        // Position at the ball's location
+        particle.position.copy(position);
+        
+        // Give random velocity - mostly backward
+        particle.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.1,
+            (Math.random() - 0.5) * 0.1,
+            (Math.random() * 0.2) + 0.1 // Mostly backward (positive Z)
+        );
+        
+        scene.add(particle);
+        
+        // Remove after animation
+        setTimeout(() => {
+            scene.remove(particle);
+        }, 500);
+        
+        // Animate particle
+        const animateParticle = () => {
+            if (!particle.parent) return;
+            
+            particle.position.x += particle.velocity.x;
+            particle.position.y += particle.velocity.y;
+            particle.position.z += particle.velocity.z;
+            
+            // Fade out
+            particle.material.opacity -= 0.02;
+            
+            if (particle.material.opacity <= 0) {
+                scene.remove(particle);
+                return;
+            }
+            
+            requestAnimationFrame(animateParticle);
+        };
+        
+        animateParticle();
+    }
+}
+
+function checkPowerupPaddleCollision(powerup, paddle) {
+    const paddleWidth = paddle.children[0].geometry.parameters.width;
+    const paddleHeight = paddle.children[0].geometry.parameters.height;
+    const paddleDepth = paddle.children[0].geometry.parameters.depth;
+    
+    // Calculate the bounds of the paddle
+    const paddleMinX = paddle.position.x - paddleWidth/2;
+    const paddleMaxX = paddle.position.x + paddleWidth/2;
+    const paddleMinY = paddle.position.y - paddleHeight/2;
+    const paddleMaxY = paddle.position.y + paddleHeight/2;
+    const paddleMinZ = paddle.position.z - paddleDepth/2;
+    const paddleMaxZ = paddle.position.z + paddleDepth/2;
+    
+    // Powerup size
+    const powerupSize = 0.4;
+    
+    // Check if powerup intersects with paddle
+    return (
+        powerup.position.x + powerupSize > paddleMinX &&
+        powerup.position.x - powerupSize < paddleMaxX &&
+        powerup.position.y + powerupSize > paddleMinY &&
+        powerup.position.y - powerupSize < paddleMaxY &&
+        powerup.position.z + powerupSize > paddleMinZ &&
+        powerup.position.z - powerupSize < paddleMaxZ
+    );
+}
+
+function updateSpeedometer() {
+    const speedBar = document.querySelector('.speed-value');
+    if (speedBar) {
+        // Calculate percentage (assuming 0.3 is max speed)
+        const percentage = Math.min(100, (ballSpeed / 0.3) * 100);
+        speedBar.style.width = `${percentage}%`;
+        
+        // Change color based on speed
+        if (percentage < 40) {
+            speedBar.style.backgroundColor = '#00ff00'; // Green
+        } else if (percentage < 70) {
+            speedBar.style.backgroundColor = '#ffff00'; // Yellow
+        } else {
+            speedBar.style.backgroundColor = '#ff0000'; // Red
+        }
+    }
+}
+
+function animate() {
+    animationFrameId = requestAnimationFrame(animate);
+    
+    if (gameActive) {
+        // Only update game state if not paused
+        if (!gamePaused) {
+            movePaddle();
+            updateJump(); // Add this line to call our new jump function
+            moveBall();
+            updateLasers();
+            updatePowerups();
+            updateRoadMarkings();
+            updateSpeedometer();
+            updateBallTracker(); // Update the ball tracker
+        }
+        
+        // Always render the scene, even when paused
+        renderer.render(scene, camera);
+    }
+}
+
+function updateRoadMarkings() {
+    // Animate road markings to create scrolling effect
+    roadMarkings.forEach(marking => {
+        if (marking.isCenterLine) {
+            // Move center lines toward the player
+            marking.position.z += 0.2;
+            
+            // Reset position when it gets too close
+            if (marking.position.z > 5) {
+                marking.position.z = -topBound;
+            }
+        }
+    });
+}
+
+function resetBall() {
+    // Clear all balls except the first one
+    for (let i = balls.length - 1; i > 0; i--) {
+        scene.remove(balls[i]);
+        balls.splice(i, 1);
+    }
+    
+    // Reset the main ball
+    if (balls.length > 0) {
+        balls[0].position.x = paddle.position.x;
+        balls[0].position.y = paddle.position.y + 0.5; // Slightly above paddle
+        balls[0].position.z = paddle.position.z - 2; // In front of paddle
+        
+        // Clear any ball trails
+        if (balls[0].userData.trailParticles) {
+            balls[0].userData.trailParticles.forEach(particle => {
+                scene.remove(particle);
+            });
+            balls[0].userData.trailParticles = [];
+            balls[0].userData.hasTrail = false;
+        }
+    } else {
+        // Create a new ball if none exists
+        createBall();
+    }
+    
+    ballLaunched = false;
+    
+    // Clear any powerups
+    powerups.forEach(powerup => scene.remove(powerup));
+    powerups = [];
+    
+    // Clear any lasers
+    clearLasers();
+    
+    // Clear paddle multiball timer
+    if (paddleMultiballTimer) {
+        clearInterval(paddleMultiballTimer);
+        paddleMultiballTimer = null;
+        remainingPaddleBalls = 0;
+        removeMultiballEffectFromPaddle();
+    }
+    
+    // Clear all bombs
+    clearBombs();
+    
+    document.getElementById('launchButton').style.display = 'block';
+}
+
+function nextLevel() {
+    level++;
+    
+    // If we completed all available levels, go back to level 1 with faster ball
+    if (level > asciiLevels.length) {
+        level = 1;
+        ballSpeed *= 1.2; // Increase difficulty
+    }
+    
+    // Update level selector UI
+    document.getElementById('levelSelect').value = level;
+    
+    // Clear all bombs
+    clearBombs();
+    
+    // Clear any existing road and markings
+    if (road) scene.remove(road);
+    roadMarkings.forEach(marking => scene.remove(marking));
+    roadMarkings = [];
+    
+    // Setup new game boundaries BEFORE creating bricks or resetting ball
+    setupGameBoundaries();
+    
+    // Create new road
+    createRoad();
+    
+    // Create new bricks for the level
+    createBricks();
+    
+    // Reset ball position and state
+    resetBall();
+    
+    // Show launch button
+    document.getElementById('launchButton').style.display = 'block';
+}
+
+function activateMultiball() {
+    // Find the highest ball on the map to split
+    if (balls.length > 0) {
+        // Sort balls by z-position (closest to bricks first)
+        balls.sort((a, b) => a.position.z - b.position.z);
+        const sourceBall = balls[0];
+        
+        // Create 2 additional balls
+        for (let i = 0; i < 2; i++) {
+            const ballGeometry = new THREE.SphereGeometry(0.4, 32, 32);
+            const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+            const newBall = new THREE.Mesh(ballGeometry, ballMaterial);
+            
+            // Position the new ball at the position of the source ball
+            newBall.position.copy(sourceBall.position);
+            
+            // Give each new ball a different direction
+            // One slightly left, one slightly right
+            const baseDirection = sourceBall.direction.clone();
+            const angleOffset = (i === 0) ? -Math.PI/6 : Math.PI/6; // +/- 30 degrees
+            
+            // Apply rotation to the direction vector around the Y axis
+            const cosAngle = Math.cos(angleOffset);
+            const sinAngle = Math.sin(angleOffset);
+            
+            const newX = baseDirection.x * cosAngle - baseDirection.z * sinAngle;
+            const newZ = baseDirection.x * sinAngle + baseDirection.z * cosAngle;
+            
+            newBall.direction = new THREE.Vector3(newX, baseDirection.y, newZ).normalize();
+            
+            // Add ball trail
+            addBallTrail(newBall);
+            
+            scene.add(newBall);
+            balls.push(newBall);
+        }
+        
+        // Visual effect
+        createMultiballEffect(sourceBall.position);
+    }
+}
+
+function createMultiballEffect(position) {
+    // Create a burst of particles
+    const particleCount = 30;
+    
+    for (let i = 0; i < particleCount; i++) {
+        const particle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.1, 8, 8),
+            new THREE.MeshBasicMaterial({
+                color: 0x00ffff,
+                transparent: true,
+                opacity: 0.7
+            })
+        );
+        
+        // Position at the activation point
+        particle.position.copy(position);
+        
+        // Random velocity in all directions
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.random() * Math.PI;
+        const speed = 0.1 + Math.random() * 0.1;
+        
+        particle.velocity = new THREE.Vector3(
+            speed * Math.sin(phi) * Math.cos(theta),
+            speed * Math.sin(phi) * Math.sin(theta),
+            speed * Math.cos(phi)
+        );
+        
+        scene.add(particle);
+        
+        // Remove after animation
+        setTimeout(() => {
+            scene.remove(particle);
+        }, 800);
+        
+        // Animate particle
+        const animateParticle = () => {
+            if (!particle.parent) return;
+            
+            particle.position.x += particle.velocity.x;
+            particle.position.y += particle.velocity.y;
+            particle.position.z += particle.velocity.z;
+            
+            // Slow down
+            particle.velocity.multiplyScalar(0.95);
+            
+            // Fade out
+            particle.material.opacity -= 0.02;
+            
+            if (particle.material.opacity <= 0) {
+                scene.remove(particle);
+                return;
+            }
+            
+            requestAnimationFrame(animateParticle);
+        };
+        
+        animateParticle();
+    }
+}
+
+function activateWidePaddle() {
+    // Remember current position
+    const currentX = paddle.position.x;
+    
+    // Calculate the maximum paddle width (40% of road width)
+    const maxPaddleWidth = roadWidth * 0.4;
+    
+    // Get current paddle width and body
+    const paddleBody = paddle.children[0];
+    let newWidth = 3.5;
+    
+    if (paddleBody.geometry.parameters.width) {
+        // If paddle already exists, increase width by 1.5 (stacking effect)
+        newWidth = paddleBody.geometry.parameters.width + 1.5;
+        
+        // Cap the width at the maximum
+        newWidth = Math.min(newWidth, maxPaddleWidth);
+    }
+    
+    // Create a new paddle with the wider width
+    createPaddle(newWidth);
+    
+    // Restore position
+    paddle.position.x = currentX;
+    
+    // Make sure the wider paddle stays within bounds
+    const widePaddleHalfWidth = newWidth / 2;
+    const paddleLeftLimit = leftBound + widePaddleHalfWidth;
+    const paddleRightLimit = rightBound - widePaddleHalfWidth;
+    
+    if (paddle.position.x < paddleLeftLimit) paddle.position.x = paddleLeftLimit;
+    if (paddle.position.x > paddleRightLimit) paddle.position.x = paddleRightLimit;
+    
+    // Set or extend the timer for paddle width
+    if (paddle.userData.widePaddleTimer) {
+        clearTimeout(paddle.userData.widePaddleTimer);
+    }
+    
+// Store the timer reference in userData
+    paddle.userData.widePaddleTimer = setTimeout(() => {
+        // Remember position again
+        const wideX = paddle.position.x;
+        
+        // Create a normal width paddle
+        createPaddle();
+        
+        // Restore position
+        paddle.position.x = wideX;
+        
+        // Keep the paddle within bounds when returning to normal size
+        const normalHalfWidth = 1.75; // Half of 3.5
+        const normalLeftLimit = leftBound + normalHalfWidth;
+        const normalRightLimit = rightBound - normalHalfWidth;
+        
+        if (paddle.position.x < normalLeftLimit) paddle.position.x = normalLeftLimit;
+        if (paddle.position.x > normalRightLimit) paddle.position.x = normalRightLimit;
+        
+        // Clear the timer reference
+        paddle.userData.widePaddleTimer = null;
+    }, 10000);
+    
+    // Visual effect
+    createWidePaddleEffect();
+}
+
+function createWidePaddleEffect() {
+    // Add pulsing glow to the paddle
+    const paddleBody = paddle.children[0];
+    const paddleWidth = paddleBody.geometry.parameters.width;
+    const paddleHeight = paddleBody.geometry.parameters.height;
+    const paddleDepth = paddleBody.geometry.parameters.depth;
+    
+    const glowGeometry = new THREE.BoxGeometry(
+        paddleWidth * 1.1, 
+        paddleHeight * 1.1, 
+        paddleDepth * 1.1
+    );
+    const glowMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.3
+    });
+    
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    paddle.add(glow);
+    
+    // Pulsing animation
+    let glowStrength = 0.3;
+    let increasing = false;
+    
+    const animateGlow = () => {
+        if (!glow.parent) return;
+        
+        if (increasing) {
+            glowStrength += 0.01;
+            if (glowStrength >= 0.5) increasing = false;
+        } else {
+            glowStrength -= 0.01;
+            if (glowStrength <= 0.2) increasing = true;
+        }
+        
+        glow.material.opacity = glowStrength;
+        
+        // Continue animation if the glow is still part of the paddle
+        if (glow.parent) {
+            requestAnimationFrame(animateGlow);
+        }
+    };
+    
+    animateGlow();
+    
+    // Remove glow after the power-up duration
+    setTimeout(() => {
+        if (glow.parent) paddle.remove(glow);
+    }, 10000);
+}
+
+function activateLaser() {
+    // Increment active lasers count
+    activeLasers++;
+    
+    // Add laser cannons to the paddle
+    addLaserCannonsToPaddle();
+    
+    // If there's no active timer, create one
+    if (!laserTimer) {
+        laserTimer = setInterval(() => {
+            shootLasers();
+        }, 1000); // Fire every second
+    }
+    
+    // Each laser powerup lasts for 10 seconds
+    setTimeout(() => {
+        // Decrement active lasers
+        activeLasers--;
+        
+        // If no more active lasers, clear the timer and remove cannons
+        if (activeLasers <= 0) {
+            activeLasers = 0; // Ensure it doesn't go negative
+            clearInterval(laserTimer);
+            laserTimer = null;
+            removeLaserCannonsFromPaddle();
+        }
+    }, 10000);
+}
+
+function addLaserCannonsToPaddle() {
+    // First remove any existing cannons
+    removeLaserCannonsFromPaddle();
+    
+    // Add visual laser cannons to the paddle
+    const paddleWidth = paddle.children[0].geometry.parameters.width;
+    
+    for (let i = 0; i < activeLasers; i++) {
+        let offsetX = 0;
+        
+        if (activeLasers === 1) {
+            // Single laser in center
+            offsetX = 0;
+        } else {
+            // Multiple lasers spread across paddle width
+            const spacing = paddleWidth * 0.8 / (activeLasers - 1);
+            offsetX = (i * spacing) - (paddleWidth * 0.4);
+        }
+        
+        // Create a cannon
+        const cannonGeometry = new THREE.CylinderGeometry(0.15, 0.2, 0.4, 8);
+        const cannonMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
+        const cannon = new THREE.Mesh(cannonGeometry, cannonMaterial);
+        
+        // Position on top of the paddle
+        cannon.position.set(offsetX, 0.3, -0.5);
+        cannon.rotation.x = -Math.PI / 2; // Point forward
+        
+        // Mark as a laser cannon for later removal
+        cannon.userData.isLaserCannon = true;
+        
+        paddle.add(cannon);
+        
+        // Add a glowing tip to the cannon
+        const tipGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+        const tipMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xffff00,
+            emissive: 0xffff00
+        });
+        const tip = new THREE.Mesh(tipGeometry, tipMaterial);
+        tip.position.set(0, 0, -0.2); // At the end of the cannon
+        cannon.add(tip);
+        
+        // Add a point light at the tip
+        const tipLight = new THREE.PointLight(0xffff00, 0.5, 1);
+        tipLight.position.copy(tip.position);
+        cannon.add(tipLight);
+    }
+}
+function updateLasers() {
+    // Move all active lasers forward
+    for (let i = lasers.length - 1; i >= 0; i--) {
+        const laser = lasers[i];
+        
+        // Move the laser based on its direction and speed
+        laser.position.x += laser.direction.x * laser.speed;
+        laser.position.y += laser.direction.y * laser.speed;
+        laser.position.z += laser.direction.z * laser.speed;
+        
+        // Decrease lifespan
+        laser.lifespan--;
+        
+        // Remove if lifespan is over or it goes too far
+        if (laser.lifespan <= 0 || laser.position.z < -topBound) {
+            scene.remove(laser);
+            lasers.splice(i, 1);
+            continue;
+        }
+        
+        // Check for brick collisions
+        for (let j = bricks.length - 1; j >= 0; j--) {
+            const brick = bricks[j];
+            
+            // Skip bricks that have already been hit
+            if (!brick.parent) continue;
+            
+            // Skip indestructible bricks
+            if (brick.userData.indestructible) continue;
+            
+            // Skip ghost phaze bricks
+            if (brick.userData.isGhost) continue;
+            
+            // Simple collision check (laser hits brick)
+            const brickWidth = brick.geometry.parameters.width;
+            const brickHeight = brick.geometry.parameters.height;
+            const brickDepth = brick.geometry.parameters.depth;
+            
+            if (laser.position.x > brick.position.x - brickWidth/2 &&
+                laser.position.x < brick.position.x + brickWidth/2 &&
+                laser.position.y > brick.position.y - brickHeight/2 &&
+                laser.position.y < brick.position.y + brickHeight/2 &&
+                laser.position.z > brick.position.z - brickDepth/2 &&
+                laser.position.z < brick.position.z + brickDepth/2) {
+                
+                // Remove the brick
+                scene.remove(brick);
+                score += brick.userData.points || 10;
+                updateScore();
+                
+                // Play brick break sound
+                if (brickBreakSound) {
+                    brickBreakSound();
+                }
+                
+                // Create breaking effect
+                createBreakingEffect(brick.position);
+                
+                // Remove the laser
+                scene.remove(laser);
+                lasers.splice(i, 1);
+                
+                break;
+            }
+        }
+    }
+}
+function clearLasers() {
+    // Remove all active lasers
+    lasers.forEach(laser => scene.remove(laser));
+    lasers = [];
+    
+    // Clear laser timer
+    if (laserTimer) {
+        clearInterval(laserTimer);
+        laserTimer = null;
+        activeLasers = 0;
+    }
+    
+    // Remove laser cannons from paddle
+    removeLaserCannonsFromPaddle();
+}
+
+function activatePaddleMultiball() {
+    // Set the number of balls to shoot
+    remainingPaddleBalls = 10;
+    
+    // Add multiball emitter to paddle
+    addMultiballEmitterToPaddle();
+    
+    // If there's no active timer, create one
+    if (!paddleMultiballTimer) {
+        paddleMultiballTimer = setInterval(() => {
+            shootBallFromPaddle();
+            
+            // Decrement remaining balls
+            remainingPaddleBalls--;
+            
+            // If no more balls to shoot, clear the timer
+            if (remainingPaddleBalls <= 0) {
+                clearInterval(paddleMultiballTimer);
+                paddleMultiballTimer = null;
+                removeMultiballEffectFromPaddle();
+            }
+        }, 300); // Shoot a ball every 0.3 seconds
+    }
+}
+
+function addMultiballEmitterToPaddle() {
+    // First remove any existing emitter
+    removeMultiballEffectFromPaddle();
+    
+    // Add visual emitter to the paddle
+    const emitterGeometry = new THREE.SphereGeometry(0.25, 16, 16);
+    const emitterMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xaa00ff,
+        emissive: 0x550088,
+        transparent: true,
+        opacity: 0.8
+    });
+    const emitter = new THREE.Mesh(emitterGeometry, emitterMaterial);
+    
+    // Position at the front of the paddle
+    emitter.position.set(0, 0.3, -0.7);
+    
+    // Mark as a multiball emitter for later removal
+    emitter.userData.isMultiballEmitter = true;
+    
+    paddle.add(emitter);
+    
+    // Add a point light
+    const emitterLight = new THREE.PointLight(0xaa00ff, 0.7, 2);
+    emitterLight.position.copy(emitter.position);
+    emitter.add(emitterLight);
+    
+    // Add pulsing animation
+    const animateEmitter = () => {
+        if (!emitter.parent) return;
+        
+        // Pulse scale
+        const time = Date.now() * 0.003;
+        const scale = 1 + 0.2 * Math.sin(time);
+        emitter.scale.set(scale, scale, scale);
+        
+        // Continue animation if emitter is still attached
+        if (emitter.parent) {
+            requestAnimationFrame(animateEmitter);
+        }
+    };
+    
+    animateEmitter();
+}
+
+function shootBallFromPaddle() {
+    // Only shoot if the game is active and the ball has been launched
+    if (!gameActive || !ballLaunched || gamePaused) return;
+    
+    // Create a new ball
+    const ballGeometry = new THREE.SphereGeometry(0.4, 32, 32);
+    const ballMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xaa00ff,
+        emissive: 0x550088
+    });
+    const newBall = new THREE.Mesh(ballGeometry, ballMaterial);
+    
+    // Position the new ball just in front of the paddle
+    newBall.position.x = paddle.position.x;
+    newBall.position.y = paddle.position.y + 0.3;
+    newBall.position.z = paddle.position.z - 1;
+    
+    // Give the ball a forward direction with slight randomness
+    const angleSpread = Math.PI / 6; // 30° spread
+    const horizontalAngle = (Math.random() * angleSpread) - (angleSpread / 2);
+    const verticalAngle = Math.PI / 12 + (Math.random() * Math.PI / 12); // 15-30° upward
+    
+    // Calculate direction vector components
+    newBall.direction = new THREE.Vector3(
+        Math.sin(horizontalAngle),
+        Math.sin(verticalAngle),
+        -Math.cos(horizontalAngle) * Math.cos(verticalAngle)
+    ).normalize();
+    
+    // Add trail effect
+    addBallTrail(newBall);
+    
+    scene.add(newBall);
+    balls.push(newBall);
+    
+    // Add launch effect particle
+    createBallLaunchEffect(newBall.position);
+}
+
+function activateBomb() {
+    // Create a 3D bomb object
+    const bombGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+    const bombMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xff0000,
+        emissive: 0x330000,
+        shininess: 60
+    });
+    const bomb = new THREE.Mesh(bombGeometry, bombMaterial);
+    
+    // If there's already an active bomb, add this one to the queue
+    if (activeBomb !== null) {
+        bombQueue.push(bomb);
+        
+        // Show a notification that bomb was queued
+        const queueNotice = document.createElement('div');
+        queueNotice.style.position = 'absolute';
+        queueNotice.style.top = '70%';
+        queueNotice.style.left = '50%';
+        queueNotice.style.transform = 'translate(-50%, -50%)';
+        queueNotice.style.color = 'orange';
+        queueNotice.style.fontFamily = 'Arial, sans-serif';
+        queueNotice.style.fontSize = '18px';
+        queueNotice.style.zIndex = '10';
+        queueNotice.textContent = `Bomb queued (${bombQueue.length} waiting)`;
+        document.getElementById('gameContainer').appendChild(queueNotice);
+        
+        // Remove notification after 2 seconds
+        setTimeout(() => {
+            if (document.getElementById('gameContainer').contains(queueNotice)) {
+                document.getElementById('gameContainer').removeChild(queueNotice);
+            }
+        }, 2000);
+        
+        // Update bomb UI if available
+        if (window.updateBombUIDisplay) {
+            window.updateBombUIDisplay();
+        }
+        
+        return;
+    }
+    
+    // Set this as the active bomb
+    activeBomb = bomb;
+    totalBombsCollected++;
+    
+    // Position it just above and in front of the paddle
+    bomb.position.x = paddle.position.x;
+    bomb.position.y = paddle.position.y + 0.7;
+    bomb.position.z = paddle.position.z - 1.5;
+    bomb.userData.isBomb = true;
+    scene.add(bomb);
+    
+    // Add a point light to the bomb
+    const bombLight = new THREE.PointLight(0xff6600, 0.8, 3);
+    bomb.add(bombLight);
+    
+    // Add fuse effect (particle emitter)
+    createBombFuseEffect(bomb);
+    
+    // Create a countdown timer display
+    const countdownDiv = document.createElement('div');
+    countdownDiv.style.position = 'absolute';
+    countdownDiv.style.top = '30%';
+    countdownDiv.style.left = '50%';
+    countdownDiv.style.transform = 'translate(-50%, -50%)';
+    countdownDiv.style.color = 'red';
+    countdownDiv.style.fontFamily = 'Arial, sans-serif';
+    countdownDiv.style.fontSize = '48px';
+    countdownDiv.style.zIndex = '100';
+    document.getElementById('gameContainer').appendChild(countdownDiv);
+    
+    // Start a 5 second countdown
+    let countdown = 5;
+    countdownDiv.textContent = countdown;
+    
+    const countdownInterval = setInterval(() => {
+        // Don't advance the countdown if game is paused
+        if (gamePaused) return;
+        
+        countdown--;
+        countdownDiv.textContent = countdown;
+        
+        // Add a pulsing effect to the bomb
+        bomb.scale.set(1 + Math.sin(Date.now() * 0.01) * 0.2, 
+                      1 + Math.sin(Date.now() * 0.01) * 0.2, 
+                      1 + Math.sin(Date.now() * 0.01) * 0.2);
+        
+        // Increase light intensity as countdown decreases
+        if (bombLight) {
+            bombLight.intensity = 0.8 + (5 - countdown) * 0.2;
+            bombLight.distance = 3 + (5 - countdown) * 0.5;
+        }
+        
+        // Update bomb position to follow paddle
+        bomb.position.x = paddle.position.x;
+        bomb.position.y = paddle.position.y + 0.7;
+        bomb.position.z = paddle.position.z - 1.5;
+        
+        if (countdown <= 0) {
+            clearInterval(countdownInterval);
+            if (document.getElementById('gameContainer').contains(countdownDiv)) {
+                document.getElementById('gameContainer').removeChild(countdownDiv);
+            }
+            launchBomb(bomb);
+        }
+    }, 1000);
+    
+    // Update bomb UI if available
+    if (window.updateBombUIDisplay) {
+        window.updateBombUIDisplay();
+    }
+}
+
+function launchBomb(bomb) {
+    if (!bomb || !bomb.parent) return;
+    
+    // Explosion radius
+    const explosionRadius = 15;
+    
+    // Create explosion effect
+    const explosionGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+    const explosionMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff6600,
+        transparent: true,
+        opacity: 0.9
+    });
+    const explosion = new THREE.Mesh(explosionGeometry, explosionMaterial);
+    explosion.position.copy(bomb.position);
+    scene.add(explosion);
+    
+    // Animate explosion
+    let expansionRate = 0.5;
+    let maxRadius = explosionRadius;
+    let bricksDestroyed = 0;
+    
+    const animateExplosion = () => {
+        if (!explosion.parent) return;
+        
+        // Expand the explosion
+        explosion.scale.x += expansionRate;
+        explosion.scale.y += expansionRate;
+        explosion.scale.z += expansionRate;
+        
+        // Reduce opacity as it expands
+        explosion.material.opacity -= 0.02;
+        
+        // Check brick collisions only every few frames for performance
+        if (explosion.scale.x < maxRadius && explosion.scale.x % 1 < 0.1) {
+            // Check all bricks for explosion collision
+            for (let i = bricks.length - 1; i >= 0; i--) {
+                const brick = bricks[i];
+                
+                // Skip bricks that have already been hit
+                if (!brick.parent) continue;
+                
+                // Skip indestructible bricks
+                if (brick.userData.indestructible) continue;
+                
+                // Calculate distance to brick
+                const distance = new THREE.Vector3().subVectors(
+                    brick.position, bomb.position
+                ).length();
+                
+                // If brick is within explosion radius
+                if (distance < explosion.scale.x + 1) {
+                    // Remove the brick
+                    scene.remove(brick);
+                    score += brick.userData.points || 10;
+                    bricksDestroyed++;
+                    updateScore();
+                    
+                    // Create mini explosion at brick position
+                    createBrickExplosion(brick.position);
+                }
+            }
+            
+            // Check if all destructible bricks are gone
+            const remainingBricks = bricks.filter(b => 
+                b.parent && (!b.userData.indestructible)
+            );
+            
+            if (remainingBricks.length === 0) {
+                // Level complete
+                nextLevel();
+                scene.remove(explosion);
+                scene.remove(bomb);
+                activeBomb = null;
+                
+                // Process next bomb in queue
+                processNextBomb();
+                return;
+            }
+        }
+        
+        // Remove explosion when done
+        if (explosion.material.opacity <= 0 || explosion.scale.x >= maxRadius) {
+            scene.remove(explosion);
+            scene.remove(bomb);
+            activeBomb = null;
+            
+            // Display bricks destroyed
+            totalBricksDestroyedByBombs += bricksDestroyed;
+            if (bricksDestroyed > 0) {
+                const destroyedNotice = document.createElement('div');
+                destroyedNotice.style.position = 'absolute';
+                destroyedNotice.style.top = '40%';
+                destroyedNotice.style.left = '50%';
+                destroyedNotice.style.transform = 'translate(-50%, -50%)';
+                destroyedNotice.style.color = 'orange';
+                destroyedNotice.style.fontFamily = 'Arial, sans-serif';
+                destroyedNotice.style.fontSize = '24px';
+                destroyedNotice.style.zIndex = '10';
+                destroyedNotice.textContent = `${bricksDestroyed} bricks destroyed!`;
+                document.getElementById('gameContainer').appendChild(destroyedNotice);
+                
+                // Remove notification after 2 seconds
+                setTimeout(() => {
+                    if (document.getElementById('gameContainer').contains(destroyedNotice)) {
+                        document.getElementById('gameContainer').removeChild(destroyedNotice);
+                    }
+                }, 2000);
+            }
+            
+            // Process next bomb in queue
+            processNextBomb();
+            return;
+        }
+        
+        requestAnimationFrame(animateExplosion);
+    };
+    
+    animateExplosion();
+    
+    // Add shockwave effect
+    createShockwave(bomb.position);
+    
+    // Screen shake effect
+    addScreenShake();
+}
+
+function createBrickExplosion(position) {
+    const particles = [];
+    const particleCount = 5;
+    
+    for (let i = 0; i < particleCount; i++) {
+        const particle = new THREE.Mesh(
+            new THREE.BoxGeometry(0.1, 0.1, 0.1),
+            new THREE.MeshBasicMaterial({
+                color: 0xff6600,
+                transparent: true,
+                opacity: 0.8
+            })
+        );
+        
+        particle.position.copy(position);
+        
+        // Random velocity
+        particle.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.2,
+            (Math.random() - 0.5) * 0.2,
+            (Math.random() - 0.5) * 0.2
+        );
+        
+        scene.add(particle);
+        particles.push(particle);
+        
+        // Remove after animation
+        setTimeout(() => {
+            scene.remove(particle);
+        }, 500);
+    }
+    
+    // Animate particles
+    const animateParticles = () => {
+        for (const particle of particles) {
+            if (!particle.parent) continue;
+            
+            particle.position.x += particle.velocity.x;
+            particle.position.y += particle.velocity.y;
+            particle.position.z += particle.velocity.z;
+            
+            // Fade out
+            particle.material.opacity -= 0.05;
+        }
+        
+        if (particles.some(p => p.parent && p.material.opacity > 0)) {
+            requestAnimationFrame(animateParticles);
+        }
+    };
+    
+    animateParticles();
+}
+
+function createShockwave(position) {
+    // Create ring geometry
+    const ringGeometry = new THREE.RingGeometry(0.5, 1, 32);
+    const ringMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff9900,
+        transparent: true,
+        opacity: 0.7,
+        side: THREE.DoubleSide
+    });
+    
+    const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+    ring.position.copy(position);
+    
+    // Orient to face camera
+    ring.lookAt(camera.position);
+    
+    scene.add(ring);
+    
+    // Animate shockwave
+    let size = 1;
+    const animateShockwave = () => {
+        if (!ring.parent) return;
+        
+        // Expand the ring
+        size += 0.5;
+        ring.scale.set(size, size, size);
+        
+        // Fade out
+        ring.material.opacity -= 0.02;
+        
+        if (ring.material.opacity <= 0) {
+            scene.remove(ring);
+            return;
+        }
+        
+        requestAnimationFrame(animateShockwave);
+    };
+    
+    animateShockwave();
+}
+
+function addScreenShake() {
+    // Save original camera position
+    const originalPosition = camera.position.clone();
+    
+    // Shake parameters
+    let shakeIntensity = 0.3;
+    let shakeDuration = 500; // ms
+    const startTime = Date.now();
+    
+    // Shake function
+    const shakeCamera = () => {
+        const elapsed = Date.now() - startTime;
+        
+        if (elapsed < shakeDuration) {
+            // Calculate remaining shake percentage
+            const remaining = 1 - (elapsed / shakeDuration);
+            const currentIntensity = shakeIntensity * remaining;
+            
+            // Apply random offset
+            camera.position.set(
+                originalPosition.x + (Math.random() - 0.5) * currentIntensity,
+                originalPosition.y + (Math.random() - 0.5) * currentIntensity,
+                originalPosition.z + (Math.random() - 0.5) * currentIntensity
+            );
+            
+            requestAnimationFrame(shakeCamera);
+        } else {
+            // Restore original position
+            camera.position.copy(originalPosition);
+        }
+    };
+    
+    shakeCamera();
+}
+
+function processNextBomb() {
+    // Check if there are bombs in the queue
+    if (bombQueue.length > 0) {
+        // Get the next bomb
+        const nextBomb = bombQueue.shift();
+        activeBomb = nextBomb;
+        
+        // Position it just above and in front of the paddle
+        nextBomb.position.x = paddle.position.x;
+        nextBomb.position.y = paddle.position.y + 0.7;
+        nextBomb.position.z = paddle.position.z - 1.5;
+        nextBomb.userData.isBomb = true;
+        scene.add(nextBomb);
+        
+        // Add a point light to the bomb
+        const bombLight = new THREE.PointLight(0xff6600, 0.8, 3);
+        nextBomb.add(bombLight);
+        
+        // Add fuse effect
+        createBombFuseEffect(nextBomb);
+        
+        // Display notification
+        const countdownDiv = document.createElement('div');
+        countdownDiv.style.position = 'absolute';
+        countdownDiv.style.top = '30%';
+        countdownDiv.style.left = '50%';
+        countdownDiv.style.transform = 'translate(-50%, -50%)';
+        countdownDiv.style.color = 'red';
+        countdownDiv.style.fontFamily = 'Arial, sans-serif';
+        countdownDiv.style.fontSize = '48px';
+        countdownDiv.style.zIndex = '100';
+        document.getElementById('gameContainer').appendChild(countdownDiv);
+        
+        // Start a 3 second countdown (faster for queued bombs)
+        let countdown = 3;
+        countdownDiv.textContent = countdown;
+        
+        const countdownInterval = setInterval(() => {
+            // Don't advance the countdown if game is paused
+            if (gamePaused) return;
+            
+            countdown--;
+            countdownDiv.textContent = countdown;
+            
+            // Add a pulsing effect to the bomb
+            nextBomb.scale.set(1 + Math.sin(Date.now() * 0.01) * 0.2, 
+                            1 + Math.sin(Date.now() * 0.01) * 0.2, 
+                            1 + Math.sin(Date.now() * 0.01) * 0.2);
+            
+            // Update bomb position to follow paddle
+            nextBomb.position.x = paddle.position.x;
+            nextBomb.position.y = paddle.position.y + 0.7;
+            nextBomb.position.z = paddle.position.z - 1.5;
+            
+            if (countdown <= 0) {
+                clearInterval(countdownInterval);
+                if (document.getElementById('gameContainer').contains(countdownDiv)) {
+                    document.getElementById('gameContainer').removeChild(countdownDiv);
+                }
+                launchBomb(nextBomb);
+            }
+        }, 1000);
+        
+        // Update bomb UI if available
+        if (window.updateBombUIDisplay) {
+            window.updateBombUIDisplay();
+        }
+    }
+}
+
+function integrateFullBombQueueSystem() {
+    // Add a global function to update bomb UI
+    window.updateBombUIDisplay = function() {
+        // If there's an active bomb display its countdown
+        // If there are queued bombs, show how many are waiting
+        
+        // Add this function if you want to display bomb queue information in the UI
+        // For now, just ensure the variables are properly initialized
+        if (typeof bombQueue === 'undefined') {
+            bombQueue = [];
+        }
+        if (typeof activeBomb === 'undefined') {
+            activeBomb = null;
+        }
+        if (typeof totalBombsCollected === 'undefined') {
+            totalBombsCollected = 0;
+        }
+        if (typeof totalBricksDestroyedByBombs === 'undefined') {
+            totalBricksDestroyedByBombs = 0;
+        }
+    };
+}
+
+function createBombFuseEffect(bomb) {
+    // Create emitter function to spawn particles
+    const emitParticles = () => {
+        if (!bomb.parent || gamePaused) return;
+        
+        // Create spark particle
+        const particleGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+        const particleMaterial = new THREE.MeshBasicMaterial({
+            color: Math.random() > 0.5 ? 0xff6600 : 0xffcc00,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+        
+        // Position at top of bomb with slight randomness
+        particle.position.set(
+            bomb.position.x + (Math.random() - 0.5) * 0.1,
+            bomb.position.y + 0.5 + (Math.random() - 0.5) * 0.1,
+            bomb.position.z + (Math.random() - 0.5) * 0.1
+        );
+        
+        // Give velocity upward and random direction
+        particle.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.1,
+            0.05 + Math.random() * 0.1,
+            (Math.random() - 0.5) * 0.1
+        );
+        
+        scene.add(particle);
+        
+        // Animate and remove after short time
+        let lifetime = 20;
+        const animateParticle = () => {
+            if (!particle.parent || gamePaused) {
+                if (particle.parent) scene.remove(particle);
+                return;
+            }
+            
+            lifetime--;
+            
+            // Move particle
+            particle.position.x += particle.velocity.x;
+            particle.position.y += particle.velocity.y;
+            particle.position.z += particle.velocity.z;
+            
+            // Fade out
+            particle.material.opacity = lifetime / 20;
+            
+            // Remove when lifecycle is complete
+            if (lifetime <= 0) {
+                scene.remove(particle);
+                return;
+            }
+            
+            requestAnimationFrame(animateParticle);
+        };
+        
+        animateParticle();
+        
+        // Continue emitting particles if bomb still exists
+        if (bomb.parent && !gamePaused) {
+            setTimeout(emitParticles, 50);
+        }
+    };
+    
+    // Start emitting particles
+    emitParticles();
+}
+
+// Remaining essential parts for the jump/boost functionality
+
+// These are the key event listeners to make everything work
+function handleKeyDown(event) {
+    keysPressed[event.key] = true;
+    
+    // Space key to launch ball
+    if (event.key === ' ' && !ballLaunched && gameActive && !gamePaused) {
+        launchBall();
+    }
+    
+    // J key to activate jump/boost
+    if (event.key === 'j' || event.key === 'J') {
+        activateJump();
+    }
+    
+    // T key to toggle ball tracker
+    if (event.key === 't' || event.key === 'T') {
+        if (ballTracker) {
+            ballTracker.visible = !ballTracker.visible;
+        }
+    }
+    
+    // P key to toggle pause
+    if (event.key === 'p' || event.key === 'P') {
+        togglePause();
+    }
+}
+
+function handleKeyUp(event) {
+    keysPressed[event.key] = false;
+}
+
+function handleResize() {
+    const container = document.getElementById('gameContainer');
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    
+    // Update camera aspect ratio
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+}
+
+function togglePause() {
+    gamePaused = !gamePaused;
+    const pauseButton = document.getElementById('pauseButton');
+    const pauseOverlay = document.getElementById('pauseOverlay');
+    
+    if (gamePaused) {
+        // Change button to show "Resume"
+        pauseButton.innerHTML = '<span class="play-icon"></span>Resume';
+        
+        // Show pause overlay
+        pauseOverlay.style.display = 'flex';
+    } else {
+        // Change button back to "Pause"
+        pauseButton.innerHTML = '<span class="pause-icon"></span>Pause';
+        
+        // Hide pause overlay
+        pauseOverlay.style.display = 'none';
+    }
+}
+
+function resumeGame() {
+    if (gamePaused) {
+        togglePause();
+    }
+}
+
+function restartGame() {
+    // Reset game state
+    gameActive = true;
+    gamePaused = false;
+    paddle.position.x = 0;
+    
+    // Update pause button to show "Pause"
+    const pauseButton = document.getElementById('pauseButton');
+    pauseButton.innerHTML = '<span class="pause-icon"></span>Pause';
+    
+    // Hide pause overlay
+    document.getElementById('pauseOverlay').style.display = 'none';
+    
+    // Reset all balls and powerups
+    balls.forEach((b, index) => {
+        if (index > 0) {
+            scene.remove(b);
+        }
+    });
+    balls = [balls[0]];
+    
+    powerups.forEach(p => scene.remove(p));
+    powerups = [];
+    
+    // Clear any lasers
+    clearLasers();
+    
+    // Clear all bombs
+    clearBombs();
+    
+    // Reset main ball position
+    balls[0].position.x = paddle.position.x;
+    balls[0].position.y = paddle.position.y + 0.5;
+    balls[0].position.z = paddle.position.z - 2;
+    ballLaunched = false;
+    
+    // Reset level and ball speed
+    level = parseInt(document.getElementById('levelSelect').value);
+    ballSpeed = 0.08;
+    
+    // First setup game boundaries for the new level
+    setupGameBoundaries();
+    
+    // Create new road
+    createRoad();
+    
+    // Then create bricks after boundaries are established
+    createBricks();
+    
+    // Reset score and cash
+    score = 0;
+    cash = 3;
+    updateScore();
+    updateCash();
+    
+    // Update UI
+    document.getElementById('gameOver').style.display = 'none';
+    document.getElementById('startButton').style.display = 'none';
+    document.getElementById('launchButton').style.display = 'block';
+    
+    // Restart animation loop if it was stopped
+    if (!animationFrameId) {
+        animate();
+    }
+}
+
+function updateScore() {
+    document.getElementById('score').textContent = `Score: ${score}`;
+}
+
+function updateCash() {
+    document.getElementById('cash').textContent = `Cash: $${cash}`;
+    
+    // Update the store UI to reflect available cash
+    updateStoreItemAvailability();
+}
+
+function spendCash() {
+    cash--;
+    updateCash();
+    
+    if (cash <= 0) {
+        gameOver();
+    } else {
+        resetBall();
+        
+        document.getElementById('launchButton').style.display = 'block';
+    }
+}
+
+function gameOver() {
+    gameActive = false;
+    document.getElementById('gameOver').style.display = 'block';
+    document.getElementById('startButton').style.display = 'block';
+    document.getElementById('launchButton').style.display = 'none';
+    
+    // Clear paddle multiball timer
+    if (paddleMultiballTimer) {
+        clearInterval(paddleMultiballTimer);
+        paddleMultiballTimer = null;
+        remainingPaddleBalls = 0;
+    }
+    
+    // Clear all bombs
+    clearBombs();
+}
+
+function clearBombs() {
+    // Clear the bomb queue
+    bombQueue = [];
+    
+    // Clear active bomb
+    activeBomb = null;
+    
+    // Remove all bomb objects from the scene
+    scene.children.forEach(child => {
+        if (child.userData && child.userData.isBomb) {
+            scene.remove(child);
+        }
+    });
+    
+    // Remove any countdown displays
+    const container = document.getElementById('gameContainer');
+    Array.from(container.children).forEach(child => {
+        if (child.style && 
+            ((child.style.color === 'red' && child.style.fontSize === '48px') || 
+             (child.style.color === 'orange' && child.style.fontSize === '18px'))) {
+            container.removeChild(child);
+        }
+    });
+    
+    // Update bomb UI if available
+    if (window.updateBombUIDisplay) {
+        window.updateBombUIDisplay();
+    }
+}
+function fungusBrickReact() {
+    // Find all fungus bricks
+    const fungusBricks = bricks.filter(brick => 
+        brick.parent && brick.userData.fungus
+    );
+    
+    if (fungusBricks.length === 0) return;
+    
+    // Randomly select one fungus brick to react
+    const reactingBrick = fungusBricks[Math.floor(Math.random() * fungusBricks.length)];
+    
+    // Create a visual pulse effect
+    const originalColor = reactingBrick.material.color.clone();
+    const originalEmissive = reactingBrick.material.emissive ? 
+                            reactingBrick.material.emissive.clone() : 
+                            new THREE.Color(0x000000);
+    
+    // Function to pulse the brick
+    const pulseBrick = () => {
+        // Set to bright green
+        reactingBrick.material.emissive = new THREE.Color(0x33ff33);
+        reactingBrick.material.emissiveIntensity = 0.5;
+        
+        // Return to original color after a short delay
+        setTimeout(() => {
+            if (reactingBrick.parent) {
+                reactingBrick.material.emissive = originalEmissive;
+                reactingBrick.material.emissiveIntensity = 0.1;
+            }
+        }, 300);
+    };
+    
+    // Pulse the brick
+    pulseBrick();
+    
+    // Play the fungus spread sound
+    if (fungusSpreadSound) {
+        fungusSpreadSound();
+    }
+}
+
+function animateFungusBricks() {
+    // Find all fungus bricks
+    const fungusBricks = bricks.filter(brick => 
+        brick.parent && brick.userData.fungus
+    );
+    
+    if (fungusBricks.length === 0) return;
+    
+    // Animate each fungus brick
+    fungusBricks.forEach(brick => {
+        // Add subtle pulsing animation
+        const pulseAnimation = () => {
+            if (!brick.parent || gamePaused) return;
+            
+            const time = Date.now() * 0.001;
+            const pulse = Math.sin(time * 2) * 0.1 + 0.9;
+            
+            // Pulse size
+            brick.scale.set(pulse, pulse, pulse);
+            
+            // Pulse emission
+            if (brick.material && brick.material.emissive) {
+                const emissionStrength = Math.sin(time * 2) * 0.2 + 0.3;
+                brick.material.emissiveIntensity = emissionStrength;
+            }
+            
+            requestAnimationFrame(pulseAnimation);
+        };
+        
+        pulseAnimation();
+        
+        // Occasionally emit spores
+        const emitSpores = () => {
+            if (!brick.parent || gamePaused) return;
+            
+            // Only emit spores rarely
+            if (Math.random() < 0.05) {
+                // Create a spore particle
+                const sporeGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+                const sporeMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x44ff44,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                
+                const spore = new THREE.Mesh(sporeGeometry, sporeMaterial);
+                
+                // Position at the brick
+                spore.position.set(
+                    brick.position.x + (Math.random() - 0.5) * 0.5,
+                    brick.position.y + (Math.random() - 0.5) * 0.5,
+                    brick.position.z + 0.3
+                );
+                
+                // Give slow drifting motion
+                spore.velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.02,
+                    (Math.random() - 0.5) * 0.02,
+                    (Math.random() - 0.5) * 0.02
+                );
+                
+                scene.add(spore);
+                
+                // Animate and remove after a few seconds
+                let lifetime = 100;
+                const animateSpore = () => {
+                    if (!spore.parent || gamePaused) {
+                        if (spore.parent) scene.remove(spore);
+                        return;
+                    }
+                    
+                    lifetime--;
+                    
+                    // Move spore
+                    spore.position.x += spore.velocity.x;
+                    spore.position.y += spore.velocity.y;
+                    spore.position.z += spore.velocity.z;
+                    
+                    // Fade out gradually
+                    spore.material.opacity = 0.6 * (lifetime / 100);
+                    
+                    // Remove when lifecycle is complete
+                    if (lifetime <= 0) {
+                        scene.remove(spore);
+                        return;
+                    }
+                    
+                    requestAnimationFrame(animateSpore);
+                };
+                
+                animateSpore();
+            }
+            
+            // Continue emitting spores if brick still exists
+            if (brick.parent) {
+                setTimeout(emitSpores, 1000 + Math.random() * 2000);
+            }
+        };
+        
+        // Start the spore emission process
+        emitSpores();
+    });
+}
+                    //
+function createFungusSpreadSound() {
+    return function() {
+        try {
+            if (!audioContext) return;
+            
+            // Create oscillator for "pop" sound
+            const osc = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            // Set frequency and waveform
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(180, audioContext.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(120, audioContext.currentTime + 0.2);
+            
+            // Set volume envelope
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.02);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+            
+            // Connect nodes
+            osc.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // Start and stop
+            osc.start();
+            osc.stop(audioContext.currentTime + 0.3);
+        } catch (e) {
+            console.warn('Could not play fungus sound', e);
+        }
+    };
+}
+
+function createBrickBreakSound() {
+    return function() {
+        try {
+            if (!audioContext) return;
+            
+            // Create noise-like sound for brick breaking
+            const osc = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
+            
+            // Set oscillator parameters
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(100 + Math.random() * 100, audioContext.currentTime);
+            
+            // Set filter parameters
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(800, audioContext.currentTime);
+            filter.Q.setValueAtTime(0.5, audioContext.currentTime);
+            
+            // Set volume envelope (quick attack, quick decay)
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15);
+            
+            // Connect nodes
+            osc.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // Start and stop
+            osc.start();
+            osc.stop(audioContext.currentTime + 0.15);
+        } catch (e) {
+            console.warn('Could not play brick break sound', e);
+        }
+    };
+}
+
+function initAudio() {
+    // Create audio context
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+        console.warn('Web Audio API not supported in this browser');
+        return;
+    }
+    
+    // Create fungus spread sound (organic "pop" sound)
+    fungusSpreadSound = createFungusSpreadSound();
+    
+    // Create brick break sound
+    brickBreakSound = createBrickBreakSound();
+}
+
+// Store initialization and functions
+function initializeStore() {
+    const storeItems = document.querySelectorAll('.store-item');
+    
+    storeItems.forEach(item => {
+        item.addEventListener('click', function() {
+            if (item.classList.contains('store-item-disabled')) {
+                // Show "not enough cash" notification
+                showNotification("Not enough cash!", item);
+                return;
+            }
+            
+            const itemType = item.getAttribute('data-item');
+            const itemCost = parseInt(item.getAttribute('data-cost'));
+            
+            // Purchase the item
+            if (purchaseItem(itemType, itemCost)) {
+                // Show purchase notification
+                showNotification(itemType + " purchased!", item);
+                
+                // Update store item availability
+                updateStoreItemAvailability();
+            }
+        });
+    });
+}
+
+function updateStoreItemAvailability() {
+    const storeItems = document.querySelectorAll('.store-item');
+    
+    storeItems.forEach(item => {
+        const itemCost = parseInt(item.getAttribute('data-cost'));
+        
+        if (cash >= itemCost) {
+            item.classList.remove('store-item-disabled');
+        } else {
+            item.classList.add('store-item-disabled');
+        }
+    });
+}
+
+function purchaseItem(itemType, cost) {
+    // Check if player has enough cash
+    if (cash < cost) {
+        return false;
+    }
+    
+    // Deduct the cost
+    cash -= cost;
+    updateCash();
+    
+    // Apply the purchased powerup effect
+    if (itemType === 'multiball') {
+        activateMultiball();
+    } else if (itemType === 'bomb') {
+        activateBomb();
+    } else if (itemType === 'tenball') {
+        activateTenBall();
+    } else if (itemType === 'turbo') {
+        // Add our turbo boost functionality
+        activateJump();
+    }
+    
+    return true;
+}
+
+function activateTenBall() {
+    // Find the main ball to use as a template
+    if (balls.length > 0) {
+        const sourceBall = balls[0];
+        
+        // Create 10 additional balls
+        for (let i = 0; i < 10; i++) {
+            const ballGeometry = new THREE.SphereGeometry(0.4, 32, 32);
+            const ballMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xaa00ff,
+                emissive: 0x550088
+            });
+            const newBall = new THREE.Mesh(ballGeometry, ballMaterial);
+            
+            // Position the new ball at the position of the source ball
+            newBall.position.copy(sourceBall.position);
+            
+            // Give each new ball a different random direction
+            const angleH = Math.random() * Math.PI * 2; // Random horizontal angle
+            const angleV = Math.random() * Math.PI / 2; // Random vertical angle (0 to 90 degrees)
+            
+            // Calculate direction components
+            const x = Math.sin(angleH) * Math.cos(angleV);
+            const y = Math.sin(angleV);
+            const z = -Math.cos(angleH) * Math.cos(angleV);
+            
+            newBall.direction = new THREE.Vector3(x, y, z).normalize();
+            
+            // Add ball trail
+            addBallTrail(newBall);
+            
+            scene.add(newBall);
+            balls.push(newBall);
+        }
+        
+        // Create spectacular 10-ball effect
+        create10BallEffect(sourceBall.position);
+    }
+}
+
+function create10BallEffect(position) {
+    // Create a burst of colored particles
+    const particleCount = 50;
+    const colors = [0xff00ff, 0xaa00ff, 0x7700ff, 0x4400ff, 0x0000ff];
+    
+    for (let i = 0; i < particleCount; i++) {
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        
+        const particle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.1, 8, 8),
+            new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.7
+            })
+        );
+        
+        // Position at the activation point
+        particle.position.copy(position);
+        
+        // Random velocity in all directions
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.random() * Math.PI;
+        const speed = 0.1 + Math.random() * 0.1;
+        
+        particle.velocity = new THREE.Vector3(
+            speed * Math.sin(phi) * Math.cos(theta),
+            speed * Math.sin(phi) * Math.sin(theta),
+            speed * Math.cos(phi)
+        );
+        
+        scene.add(particle);
+        
+        // Remove after animation
+        setTimeout(() => {
+            scene.remove(particle);
+        }, 1000);
+        
+        // Animate particle
+        const animateParticle = () => {
+            if (!particle.parent) return;
+            
+            particle.position.x += particle.velocity.x;
+            particle.position.y += particle.velocity.y;
+            particle.position.z += particle.velocity.z;
+            
+            // Slow down
+            particle.velocity.multiplyScalar(0.95);
+            
+            // Fade out
+            particle.material.opacity -= 0.01;
+            
+            if (particle.material.opacity <= 0) {
+                scene.remove(particle);
+                return;
+            }
+            
+            requestAnimationFrame(animateParticle);
+        };
+        
+        animateParticle();
+    }
+    
+    // Add a flash of light
+    const flash = new THREE.PointLight(0xaa00ff, 2, 10);
+    flash.position.copy(position);
+    scene.add(flash);
+    
+    // Fade out the flash
+    setTimeout(() => {
+        scene.remove(flash);
+    }, 500);
+}
+
+function showNotification(message, sourceElement) {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = 'notification';
+    notification.textContent = message;
+    
+    // Position it above the source element
+    const rect = sourceElement.getBoundingClientRect();
+    const container = document.getElementById('gameContainer');
+    const containerRect = container.getBoundingClientRect();
+    
+    notification.style.left = (rect.left + rect.width/2 - containerRect.left) + 'px';
+    notification.style.top = (rect.top - 20 - containerRect.top) + 'px';
+    
+    // Add to container
+    container.appendChild(notification);
+    
+    // Animate and remove
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateY(-20px)';
+        
+        setTimeout(() => {
+            container.removeChild(notification);
+        }, 1000);
+    }, 1000);
+}
+
+// Initialize the game when the window loads
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
