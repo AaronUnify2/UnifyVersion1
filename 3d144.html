@@ -1,0 +1,3528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Brick Breaker - With In-game Store</title>
+
+ <style>
+    #gameContainer {
+        position: relative;
+        width: 95%;
+        height: 85vh;
+        margin: 20px auto;
+        border: 2px solid #444;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    }
+    canvas { 
+        display: block; 
+        width: 100%; 
+        height: 100%; 
+    }    
+
+   body { margin: 0; overflow: hidden; touch-action: none; background-color: #000033; }
+        
+        #score { 
+            position: absolute; 
+            top: 10px; 
+            left: 10px; 
+            color: white; 
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            z-index: 10;
+        }
+        #cash {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #33cc33;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            z-index: 10;
+        }
+        #instructions {
+            position: absolute;
+            top: 40px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            z-index: 10;
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 36px;
+            display: none;
+            text-align: center;
+            z-index: 10;
+        }
+        #startButton {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            display: none;
+            z-index: 10;
+        }
+        #launchButton {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 30px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 100;
+            user-select: none;
+        }
+        #levelSelector {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #levelSelector select {
+            padding: 5px;
+            border-radius: 5px;
+        }
+        /* New pause button styles */
+        #pauseButton {
+            position: absolute;
+            top: 10px;
+            right: 120px;
+            background-color: #555;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 10px;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #pauseButton:hover {
+            background-color: #777;
+        }
+        /* Pause overlay styles */
+        #pauseOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 50, 0.7);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        #pauseOverlay h2 {
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        #resumeButton {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        #resumeButton:hover {
+            background-color: #45a049;
+        }
+        /* Pause icon styles */
+        .pause-icon {
+            width: 12px;
+            height: 14px;
+            position: relative;
+            margin-right: 5px;
+        }
+        .pause-icon::before, .pause-icon::after {
+            content: '';
+            position: absolute;
+            background-color: white;
+            width: 4px;
+            height: 14px;
+        }
+        .pause-icon::before {
+            left: 0;
+        }
+        .pause-icon::after {
+            right: 0;
+        }
+        /* Play icon styles for when game is paused */
+        .play-icon {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 7px 0 7px 12px;
+            border-color: transparent transparent transparent white;
+            margin-right: 5px;
+        }
+        
+        /* Store styles */
+        #storeContainer {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 20;
+            background-color: rgba(0, 0, 50, 0.7);
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 90%;
+        }
+        
+        .store-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            padding: 5px;
+            border: 1px solid #666;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .store-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            border-color: #aaa;
+        }
+        
+        .store-item-disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .store-item-disabled:hover {
+            transform: none;
+            box-shadow: none;
+            border-color: #666;
+        }
+        
+        .item-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 5px;
+        }
+        
+        .item-cost {
+            color: #33cc33;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .item-name {
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            text-align: center;
+        }
+        
+        .notification {
+            position: absolute;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 0 5px black;
+            opacity: 1;
+            transition: opacity 1s, transform 1s;
+            z-index: 100;
+            pointer-events: none;
+        }
+        
+        /* Responsive store adjustments */
+        @media (max-width: 600px) {
+            #storeContainer {
+                bottom: 70px;
+                padding: 8px;
+            }
+            
+            .item-icon {
+                width: 30px;
+                height: 30px;
+            }
+            
+            .item-cost {
+                font-size: 12px;
+            }
+            
+            .item-name {
+                font-size: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+
+    <div id="score">Score: 0</div>
+    <div id="cash">Cash: $3</div>
+    <div id="levelSelector">
+        <span>Level:</span>
+        <select id="levelSelect">
+            <option value="1">Level 1</option>
+            <option value="2">Level 2</option>
+            <option value="3">Level 3</option>
+        </select>
+    </div>
+    <button id="pauseButton"><span class="pause-icon"></span>Pause</button>
+    
+    <div id="gameOver">Game Over</div>
+    <button id="startButton">Restart Game</button>
+    <button id="launchButton">TAP TO LAUNCH</button>
+    
+    <!-- New store container -->
+    <div id="storeContainer">
+        <div class="store-item" data-item="multiball" data-cost="3">
+            <div class="item-icon">
+                <svg width="32" height="32" viewBox="0 0 32 32">
+                    <circle cx="16" cy="16" r="10" fill="#00ffff" />
+                    <circle cx="10" cy="14" r="5" fill="#00cccc" />
+                    <circle cx="20" cy="12" r="4" fill="#00aaaa" />
+                </svg>
+            </div>
+            <div class="item-cost">$3</div>
+            <div class="item-name">Multiball</div>
+        </div>
+        
+        <div class="store-item" data-item="bomb" data-cost="5">
+            <div class="item-icon">
+                <svg width="32" height="32" viewBox="0 0 32 32">
+                    <circle cx="16" cy="16" r="10" fill="#ff3333" />
+                    <path d="M16 8 L16 12" stroke="black" stroke-width="2" />
+                    <path d="M12 12 L20 12" stroke="black" stroke-width="2" />
+                    <path d="M21 17 L24 14" stroke="#ffcc00" stroke-width="2" />
+                    <path d="M11 17 L8 14" stroke="#ffcc00" stroke-width="2" />
+                </svg>
+            </div>
+            <div class="item-cost">$5</div>
+            <div class="item-name">Bomb</div>
+        </div>
+        
+        <div class="store-item" data-item="tenball" data-cost="10">
+            <div class="item-icon">
+                <svg width="32" height="32" viewBox="0 0 32 32">
+                    <text x="7" y="20" font-family="Arial" font-size="10" fill="white">10x</text>
+                    <circle cx="16" cy="10" r="4" fill="#aa00ff" />
+                    <circle cx="22" cy="16" r="4" fill="#aa00ff" />
+                    <circle cx="10" cy="16" r="4" fill="#aa00ff" />
+                </svg>
+            </div>
+            <div class="item-cost">$10</div>
+            <div class="item-name">10x Ball</div>
+        </div>
+    </div>
+    
+    <!-- Pause overlay -->
+    <div id="pauseOverlay">
+        <h2>GAME PAUSED</h2>
+        <button id="resumeButton">Resume Game</button>
+    </div>
+</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+     // Game variables
+        let scene, camera, renderer;
+        let paddle, ball;
+        let bricks = [];
+        let powerups = [];
+        let balls = [];
+        let lasers = [];
+        let paddleMultiballTimer = null;
+        let remainingPaddleBalls = 0;
+        let laserTimer = null;
+        let activeLasers = 0;
+        let paddleSpeed = 0.15;
+        let ballSpeed = 0.08;
+        let ballDirection = new THREE.Vector3(0.5, -1, 0).normalize();
+        let score = 0;
+        let cash = 3;
+        let level = 1;
+        let gameActive = true;
+        let ballLaunched = false;
+        let keysPressed = {};
+        let touchX = 0;
+        let launchButton;
+        
+        // Audio context for sound effects
+        let audioContext;
+        let fungusSpreadSound;
+        let brickBreakSound;
+        
+        // Pause system variables
+        let gamePaused = false;
+        let animationFrameId = null;
+        
+        // Bomb queue system variables
+        let bombQueue = [];
+        let activeBomb = null;
+        let totalBombsCollected = 0;
+        let totalBricksDestroyedByBombs = 0;
+        
+        // Game boundaries - WILL BE DYNAMICALLY ADJUSTED BASED ON LEVEL
+        let gameWidth = 32;
+        let gameHeight = 32;
+        let leftBound, rightBound, topBound, bottomBound;
+        
+        // ASCII Level Design
+        const brickSymbols = {
+            'R': { color: 0xff0000, points: 10 },  // Red
+            'O': { color: 0xff7700, points: 20 },  // Orange
+            'Y': { color: 0xffff00, points: 30 },  // Yellow
+            'G': { color: 0x00ff00, points: 40 },  // Green
+            'B': { color: 0x0077ff, points: 50 },  // Blue
+            'P': { color: 0xaa00ff, points: 60 },  // Purple
+            'W': { color: 0xffffff, points: 70 },  // White
+            'M': { color: 0xff00ff, points: 100 }, // Magenta (special brick)
+            'C': { color: 0x00ffff, points: 80 },  // Cyan
+            'X': { color: 0x888888, points: 0, indestructible: true }, // Gray (indestructible)
+            'F': { color: 0x33cc33, points: 150, fungus: true }, // Green fungus brick
+            'Z': { color: 0x8800bb, points: 200, phaze: true }, // Phaze brick - purple with blue tint
+            ' ': null  // Empty space (no brick)
+        };
+// Pre-defined ASCII Levels (Optimized)
+const asciiLevels = [
+    // Level 1 - Classic rows with fungus bricks (reduced size and 80% less fungus bricks)
+    `
+M
+
+RRRRRRRRRRRRRRRRRRR
+OOOOOOOOOOOOOOOOOOO
+RROORROYYYYYYYYYYO             F
+RROYORRROGGGGGGGGYO
+RROYGOYRROBBBBBBBGYO
+RROYGBGYORROPPPPPBGYO
+RROYGBPGYORRROWWWWWPBGYO      F
+RROYGBPYORRROCCCCCWPBGYO
+RROYGBWYRROCROYGBPWCWPBGYO
+RROYGBWYROYGBPWCROYGCWPBGYO
+RROYGBWYCYGBPWCROYGBCWPBGYO
+RROYGBWYCBPWCROYBPWCROYPBGYO
+RROYGBWYPWCROGBPWCROYBWPBGYO
+RROYGBWXXCROYGBPWCROYCWPBGYO
+RROYGBXYROYGBPWCROYCWPBGYO
+RROYGXWYRROYGBPWCXXCWPBGYO
+RROYGXPWCROYGBPWCROYCWPBGYO
+RROYGZXBXZXPWCROYGCWPBGYO
+RROYGBPWCROYGBPWCROYCWPBGYO
+RROYGBCWPBGYOF
+RROYGBCCCCCCCCCCCCCCWPBGYO
+RROYGBWPBGYORROYGBPWWWWWWPBGYO
+RROYGBPBGYORROYGBPPPPPPPBGYO
+RROYGBGYORROYGBBBBBBBBBGYO
+RROYGGYORROYGGGGGGGGGGGYO
+RROYYORROYYYYYYYYYYYYYO
+RROORROOOOOOOOOOOOOOOOO
+RRRRRRRRRRRRRRRRRRRRRRR
+
+M
+`,
+
+    // Level 2 - Fortress Layout (reduced size and 80% less fungus/phaze bricks)
+    `
+M
+M
+X                 X         X
+      X     X        X
+   X    X        X     X
+X            X            X
+XXXXXXXXXXXXXXXXXXXXXXXXXXX
+X                 X      X
+X   RRRR     RRRR    X           X
+X RRRRRR   RRRRRR   RR  X
+X RRFFRR   RRFFRR   RR  X   X
+X RRFWRR   RRFWRR   RR  X      X
+X RRRRRR   RRRRRR   RR  X   X
+X   RRRR     RRRR    R  X
+X                    X
+X     PPPPPPPPPP     X      X
+X    PPPPPPPPPPPP    X            X
+X    PP      PPPP    X      X
+X  PP        PPPP    X
+X  PP         PPP    X      X
+X  PP    M     PPP   X    
+X  PPP  MMM  PPP     X             X
+X    PPPPPPPPPP      X      X
+X     PPPPPPPP       X
+X                    X      X
+X  BBBBBBBBBBBBBBB   X       X
+X BBZZBBBBBBBBBBZB  X
+X BZ ZBBFFBBBBFBBZ ZB X
+X BZ ZBBFFBBBBFBBZ ZB X   X
+X BBZZBBBBBBBBBBZB  X
+X  BBBBBBBBBBBBBBB   X      X
+X                 
+XBBBBMMMXBXMMBBBBBBBXBX
+`,
+    
+    // Level 3 - Into the Void (reduced size and 80% less fungus/phaze bricks)
+    `
+
+XXXFFXXX
+XX    XX
+X      X
+X      X
+X      X
+RRRRRRRR
+OOOOOOOO            Z
+YYYYYYYY
+GGGGGGGG           
+BBBBBBBB
+PPPPPPPP           
+WWWWWWWW
+CCCCCCCC
+RRRRRRRR                   
+OOOOOOOO
+YYYYYYYY       
+GGGGGGGG
+BBBBBBBB           
+PPPPPPPP
+WWWWWWWW      F
+CCCCCCCC
+RRRRRRRR            
+OOOOOOOO
+YYYYYYYY                      
+GGGGGGGG       
+BBBBBBBB
+PPPPPPPP      
+WWWWWWWW
+CCCCCCCC                Z
+RRRRRRRR
+OOOOOOOO          Z
+YYYYYYYY
+GGGGGGGG                 
+BBBBBBBB        
+PPPPPPPP
+WWWWWWWW                  
+CCCCCCCC            Z
+RRRRRRRR    
+OOOOOOOO
+YYYYYYYY     Z              
+GGGGGGGG
+BBBBBBBB            F
+PPPPPPPP                 
+WWWWWWWW
+CCCCCCCC     
+RRRRRRRR                       
+OOOOOOOO
+YYYYYYYY      
+GGGGGGGG    
+BBBBBBBB
+PPPPPPPP                
+WWWWWWWW                
+CCCCCCCC       
+RRRRRRRR
+OOOOOOOO             
+YYYYYYYY  
+GGGGGGGG
+BBBBBBBB                 Z
+PPPPPPPP
+WWWWWWWW     Z      
+CCCCCCCC
+RRRRRRRR                
+OOOOOOOO
+YYYYYYYY             Z     
+GGGGGGGG
+BBBBBBBB
+PPPPPPPP
+WWWWWWWW
+CCCCCCCC
+RRRRRRRR
+RXXRRXXR
+   MM
+   MM
+   MM
+   MM
+   MM
+   MM
+   MM
+   MM
+   MM
+MMMMMMMMM
+    
+
+`,
+    // Level 4 - God of Thieves (reduced size, 80% less phaze bricks)
+`    
+M
+M
+M
+M
+M
+M
+M
+M
+MGGGGGZGGGGGGGGGXGGGGGG
+MGGGGGZGGGGGGGGGXGGGGGM
+MGGGGGZGGGGGGGGGXGGGGGX
+XXXGXZGGGGGGGGZZZGXGGXGXXGG
+XGGGGGGGGXGGGGXGGGGGGGGM
+MGGGGGGGGGGGGGXGGGGGGGGX
+MGGMMGGGGZGGGGXGGGGMMGGM
+MGGMWMGGGGGGGGXGGGMWMGGX
+MGGMWMGGGXGGGGXGGGMWMGGX
+GGGMMGGGGZGGGGXGGGGMMGGX
+MMGGGGGGGZGGGGXGGGGGGGGX
+XGGGGGGGGMGGGGXGGGGGGGGM
+XXGGZMMMMXGMGMZXGGSXGMGMXXXX
+MGGGGGGGGGGGGGGGGGGGGGGGX
+XGGGGGGGGGGGGGGGGGGGGGGGZP
+ZGGGGGGGGGGGGGGGGGGGGGGGZ
+MGGGGGGGGGGGGGGGGGGGGGGGX
+MMMGGGGGGGGGGGGGGGGGGGGGM
+XGGGGGGGGGGGGGGGGGGGGGGGG
+MMGGGGGGGGGGGGGGGGGGGGGGX
+XXMMZZXXXXGGGGGSXXMZMMMMMG
+XGGGGGGGGMRRRRRRMGGGGGGGGX
+ZGGGGGGGGXRRRRRRXGGGGGGGGZG
+ZGGGGGGGGMRRRRRRXGGGGGGGGZ
+XGGRRRRRGXRRRRRRXGGRRRRRGGM
+XGGRZZRRGMRRRRRRXGGRZZRRGGX
+ZGGRCCRRGXRRRRRRXGGRCCRRGGX
+XGGRCCRRGGRPPPPRMGGRCCRRGGX
+XGGRZZRRGZRPFPRXGGRMGMRGGM
+XGGRRRRRGXRPFPRXGGRRRRRGGZ
+XGGGGGGGGMRPPPPRZGGGGGGGGZ
+XGGGGGGGGXRRRRRRZGGGGGGGGZ
+XGGGGGGGGXRRRRRRXGGGGGGGGX
+XXFFFMMFMMMMGGZMMMMFFMMMZZX
+
+XX                        XX
+      XX            XX
+             XX
+
+            MM
+`,
+    // Level 5 - Bigfoots Shoe (reduced size, 80% less phaze/fungus bricks)
+    `
+                   MM
+                   MM
+                   MM
+                   MMMM
+                  MMMMM
+                 MMWWWMM
+                MMWBBBWMM
+               MMWBPPPBWMM
+              MMWBPZZPBWMM
+             MMWBPZCCZBWMM
+            MMWBPZXXXZBWMM
+           MMWBPZX   XZBWMM
+          MMWBPZX    XZBWMM
+         MMWBPZX     XZBWMM
+        MMWBPZX      XZBWMM
+       MMWBPZX       XZBWMM
+      MMWBPZX        XZBWMM
+     MMWBPZX         XZBWMM
+    MMMMXXXX         XXXXMMMM
+    MMMMX                XMMMM
+    MMMMX                XMMMM
+      MMMX                XMMM
+        MMX                XMM
+          MX                XM
+            XXXXXXXXXXXXXXXXX
+
+                    
+       BBBBBB                   
+      BBBBBB                 
+     BBBBBB                
+    BBBBBB               
+    BBRRRRBB                
+    BRBBBBRB                
+    BRBBBBRB                
+    BRBBBBRB                
+    BRBBBBRB                
+    BRBBBBRB                
+    BRBBBBRB                
+    BRBBBBRBBBBBBB       
+    BRBBBBRBBBBBBB      
+    BRRRRRRBBBBBBBB     
+    BBBBBBBBBBBBBB     
+    BBBBBBBBBBBBBB     
+    BBBBBBBBBBBBBB     
+    BBXXMMMXXXXXXXXX     
+YYYYYYXWWWWWWWWWWWWX     
+YYYYYYXWWRRRRWWWWWWX     
+YYYYYYXWRR  RRWWWWWX     
+YYYYYYXWR   RWWWWWWX     
+YYYYYYXWR   RWWWWWWX     
+YYYYYYXWR   RWWWWWWX     
+YYYYYYXXXXXXXXXXX     
+YYYYYYYYYYYYYYY       
+YYYYYYYYYYYYYYY       
+YYYYYYYYYYYYYYY       
+YYYYYYYYYYYYYYY       
+YYYYYYYYYYYYYYY
+`,
+    // Level 6 - The Judge (reduced size and 80% less fungus/phaze bricks)
+    `
+B
+B
+B
+W
+W
+W
+B
+XXXXXXXXXXXXXXXXXX
+X                 X
+X                 X
+X  BBBBBBBBBBBBB   X
+X  BBBBBBBBBBBBB   X
+X  BBWWWWWWWWWBB   X
+X  BBWWWWWWWWWBB   X
+X  BBWBBBBBBBWBB   X
+X  BBWBWWWWWWBWBB   X
+X  BBWBWXXWWXXBWBB   X
+X  BBWBWXXWWXXBWBB   X
+X  BBWBWWWWWWWBWBB   X
+X  BBWBWWWWWWWBWBB   X
+X  BBWBWWWWWWWBWBB   X           M
+X  BBWBWWWRRWWWBWBB   X
+X  BBWBWWRRRRRWBWBB   X
+X  BBWBWRRRRRRBWBB   X
+X  BBWBWRRRRRRBWBB   X
+X  BBWBWWRRRRRWBWBB   X
+X  BBWBWWWRRWWWBWBB   X
+X  BBWBWWWWWWWBWBB   X
+X  BBWBWWWWWWWBWBB   X
+X  BBWBBBBBBBWBB   X
+X  BBWWWWWWWWWBB   X
+X  BBWWWWWWWWWBB   X
+X  BBBBBBBBBBBBB   X
+X  BBBBBBBBBBBBB   X
+X                 X
+X                 X
+X    PPPPPPP       X
+X  PPPPPPPPP       X
+X PPPPPPPPP        X
+X PPWWPPWPP        X
+X PPWWPPWPP        X
+X PPPPPPPPP        X
+X PPPPPPPPP        Z
+X PPPPZPPPP        X
+X PPPZZZPPP        Z
+X PPPZMPPP        X
+X PPPZZZPPP        Z
+X PPPPZPPPP        X
+X PPPPPPPPP        Z
+X PPPPPPPPP        X
+X PPP   PPPP       Z
+X PP     PPP       X
+X P       PP       Z
+X                 X
+X                 X
+XMXMXMXMXMXMXMXMXMXMX
+
+M
+`,
+    // Level 7 - The Fungus Portal (Final Level - reduced size and 80% less fungus/phaze bricks)
+    `
+    FXFMMRRRRRXXX
+   WWWWWWWWWWW
+FFZMMZFMMMWWWW
+MMZMMZFRRFRWWWWW
+MFZZZZFXXMFWWWWW
+FRZFRZGRZFRZGRZFRZFRZFRZ
+MMMMMMMMMMMMMMMMMMMMMMMMM
+  WWWWZZZWWWW
+   WWWWWWZZZZW
+    FRFRFRGRMMM
+      FRGRFRGRG
+        WWWW
+         ZRZ
+          Z
+         RR
+       RRBBR
+     RRBBBBR
+   RRBBBBBBBR
+   RBPPPPPPPBR
+   RBPCCCCCPBR
+   RBPCYYYPCPBR
+   RBPCYGGPCPBR
+   RBPCYRRPCPBR
+   RBPCYRXPCPBR
+   RBPCYRXPCPBR
+   RBPCYRRPCPBR
+   RBPCYGGPCPBR
+   RBPCYYYPCPBR
+   RBPCCCCCPBR
+   RBPPPPPPPBR
+   RRBBBBBBBR
+     RRBBBBR
+       RRBBR
+         RR
+`,
+  // Level 8
+
+`
+XXXXXXXXXXXXXXXX
+F                X           F
+X 
+X
+X
+X
+FXXXXXXXXXXXXXXF
+X
+X
+X
+X
+X
+
+   
+`,
+    // Level 9 - The Friendly Fungus
+`
+
+              G
+              G
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG   F     F
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+              G
+              G
+              G
+              G
+              G
+              G
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG      F
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG      F
+              G
+              G
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+              G
+              G
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG   F     F
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+              G
+              G
+              G
+              G
+              G
+              G
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG      F
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG      F
+              G
+              G
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+              G
+              G
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG   F     F
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+              G
+              G
+              G
+              G
+              G
+              G
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG      F
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG      F
+              G
+              G
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+              G
+              G
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG   F     F
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+              G
+              G
+              G
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG      F
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG         
+              G
+              G
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+              G
+              G
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG   F     F
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+              G
+              G
+              G
+              G
+              G
+              G
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG      F
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX  F     F 
+XMMMMMMMMMMMMMMMMMMMMMMMMMMMX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG      F
+  
+ 
+  
+  
+ 
+ 
+    
+  
+  
+ 
+  
+ 
+ 
+ 
+`
+    
+];
+        
+        
+        // Initialize the game
+        function init() {
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000033);
+            
+            // Get container dimensions for aspect ratio
+            const container = document.getElementById('gameContainer');
+            const aspectRatio = container.clientWidth / container.clientHeight;
+            
+            // Create camera - will be properly adjusted in setupGameBoundaries()
+            camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
+            camera.position.z = 10;
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+           
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(0, 10, 5);
+            scene.add(directionalLight);
+            
+            // Setup game boundaries based on ASCII level
+            setupGameBoundaries();
+            
+            // Paddle
+            const paddleGeometry = new THREE.BoxGeometry(3.5, 0.5, 1);
+            const paddleMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+            paddle = new THREE.Mesh(paddleGeometry, paddleMaterial);
+            paddle.position.y = bottomBound;
+            scene.add(paddle);
+            
+            // Ball
+            const ballGeometry = new THREE.SphereGeometry(0.4, 32, 32);
+            const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+            ball = new THREE.Mesh(ballGeometry, ballMaterial);
+            ball.position.y = bottomBound + 0.9;
+            ball.position.x = paddle.position.x;
+            ball.direction = new THREE.Vector3(0.5, -1, 0).normalize();
+            scene.add(ball);
+            
+            // Add the main ball to the balls array
+            balls = [ball];
+            
+            // Clear powerups array
+            powerups = [];
+            
+            // Get level selector and update options
+            const levelSelect = document.getElementById('levelSelect');
+            levelSelect.innerHTML = ''; // Clear existing options
+            
+            // Create options for each level
+            for (let i = 0; i < asciiLevels.length; i++) {
+                const option = document.createElement('option');
+                option.value = i + 1;
+                option.textContent = `Level ${i + 1}`;
+                levelSelect.appendChild(option);
+            }
+            
+            levelSelect.addEventListener('change', function() {
+                level = parseInt(this.value);
+                
+                // First update boundaries
+                setupGameBoundaries();
+                
+                // Then create bricks after boundaries are established
+                createBricks();
+                
+                // Reset ball position
+                resetBall();
+                
+                // For debugging - uncomment to see boundaries
+                // showBoundaries();
+                
+                document.getElementById('launchButton').style.display = 'block';
+            });
+            
+            // Create bricks based on ASCII layout
+            createBricks();
+            
+            // Event listeners
+            launchButton = document.getElementById('launchButton');
+            const startButton = document.getElementById('startButton');
+            const pauseButton = document.getElementById('pauseButton');
+            const resumeButton = document.getElementById('resumeButton');
+            const pauseOverlay = document.getElementById('pauseOverlay');
+            
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('keyup', handleKeyUp);
+            window.addEventListener('resize', handleResize);
+            
+            renderer.domElement.addEventListener('touchstart', handleTouchStart, { passive: false });
+            renderer.domElement.addEventListener('touchmove', handleTouchMove, { passive: false });
+            renderer.domElement.addEventListener('touchend', handleTouchEnd, { passive: false });
+            
+            startButton.addEventListener('click', restartGame);
+            
+            // Pause button event listeners
+            pauseButton.addEventListener('click', togglePause);
+            resumeButton.addEventListener('click', resumeGame);
+            
+            launchButton.addEventListener('click', function(event) {
+                event.preventDefault();
+                launchBall();
+                return false;
+            });
+            
+            launchButton.addEventListener('touchstart', function(event) {
+                event.stopPropagation();
+            }, { passive: false });
+            
+            launchButton.addEventListener('touchend', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                launchBall();
+                return false;
+            }, { passive: false });
+            
+            // Initialize store
+            initializeStore();
+            updateStoreItemAvailability();
+            
+            // Initial setup
+            score = 0;
+            cash = 3;
+            updateScore();
+            updateCash();
+            ballLaunched = false;
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('startButton').style.display = 'none';
+            document.getElementById('launchButton').style.display = 'block';
+            
+            // Initialize bomb queue system variables
+            bombQueue = [];
+            activeBomb = null;
+            totalBombsCollected = 0;
+            totalBricksDestroyedByBombs = 0;
+            
+            gameActive = true;
+            gamePaused = false;
+            
+            // Start animation loop
+            animate();
+            
+            // Initialize bomb queue system
+            integrateFullBombQueueSystem();
+            
+            // Initialize audio
+            initAudio();
+            
+            
+            
+            // Start the fungus animation
+            animateFungusBricks();
+            
+            // Start the phaze brick animation
+            animatePhazeBricks();
+        }
+        
+        // Function to create phaze brick
+        function createPhazeBrick(x, y) {
+            const brickWidth = 1.3;
+            const brickHeight = 0.8;
+            const brickDepth = 1;
+            
+            // Create the brick with initial phaze appearance
+            const brickGeometry = new THREE.BoxGeometry(brickWidth, brickHeight, brickDepth);
+            const brickMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x8800bb,
+                transparent: true,
+                opacity: 0.9
+            });
+            
+            const brick = new THREE.Mesh(brickGeometry, brickMaterial);
+            brick.position.x = x;
+            brick.position.y = y;
+            
+            // Set the initial state (0 = normal, 1 = ghost/transparent, 2 = indestructible)
+            brick.userData = {
+                points: 200,
+                phaze: true,
+                phazeState: 0,
+                hitCount: 0
+            };
+            
+            // Add visual effect for phaze brick
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: 0xaa00ff,
+                transparent: true,
+                opacity: 0.2,
+                side: THREE.DoubleSide
+            });
+            
+            const glowMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(brickWidth * 1.1, brickHeight * 1.1, brickDepth * 1.2),
+                glowMaterial
+            );
+            
+            brick.add(glowMesh);
+            
+            // Add circular pattern on the brick to distinguish it
+            const patternMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ffff,
+                transparent: true,
+                opacity: 0.6
+            });
+            
+            // Add three small circles in a triangle pattern
+            const circleGeometry = new THREE.CircleGeometry(0.1, 16);
+            
+            const circle1 = new THREE.Mesh(circleGeometry, patternMaterial);
+            circle1.position.set(0, 0, 0.51);
+            brick.add(circle1);
+            
+            const circle2 = new THREE.Mesh(circleGeometry, patternMaterial);
+            circle2.position.set(-0.3, 0, 0.51);
+            brick.add(circle2);
+            
+            const circle3 = new THREE.Mesh(circleGeometry, patternMaterial);
+            circle3.position.set(0.3, 0, 0.51);
+            brick.add(circle3);
+            
+            return brick;
+        }
+        
+        // Function to update phaze brick state
+        function updatePhazeBrickState(phazeBrick) {
+            const currentState = phazeBrick.userData.phazeState;
+            
+            // Cycle to the next state (0 → 1 → 2 → 0)
+            const newState = (currentState + 1) % 3;
+            phazeBrick.userData.phazeState = newState;
+            
+            // Update appearance and properties based on new state
+            switch (newState) {
+                case 0: // Normal state - can be hit and destroyed
+                    phazeBrick.material.color.set(0x8800bb);
+                    phazeBrick.material.transparent = false;
+                    phazeBrick.material.opacity = 1.0;
+                    phazeBrick.userData.indestructible = false;
+                    phazeBrick.userData.isGhost = false;
+                    
+                    // Update the glow color
+                    if (phazeBrick.children[0]) {
+                        phazeBrick.children[0].material.color.set(0xaa00ff);
+                        phazeBrick.children[0].material.opacity = 0.2;
+                    }
+                    
+                    // Add pulsing animation
+                    animatePhazeBrick(phazeBrick);
+                    break;
+                    
+                case 1: // Ghost state - ball passes through
+                    phazeBrick.material.color.set(0x8800bb);
+                    phazeBrick.material.transparent = true;
+                    phazeBrick.material.opacity = 0.2;
+                    phazeBrick.userData.indestructible = true; // Technically not collidable
+                    phazeBrick.userData.isGhost = true;
+                    
+                    // Update the glow color
+                    if (phazeBrick.children[0]) {
+                        phazeBrick.children[0].material.color.set(0x00ffff);
+                        phazeBrick.children[0].material.opacity = 0.1;
+                    }
+                    break;
+                    
+                case 2: // Indestructible state
+                    phazeBrick.material.color.set(0x4400aa);
+                    phazeBrick.material.transparent = false;
+                    phazeBrick.material.opacity = 1.0;
+                    phazeBrick.userData.indestructible = true;
+                    phazeBrick.userData.isGhost = false;
+                    
+                    // Update the glow color
+                    if (phazeBrick.children[0]) {
+                        phazeBrick.children[0].material.color.set(0x00aaff);
+                        phazeBrick.children[0].material.opacity = 0.4;
+                    }
+                    break;
+            }
+            
+            return newState;
+        }
+        
+        // Animation function for phaze bricks
+        function animatePhazeBrick(phazeBrick) {
+            if (!phazeBrick.parent || gamePaused) return;
+            
+            // Only animate in normal state
+            if (phazeBrick.userData.phazeState === 0) {
+                const time = Date.now() * 0.001;
+                const pulse = Math.sin(time * 2) * 0.1 + 0.9;
+                
+                // Pulse the main brick
+                phazeBrick.scale.set(pulse, pulse, pulse);
+                
+                // Rotate the circles slightly
+                if (phazeBrick.children.length > 1) {
+                    for (let i = 1; i < phazeBrick.children.length; i++) {
+                        const circle = phazeBrick.children[i];
+                        circle.rotation.z = time * (i * 0.5);
+                    }
+                }
+            }
+        }
+        
+        
+
+// Function to animate all phaze bricks
+    function animatePhazeBricks() {
+        // Don't animate if game is paused
+        if (gamePaused) return;
+        
+        // Find all phaze bricks
+        bricks.forEach(brick => {
+            if (brick.parent && brick.userData.phaze) {
+                animatePhazeBrick(brick);
+            }
+        });
+        
+        // Continue the animation in the next frame
+        requestAnimationFrame(animatePhazeBricks);
+    }
+        
+    // Function to initialize audio
+    function initAudio() {
+        // Create audio context
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            console.warn('Web Audio API not supported in this browser');
+            return;
+        }
+        
+        // Create fungus spread sound (organic "pop" sound)
+        fungusSpreadSound = createFungusSpreadSound();
+        
+        // Create brick break sound
+        brickBreakSound = createBrickBreakSound();
+    }
+
+    // Function to create the fungus spread sound
+    function createFungusSpreadSound() {
+        return () => {
+            if (!audioContext) return;
+            
+            // Create oscillator
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            // Connect nodes
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // Configure sound
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(220, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(440, audioContext.currentTime + 0.1);
+            
+            // Volume envelope
+            gainNode.gain.setValueAtTime(0.01, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.3, audioContext.currentTime + 0.05);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            
+            // Start and stop
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.3);
+        };
+    }
+
+    // Function to create brick break sound
+    function createBrickBreakSound() {
+        return () => {
+            if (!audioContext) return;
+            
+            // Create noise for brick break
+            const bufferSize = 4096;
+            const whiteNoise = audioContext.createBufferSource();
+            const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            
+            // Fill buffer with noise
+            for (let i = 0; i < bufferSize; i++) {
+                output[i] = Math.random() * 2 - 1;
+            }
+            
+            whiteNoise.buffer = noiseBuffer;
+            
+            // Create gain node for volume control
+            const gainNode = audioContext.createGain();
+            whiteNoise.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            // Volume envelope for quick attack and decay
+            gainNode.gain.setValueAtTime(0.01, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            
+            // Play the sound
+            whiteNoise.start();
+            whiteNoise.stop(audioContext.currentTime + 0.1);
+        };
+    }
+    
+    // Function for animating fungus bricks
+    function animateFungusBricks() {
+        // Don't animate if game is paused
+        if (gamePaused) return;
+        
+        // Find all fungus bricks
+        bricks.forEach(brick => {
+            if (brick.parent && brick.userData.fungus) {
+                // Pulsating effect
+                const time = Date.now() * 0.001; // Convert to seconds for smoother animation
+                const pulse = Math.sin(time * 3) * 0.1 + 0.9; // Pulsate between 0.8 and 1.0 scale
+                
+                brick.scale.set(pulse, pulse, pulse);
+                
+                // Add a subtle rotation
+                brick.rotation.z = Math.sin(time * 2) * 0.1;
+                
+                // Make the spore effect more visible for the indestructible fungus bricks
+                if (Math.random() < 0.005) { // occasional light pulse
+                    const pulse = new THREE.PointLight(0x33ff33, 1, 3);
+                    brick.add(pulse);
+                    
+                    // Fade out the light
+                    setTimeout(() => {
+                        let intensity = 1;
+                        const fadeInterval = setInterval(() => {
+                            if (gamePaused) return;
+                            
+                            intensity -= 0.1;
+                            if (intensity <= 0) {
+                                brick.remove(pulse);
+                                clearInterval(fadeInterval);
+                                return;
+                            }
+                            
+                            pulse.intensity = intensity;
+                        }, 20);
+                    }, 100);
+                }
+                
+                // Emit spores (particles) occasionally
+                if (Math.random() < 0.01) { // 1% chance each frame
+                    createFungusSpore(brick.position);
+                }
+            }
+        });
+        
+        // Continue the animation in the next frame
+        requestAnimationFrame(animateFungusBricks);
+    }
+
+    // Create a visual spore particle
+    function createFungusSpore(position) {
+        // Create a small particle
+        const sporeGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+        const sporeMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x33ff33,
+            transparent: true,
+            opacity: 0.7
+        });
+        const spore = new THREE.Mesh(sporeGeometry, sporeMaterial);
+        
+        // Position it at the fungus brick with slight random offset
+        spore.position.set(
+            position.x + (Math.random() - 0.5) * 0.5,
+            position.y + (Math.random() - 0.5) * 0.5,
+            position.z
+        );
+        
+        // Give it a random direction
+        const angle = Math.random() * Math.PI * 2;
+        spore.direction = new THREE.Vector3(
+            Math.sin(angle) * 0.03,
+            Math.cos(angle) * 0.03,
+            0
+        );
+        
+        // Add to scene and set up its lifecycle
+        scene.add(spore);
+        
+        // Set a lifespan for the spore
+        let lifespan = 60; // Frames
+        
+        const updateSpore = () => {
+            if (gamePaused) {
+                requestAnimationFrame(updateSpore);
+                return;
+            }
+            
+            // Move the spore
+            spore.position.x += spore.direction.x;
+            spore.position.y += spore.direction.y;
+            
+            // Fade out over time
+            lifespan--;
+            spore.material.opacity = lifespan / 60;
+            
+            // Remove when lifecycle is complete
+            if (lifespan <= 0) {
+                scene.remove(spore);
+                return;
+            }
+            
+            requestAnimationFrame(updateSpore);
+        };
+        
+        requestAnimationFrame(updateSpore);
+    }
+    
+    // Fungus brick reaction function - called when a normal brick is destroyed
+    function fungusBrickReact() {
+        // Find all fungus bricks
+        const fungusBricks = bricks.filter(brick => 
+            brick.parent && brick.userData.fungus
+        );
+        
+        // If there are no fungus bricks, return
+        if (fungusBricks.length === 0) return;
+        
+        // For each fungus brick, spawn new bricks
+        fungusBricks.forEach(fungusBrick => {
+            // Play fungus activation sound
+            if (fungusSpreadSound) {
+                fungusSpreadSound();
+            }
+            
+            // Visual feedback on the fungus brick
+            const glowEffect = new THREE.Mesh(
+                new THREE.BoxGeometry(2, 1.2, 1),
+                new THREE.MeshBasicMaterial({ 
+                    color: 0x33ff33, 
+                    transparent: true, 
+                    opacity: 0.6 
+                })
+            );
+            fungusBrick.add(glowEffect);
+            
+            // Fade out the glow effect
+            let glowOpacity = 0.6;
+            const glowInterval = setInterval(() => {
+                if (gamePaused) return;
+                
+                glowOpacity -= 0.05;
+                if (glowOpacity <= 0) {
+                    fungusBrick.remove(glowEffect);
+                    clearInterval(glowInterval);
+                    return;
+                }
+                
+                glowEffect.material.opacity = glowOpacity;
+            }, 50);
+            
+            // First wave: Create bricks in a + pattern (cross)
+            const brickWidth = 1.3;
+            const brickHeight = 0.8;
+            const spacing = 0.15;
+            
+            const crossPositions = [
+                { x: 0, y: brickHeight + spacing }, // Above
+                { x: 0, y: -(brickHeight + spacing) }, // Below
+                { x: brickWidth + spacing, y: 0 }, // Right
+                { x: -(brickWidth + spacing), y: 0 } // Left
+            ];
+            
+            // Create the cross pattern bricks
+            createFungusBricks(fungusBrick.position, crossPositions);
+            
+            // Schedule creation of X pattern after a delay
+            setTimeout(() => {
+                // Second wave: Create bricks in an X pattern
+                const xPositions = [
+                    { x: brickWidth + spacing, y: brickHeight + spacing }, // Top-right
+                    { x: -(brickWidth + spacing), y: brickHeight + spacing }, // Top-left
+                    { x: brickWidth + spacing, y: -(brickHeight + spacing) }, // Bottom-right
+                    { x: -(brickWidth + spacing), y: -(brickHeight + spacing) } // Bottom-left
+                ];
+                
+                // Create the X pattern bricks
+                createFungusBricks(fungusBrick.position, xPositions);
+            }, 500); // Half-second delay before the X pattern appears
+        });
+    }
+
+    // Helper function to create new bricks spawned by fungus
+    function createFungusBricks(originPosition, offsets) {
+        // Play fungus spread sound
+        if (fungusSpreadSound) {
+            fungusSpreadSound();
+        }
+        
+        offsets.forEach(offset => {
+            // Calculate the position for the new brick
+            const newX = originPosition.x + offset.x;
+            const newY = originPosition.y + offset.y;
+            
+            // Check if the position is within the valid game area
+            const brickWidth = 1.3;
+            const brickHeight = 0.8;
+            const halfWidth = brickWidth / 2;
+            const halfHeight = brickHeight / 2;
+            
+            // Skip if outside the boundaries
+            if (newX - halfWidth < leftBound || 
+                newX + halfWidth > rightBound || 
+                newY - halfHeight < bottomBound + 4 || 
+                newY + halfHeight > topBound) {
+                return;
+            }
+            
+            // Check if there's already a brick at this position
+            for (const brick of bricks) {
+                if (brick.parent && 
+                    Math.abs(brick.position.x - newX) < halfWidth && 
+                    Math.abs(brick.position.y - newY) < halfHeight) {
+                    return; // Skip if a brick already exists here
+                }
+            }
+            
+            // Randomly choose a brick type to spawn (not fungus)
+            const normalBrickTypes = ['R', 'O', 'Y', 'G', 'B', 'P', 'W'];
+            const randomType = normalBrickTypes[Math.floor(Math.random() * normalBrickTypes.length)];
+            const brickInfo = brickSymbols[randomType];
+            
+            // Create a new brick
+            const brickGeometry = new THREE.BoxGeometry(brickWidth, brickHeight, 1);
+            const brickMaterial = new THREE.MeshPhongMaterial({ color: brickInfo.color });
+            const newBrick = new THREE.Mesh(brickGeometry, brickMaterial);
+            
+            newBrick.position.x = newX;
+            newBrick.position.y = newY;
+            
+            // Store brick properties in userData
+            newBrick.userData = {
+                points: brickInfo.points,
+                fungusSpawned: true  // Flag to track that this brick was spawned by fungus
+            };
+            
+            scene.add(newBrick);
+            bricks.push(newBrick);
+            
+            // Visual effect for new brick appearance
+            newBrick.scale.set(0.1, 0.1, 0.1); // Start small
+            
+            // Create spore particles around the spawning brick
+            for (let i = 0; i < 5; i++) {
+                createFungusSpore(newBrick.position);
+            }
+            
+            // Animate the brick growing
+            const growInterval = setInterval(() => {
+                if (gamePaused) return;
+                
+                newBrick.scale.x += 0.1;
+                newBrick.scale.y += 0.1;
+                newBrick.scale.z += 0.1;
+                
+                if (newBrick.scale.x >= 1) {
+                    newBrick.scale.set(1, 1, 1);
+                    clearInterval(growInterval);
+                }
+            }, 20);
+        });
+    }
+    
+    // UPDATED: setupGameBoundaries function with improved boundary calculation
+    function setupGameBoundaries() {
+        const levelIndex = level - 1;
+        if (levelIndex < 0 || levelIndex >= asciiLevels.length) return;
+        
+        const asciiLevel = asciiLevels[levelIndex];
+        const rows = asciiLevel.trim().split('\n');
+        
+        // Calculate the width of the ASCII level based on the longest row
+        const maxRowLength = Math.max(...rows.map(row => row.length));
+        
+        // Calculate required game dimensions to fit all bricks
+        const brickWidth = 1.3;
+        const brickHeight = 0.8;
+        const spacing = 0.15;
+        
+        // Calculate minimum required width and height 
+        const minRequiredWidth = maxRowLength * (brickWidth + spacing);
+        const minRequiredHeight = rows.length * (brickHeight + spacing) + 15; // Extra space for paddle
+        
+        // Set game dimensions with some padding
+        gameWidth = Math.max(32, minRequiredWidth + 10);
+        gameHeight = Math.max(32, minRequiredHeight + 10);
+        
+        // Set game boundaries - these are the invisible walls
+        leftBound = -gameWidth/2 + 0.5;
+        rightBound = gameWidth/2 - 0.5;
+        topBound = gameHeight/2 - 1.5;
+        
+        // Always keep paddle at a fixed distance from bottom
+        const paddleOffset = 15; // Distance from bottom edge to paddle
+        bottomBound = -gameHeight/2 + paddleOffset;
+        
+        // Adjust camera to fit the new game dimensions
+        updateCameraForGameDimensions();
+        
+        // Adjust paddle position to new bottom bound
+        if (paddle) {
+            paddle.position.y = bottomBound;
+            
+            // IMPORTANT: Make sure paddle stays within the new horizontal bounds
+            const paddleHalfWidth = paddle.geometry.parameters.width / 2;
+            paddle.position.x = Math.max(
+                leftBound + paddleHalfWidth, 
+                Math.min(rightBound - paddleHalfWidth, paddle.position.x)
+            );
+        }
+        
+        // IMPORTANT: Make sure all balls stay within the new boundaries
+        balls.forEach(ball => {
+            // Adjust ball position if it's outside the new boundaries
+            const ballRadius = 0.4;
+            ball.position.x = Math.max(
+                leftBound + ballRadius, 
+                Math.min(rightBound - ballRadius, ball.position.x)
+            );
+            ball.position.y = Math.min(topBound - ballRadius, ball.position.y);
+        });
+        
+        console.log(`Level ${level} dimensions: ${gameWidth} x ${gameHeight}`);
+        console.log(`Game boundaries: L:${leftBound.toFixed(2)} R:${rightBound.toFixed(2)} T:${topBound.toFixed(2)} B:${bottomBound.toFixed(2)}`);
+    }
+    
+    // IMPROVED: updateCameraForGameDimensions function for better display of game area
+    function updateCameraForGameDimensions() {
+        const container = document.getElementById('gameContainer');
+        const aspectRatio = container.clientWidth / container.clientHeight;
+        
+        // Determine which dimension constrains the view
+        const viewWidth = gameWidth;
+        const viewHeight = gameHeight;
+        
+        // Calculate whether we're constrained by width or height based on aspect ratio
+        const gameAspectRatio = viewWidth / viewHeight;
+        
+        if (aspectRatio > gameAspectRatio) {
+            // Container is wider than game area, so height is the constraint
+            camera.left = -(viewHeight * aspectRatio) / 2;
+            camera.right = (viewHeight * aspectRatio) / 2;
+            camera.top = viewHeight / 2;
+            camera.bottom = -viewHeight / 2;
+        } else {
+            // Container is taller than game area, so width is the constraint
+            camera.left = -viewWidth / 2;
+            camera.right = viewWidth / 2;
+            camera.top = viewWidth / (2 * aspectRatio);
+            camera.bottom = -viewWidth / (2 * aspectRatio);
+        }
+
+        camera.updateProjectionMatrix();
+    }
+    
+    // UPDATED: createBricks function to work better with dynamic boundaries
+    function createBricks() {
+        // Remove existing bricks
+        bricks.forEach(brick => scene.remove(brick));
+        bricks = [];
+        
+        // Get the ASCII layout for the current level
+        const levelIndex = level - 1;
+        if (levelIndex < 0 || levelIndex >= asciiLevels.length) return;
+        
+        const asciiLevel = asciiLevels[levelIndex];
+        const rows = asciiLevel.trim().split('\n');
+        
+        // Brick dimensions
+        const brickWidth = 1.3;
+        const brickHeight = 0.8;
+        const brickDepth = 1;
+        const spacing = 0.15;
+        
+        // Calculate the total width of the level
+        const maxRowLength = Math.max(...rows.map(row => row.length));
+        const totalWidth = maxRowLength * (brickWidth + spacing) - spacing;
+        
+        // Calculate the starting position (top-left corner of the level)
+        const startX = Math.max(leftBound + brickWidth/2 + 0.5, -totalWidth / 2);
+        const startY = topBound - brickHeight - 1; // Start a bit lower from the top to leave some space
+        
+        console.log(`Creating bricks for level ${level}. Start position: ${startX.toFixed(2)}, ${startY.toFixed(2)}`);
+        
+        // Create bricks based on ASCII layout
+        for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+            const row = rows[rowIndex];
+            for (let colIndex = 0; colIndex < row.length; colIndex++) {
+                const symbol = row[colIndex];
+                
+                // Skip if the symbol is a space or not defined
+                if (symbol === ' ' || !brickSymbols[symbol]) continue;
+                
+                const brickInfo = brickSymbols[symbol];
+                
+                // Calculate x position with proper centering
+                const xPos = startX + colIndex * (brickWidth + spacing);
+                
+                // Calculate the position for this brick's row
+                const rowPosition = startY - rowIndex * (brickHeight + spacing);
+                
+                // Skip creating bricks that would be outside the playable area
+                const brickLeftEdge = xPos - brickWidth/2;
+                const brickRightEdge = xPos + brickWidth/2;
+                const minBrickY = bottomBound + 4 * (brickHeight + spacing); // 4 rows of space above paddle
+                
+                if (brickLeftEdge < leftBound || brickRightEdge > rightBound || rowPosition < minBrickY) {
+                    continue; // Skip this brick as it's outside the playable area
+                }
+                
+                // Special handling for phaze bricks
+                if (symbol === 'Z') {
+                    const phazeBrick = createPhazeBrick(xPos, rowPosition);
+                    scene.add(phazeBrick);
+                    bricks.push(phazeBrick);
+                    continue;
+                }
+                
+                // Normal brick creation for non-phaze bricks
+                const brickGeometry = new THREE.BoxGeometry(brickWidth, brickHeight, brickDepth);
+                const brickMaterial = new THREE.MeshPhongMaterial({ color: brickInfo.color });
+                const brick = new THREE.Mesh(brickGeometry, brickMaterial);
+                
+                brick.position.x = xPos;
+                brick.position.y = rowPosition;
+                
+                // Store brick properties in userData
+                brick.userData = {
+                    points: brickInfo.points,
+                    indestructible: brickInfo.indestructible || false,
+                    fungus: brickInfo.fungus || false
+                };
+                
+                // Enhanced visual for fungus bricks
+                if (brickInfo.fungus) {
+                    // Add a subtle glow effect
+                    const glowMaterial = new THREE.MeshBasicMaterial({
+                        color: 0x33ff33,
+                        transparent: true,
+                        opacity: 0.3
+                    });
+                    const glowMesh = new THREE.Mesh(
+                        new THREE.BoxGeometry(brickWidth * 1.2, brickHeight * 1.2, brickDepth),
+                        glowMaterial
+                    );
+                    brick.add(glowMesh);
+                    
+                    // Add a spore pattern on the brick
+                    const sporePatterns = [
+                        [-0.3, -0.2, 0.1],
+                        [0.2, 0.1, 0.1],
+                        [-0.1, 0.2, 0.1],
+                        [0.3, -0.1, 0.1]
+                    ];
+                    
+                    sporePatterns.forEach(pattern => {
+                        const sporeGeometry = new THREE.SphereGeometry(pattern[2], 8, 8);
+                        const sporeMaterial = new THREE.MeshBasicMaterial({ color: 0x44ff44 });
+                        const spore = new THREE.Mesh(sporeGeometry, sporeMaterial);
+                        spore.position.set(pattern[0], pattern[1], 0.51); // Slightly above brick surface
+                        brick.add(spore);
+                    });
+                }
+                
+                scene.add(brick);
+                bricks.push(brick);
+            }
+        }
+        
+        console.log(`Created ${bricks.length} bricks for level ${level}`);
+    }// Helper function for debugging boundary issues
+    function showBoundaries() {
+        // Create visible markers at the game boundaries
+        const boundaryObjects = [];
+        const markerGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+        
+        // Left boundary marker
+        const leftMarker = new THREE.Mesh(
+            markerGeometry, 
+            new THREE.MeshBasicMaterial({ color: 0xff0000 })
+        );
+        leftMarker.position.set(leftBound, 0, 0);
+        scene.add(leftMarker);
+        boundaryObjects.push(leftMarker);
+        
+        // Right boundary marker
+        const rightMarker = new THREE.Mesh(
+            markerGeometry, 
+            new THREE.MeshBasicMaterial({ color: 0xff0000 })
+        );
+        rightMarker.position.set(rightBound, 0, 0);
+        scene.add(rightMarker);
+        boundaryObjects.push(rightMarker);
+        
+        // Top boundary marker
+        const topMarker = new THREE.Mesh(
+            markerGeometry, 
+            new THREE.MeshBasicMaterial({ color: 0x00ffff })
+        );
+        topMarker.position.set(0, topBound, 0);
+        scene.add(topMarker);
+        boundaryObjects.push(topMarker);
+        
+        // Bottom boundary marker
+        const bottomMarker = new THREE.Mesh(
+            markerGeometry, 
+            new THREE.MeshBasicMaterial({ color: 0xffff00 })
+        );
+        bottomMarker.position.set(0, bottomBound, 0);
+        scene.add(bottomMarker);
+        boundaryObjects.push(bottomMarker);
+        
+        // Create boundary lines to visualize the play area
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x44ff44 });
+        
+        // Top boundary line
+        const topLine = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(leftBound, topBound, 0),
+                new THREE.Vector3(rightBound, topBound, 0)
+            ]),
+            lineMaterial
+        );
+        scene.add(topLine);
+        boundaryObjects.push(topLine);
+        
+        // Bottom boundary line
+        const bottomLine = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(leftBound, bottomBound, 0),
+                new THREE.Vector3(rightBound, bottomBound, 0)
+            ]),
+            lineMaterial
+        );
+        scene.add(bottomLine);
+        boundaryObjects.push(bottomLine);
+        
+        // Left boundary line
+        const leftLine = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(leftBound, topBound, 0),
+                new THREE.Vector3(leftBound, bottomBound, 0)
+            ]),
+            lineMaterial
+        );
+        scene.add(leftLine);
+        boundaryObjects.push(leftLine);
+        
+        // Right boundary line
+        const rightLine = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(rightBound, topBound, 0),
+                new THREE.Vector3(rightBound, bottomBound, 0)
+            ]),
+            lineMaterial
+        );
+        scene.add(rightLine);
+        boundaryObjects.push(rightLine);
+        
+        console.log("Game dimensions:", gameWidth, "x", gameHeight);
+        console.log("Game boundaries:", leftBound, rightBound, topBound, bottomBound);
+        console.log("Brick count:", bricks.length);
+        
+        // Remove debug visualization after 5 seconds
+        setTimeout(() => {
+            boundaryObjects.forEach(obj => scene.remove(obj));
+        }, 5000);
+    }
+    
+    // FIXED: Level transition function to properly handle boundaries
+    function nextLevel() {
+        level++;
+        
+        // If we completed all available levels, go back to level 1 with faster ball
+        if (level > asciiLevels.length) {
+            level = 1;
+            ballSpeed *= 1.2; // Increase difficulty
+        }
+        
+        // Update level selector UI
+        document.getElementById('levelSelect').value = level;
+        
+        // Clear all bombs
+        clearBombs();
+        
+        // Setup new game boundaries BEFORE creating bricks or resetting ball
+        setupGameBoundaries();
+        
+        // Create new bricks for the level
+        createBricks();
+        
+        // Reset ball position and state
+        resetBall();
+        
+        // Show launch button
+        document.getElementById('launchButton').style.display = 'block';
+    }
+    
+    function moveBall() {
+        if (!ballLaunched) return;
+        
+        // Handle multiple balls
+        for (let i = balls.length - 1; i >= 0; i--) {
+            const currentBall = balls[i];
+            
+            currentBall.position.x += currentBall.direction.x * ballSpeed;
+            currentBall.position.y += currentBall.direction.y * ballSpeed;
+            
+            const ballRadius = 0.4;
+            
+            // Wall collisions
+            if (currentBall.position.x > rightBound - ballRadius || currentBall.position.x < leftBound + ballRadius) {
+                currentBall.direction.x = -currentBall.direction.x;
+            }
+            if (currentBall.position.y > topBound - ballRadius) {
+                currentBall.direction.y = -currentBall.direction.y;
+            }
+            if (currentBall.position.y < bottomBound - 1) {
+                // For additional balls, just remove them
+                if (i > 0) {
+                    scene.remove(currentBall);
+                    balls.splice(i, 1);
+                } else if (balls.length === 1) {
+                    // Only lose cash if it's the last ball
+                    spendCash();
+                }
+                continue;
+            }
+            
+            // Paddle collision - dynamically calculate the paddle width
+            const paddleWidth = paddle.geometry.parameters.width;
+            const paddleHalfWidth = paddleWidth / 2;
+            const paddleTop = bottomBound + 0.25;
+            const paddleBottom = bottomBound - 0.25;
+            
+            if (currentBall.position.y - ballRadius <= paddleTop && 
+                currentBall.position.y + ballRadius >= paddleBottom && 
+                currentBall.position.x >= paddle.position.x - paddleHalfWidth &&
+                currentBall.position.x <= paddle.position.x + paddleHalfWidth) {
+                
+                if (currentBall.direction.y < 0) {
+                    const hitPosition = (currentBall.position.x - paddle.position.x) / paddleHalfWidth;
+                    const angle = hitPosition * Math.PI / 3;
+                    
+                    currentBall.direction.x = Math.sin(angle);
+                    currentBall.direction.y = Math.cos(angle);currentBall.direction.normalize();
+                    
+                    currentBall.position.y = paddleTop + ballRadius + 0.01;
+                }
+            }
+            
+            // Brick collisions
+            for (let j = 0; j < bricks.length; j++) {
+                const brick = bricks[j];
+                // Skip bricks that have already been hit
+                if (!brick.parent) continue;
+                
+                // Use the actual half width and height of the brick from its geometry
+                const brickHalfWidth = brick.geometry.parameters.width / 2;
+                const brickHalfHeight = brick.geometry.parameters.height / 2;
+                
+                if (currentBall.position.x + ballRadius > brick.position.x - brickHalfWidth &&
+                    currentBall.position.x - ballRadius < brick.position.x + brickHalfWidth &&
+                    currentBall.position.y + ballRadius > brick.position.y - brickHalfHeight &&
+                    currentBall.position.y - ballRadius < brick.position.y + brickHalfHeight) {
+                    
+                    const dx = currentBall.position.x - brick.position.x;
+                    const dy = currentBall.position.y - brick.position.y;
+                    const absDx = Math.abs(dx);
+                    const absDy = Math.abs(dy);
+                    
+                    const overlapX = brickHalfWidth + ballRadius - absDx;
+                    const overlapY = brickHalfHeight + ballRadius - absDy;
+                    
+                    // Bounce the ball
+                    if (overlapX < overlapY) {
+                        currentBall.direction.x = -currentBall.direction.x;
+                        currentBall.position.x += (dx > 0) ? overlapX : -overlapX;
+                    } else {
+                        currentBall.direction.y = -currentBall.direction.y;
+                        currentBall.position.y += (dy > 0) ? overlapY : -overlapY;
+                    }
+                    
+                    // Handle ghost phaze bricks - ball passes through
+                    if (brick.userData.isGhost) {
+                        continue; // Skip collision, ball passes through
+                    }
+                    
+                    // Handle indestructible bricks
+                    if (brick.userData.indestructible) {
+                        continue; // Skip removing the brick
+                    }
+                    
+                    // Handle phaze brick state transitions
+                    if (brick.userData.phaze) {
+                        // Only remove the brick if it's in normal state (not ghost or indestructible)
+                        if (brick.userData.phazeState !== 0) {
+                            continue; // Skip removing the brick
+                        }
+                    }
+                    
+                    // Remove the brick
+                    scene.remove(brick);
+                    score += brick.userData.points || 10; // Use the points from userData or default to 10
+                    updateScore();
+                    
+                    // Play brick break sound
+                    if (brickBreakSound) {
+                        brickBreakSound();
+                    }
+                    
+                    // Trigger fungus bricks to react when any normal brick is destroyed
+                    if (!brick.userData.fungus) {  // Only react when non-fungus bricks are destroyed
+                        fungusBrickReact();
+                    }
+                    
+                    // Update all phaze bricks when any brick is destroyed
+                    const phazeBricks = bricks.filter(b => 
+                        b.parent && b.userData.phaze
+                    );
+                    
+                    if (phazeBricks.length > 0) {
+                        phazeBricks.forEach(phazeBrick => {
+                            updatePhazeBrickState(phazeBrick);
+                        });
+                    }
+                    
+                    // Chance to spawn a powerup (higher chance for special bricks)
+                    const powerupChance = brick.userData.points >= 80 ? 0.5 : 0.3;
+                    if (Math.random() < powerupChance) {
+                        spawnPowerup(brick.position.x, brick.position.y);
+                    }
+                    
+                    // Check if all non-indestructible bricks are cleared
+                    const remainingBricks = bricks.filter(b => 
+                        b.parent && (!b.userData.indestructible)
+                    );
+                    
+                    if (remainingBricks.length === 0) {
+                        // Use the nextLevel function to handle level transition properly
+                        nextLevel();
+                    }
+                    
+                    break;
+                }
+            }
+        }
+        
+        // Move powerups
+        movePowerups();
+    }
+
+    // Store initialization and functions
+    function initializeStore() {
+        const storeItems = document.querySelectorAll('.store-item');
+        
+        storeItems.forEach(item => {
+            item.addEventListener('click', function() {
+                if (item.classList.contains('store-item-disabled')) {
+                    // Show "not enough cash" notification
+                    showNotification("Not enough cash!", item);
+                    return;
+                }
+                
+                const itemType = item.getAttribute('data-item');
+                const itemCost = parseInt(item.getAttribute('data-cost'));
+                
+                // Purchase the item
+                if (purchaseItem(itemType, itemCost)) {
+                    // Show purchase notification
+                    showNotification(itemType + " purchased!", item);
+                    
+                    // Update store item availability
+                    updateStoreItemAvailability();
+                }
+            });
+        });
+    }
+    
+    function updateStoreItemAvailability() {
+        const storeItems = document.querySelectorAll('.store-item');
+        
+        storeItems.forEach(item => {
+            const itemCost = parseInt(item.getAttribute('data-cost'));
+            
+            if (cash >= itemCost) {
+                item.classList.remove('store-item-disabled');
+            } else {
+                item.classList.add('store-item-disabled');
+            }
+        });
+    }
+    
+    function purchaseItem(itemType, cost) {
+        // Check if player has enough cash
+        if (cash < cost) {
+            return false;
+        }
+        
+        // Deduct the cost
+        cash -= cost;
+        updateCash();
+        
+        // Apply the purchased powerup effect
+        if (itemType === 'multiball') {
+            activateMultiball();
+        } else if (itemType === 'bomb') {
+            activateBomb();
+        } else if (itemType === 'tenball') {
+            activateTenBall();
+        }
+        
+        return true;
+    }
+    
+    function showNotification(message, sourceElement) {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = 'notification';
+        notification.textContent = message;
+        
+        // Position it above the source element
+        const rect = sourceElement.getBoundingClientRect();
+        const container = document.getElementById('gameContainer');
+        const containerRect = container.getBoundingClientRect();
+        
+        notification.style.left = (rect.left + rect.width/2 - containerRect.left) + 'px';
+        notification.style.top = (rect.top - 20 - containerRect.top) + 'px';
+        
+        // Add to container
+        container.appendChild(notification);
+        
+        // Animate and remove
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateY(-20px)';
+            
+            setTimeout(() => {
+                container.removeChild(notification);
+            }, 1000);
+        }, 1000);
+    }
+    
+    // New 10x Ball powerup function
+    function activateTenBall() {
+        // Create 10 new balls around the paddle
+        for (let i = 0; i < 10; i++) {
+            const ballGeometry = new THREE.SphereGeometry(0.4, 32, 32);
+            const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xaa00ff }); // Purple color for 10xball
+            const newBall = new THREE.Mesh(ballGeometry, ballMaterial);
+            
+            // Position the ball just above the paddle with slight offset
+            const offsetX = (Math.random() - 0.5) * 3;
+            newBall.position.x = paddle.position.x + offsetX;
+            newBall.position.y = bottomBound + 1.2;
+            
+            // Give each ball a slightly different upward direction
+            const angle = (Math.random() * Math.PI / 2) - (Math.PI / 4); // -45° to +45°
+            newBall.direction = new THREE.Vector3(
+                Math.sin(angle),
+                Math.cos(angle),
+                0
+            ).normalize();
+            
+            scene.add(newBall);
+            balls.push(newBall);
+        }
+        
+        // Add visual effect
+        const container = document.getElementById('gameContainer');
+        const flashEffect = document.createElement('div');
+        flashEffect.style.position = 'absolute';
+        flashEffect.style.top = '0';
+        flashEffect.style.left = '0';
+        flashEffect.style.width = '100%';
+        flashEffect.style.height = '100%';
+        flashEffect.style.backgroundColor = 'rgba(170, 0, 255, 0.3)';
+        flashEffect.style.opacity = '1';
+        flashEffect.style.transition = 'opacity 0.5s';
+        flashEffect.style.pointerEvents = 'none';
+        flashEffect.style.zIndex = '5';
+        
+        container.appendChild(flashEffect);
+        
+        setTimeout(() => {
+            flashEffect.style.opacity = '0';
+            setTimeout(() => {
+                container.removeChild(flashEffect);
+            }, 500);
+        }, 100);
+    }
+    
+    function spawnPowerup(x, y) {
+        const powerupGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.5);
+        
+        // Powerup types with different visual appearance and effects
+        // Let players discover these effects through gameplay:
+        // - Cyan (0x00ffff): Multiball - Spawns 2 additional balls
+        // - Green (0x006400): Extra Cash - Grants extra cash
+        // - Navy Blue (0x000435): Wide Paddle - Widens paddle for 10 seconds
+        // - Yellow (0xffff00): Laser - Paddle shoots lasers that break bricks
+        // - Purple (0xaa00ff): Paddle Multiball - Paddle shoots additional balls
+        // - Deep Red (0xcc0000): Bomb - Bomb powerup 
+        const powerupTypes = [
+            { type: 'multiball', color: 0x00ffff },
+            { type: 'extraCash', color: 0x33cc33 },
+            { type: 'widePaddle', color: 0xffffff, },
+            { type: 'laser', color: 0xffff00 },
+            { type: 'paddleMultiball', color: 0xaa00ff },
+            { type: 'bomb', color: 0xcc0000 }  // New bomb powerup
+        ];
+        
+        // Choose a powerup type with weighted probabilities
+        let powerupRoll = Math.random();
+        let powerupInfo;
+        
+        if (powerupRoll < 0.30) {
+            powerupInfo = powerupTypes[0]; // 30% chance for multiball
+        } else if (powerupRoll < 0.45) {
+            powerupInfo = powerupTypes[2]; // 15% chance for wide paddle
+        } else if (powerupRoll < 0.60) {
+            powerupInfo = powerupTypes[1]; // 15% chance for extra cash
+        } else if (powerupRoll < 0.75) {
+            powerupInfo = powerupTypes[3]; // 15% chance for laser
+        } else if (powerupRoll < 0.90) {
+            powerupInfo = powerupTypes[4]; // 15% chance for paddle multiball
+        } else {
+            powerupInfo = powerupTypes[5]; // 10% chance for bomb
+        }
+        
+        const powerupMaterial = new THREE.MeshPhongMaterial({ color: powerupInfo.color });
+        const powerup = new THREE.Mesh(powerupGeometry, powerupMaterial);
+        powerup.position.set(x, y, 0);
+        powerup.rotation.set(0, 0, Math.PI/4);
+        powerup.type = powerupInfo.type;
+        scene.add(powerup);
+        powerups.push(powerup);
+    }
+    
+    function movePowerups() {
+        const powerupSpeed = 0.05;
+        const powerupSize = 0.4;
+        
+        for (let i = powerups.length - 1; i >= 0; i--) {
+            const powerup = powerups[i];
+            
+            // Move powerup down
+            powerup.position.y -= powerupSpeed;
+            
+            // Remove if it goes off screen
+            if (powerup.position.y < bottomBound - 1) {
+                scene.remove(powerup);
+                powerups.splice(i, 1);
+                continue;
+            }
+            
+            // Check for paddle collision
+            const paddleHalfWidth = paddle.geometry.parameters.width / 2;
+            const paddleTop = bottomBound + 0.25;
+            const paddleBottom = bottomBound - 0.25;
+            
+            if (powerup.position.y - powerupSize <= paddleTop && 
+                powerup.position.y + powerupSize >= paddleBottom && 
+                powerup.position.x >= paddle.position.x - paddleHalfWidth &&
+                powerup.position.x <= paddle.position.x + paddleHalfWidth) {
+                
+                // Activate the powerup
+                if (powerup.type === 'multiball') {
+                    activateMultiball();
+                } else if (powerup.type === 'extraCash') {
+                    cash++;
+                    updateCash();
+                    updateStoreItemAvailability();
+                } else if (powerup.type === 'widePaddle') {
+                    activateWidePaddle();
+                } else if (powerup.type === 'laser') {
+                    activateLaser();
+                } else if (powerup.type === 'paddleMultiball') {
+                    activatePaddleMultiball();
+                } else if (powerup.type === 'bomb') {
+                    activateBomb();
+                }
+                
+                scene.remove(powerup);
+                powerups.splice(i, 1);
+            }
+        }
+    }function activateMultiball() {
+        // Find the highest ball on the map to split
+        if (balls.length > 0) {
+            // Sort balls by y-position (highest first)
+            balls.sort((a, b) => b.position.y - a.position.y);
+            const sourceBall = balls[0];
+            
+            // Create 2 additional balls
+            for (let i = 0; i < 2; i++) {
+                const ballGeometry = new THREE.SphereGeometry(0.4, 32, 32);
+                const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+                const newBall = new THREE.Mesh(ballGeometry, ballMaterial);
+                
+                // Position the new ball at the position of the source ball
+                newBall.position.copy(sourceBall.position);
+                
+                // Give each new ball a different direction
+                const angle = Math.PI * 2 * Math.random();
+                newBall.direction = new THREE.Vector3(
+                    Math.sin(angle),
+                    Math.cos(angle),
+                    0
+                ).normalize();
+                
+                scene.add(newBall);
+                balls.push(newBall);
+            }
+        }
+    }
+    
+    function activateWidePaddle() {
+    // Remember current position
+    const currentX = paddle.position.x;
+    
+    // Calculate the maximum paddle width (40% of bottom boundary width)
+    const maxPaddleWidth = (rightBound - leftBound) * 0.4;
+    
+    // Remove current paddle
+    scene.remove(paddle);
+    
+    // Get current paddle width (default is 3.5)
+    let newWidth = 3.5;
+    if (paddle.geometry.parameters.width) {
+        // If paddle already exists, increase width by 1.5 (stacking effect)
+        newWidth = paddle.geometry.parameters.width + 1.5;
+        
+        // Cap the width at the maximum
+        newWidth = Math.min(newWidth, maxPaddleWidth);
+    }
+    
+    // Create wider paddle
+    const paddleGeometry = new THREE.BoxGeometry(newWidth, 0.5, 1);
+    const paddleMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+    paddle = new THREE.Mesh(paddleGeometry, paddleMaterial);
+    paddle.position.y = bottomBound;
+    
+    // Make sure the wider paddle stays within bounds
+    const widePaddleHalfWidth = newWidth / 2;
+    const adjustedX = Math.max(
+        leftBound + widePaddleHalfWidth, 
+        Math.min(rightBound - widePaddleHalfWidth, currentX)
+    );
+    paddle.position.x = adjustedX;
+    
+    scene.add(paddle);
+    
+    // Set or extend the timer for paddle width
+    if (paddle.userData.widePaddleTimer) {
+        clearTimeout(paddle.userData.widePaddleTimer);
+    }
+    
+    // Store the timer reference and original width in userData
+    paddle.userData.widePaddleTimer = setTimeout(() => {
+        // Remember position again
+        const wideX = paddle.position.x;
+        
+        scene.remove(paddle);
+        const normalPaddleGeometry = new THREE.BoxGeometry(3.5, 0.5, 1);
+        const normalPaddleMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+        paddle = new THREE.Mesh(normalPaddleGeometry, normalPaddleMaterial);
+        paddle.position.y = bottomBound;
+        
+        // Keep the paddle within bounds when returning to normal size
+        const normalHalfWidth = 1.75; // Half of 3.5
+        paddle.position.x = Math.max(leftBound + normalHalfWidth, Math.min(rightBound - normalHalfWidth, wideX));
+        
+        scene.add(paddle);
+        
+        // Clear the timer reference
+        paddle.userData.widePaddleTimer = null;
+    }, 10000);
+}
+    
+    function activateLaser() {
+        // Increment active lasers count
+        activeLasers++;
+        
+        // If there's no active timer, create one
+        if (!laserTimer) {
+            laserTimer = setInterval(() => {
+                shootLasers();
+            }, 1000); // Fire every second
+        }
+        
+        // Each laser powerup lasts for 10 seconds
+        setTimeout(() => {
+            // Decrement active lasers
+            activeLasers--;
+            
+            // If no more active lasers, clear the timer
+            if (activeLasers <= 0) {
+                activeLasers = 0; // Ensure it doesn't go negative
+                clearInterval(laserTimer);
+                laserTimer = null;
+            }
+        }, 10000);
+    }
+    
+    function activatePaddleMultiball() {
+        // Set the number of balls to shoot
+        remainingPaddleBalls = 10;
+        
+        // If there's no active timer, create one
+        if (!paddleMultiballTimer) {
+            paddleMultiballTimer = setInterval(() => {
+                shootBallFromPaddle();
+                
+                // Decrement remaining balls
+                remainingPaddleBalls--;
+                
+                // If no more balls to shoot, clear the timer
+                if (remainingPaddleBalls <= 0) {
+                    clearInterval(paddleMultiballTimer);
+                    paddleMultiballTimer = null;
+                }
+            }, 100); // Shoot a ball every 0.1 seconds
+        }
+    }
+    
+    // BOMB QUEUE SYSTEM IMPLEMENTATION
+
+    // Core function 1: activateBomb - handles collecting bomb powerups
+    function activateBomb() {
+        // Create a bomb object
+        const bombGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+        const bombMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xff0000,
+            emissive: 0x330000
+        });
+        const bomb = new THREE.Mesh(bombGeometry, bombMaterial);
+        
+        // If there's already an active bomb, add this one to the queue
+        if (activeBomb !== null) {
+            bombQueue.push(bomb);
+            
+            // Show a notification that bomb was queued
+            const queueNotice = document.createElement('div');
+            queueNotice.style.position = 'absolute';
+            queueNotice.style.top = '70%';
+            queueNotice.style.left = '50%';
+            queueNotice.style.transform = 'translate(-50%, -50%)';
+            queueNotice.style.color = 'orange';
+            queueNotice.style.fontFamily = 'Arial, sans-serif';
+            queueNotice.style.fontSize = '18px';
+            queueNotice.style.zIndex = '10';
+            queueNotice.textContent = `Bomb queued (${bombQueue.length} waiting)`;
+            document.getElementById('gameContainer').appendChild(queueNotice);
+            
+            // Remove notification after 2 seconds
+            setTimeout(() => {
+                document.getElementById('gameContainer').removeChild(queueNotice);
+            }, 2000);
+            
+            // Update bomb UI if available
+            if (window.updateBombUIDisplay) {
+                window.updateBombUIDisplay();
+            }
+            
+            return;
+        }
+        
+        // Set this as the active bomb
+        activeBomb = bomb;
+        totalBombsCollected++;
+        
+        // Position it just above the paddle
+        bomb.position.x = paddle.position.x;
+        bomb.position.y = bottomBound + 0.9;
+        bomb.userData.isBomb = true;
+        scene.add(bomb);
+        
+        // Create a countdown timer display
+        const countdownDiv = document.createElement('div');
+        countdownDiv.style.position = 'absolute';
+        countdownDiv.style.top = '30%';
+        countdownDiv.style.left = '50%';
+        countdownDiv.style.transform = 'translate(-50%, -50%)';
+        countdownDiv.style.color = 'red';
+        countdownDiv.style.fontFamily = 'Arial, sans-serif';
+        countdownDiv.style.fontSize = '48px';
+        countdownDiv.style.zIndex = '100';
+        document.getElementById('gameContainer').appendChild(countdownDiv);
+        
+        // Start a 5 second countdown
+        let countdown = 5;
+        countdownDiv.textContent = countdown;
+        
+        const countdownInterval = setInterval(() => {
+            // Don't advance the countdown if game is paused
+            if (gamePaused) return;
+            
+            countdown--;
+            countdownDiv.textContent = countdown;
+            
+            // Add a pulsing effect to the bomb
+            bomb.scale.set(1 + Math.sin(Date.now() * 0.01) * 0.2, 
+                           1 + Math.sin(Date.now() * 0.01) * 0.2, 
+                           1 + Math.sin(Date.now() * 0.01) * 0.2);
+            
+            // Update bomb position to follow paddle
+            bomb.position.x = paddle.position.x;
+            
+            if (countdown <= 0) {
+                clearInterval(countdownInterval);
+                document.getElementById('gameContainer').removeChild(countdownDiv);
+                launchBomb(bomb);
+            }
+        }, 1000);
+        
+        // Update bomb UI if available
+        if (window.updateBombUIDisplay) {
+            window.updateBombUIDisplay();
+        }
+    }
+
+    // Core function 2: launchBomb - handles bomb movement
+    function launchBomb(bomb) {
+        // Set high speed for the bomb
+        const bombSpeed = 0.3;
+        
+        // Launch the bomb upward
+        bomb.userData.launched = true;
+        bomb.direction = new THREE.Vector3(0, 1, 0);
+        
+        // Add to the animation loop specifically for the bomb
+        const bombInterval = setInterval(() => {
+            if (!gameActive || !bomb.parent || gamePaused) {
+                clearInterval(bombInterval);
+                return;
+            }
+            
+            // Move the bomb
+            bomb.position.x += bomb.direction.x * bombSpeed;
+            bomb.position.y += bomb.direction.y * bombSpeed;
+            
+            const bombRadius = 0.5;
+            
+            // Check for wall collisions
+            if (bomb.position.x > rightBound - bombRadius || bomb.position.x < leftBound + bombRadius) {
+                bomb.direction.x = -bomb.direction.x;
+            }
+            if (bomb.position.y > topBound - bombRadius) {
+                // When the bomb hits the top, explode it
+                explodeBomb(bomb);
+                clearInterval(bombInterval);
+                return;
+            }
+            
+            // Check for brick collisions
+            for (let j = 0; j < bricks.length; j++) {
+                const brick = bricks[j];
+                // Skip bricks that have already been hit
+                if (!brick.parent) continue;
+                
+                // Skip ghost phaze bricks - bombs pass through
+                if (brick.userData.isGhost) continue;
+                
+                // Use the actual half width and height of the brick from its geometry
+                const brickHalfWidth = brick.geometry.parameters.width / 2;
+                const brickHalfHeight = brick.geometry.parameters.height / 2;
+                
+                if (bomb.position.x + bombRadius > brick.position.x - brickHalfWidth &&
+                    bomb.position.x - bombRadius < brick.position.x + brickHalfWidth &&
+                    bomb.position.y + bombRadius > brick.position.y - brickHalfHeight &&
+                    bomb.position.y - bombRadius < brick.position.y + brickHalfHeight) {
+                    
+                    // Explode the bomb when it hits a brick
+                    explodeBomb(bomb);
+                    clearInterval(bombInterval);
+                    return;
+                }
+            }
+        }, 16); // Update at roughly 60fps
+    }
+
+    // Core function 3: explodeBomb - creates explosion and processes queue
+    function explodeBomb(bomb) {
+        // Create explosion visual effect
+        const explosionGeometry = new THREE.SphereGeometry(2, 32, 32);
+        const explosionMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff9900,
+            transparent: true,
+            opacity: 0.8
+        });
+        const explosion = new THREE.Mesh(explosionGeometry, explosionMaterial);
+        explosion.position.copy(bomb.position);
+        scene.add(explosion);
+        
+        // Create 5 red balls that spread out from the explosion
+        for (let i = 0; i < 5; i++) {
+            const ballGeometry = new THREE.SphereGeometry(0.4, 32, 32);
+            const ballMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xff0000,
+                emissive: 0x330000
+            });
+            const newBall = new THREE.Mesh(ballGeometry, ballMaterial);
+            
+            // Position at bomb location
+            newBall.position.copy(bomb.position);
+            
+            // Give each ball a different direction spreading outward
+            const angle = (Math.PI * 2 * i) / 5;
+            newBall.direction = new THREE.Vector3(
+                Math.sin(angle),
+                Math.cos(angle),
+                0
+            ).normalize();
+            
+            scene.add(newBall);
+            balls.push(newBall);
+        }
+        
+        // Remove the original bomb
+        scene.remove(bomb);
+        activeBomb = null;
+        
+        // Process the next bomb in queue after a short delay
+        if (bombQueue.length > 0) {
+            setTimeout(() => {
+                const nextBomb = bombQueue.shift();
+                activeBomb = nextBomb;
+                
+                // Position the next bomb above the paddle
+                nextBomb.position.x = paddle.position.x;
+                nextBomb.position.y = bottomBound + 0.9;
+                nextBomb.userData.isBomb = true;
+                scene.add(nextBomb);
+                
+                // Create a countdown timer for the next bomb
+                const countdownDiv = document.createElement('div');
+                countdownDiv.style.position = 'absolute';
+                countdownDiv.style.top = '30%';
+                countdownDiv.style.left = '50%';
+                countdownDiv.style.transform = 'translate(-50%, -50%)';
+                countdownDiv.style.color = 'red';
+                countdownDiv.style.fontFamily = 'Arial, sans-serif';
+                countdownDiv.style.fontSize = '48px';
+                countdownDiv.style.zIndex = '100';
+                document.getElementById('gameContainer').appendChild(countdownDiv);
+                
+                // Start a 5 second countdown for the next bomb
+                let countdown = 5;
+                countdownDiv.textContent = countdown;
+                
+                const countdownInterval = setInterval(() => {
+                    // Don't advance the countdown if game is paused
+                    if (gamePaused) return;
+                    
+                    countdown--;
+                    countdownDiv.textContent = countdown;
+                    
+                    // Add a pulsing effect to the bomb
+                    nextBomb.scale.set(1 + Math.sin(Date.now() * 0.01) * 0.2, 
+                                      1 + Math.sin(Date.now() * 0.01) * 0.2, 
+                                      1 + Math.sin(Date.now() * 0.01) * 0.2);
+                    
+                    // Update bomb position to follow paddle
+                    nextBomb.position.x = paddle.position.x;
+                    
+                    if (countdown <= 0) {
+                        clearInterval(countdownInterval);
+                        document.getElementById('gameContainer').removeChild(countdownDiv);
+                        launchBomb(nextBomb);
+                    }
+                }, 1000);
+                
+                // Update bomb UI if available
+                if (window.updateBombUIDisplay) {
+                    window.updateBombUIDisplay();
+                }
+            }, 1500); // Short delay before activating the next bomb
+        }
+        
+        // Fade out and remove the explosion effect
+        let explosionOpacity = 0.8;
+        let explosionScale = 1;
+        
+        const explosionInterval = setInterval(() => {
+            // Don't update if game is paused
+            if (gamePaused) return;
+            
+            explosionOpacity -= 0.05;
+            explosionScale += 0.2;
+            
+            if (explosionOpacity <= 0) {
+                clearInterval(explosionInterval);
+                scene.remove(explosion);
+                return;
+            }
+            
+            explosion.material.opacity = explosionOpacity;
+            explosion.scale.set(explosionScale, explosionScale, explosionScale);
+        }, 50);
+        
+        // Add game juice: screen shake effect
+        const originalCameraPosition = camera.position.z;
+        let shakeIntensity = 0.5;
+        
+        const shakeInterval = setInterval(() => {
+            // Don't update if game is paused
+            if (gamePaused) return;
+            
+            shakeIntensity *= 0.9;
+            
+            if (shakeIntensity < 0.05) {
+                clearInterval(shakeInterval);
+                camera.position.z = originalCameraPosition;
+                return;
+            }
+            
+            camera.position.z = originalCameraPosition + (Math.random() - 0.5) * shakeIntensity;
+        }, 50);
+        
+        // Apply damage to nearby bricks
+        const explosionRadius = 5;
+        const bricksToCheck = [...bricks]; // Create a copy to safely modify during iteration
+        let bricksDestroyed = 0;
+        
+        // First check if any brick was destroyed - to trigger phaze transitions
+        let brickWasDestroyed = false;
+        
+        for (const brick of bricksToCheck) {
+            if (!brick.parent) continue; // Skip already destroyed bricks
+            
+            // Calculate distance from explosion to this brick
+            const distance = new THREE.Vector3().subVectors(brick.position, bomb.position).length();
+            
+            // If the brick is within explosion radius
+            if (distance < explosionRadius) {
+                // Skip indestructible bricks and ghost phaze bricks
+                if (brick.userData.indestructible || brick.userData.isGhost) continue;
+                
+                // Mark that a brick was destroyed
+                brickWasDestroyed = true;
+                
+                // Remove the brick
+                scene.remove(brick);
+                bricksDestroyed++;
+                
+                // Award points
+                score += brick.userData.points || 10;
+                updateScore();
+                
+                // Trigger fungus bricks for each brick destroyed by the bomb
+                if (!brick.userData.fungus) {
+                    fungusBrickReact();
+                }
+                
+                // Small chance for powerup from explosion-destroyed bricks
+                if (Math.random() < 0.1) {
+                    spawnPowerup(brick.position.x, brick.position.y);
+                }
+            }
+        }
+        
+        // If any brick was destroyed, update all phaze bricks
+        if (brickWasDestroyed) {
+            const phazeBricks = bricks.filter(b => 
+                b.parent && b.userData.phaze
+            );
+            
+            phazeBricks.forEach(phazeBrick => {
+                updatePhazeBrickState(phazeBrick);
+            });
+        }
+        
+        // Update statistics
+        totalBricksDestroyedByBombs += bricksDestroyed;
+        
+        // Check if all non-indestructible bricks are cleared
+        const remainingBricks = bricks.filter(b => 
+            b.parent && (!b.userData.indestructible)
+        );
+        
+        if (remainingBricks.length === 0) {
+            // Use the nextLevel function to handle level transition properly
+            nextLevel();
+        }
+        
+        // Update bomb UI if available
+        if (window.updateBombUIDisplay) {
+            window.updateBombUIDisplay();
+        }
+    }
+
+    // Helper function: clearBombs - removes all bombs and related elements
+    function clearBombs() {
+        // Clear the bomb queue
+        bombQueue = [];
+        
+        // Clear active bomb
+        activeBomb = null;
+        
+        // Remove all bomb objects from the scene
+        scene.children.forEach(child => {
+            if (child.userData && child.userData.isBomb) {
+                scene.remove(child);
+            }
+        });
+        
+        // Remove any countdown displays
+        const container = document.getElementById('gameContainer');
+        Array.from(container.children).forEach(child => {
+            if (child.style && 
+                ((child.style.color === 'red' && child.style.fontSize === '48px') || 
+                 (child.style.color === 'orange' && child.style.fontSize === '18px'))) {
+                container.removeChild(child);
+            }
+        });
+        
+        // Update bomb UI if available
+        if (window.updateBombUIDisplay) {
+            window.updateBombUIDisplay();
+        }
+    }
+
+    // Helper function: updateBombQueueIndicator - creates visual indicator for queued bombs
+    function updateBombQueueIndicator() {
+        // Remove any existing indicators
+        const container = document.getElementById('gameContainer');
+        Array.from(container.children).forEach(child => {
+            if (child.id === 'bombQueueIndicator') {
+                container.removeChild(child);
+            }
+        });
+        
+        // If there are bombs in queue, show indicator
+        if (bombQueue.length > 0) {
+            const indicator = document.createElement('div');
+            indicator.id = 'bombQueueIndicator';
+            indicator.style.position = 'absolute';
+            indicator.style.top = '90px';
+            indicator.style.right = '10px';
+            indicator.style.color = '#FF6600';
+            indicator.style.fontFamily = 'Arial, sans-serif';
+            indicator.style.fontSize = '16px';
+            indicator.style.padding = '5px 10px';
+            indicator.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            indicator.style.borderRadius = '5px';
+            indicator.style.zIndex = '10';
+            indicator.textContent = `Bombs: ${bombQueue.length + (activeBomb ? 1 : 0)}`;
+            container.appendChild(indicator);
+        }
+    }
+
+    // Create bomb UI for better visual feedback
+    function createBombUI() {
+        // Create container for bomb UI
+        const bombUIContainer = document.createElement('div');
+        bombUIContainer.id = 'bombUIContainer';
+        bombUIContainer.style.position = 'absolute';
+        bombUIContainer.style.bottom = '10px';
+        bombUIContainer.style.right = '10px';
+        bombUIContainer.style.display = 'flex';
+        bombUIContainer.style.flexDirection = 'row-reverse';
+        bombUIContainer.style.gap = '5px';
+        bombUIContainer.style.zIndex = '100';
+        document.getElementById('gameContainer').appendChild(bombUIContainer);
+        
+        // This function updates the UI when bomb queue changes
+        window.updateBombUIDisplay = function() {
+            // Clear existing bombs
+            bombUIContainer.innerHTML = '';
+            
+            // Add UI element for active bomb
+            if (activeBomb) {
+                const activeBombElement = document.createElement('div');
+                activeBombElement.style.width = '20px';
+                activeBombElement.style.height = '20px';
+                activeBombElement.style.borderRadius = '50%';
+                activeBombElement.style.backgroundColor = '#ff3333';
+                activeBombElement.style.border = '2px solid white';
+                activeBombElement.style.boxShadow = '0 0 5px #ff0000';
+                activeBombElement.style.animation = 'bombPulse 1s infinite';
+                bombUIContainer.appendChild(activeBombElement);
+            }
+            
+            // Add UI elements for queued bombs
+            bombQueue.forEach((_, index) => {
+                const queuedBombElement = document.createElement('div');
+                queuedBombElement.style.width = '15px';
+                queuedBombElement.style.height = '15px';
+                queuedBombElement.style.borderRadius = '50%';
+                queuedBombElement.style.backgroundColor = '#cc0000';
+                queuedBombElement.style.border = '1px solid white';
+                queuedBombElement.style.opacity = '0.8';
+                bombUIContainer.appendChild(queuedBombElement);
+            });
+        };
+        
+        // Add CSS for bomb pulse animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes bombPulse {
+                0% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.2); opacity: 0.8; }
+                100% { transform: scale(1); opacity: 1; }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Initial update
+        window.updateBombUIDisplay();
+    }
+
+    // Integration function to initialize the bomb queue system
+    function integrateFullBombQueueSystem() {
+        // Initialize variables if not already done
+        if (typeof bombQueue === 'undefined') {
+            bombQueue = [];
+        }
+        if (typeof activeBomb === 'undefined') {
+            activeBomb = null;
+        }
+        if (typeof totalBombsCollected === 'undefined') {
+            totalBombsCollected = 0;
+        }
+        if (typeof totalBricksDestroyedByBombs === 'undefined') {
+            totalBricksDestroyedByBombs = 0;
+        }
+        
+        // Create the bomb UI
+        createBombUI();
+        
+        console.log('Bomb queue system initialized');
+    }
+    
+    function shootBallFromPaddle() {
+        // Only shoot if the game is active and the ball has been launched
+        if (!gameActive || !ballLaunched || gamePaused) return;
+        
+        // Create a new ball
+        const ballGeometry = new THREE.SphereGeometry(0.4, 32, 32);
+        const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xaa00ff }); // Purple ball
+        const newBall = new THREE.Mesh(ballGeometry, ballMaterial);
+        
+        // Position the new ball just above the paddle
+        newBall.position.x = paddle.position.x;
+        newBall.position.y = bottomBound + 1;
+        
+        // Give the ball a random upward direction
+        const angleSpread = Math.PI / 3; // 60° spread
+        const angle = (Math.random() * angleSpread) - (angleSpread / 2);
+        newBall.direction = new THREE.Vector3(
+            Math.sin(angle),
+            Math.cos(angle),
+            0
+        ).normalize();
+        
+        scene.add(newBall);
+        balls.push(newBall);
+    }
+    
+    function shootLasers() {
+        // Calculate positions for lasers based on paddle width
+        const paddleWidth = paddle.geometry.parameters.width;
+        const laserCount = activeLasers;
+        
+        // Create a laser beam for each active laser powerup
+        for (let i = 0; i < laserCount; i++) {
+            const laserGeometry = new THREE.BoxGeometry(0.2, 1, 0.2);
+            const laserMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00, emissive: 0xffff00 });
+            const laser = new THREE.Mesh(laserGeometry, laserMaterial);
+            
+            let offsetX = 0;
+            
+            if (laserCount === 1) {
+                // Single laser in center
+                offsetX = 0;
+            } else {
+                // Multiple lasers spread across paddle width
+                const spacing = paddleWidth * 0.8 / (laserCount - 1);
+                offsetX = (i * spacing) - (paddleWidth * 0.4);
+            }
+            
+            // Position the laser at the paddle plus offset
+            laser.position.x = paddle.position.x + offsetX;
+            laser.position.y = bottomBound + 1; // Start just above the paddle
+            laser.direction = new THREE.Vector3(0, 1, 0); // Move upward
+            laser.speed = 0.4; // Faster than the ball
+            laser.lifespan = 100; // Frames the laser will exist
+            
+            scene.add(laser);
+            lasers.push(laser);
+        }
+    }
+    
+    function updateLasers() {
+        // Skip if game is paused
+        if (gamePaused) return;
+        
+        // Move lasers and check for collisions
+        for (let i = lasers.length - 1; i >= 0; i--) {
+            const laser = lasers[i];
+            
+            // Move the laser
+            laser.position.x += laser.direction.x * laser.speed;
+            laser.position.y += laser.direction.y * laser.speed;
+            
+            // Decrease lifespan
+            laser.lifespan--;
+            
+            // Remove if lifespan is over or if it's out of bounds
+            if (laser.lifespan <= 0 || laser.position.y > topBound) {
+                scene.remove(laser);
+                lasers.splice(i, 1);
+                continue;
+            }
+            
+            // Check for brick collisions
+            for (let j = 0; j < bricks.length; j++) {
+                const brick = bricks[j];
+                // Skip bricks that have already been hit
+                if (!brick.parent) continue;
+                
+                // Use the actual dimensions from the brick's geometry
+                const brickHalfWidth = brick.geometry.parameters.width / 2;
+                const brickHalfHeight = brick.geometry.parameters.height / 2;
+                
+                if (laser.position.x > brick.position.x - brickHalfWidth &&
+                    laser.position.x < brick.position.x + brickHalfWidth &&
+                    laser.position.y > brick.position.y - brickHalfHeight &&
+                    laser.position.y < brick.position.y + brickHalfHeight) {
+                    
+                    // Handle ghost phaze bricks - lasers pass through
+                    if (brick.userData.isGhost) {
+                        continue;
+                    }
+                    
+                    // Handle indestructible bricks
+                    if (brick.userData.indestructible) {
+                        // Remove the laser but keep the brick
+                        scene.remove(laser);
+                        lasers.splice(i, 1);
+                        break;
+                    }
+                    
+                    // Handle phaze bricks
+                    if (brick.userData.phaze) {
+                        // Find all phaze bricks
+                        const phazeBricks = bricks.filter(b => 
+                            b.parent && b.userData.phaze
+                        );
+                        
+                        // Update the state of all phaze bricks
+                        phazeBricks.forEach(phazeBrick => {
+                            updatePhazeBrickState(phazeBrick);
+                        });
+                        
+                        // Only remove the brick if it's in normal state
+                        if (brick.userData.phazeState !== 0) {
+                            // Remove the laser but keep the brick
+                            scene.remove(laser);
+                            lasers.splice(i, 1);
+                            break;
+                        }
+                    }
+                    
+                    // Remove the brick
+                    scene.remove(brick);
+                    score += brick.userData.points || 10;
+                    updateScore();
+                    
+                    // Trigger fungus bricks when a brick is destroyed by a laser
+                    if (!brick.userData.fungus) {
+                        fungusBrickReact();
+                    }
+                    
+                    // Chance to spawn a powerup (lower than ball hits)
+                    const powerupChance = 0.15; // 15% chance
+                    if (Math.random() < powerupChance) {
+                        spawnPowerup(brick.position.x, brick.position.y);
+                    }
+                    
+                    // Remove the laser
+                    scene.remove(laser);
+                    lasers.splice(i, 1);
+                    
+                    // Check if all non-indestructible bricks are cleared
+                    const remainingBricks = bricks.filter(b => 
+                        b.parent && (!b.userData.indestructible)
+                    );
+                    
+                    if (remainingBricks.length === 0) {
+                        // Use the nextLevel function to handle level transition properly
+                        nextLevel();
+                    }
+                    
+                    break;
+                }
+            }
+        }
+    }
+    
+    function handleTouchStart(event) {
+        if (event.target === launchButton) return;
+        event.preventDefault();
+        if (event.touches.length > 0) {
+            touchX = event.touches[0].clientX;
+        }
+    }
+    
+    function handleTouchMove(event) {
+        if (event.target === launchButton) return;
+        event.preventDefault();
+        if (event.touches.length > 0) {
+            const newTouchX = event.touches[0].clientX;
+            const deltaX = newTouchX - touchX;
+            
+            // Updated scaling factor based on container width
+            const container = document.getElementById('gameContainer');
+            const moveScale = 28 / container.clientWidth;
+            
+            paddle.position.x += deltaX * moveScale;
+            // Ensure paddle stays within bounds
+            const paddleHalfWidth = paddle.geometry.parameters.width / 2;
+            const paddleLeftLimit = leftBound + paddleHalfWidth;
+            const paddleRightLimit = rightBound - paddleHalfWidth;
+            
+            if (paddle.position.x < paddleLeftLimit) paddle.position.x = paddleLeftLimit;
+            if (paddle.position.x > paddleRightLimit) paddle.position.x = paddleRightLimit;
+            
+            if (!ballLaunched && balls.length > 0) balls[0].position.x = paddle.position.x;
+            touchX = newTouchX;
+        }
+    }
+    
+    function handleTouchEnd(event) {
+        if (event.target === launchButton) return;
+        event.preventDefault();
+    }
+    
+    function launchBall() {
+        if (!ballLaunched && gameActive && !gamePaused) {
+            ballLaunched = true;
+            const angle = (Math.random() * Math.PI / 4) - (Math.PI / 8);
+            
+            // Update the first ball's direction (main ball)
+            if (balls.length > 0) {
+                balls[0].direction.x = Math.sin(angle);
+                balls[0].direction.y = Math.cos(angle);
+                balls[0].direction.normalize();
+            }
+            
+            document.getElementById('launchButton').style.display = 'none';
+        }
+    }function handleKeyDown(event) {
+        keysPressed[event.key] = true;
+        
+        // Space key to launch ball
+        if (event.key === ' ' && !ballLaunched && gameActive && !gamePaused) {
+            launchBall();
+        }
+        
+        // P key to toggle pause
+        if (event.key === 'p' || event.key === 'P') {
+            togglePause();
+        }
+    }
+    
+    function handleKeyUp(event) {
+        keysPressed[event.key] = false;
+    }
+    
+    function handleResize() {
+        const container = document.getElementById('gameContainer');
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        
+        // Recalculate the proper camera view on resize
+        updateCameraForGameDimensions();
+    }
+    
+    function movePaddle() {
+        // Skip if game is paused
+        if (gamePaused) return;
+        
+        // Calculate paddle half width for boundary checking
+        const paddleHalfWidth = paddle.geometry.parameters.width / 2;
+        const paddleLeftLimit = leftBound + paddleHalfWidth;
+        const paddleRightLimit = rightBound - paddleHalfWidth;
+        
+        if (keysPressed['ArrowLeft'] || keysPressed['a']) {
+            paddle.position.x -= paddleSpeed;
+            if (paddle.position.x < paddleLeftLimit) paddle.position.x = paddleLeftLimit;
+        }
+        if (keysPressed['ArrowRight'] || keysPressed['d']) {
+            paddle.position.x += paddleSpeed;
+            if (paddle.position.x > paddleRightLimit) paddle.position.x = paddleRightLimit;
+        }
+    
+        if (!ballLaunched && balls.length > 0) {
+            balls[0].position.x = paddle.position.x;
+        }
+    }
+    
+    function resetBall() {
+        // Clear all balls except the first one
+        for (let i = balls.length - 1; i > 0; i--) {
+            scene.remove(balls[i]);
+            balls.splice(i, 1);
+        }
+        
+        // Reset the main ball
+        if (balls.length > 0) {
+            balls[0].position.y = bottomBound + 0.9;
+            balls[0].position.x = paddle.position.x;
+        }
+        
+        ballLaunched = false;
+        
+        // Clear any powerups
+        powerups.forEach(powerup => scene.remove(powerup));
+        powerups = [];
+        
+        // Clear any lasers
+        clearLasers();
+        
+        // Clear paddle multiball timer
+        if (paddleMultiballTimer) {
+            clearInterval(paddleMultiballTimer);
+            paddleMultiballTimer = null;
+            remainingPaddleBalls = 0;
+        }
+        
+        // Clear all bombs
+        clearBombs();
+        
+        document.getElementById('launchButton').style.display = 'block';
+    }
+    
+    function clearLasers() {
+        // Stop the laser timer
+        if (laserTimer) {
+            clearInterval(laserTimer);
+            laserTimer = null;
+        }
+        
+        // Remove all active lasers
+        lasers.forEach(laser => scene.remove(laser));
+        lasers = [];
+        activeLasers = 0;
+    }
+    
+    function updateScore() {
+        document.getElementById('score').textContent = `Score: ${score}`;
+    }
+    
+    function updateCash() {
+        document.getElementById('cash').textContent = `Cash: $${cash}`;
+        
+        // Update the store UI to reflect available cash
+        updateStoreItemAvailability();
+    }
+    
+    function spendCash() {
+        cash--;
+        updateCash();
+        
+        if (cash <= 0) {
+            gameOver();
+        } else {
+            resetBall();
+            
+            document.getElementById('launchButton').style.display = 'block';
+        }
+    }
+    
+    function gameOver() {
+        gameActive = false;
+        document.getElementById('gameOver').style.display = 'block';
+        document.getElementById('startButton').style.display = 'block';
+        document.getElementById('launchButton').style.display = 'none';
+        
+        // Clear paddle multiball timer
+        if (paddleMultiballTimer) {
+            clearInterval(paddleMultiballTimer);
+            paddleMultiballTimer = null;
+            remainingPaddleBalls = 0;
+        }
+        
+        // Clear all bombs
+        clearBombs();
+    }
+    
+    function restartGame() {
+        // Reset game state
+        gameActive = true;
+        gamePaused = false;
+        paddle.position.x = 0;
+        
+        // Update pause button to show "Pause"
+        const pauseButton = document.getElementById('pauseButton');
+        pauseButton.innerHTML = '<span class="pause-icon"></span>Pause';
+        
+        // Hide pause overlay
+        document.getElementById('pauseOverlay').style.display = 'none';
+        
+        // Reset all balls and powerups
+        balls.forEach((b, index) => {
+            if (index > 0) {
+                scene.remove(b);
+            }
+        });
+        balls = [balls[0]];
+        
+        powerups.forEach(p => scene.remove(p));
+        powerups = [];
+        
+        // Clear any lasers
+        clearLasers();
+        
+        // Clear all bombs
+        clearBombs();
+        
+        // Reset main ball position
+        balls[0].position.y = bottomBound + 0.9;
+        balls[0].position.x = paddle.position.x;
+        ballLaunched = false;
+        
+        // Reset level and ball speed
+        level = parseInt(document.getElementById('levelSelect').value);
+        ballSpeed = 0.08;
+        
+        // First setup game boundaries for the new level
+        setupGameBoundaries();
+        
+        // Then create bricks after boundaries are established
+        createBricks();
+        
+        // Reset score and cash
+        score = 0;
+        cash = 3;
+        updateScore();
+        updateCash();
+        
+        // Update UI
+        document.getElementById('gameOver').style.display = 'none';
+        document.getElementById('startButton').style.display = 'none';
+        document.getElementById('launchButton').style.display = 'block';
+        
+        // Restart animation loop if it was stopped
+        if (!animationFrameId) {
+            animate();
+        }
+    }
+    
+    // Pause system functions
+    function togglePause() {
+        gamePaused = !gamePaused;
+        const pauseButton = document.getElementById('pauseButton');
+        const pauseOverlay = document.getElementById('pauseOverlay');
+        
+        if (gamePaused) {
+            // Change button to show "Resume"
+            pauseButton.innerHTML = '<span class="play-icon"></span>Resume';
+            
+            // Show pause overlay
+            pauseOverlay.style.display = 'flex';
+            
+            // If any active timers or intervals, they should check gamePaused status
+            // No need to explicitly pause animation as the animate function checks gamePaused
+        } else {
+            // Change button back to "Pause"
+            pauseButton.innerHTML = '<span class="pause-icon"></span>Pause';
+            
+            // Hide pause overlay
+            pauseOverlay.style.display = 'none';
+        }
+    }
+    
+    function resumeGame() {
+        if (gamePaused) {
+            togglePause();
+        }
+    }
+    
+    function animate() {
+    animationFrameId = requestAnimationFrame(animate);
+    
+    if (gameActive) {
+        // Only update game state if not paused
+        if (!gamePaused) {
+            movePaddle();
+            moveBall();
+            updateLasers();
+            detectAndFixStuckBalls(); // Add this line to check for stuck balls
+        }
+        
+        // Always render the scene, even when paused
+        renderer.render(scene, camera);
+    }
+}
+    
+function detectAndFixStuckBalls() {
+    // Skip if game is paused
+    if (gamePaused) return;
+    
+    // Define the "stuck zone" near the top boundary
+    const ballRadius = 0.4; // Make sure this matches your ball radius
+    const stuckZoneThreshold = 0.1; // How close to the top boundary to check
+    const stuckZone = topBound - ballRadius - stuckZoneThreshold;
+    
+    // Keep track of time a ball might be stuck
+    const currentTime = Date.now();
+    
+    // Check each ball
+    for (let i = 0; i < balls.length; i++) {
+        const ball = balls[i];
+        
+        // If ball is very close to the top boundary
+        if (ball.position.y > stuckZone) {
+            // Initialize stuck detection data if not present
+            if (!ball.userData.stuckData) {
+                ball.userData.stuckData = {
+                    lastY: ball.position.y,
+                    lastChangeTime: currentTime,
+                    possiblyStuck: false
+                };
+            }
+            
+            // Check if the ball has moved vertically
+            const verticalMovement = Math.abs(ball.position.y - ball.userData.stuckData.lastY);
+            
+            // If the ball hasn't moved significantly in vertical direction
+            if (verticalMovement < 0.01) {
+                // If we haven't marked it as possibly stuck yet
+                if (!ball.userData.stuckData.possiblyStuck) {
+                    ball.userData.stuckData.possiblyStuck = true;
+                    ball.userData.stuckData.stuckStartTime = currentTime;
+                } 
+                // If it's been possibly stuck for more than 1 second
+                else if (currentTime - ball.userData.stuckData.stuckStartTime > 1000) {
+                    console.log("Ball unstuck from top boundary");
+                    
+                    // Fix the ball position and direction
+                    ball.position.y -= 0.5; // Move ball down a bit
+                    
+                    // Make sure the ball is moving downward
+                    if (ball.direction.y >= 0) {
+                        ball.direction.y = -Math.abs(ball.direction.y) - 0.1;
+                        
+                        // Ensure the direction is still normalized
+                        ball.direction.normalize();
+                    }
+                    
+                    // Reset the stuck detection data
+                    ball.userData.stuckData.possiblyStuck = false;
+                }
+            } else {
+                // Ball is moving normally, update tracking data
+                ball.userData.stuckData.lastY = ball.position.y;
+                ball.userData.stuckData.lastChangeTime = currentTime;
+                ball.userData.stuckData.possiblyStuck = false;
+            }
+        } else {
+            // Ball is not in the stuck zone, reset tracking data
+            if (ball.userData.stuckData) {
+                ball.userData.stuckData.possiblyStuck = false;
+            }
+        }
+    }
+}
+
+    // Helper function for testing - toggle debug visualization
+    function toggleDebug() {
+        showBoundaries();
+    }
+
+// Add this code at the end of the init() function or in a separate function
+// that runs after the page loads
+function moveStoreDown() {
+  const storeContainer = document.getElementById('storeContainer');
+  storeContainer.style.bottom = '25px'; // Move closer to bottom
+  
+  // Also adjust the launch button if needed
+  const launchButton = document.getElementById('launchButton');
+  launchButton.style.bottom = '10px';
+}
+
+// Call this function after the page loads
+window.addEventListener('load', function() {
+  // Give time for any other scripts to finish
+  setTimeout(moveStoreDown, 500);
+});
+    
+    // Make sure focus stays on canvas for keyboard controls
+    document.addEventListener('click', function() {
+        renderer.domElement.focus();
+    });
+    
+    window.addEventListener('load', init);
+    </script>
+</body>
+</html>
