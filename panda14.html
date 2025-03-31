@@ -1,0 +1,2222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Enhanced PS2-Style Mascot Panda</title>
+  <style>
+    body { 
+      margin: 0; 
+      overflow: hidden; 
+      background-color: #000;
+      touch-action: none;
+    }
+    canvas { 
+      display: block; 
+    }
+    #controls {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .direction-pad {
+      display: grid;
+      grid-template-columns: repeat(3, 60px);
+      grid-template-rows: repeat(3, 60px);
+      gap: 5px;
+      pointer-events: none;
+    }
+    .camera-pad {
+      display: grid;
+      grid-template-columns: repeat(3, 60px);
+      grid-template-rows: repeat(3, 60px);
+      gap: 5px;
+      pointer-events: none;
+    }
+    .control-btn {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background-color: rgba(255, 255, 255, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: white;
+      user-select: none;
+      pointer-events: auto;
+      border: none;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .control-btn:active, .control-btn.active {
+      background-color: rgba(255, 255, 255, 0.6);
+    }
+    .control-btn.center {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .instructions {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: white;
+      font-family: Arial, sans-serif;
+      background-color: rgba(0,0,0,0.6);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    #fps-counter {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      color: white;
+      font-family: monospace;
+      background-color: rgba(0,0,0,0.6);
+      padding: 5px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+    #hud {
+      position: absolute;
+      top: 60px;
+      left: 20px;
+      color: white;
+      font-family: 'Arial', sans-serif;
+      font-size: 16px;
+      text-shadow: 2px 2px 2px rgba(0,0,0,0.8);
+    }
+    .gem-counter {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .gem-icon {
+      width: 30px;
+      height: 30px;
+      background-color: #f8f;
+      border-radius: 3px;
+      margin-right: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 10px #f0f;
+    }
+  </style>
+</head>
+<body>
+  <div class="instructions">
+    Left buttons: Move Panda<br>
+    Right buttons: Rotate Camera
+  </div>
+
+  <div id="fps-counter">FPS: 60</div>
+  
+  <div id="hud">
+    <div class="gem-counter">
+      <div class="gem-icon">♦</div>
+      <span id="gem-count">0</span>
+    </div>
+  </div>
+  
+  <div id="controls">
+    <div class="control-group">
+      <div class="direction-pad">
+        <button id="btn-nw" class="control-btn">↖</button>
+        <button id="btn-n" class="control-btn">↑</button>
+        <button id="btn-ne" class="control-btn">↗</button>
+        <button id="btn-w" class="control-btn">←</button>
+        <button id="btn-center" class="control-btn center">·</button>
+        <button id="btn-e" class="control-btn">→</button>
+        <button id="btn-sw" class="control-btn">↙</button>
+        <button id="btn-s" class="control-btn">↓</button>
+        <button id="btn-se" class="control-btn">↘</button>
+      </div>
+    </div>
+    
+    <div class="control-group">
+      <div class="camera-pad">
+        <button id="cam-zoom-in" class="control-btn">+</button>
+        <button id="cam-up" class="control-btn">↑</button>
+        <button id="cam-empty1" class="control-btn center">·</button>
+        <button id="cam-left" class="control-btn">←</button>
+        <button id="cam-empty2" class="control-btn center">·</button>
+        <button id="cam-right" class="control-btn">→</button>
+        <button id="cam-zoom-out" class="control-btn">-</button>
+        <button id="cam-down" class="control-btn">↓</button>
+        <button id="cam-empty3" class="control-btn center">·</button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    // Enhanced PS2-Style 3D Game Setup
+    // With improved textures, normal maps, and advanced effects
+    
+    // Set up renderer with PS2-era capabilities (better than PS1)
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+    
+    // Set up scene
+    const scene = new THREE.Scene();
+    
+    // Set up camera with PS2-era field of view
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 3, 8);
+    camera.lookAt(0, 1, 0);
+    
+    // PS2-era enhanced lighting system
+    // Ambient light
+    const ambientLight = new THREE.AmbientLight(0x666666);
+    scene.add(ambientLight);
+    
+    // Main directional light with shadows
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(50, 100, 30);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 1024;
+    directionalLight.shadow.mapSize.height = 1024;
+    directionalLight.shadow.camera.near = 10;
+    directionalLight.shadow.camera.far = 200;
+    directionalLight.shadow.camera.left = -50;
+    directionalLight.shadow.camera.right = 50;
+    directionalLight.shadow.camera.top = 50;
+    directionalLight.shadow.camera.bottom = -50;
+    scene.add(directionalLight);
+    
+    // Secondary fill light - PS2 games often used multiple lights
+    const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
+    fillLight.position.set(-30, 50, -30);
+    scene.add(fillLight);
+    
+    // ===== TEXTURE CREATION UTILITIES =====
+    
+    // Create a procedural normal map using a canvas
+    function createProceduralNormalMap(width = 256, height = 256, scale = 10) {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      
+      // First, create a height map
+      ctx.fillStyle = '#808080';
+      ctx.fillRect(0, 0, width, height);
+      
+      // Add random noise
+      for (let i = 0; i < 10000; i++) {
+        const x = Math.random() * width;
+        const y = Math.random() * height;
+        const size = Math.random() * 3 + 1;
+        const gray = 100 + Math.random() * 60;
+        
+        ctx.fillStyle = `rgb(${gray}, ${gray}, ${gray})`;
+        ctx.fillRect(x, y, size, size);
+      }
+      
+      // Add larger structures
+      for (let i = 0; i < 20; i++) {
+        const x = Math.random() * width;
+        const y = Math.random() * height;
+        const radius = 10 + Math.random() * 40;
+        
+        const isBump = Math.random() > 0.5;
+        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+        
+        if (isBump) {
+          gradient.addColorStop(0, 'rgb(240, 240, 240)');
+          gradient.addColorStop(1, 'rgb(128, 128, 128)');
+        } else {
+          gradient.addColorStop(0, 'rgb(60, 60, 60)');
+          gradient.addColorStop(1, 'rgb(128, 128, 128)');
+        }
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      // Convert to normal map
+      const imgData = ctx.getImageData(0, 0, width, height);
+      const data = imgData.data;
+      
+      const normalData = ctx.createImageData(width, height);
+      const normalPixels = normalData.data;
+      
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const idx = (y * width + x) * 4;
+          const left = data[idx - 4] / 255;
+          const right = data[idx + 4] / 255;
+          const up = data[(y - 1) * width * 4 + x * 4] / 255;
+          const down = data[(y + 1) * width * 4 + x * 4] / 255;
+          
+          const dX = (right - left) * scale;
+          const dY = (down - up) * scale;
+          
+          const length = Math.sqrt(dX * dX + dY * dY + 1);
+          const nx = -dX / length;
+          const ny = -dY / length;
+          const nz = 1 / length;
+          
+          normalPixels[idx] = Math.floor((nx * 0.5 + 0.5) * 255);
+          normalPixels[idx + 1] = Math.floor((ny * 0.5 + 0.5) * 255);
+          normalPixels[idx + 2] = Math.floor((nz * 0.5 + 0.5) * 255);
+          normalPixels[idx + 3] = 255;
+        }
+      }
+      
+      ctx.putImageData(normalData, 0, 0);
+      
+      return new THREE.CanvasTexture(canvas);
+    }
+    
+    // Create a grass texture with normal map
+    function createGrassWithNormalMap() {
+  // Color texture
+  const colorCanvas = document.createElement('canvas');
+  colorCanvas.width = 512;  // Increase resolution
+  colorCanvas.height = 512;
+  const colorCtx = colorCanvas.getContext('2d');
+  
+  // Create a more varied base pattern
+  // First layer - dark base
+  colorCtx.fillStyle = '#335522';
+  colorCtx.fillRect(0, 0, 512, 512);
+  
+  // Second layer - patches of different green
+  for (let i = 0; i < 30; i++) {
+    const x = Math.random() * 512;
+    const y = Math.random() * 512;
+    const radius = 20 + Math.random() * 60;
+    
+    const gradient = colorCtx.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, 'rgba(120, 180, 65, 0.7)');
+    gradient.addColorStop(1, 'rgba(51, 85, 34, 0)');
+    
+    colorCtx.fillStyle = gradient;
+    colorCtx.beginPath();
+    colorCtx.arc(x, y, radius, 0, Math.PI * 2);
+    colorCtx.fill();
+  }
+  
+  // Add grass blades
+  for (let i = 0; i < 10000; i++) {
+    const x = Math.random() * 512;
+    const y = Math.random() * 512;
+    
+    // Grass blade
+    const length = 3 + Math.random() * 12;
+    const width = 1 + Math.random() * 2;
+    
+    // Vary the green color
+    const r = 40 + Math.random() * 40;
+    const g = 100 + Math.random() * 80;
+    const b = 20 + Math.random() * 50;
+    
+    colorCtx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+    
+    // Rotate to create random blade orientation
+    colorCtx.save();
+    colorCtx.translate(x, y);
+    colorCtx.rotate(Math.random() * Math.PI * 2);
+    colorCtx.fillRect(-width/2, -length/2, width, length);
+    colorCtx.restore();
+  }
+  
+  // Add some soil/dirt spots
+  for (let i = 0; i < 50; i++) {
+    const x = Math.random() * 512;
+    const y = Math.random() * 512;
+    const radius = 3 + Math.random() * 10;
+    
+    colorCtx.fillStyle = `rgb(${90 + Math.random() * 40}, ${70 + Math.random() * 30}, ${30 + Math.random() * 30})`;
+    colorCtx.beginPath();
+    colorCtx.arc(x, y, radius, 0, Math.PI * 2);
+    colorCtx.fill();
+  }
+  
+  // Create matching normal map with more detail
+  const normalMap = createProceduralNormalMap(512, 512, 15);
+  
+  // Create textures
+  const colorTexture = new THREE.CanvasTexture(colorCanvas);
+  
+  // Set texture properties
+  colorTexture.wrapS = THREE.RepeatWrapping;
+  colorTexture.wrapT = THREE.RepeatWrapping;
+  colorTexture.repeat.set(100, 100);
+  
+  normalMap.wrapS = THREE.RepeatWrapping;
+  normalMap.wrapT = THREE.RepeatWrapping;
+  normalMap.repeat.set(100, 100);
+  
+  return {
+    colorMap: colorTexture,
+    normalMap: normalMap
+  };
+}
+    
+    // Create fur texture with normal map
+    function createFurTextureWithNormal() {
+      // Create base color texture for fur
+      const colorCanvas = document.createElement('canvas');
+      colorCanvas.width = 256;
+      colorCanvas.height = 256;
+      const colorCtx = colorCanvas.getContext('2d');
+      
+      // Base fur color
+      colorCtx.fillStyle = '#ffffff';
+      colorCtx.fillRect(0, 0, 256, 256);
+      
+      // Add fur strands
+      for (let i = 0; i < 2000; i++) {
+        const x = Math.random() * 256;
+        const y = Math.random() * 256;
+        const length = 2 + Math.random() * 8;
+        const width = 1 + Math.random() * 1.5;
+        const angle = Math.random() * Math.PI * 2;
+        
+        // Random gray for the fur strand
+        const gray = 200 + Math.random() * 55;
+        colorCtx.fillStyle = `rgb(${gray}, ${gray}, ${gray})`;
+        
+        // Draw a small line representing a fur strand
+        colorCtx.save();
+        colorCtx.translate(x, y);
+        colorCtx.rotate(angle);
+        colorCtx.fillRect(-width/2, -length/2, width, length);
+        colorCtx.restore();
+      }
+      
+      // Create a matching normal map
+      const normalCanvas = document.createElement('canvas');
+      normalCanvas.width = 256;
+      normalCanvas.height = 256;
+      const normalCtx = normalCanvas.getContext('2d');
+      
+      // Initialize with flat normal
+      normalCtx.fillStyle = '#8080ff';
+      normalCtx.fillRect(0, 0, 256, 256);
+      
+      // Add normal details for each fur strand
+      for (let i = 0; i < 2000; i++) {
+        const x = Math.random() * 256;
+        const y = Math.random() * 256;
+        const length = 2 + Math.random() * 8;
+        const width = 1 + Math.random() * 1.5;
+        const angle = Math.random() * Math.PI * 2;
+        
+        // Calculate normal based on angle
+        const xNormal = Math.floor(128 + Math.cos(angle) * 64);
+        const yNormal = Math.floor(128 + Math.sin(angle) * 64);
+        
+        normalCtx.fillStyle = `rgb(${xNormal}, ${yNormal}, 255)`;
+        
+        // Draw the strand normal
+        normalCtx.save();
+        normalCtx.translate(x, y);
+        normalCtx.rotate(angle);
+        normalCtx.fillRect(-width/2, -length/2, width, length);
+        normalCtx.restore();
+      }
+      
+      // Create textures
+      const colorTexture = new THREE.CanvasTexture(colorCanvas);
+      const normalTexture = new THREE.CanvasTexture(normalCanvas);
+      
+      // Set texture properties
+      colorTexture.wrapS = THREE.RepeatWrapping;
+      colorTexture.wrapT = THREE.RepeatWrapping;
+      normalTexture.wrapS = THREE.RepeatWrapping;
+      normalTexture.wrapT = THREE.RepeatWrapping;
+      
+      return {
+        colorMap: colorTexture,
+        normalMap: normalTexture
+      };
+    }
+    
+    // Create a bamboo texture
+    function createBambooTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 512;
+      const context = canvas.getContext('2d');
+      
+      // Base bamboo color
+      context.fillStyle = '#3a6324';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw bamboo segments/rings
+      for (let y = 0; y < canvas.height; y += 60) {
+        // Darker ring
+        context.fillStyle = '#2d4f1e';
+        context.fillRect(0, y, canvas.width, 10);
+        
+        // Add some texture variation
+        for (let i = 0; i < 100; i++) {
+          const x = Math.random() * canvas.width;
+          const yPos = y + Math.random() * 60;
+          const size = Math.random() * 3 + 1;
+          const alpha = Math.random() * 0.2 + 0.1;
+          
+          context.fillStyle = `rgba(45, 79, 30, ${alpha})`;
+          context.fillRect(x, yPos, size, size);
+        }
+      }
+      
+      // Create vertical stripes typical of bamboo
+      for (let x = 0; x < canvas.width; x += 20) {
+        context.fillStyle = 'rgba(45, 79, 30, 0.2)';
+        context.fillRect(x, 0, 2, canvas.height);
+      }
+      
+      return new THREE.CanvasTexture(canvas);
+    }
+    
+    // Create a dynamic skybox
+  function createSkybox() {
+  // Create a sky sphere with larger radius
+  const skyGeometry = new THREE.SphereGeometry(800, 32, 16);
+  
+  // Create a gradient shader material with stronger colors
+  const skyMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      topColor: { value: new THREE.Color(0x0055ff) },  // Deeper blue
+      bottomColor: { value: new THREE.Color(0x80b5ff) }, // Lighter blue
+      offset: { value: 400 },
+      exponent: { value: 0.8 },  // Increased exponent for stronger gradient
+      time: { value: 0 }
+    },
+    vertexShader: `
+      varying vec3 vWorldPosition;
+      
+      void main() {
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPosition.xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 topColor;
+      uniform vec3 bottomColor;
+      uniform float offset;
+      uniform float exponent;
+      uniform float time;
+      
+      varying vec3 vWorldPosition;
+      
+      void main() {
+        float h = normalize(vWorldPosition + offset).y;
+        
+        // Day-night cycle based on time
+        vec3 dayTopColor = vec3(0.0, 0.33, 1.0);
+        vec3 dayBottomColor = vec3(0.5, 0.7, 1.0);
+        
+        vec3 nightTopColor = vec3(0.0, 0.0, 0.15);
+        vec3 nightBottomColor = vec3(0.05, 0.05, 0.2);
+        
+        // Use time to interpolate between day and night
+        float dayFactor = (sin(time) * 0.5 + 0.5);
+        
+        vec3 finalTopColor = mix(nightTopColor, dayTopColor, dayFactor);
+        vec3 finalBottomColor = mix(nightBottomColor, dayBottomColor, dayFactor);
+        
+        // Add stars at night
+        float stars = 0.0;
+        if (dayFactor < 0.5) {
+          // Simple procedural stars
+          vec3 coord = vWorldPosition * 50.0;
+          float noise = fract(sin(dot(coord, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+          stars = (noise > 0.99) ? 1.0 - dayFactor * 2.0 : 0.0;
+        }
+        
+        vec3 skyColor = mix(finalBottomColor, finalTopColor, max(pow(max(h, 0.0), exponent), 0.0));
+        skyColor += vec3(stars);
+        
+        gl_FragColor = vec4(skyColor, 1.0);
+      }
+    `,
+    side: THREE.BackSide
+  });
+  
+  const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+  
+  // Add an update function
+  sky.update = function(time) {
+    skyMaterial.uniforms.time.value = time * 0.1;
+  };
+  
+  return sky;
+}
+    
+    // Create PS2-style water
+    function createPS2Water(size = 40, position = { x: 0, y: -0.3, z: 0 }) {
+      // Water group to hold all elements
+      const waterGroup = new THREE.Group();
+      waterGroup.position.set(position.x, position.y, position.z);
+      
+      // Create the water plane
+      const waterGeometry = new THREE.PlaneGeometry(size, size, 16, 16);
+      
+      // Create a canvas for the water texture
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      
+      // Fill with base water color
+      const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      gradient.addColorStop(0, '#4585b7');
+      gradient.addColorStop(0.5, '#5d9dc9');
+      gradient.addColorStop(1, '#4585b7');
+      
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Add wave patterns
+      for (let i = 0; i < 10; i++) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 2 + Math.random() * 2;
+        
+        ctx.beginPath();
+        let y = Math.random() * canvas.height;
+        ctx.moveTo(0, y);
+        
+        // Create wavy line
+        for (let x = 0; x < canvas.width; x += 20) {
+          y += (Math.random() - 0.5) * 20;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      
+      // Create a second canvas for normal map
+      const normalCanvas = document.createElement('canvas');
+      normalCanvas.width = 512;
+      normalCanvas.height = 512;
+      const normalCtx = normalCanvas.getContext('2d');
+      
+      // Fill with neutral normal color
+      normalCtx.fillStyle = '#8080ff';
+      normalCtx.fillRect(0, 0, normalCanvas.width, normalCanvas.height);
+      
+      // Add normal map details
+      for (let y = 0; y < normalCanvas.height; y += 4) {
+        for (let x = 0; x < normalCanvas.width; x += 4) {
+          const nx = Math.floor(128 + Math.sin(x * 0.1) * Math.cos(y * 0.1) * 127);
+          const ny = Math.floor(128 + Math.sin(y * 0.1) * Math.cos(x * 0.1) * 127);
+          normalCtx.fillStyle = `rgb(${nx}, ${ny}, 255)`;
+          normalCtx.fillRect(x, y, 4, 4);
+        }
+      }
+      
+      // Create textures
+      const waterTexture = new THREE.CanvasTexture(canvas);
+      waterTexture.wrapS = THREE.RepeatWrapping;
+      waterTexture.wrapT = THREE.RepeatWrapping;
+      waterTexture.repeat.set(5, 5);
+      
+      const waterNormal = new THREE.CanvasTexture(normalCanvas);
+      waterNormal.wrapS = THREE.RepeatWrapping;
+      waterNormal.wrapT = THREE.RepeatWrapping;
+      waterNormal.repeat.set(5, 5);
+      
+      // Create material
+      const waterMaterial = new THREE.MeshStandardMaterial({
+        color: 0x4499cc,
+        map: waterTexture,
+        normalMap: waterNormal,
+        transparent: true,
+        opacity: 0.8,
+        roughness: 0.2,
+        metalness: 0.1
+      });
+      
+      // Create water mesh
+      const water = new THREE.Mesh(waterGeometry, waterMaterial);
+      water.rotation.x = -Math.PI / 2;
+      water.receiveShadow = true;
+      
+      waterGroup.add(water);
+      
+      // Create an updatable ripple position
+      const ripplePositions = [];
+      const rippleTimes = [];
+      const MAX_RIPPLES = 8;
+      
+      // Add animated highlights (sparkles)
+      const sparkleGeometry = new THREE.BufferGeometry();
+      const sparkleCount = 100;
+      
+      const positions = new Float32Array(sparkleCount * 3);
+      const scales = new Float32Array(sparkleCount);
+      
+      for (let i = 0; i < sparkleCount; i++) {
+        positions[i * 3] = (Math.random() - 0.5) * size;
+        positions[i * 3 + 1] = 0.05;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * size;
+        scales[i] = Math.random() * 0.5 + 0.5;
+      }
+      
+      sparkleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      sparkleGeometry.setAttribute('scale', new THREE.BufferAttribute(scales, 1));
+      
+      const sparkleMaterial = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.2,
+        transparent: true,
+        opacity: 0.6,
+        blending: THREE.AdditiveBlending
+      });
+      
+      const sparkles = new THREE.Points(sparkleGeometry, sparkleMaterial);
+      sparkles.position.y = 0.05;
+      waterGroup.add(sparkles);
+      
+      // Animation function
+      waterGroup.update = function(time) {
+        // Update water texture offsets
+        water.material.map.offset.x = Math.sin(time * 0.05) * 0.05;
+        water.material.map.offset.y = time * 0.03;
+        water.material.normalMap.offset.x = time * 0.03;
+        water.material.normalMap.offset.y = time * 0.02;
+        
+        // Update vertices for wave motion
+        const vertices = water.geometry.attributes.position.array;
+        for (let i = 0; i < vertices.length; i += 3) {
+          const x = vertices[i];
+          const z = vertices[i + 2];
+          
+          vertices[i + 1] = Math.sin(x * 0.5 + time) * 0.1 + 
+                           Math.cos(z * 0.5 + time * 0.8) * 0.1;
+          
+          // Apply ripple effects
+          for (let r = 0; r < ripplePositions.length; r++) {
+            const ripplePos = ripplePositions[r];
+            const rippleAge = time - rippleTimes[r];
+            
+            const dx = x - ripplePos.x;
+            const dz = z - ripplePos.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            
+            const speed = 3.0;
+            const waveWidth = 1.0;
+            const amplitude = Math.max(0, 0.2 - rippleAge * 0.1);
+            
+            const wavePos = dist - rippleAge * speed;
+            if (Math.abs(wavePos) < waveWidth) {
+              vertices[i + 1] += Math.cos(wavePos / waveWidth * Math.PI) * amplitude;
+            }
+          }
+        }
+        
+        water.geometry.attributes.position.needsUpdate = true;
+        
+// Update sparkles
+        const sparklePositions = sparkles.geometry.attributes.position.array;
+        const sparkleScales = sparkles.geometry.attributes.scale.array;
+        
+        for (let i = 0; i < sparkleCount; i++) {
+          // Make sparkles "flicker"
+          const x = sparklePositions[i * 3];
+          const z = sparklePositions[i * 3 + 2];
+          
+          sparkleScales[i] = (Math.sin(time * 2 + x) * 0.25 + 0.75) * 
+                             (Math.cos(time * 1.5 + z) * 0.25 + 0.75);
+          
+          // Slowly move sparkles
+          sparklePositions[i * 3] += Math.sin(time + i) * 0.005;
+          sparklePositions[i * 3 + 2] += Math.cos(time * 0.8 + i) * 0.005;
+          
+          // Keep within bounds
+          if (sparklePositions[i * 3] > size / 2) sparklePositions[i * 3] -= size;
+          if (sparklePositions[i * 3] < -size / 2) sparklePositions[i * 3] += size;
+          if (sparklePositions[i * 3 + 2] > size / 2) sparklePositions[i * 3 + 2] -= size;
+          if (sparklePositions[i * 3 + 2] < -size / 2) sparklePositions[i * 3 + 2] += size;
+        }
+        
+        sparkles.geometry.attributes.position.needsUpdate = true;
+        sparkles.geometry.attributes.scale.needsUpdate = true;
+      };
+      
+      // Function to add a ripple
+      waterGroup.addRipple = function(position) {
+        // Convert position to water-local coordinates
+        const waterPos = {
+          x: position.x - this.position.x,
+          z: position.z - this.position.z
+        };
+        
+        // Limit number of ripples
+        if (ripplePositions.length >= MAX_RIPPLES) {
+          ripplePositions.shift();
+          rippleTimes.shift();
+        }
+        
+        ripplePositions.push(waterPos);
+        rippleTimes.push(performance.now() * 0.001);
+      };
+      
+      return waterGroup;
+    }
+    
+    // Create enhanced particle system
+    function createEnhancedParticleSystem() {
+      // Main particle container
+      const particleSystem = new THREE.Group();
+      
+      // Create dust effect (footsteps, landing)
+      function createDustEffect() {
+        const geometry = new THREE.BufferGeometry();
+        const particleCount = 100;
+        
+        const positions = new Float32Array(particleCount * 3);
+        const sizes = new Float32Array(particleCount);
+        const lifetimes = new Float32Array(particleCount);
+        const velocities = new Float32Array(particleCount * 3);
+        
+        for (let i = 0; i < particleCount; i++) {
+          positions[i * 3] = 0;
+          positions[i * 3 + 1] = 0;
+          positions[i * 3 + 2] = 0;
+          sizes[i] = 0;
+          lifetimes[i] = 0;
+          velocities[i * 3] = 0;
+          velocities[i * 3 + 1] = 0;
+          velocities[i * 3 + 2] = 0;
+        }
+        
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+        
+        // Create dust texture
+        const dustCanvas = document.createElement('canvas');
+        dustCanvas.width = 128;
+        dustCanvas.height = 128;
+        const ctx = dustCanvas.getContext('2d');
+        
+        // Draw a soft dust particle
+        const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+        gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.5)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 128, 128);
+        
+        const dustTexture = new THREE.CanvasTexture(dustCanvas);
+        
+        const material = new THREE.PointsMaterial({
+          color: 0xeedddd,
+          size: 0.15,
+          map: dustTexture,
+          transparent: true,
+          opacity: 0.6,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending
+        });
+        
+        const particles = new THREE.Points(geometry, material);
+        
+        particles.userData = {
+          lifetimes: lifetimes,
+          velocities: velocities,
+          activeParticles: 0
+        };
+        
+        // Spawn function
+        particles.spawn = function(position, count) {
+          const positionArray = this.geometry.attributes.position.array;
+          const sizeArray = this.geometry.attributes.size.array;
+          const lifetimeArray = this.userData.lifetimes;
+          const velocityArray = this.userData.velocities;
+          
+          let spawned = 0;
+          for (let i = 0; i < particleCount && spawned < count; i++) {
+            if (lifetimeArray[i] <= 0) {
+              positionArray[i * 3] = position.x + (Math.random() - 0.5) * 0.5;
+              positionArray[i * 3 + 1] = position.y + Math.random() * 0.1;
+              positionArray[i * 3 + 2] = position.z + (Math.random() - 0.5) * 0.5;
+              
+              velocityArray[i * 3] = (Math.random() - 0.5) * 0.8;
+              velocityArray[i * 3 + 1] = Math.random() * 1.5 + 0.5;
+              velocityArray[i * 3 + 2] = (Math.random() - 0.5) * 0.8;
+              
+              sizeArray[i] = 0.05 + Math.random() * 0.1;
+              
+              lifetimeArray[i] = 0.5 + Math.random() * 0.5;
+              
+              spawned++;
+              this.userData.activeParticles++;
+            }
+          }
+          
+          this.geometry.attributes.position.needsUpdate = true;
+          this.geometry.attributes.size.needsUpdate = true;
+        };
+        
+        // Update function
+        particles.update = function(delta) {
+          if (this.userData.activeParticles <= 0) return;
+          
+          const positionArray = this.geometry.attributes.position.array;
+          const sizeArray = this.geometry.attributes.size.array;
+          const lifetimeArray = this.userData.lifetimes;
+          const velocityArray = this.userData.velocities;
+          
+          let activeCount = 0;
+          
+          for (let i = 0; i < particleCount; i++) {
+            if (lifetimeArray[i] <= 0) continue;
+            
+            lifetimeArray[i] -= delta;
+            
+            if (lifetimeArray[i] > 0) {
+              positionArray[i * 3] += velocityArray[i * 3] * delta;
+              positionArray[i * 3 + 1] += velocityArray[i * 3 + 1] * delta;
+              positionArray[i * 3 + 2] += velocityArray[i * 3 + 2] * delta;
+              
+              velocityArray[i * 3] *= 0.95;
+              velocityArray[i * 3 + 1] -= 0.8 * delta;
+              velocityArray[i * 3 + 2] *= 0.95;
+              
+              const lifeRatio = lifetimeArray[i] / (0.5 + Math.random() * 0.5);
+              sizeArray[i] = 0.05 + Math.random() * 0.1 * lifeRatio;
+              
+              activeCount++;
+            } else {
+              sizeArray[i] = 0;
+            }
+          }
+          
+          this.userData.activeParticles = activeCount;
+          
+          this.geometry.attributes.position.needsUpdate = true;
+          this.geometry.attributes.size.needsUpdate = true;
+        };
+        
+        return particles;
+      }
+      
+      // Create sparkle effect for collectibles
+      function createSparkleEffect() {
+        const geometry = new THREE.BufferGeometry();
+        const particleCount = 50;
+        
+        const positions = new Float32Array(particleCount * 3);
+        const sizes = new Float32Array(particleCount);
+        const colors = new Float32Array(particleCount * 3);
+        const lifetimes = new Float32Array(particleCount);
+        const velocities = new Float32Array(particleCount * 3);
+        
+        for (let i = 0; i < particleCount; i++) {
+          positions[i * 3] = 0;
+          positions[i * 3 + 1] = 0;
+          positions[i * 3 + 2] = 0;
+          sizes[i] = 0;
+          lifetimes[i] = 0;
+          colors[i * 3] = 1;
+          colors[i * 3 + 1] = 1;
+          colors[i * 3 + 2] = 1;
+        }
+        
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        
+        // Create sparkle texture
+        const sparkleCanvas = document.createElement('canvas');
+        sparkleCanvas.width = 128;
+        sparkleCanvas.height = 128;
+        const ctx = sparkleCanvas.getContext('2d');
+        
+        // Draw a star shape
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        
+        const centerX = 64;
+        const centerY = 64;
+        const outerRadius = 64;
+        const innerRadius = 16;
+        
+        for (let i = 0; i < 8; i++) {
+          const radius = i % 2 === 0 ? outerRadius : innerRadius;
+          const angle = i * Math.PI / 4;
+          const x = centerX + Math.cos(angle) * radius;
+          const y = centerY + Math.sin(angle) * radius;
+          
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        
+        ctx.closePath();
+        ctx.fill();
+        
+        const sparkleTexture = new THREE.CanvasTexture(sparkleCanvas);
+        
+        const material = new THREE.PointsMaterial({
+          size: 0.2,
+          map: sparkleTexture,
+          transparent: true,
+          opacity: 0.8,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          vertexColors: true
+        });
+        
+        const particles = new THREE.Points(geometry, material);
+        
+        particles.userData = {
+          lifetimes: lifetimes,
+          velocities: velocities,
+          activeParticles: 0
+        };
+        
+        // Spawn function
+        particles.spawn = function(position, count) {
+          const positionArray = this.geometry.attributes.position.array;
+          const sizeArray = this.geometry.attributes.size.array;
+          const colorArray = this.geometry.attributes.color.array;
+          const lifetimeArray = this.userData.lifetimes;
+          const velocityArray = this.userData.velocities;
+          
+          let spawned = 0;
+          for (let i = 0; i < particleCount && spawned < count; i++) {
+            if (lifetimeArray[i] <= 0) {
+              positionArray[i * 3] = position.x + (Math.random() - 0.5) * 0.3;
+              positionArray[i * 3 + 1] = position.y + (Math.random() - 0.5) * 0.3;
+              positionArray[i * 3 + 2] = position.z + (Math.random() - 0.5) * 0.3;
+              
+              const angle = Math.random() * Math.PI * 2;
+              const speed = 0.5 + Math.random() * 2;
+              velocityArray[i * 3] = Math.cos(angle) * speed;
+              velocityArray[i * 3 + 1] = Math.sin(angle) * speed;
+              velocityArray[i * 3 + 2] = (Math.random() - 0.5) * speed;
+              
+              sizeArray[i] = 0.1 + Math.random() * 0.2;
+              
+              colorArray[i * 3] = Math.random() * 0.5 + 0.5;
+              colorArray[i * 3 + 1] = Math.random() * 0.5 + 0.5;
+              colorArray[i * 3 + 2] = Math.random() * 0.5 + 0.5;
+              
+              lifetimeArray[i] = 0.5 + Math.random() * 1.0;
+              
+              spawned++;
+              this.userData.activeParticles++;
+            }
+          }
+          
+          this.geometry.attributes.position.needsUpdate = true;
+          this.geometry.attributes.size.needsUpdate = true;
+          this.geometry.attributes.color.needsUpdate = true;
+        };
+        
+        // Update function
+        particles.update = function(delta) {
+          if (this.userData.activeParticles <= 0) return;
+          
+          const positionArray = this.geometry.attributes.position.array;
+          const sizeArray = this.geometry.attributes.size.array;
+          const colorArray = this.geometry.attributes.color.array;
+          const lifetimeArray = this.userData.lifetimes;
+          const velocityArray = this.userData.velocities;
+          
+          let activeCount = 0;
+          
+          for (let i = 0; i < particleCount; i++) {
+            if (lifetimeArray[i] <= 0) continue;
+            
+            lifetimeArray[i] -= delta;
+            
+            if (lifetimeArray[i] > 0) {
+              positionArray[i * 3] += velocityArray[i * 3] * delta;
+              positionArray[i * 3 + 1] += velocityArray[i * 3 + 1] * delta;
+              positionArray[i * 3 + 2] += velocityArray[i * 3 + 2] * delta;
+              
+              velocityArray[i * 3] *= 0.9;
+              velocityArray[i * 3 + 1] *= 0.9;
+              velocityArray[i * 3 + 2] *= 0.9;
+              
+              sizeArray[i] *= 0.99;
+              
+              colorArray[i * 3] = Math.min(1.0, colorArray[i * 3] + delta * 0.2);
+              colorArray[i * 3 + 1] = Math.min(1.0, colorArray[i * 3 + 1] + delta * 0.2);
+              colorArray[i * 3 + 2] = Math.min(1.0, colorArray[i * 3 + 2] + delta * 0.2);
+              
+              activeCount++;
+            } else {
+              sizeArray[i] = 0;
+            }
+          }
+          
+          this.userData.activeParticles = activeCount;
+          
+          this.geometry.attributes.position.needsUpdate = true;
+          this.geometry.attributes.size.needsUpdate = true;
+          this.geometry.attributes.color.needsUpdate = true;
+        };
+        
+        return particles;
+      }
+      
+      // Create different particle effect types
+      const effectTypes = {
+        dust: createDustEffect(),
+        sparkle: createSparkleEffect()
+      };
+      
+      // Add all effects to the particle system
+      for (const [name, effect] of Object.entries(effectTypes)) {
+        particleSystem.add(effect);
+        particleSystem[name] = effect;
+      }
+      
+      // Main update function
+      particleSystem.update = function(delta) {
+        for (const effect of Object.values(effectTypes)) {
+          if (effect.update) {
+            effect.update(delta);
+          }
+        }
+      };
+      
+      // Spawn particles at position
+      particleSystem.spawn = function(position, count, type) {
+        if (effectTypes[type]) {
+          effectTypes[type].spawn(position, count);
+        }
+      };
+      
+      return particleSystem;
+    }
+    
+    // Create textured ground with normal maps
+    function createTexturedGround() {
+  // Increase the ground size for better coverage
+  const groundSize = 1000;
+  const groundSegments = 100;
+  const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize, groundSegments, groundSegments);
+  
+  // Apply vertex displacement for more varied terrain
+  const vertices = groundGeometry.attributes.position.array;
+  for (let i = 0; i < vertices.length; i += 3) {
+    // Keep the center area (20x20) more flat for gameplay
+    const x = vertices[i];
+    const z = vertices[i + 2];
+    const distanceFromCenter = Math.sqrt(x * x + z * z);
+    
+    if (distanceFromCenter > 20) {
+      // Apply more displacement further from center
+      const factor = Math.min((distanceFromCenter - 20) / 100, 0.8);
+      vertices[i + 1] = Math.sin(vertices[i] / 10) * Math.cos(vertices[i + 2] / 10) * factor;
+    } else {
+      // Subtle variation in the center
+      vertices[i + 1] = Math.sin(vertices[i] / 15) * Math.cos(vertices[i + 2] / 15) * 0.05;
+    }
+  }
+  
+  groundGeometry.computeVertexNormals();
+  
+  // Get textures with normal maps
+  const grassTextures = createGrassWithNormalMap();
+  
+  // Increase texture repeat to maintain proper texel density with larger ground
+  grassTextures.colorMap.repeat.set(100, 100);
+  grassTextures.normalMap.repeat.set(100, 100);
+  
+  // Create enhanced ground material
+  const groundMaterial = new THREE.MeshStandardMaterial({
+    map: grassTextures.colorMap,
+    normalMap: grassTextures.normalMap,
+    normalScale: new THREE.Vector2(1, 1),
+    roughness: 0.8,
+    metalness: 0.2,
+    color: 0x88aa66  // Slightly tint the grass
+  });
+  
+  const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.5;
+  ground.receiveShadow = true;
+  
+  return ground;
+}
+    
+    // ===== Setup Scene Elements =====
+    
+    // Create sky
+    const sky = createSkybox();
+    scene.add(sky);
+    
+    // Create ground
+    const ground = createTexturedGround();
+    scene.add(ground);
+    
+    // Create water
+    const water = createPS2Water(40, { x: 20, y: -0.3, z: 20 });
+    scene.add(water);
+    
+    // Create particle system
+    const particleSystem = createEnhancedParticleSystem();
+    scene.add(particleSystem);
+    
+    // ===== Create PS2-Style Panda Character =====
+    function createPS2Panda() {
+      const panda = new THREE.Group();
+      
+      // Get fur textures
+      const furTextures = createFurTextureWithNormal();
+      
+      // Higher quality materials with textures
+      const whiteMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        map: furTextures.colorMap,
+        normalMap: furTextures.normalMap,
+        normalScale: new THREE.Vector2(0.5, 0.5),
+        roughness: 0.7,
+        metalness: 0.1
+      });
+      
+      const blackMaterial = new THREE.MeshStandardMaterial({
+        color: 0x222222,
+        map: furTextures.colorMap,
+        normalMap: furTextures.normalMap,
+        normalScale: new THREE.Vector2(0.5, 0.5),
+        roughness: 0.7,
+        metalness: 0.1
+      });
+      
+      const blueMaterial = new THREE.MeshStandardMaterial({
+        color: 0x3355ff,
+        roughness: 0.6,
+        metalness: 0.2
+      });
+      
+      const redMaterial = new THREE.MeshStandardMaterial({
+        color: 0xff3333,
+        roughness: 0.5,
+        metalness: 0.3
+      });
+      
+      // Character components with higher polygon counts
+      
+      // ----- HEAD (200+ polygons with subdivisions) -----
+      const headGeometry = new THREE.SphereGeometry(0.6, 12, 10);
+      const head = new THREE.Mesh(headGeometry, whiteMaterial);
+      head.position.y = 1.6;
+      head.castShadow = true;
+      panda.add(head);
+      
+      // ----- FACE DETAILS -----
+      // Muzzle - higher poly for PS2
+      const muzzleGeometry = new THREE.SphereGeometry(0.45, 10, 8);
+      const muzzle = new THREE.Mesh(muzzleGeometry, whiteMaterial);
+      muzzle.position.set(0, 1.45, 0.4);
+      muzzle.scale.set(0.85, 0.75, 0.8);
+      muzzle.castShadow = true;
+      panda.add(muzzle);
+      
+      // Eyes with PS2-quality details
+      const eyePatchGeometry = new THREE.SphereGeometry(0.32, 10, 8);
+      
+      const leftEyePatch = new THREE.Mesh(eyePatchGeometry, blackMaterial);
+      leftEyePatch.position.set(0.29, 1.65, 0.45);
+      leftEyePatch.scale.set(1, 1, 0.7);
+      leftEyePatch.castShadow = true;
+      panda.add(leftEyePatch);
+      
+      const rightEyePatch = new THREE.Mesh(eyePatchGeometry.clone(), blackMaterial);
+      rightEyePatch.position.set(-0.29, 1.65, 0.45);
+      rightEyePatch.scale.set(1, 1, 0.7);
+      rightEyePatch.castShadow = true;
+      panda.add(rightEyePatch);
+      
+      // Eye whites
+      const eyeGeometry = new THREE.SphereGeometry(0.14, 10, 8);
+      
+      const leftEye = new THREE.Mesh(eyeGeometry, whiteMaterial);
+      leftEye.position.set(0.31, 1.65, 0.57);
+      panda.add(leftEye);
+      
+      const rightEye = new THREE.Mesh(eyeGeometry.clone(), whiteMaterial);
+      rightEye.position.set(-0.31, 1.65, 0.57);
+      panda.add(rightEye);
+      
+      // Pupils
+      const pupilGeometry = new THREE.SphereGeometry(0.06, 8, 8);
+      
+      const leftPupil = new THREE.Mesh(pupilGeometry, blackMaterial);
+      leftPupil.position.set(0.32, 1.66, 0.67);
+      panda.add(leftPupil);
+      
+      const rightPupil = new THREE.Mesh(pupilGeometry.clone(), blackMaterial);
+      rightPupil.position.set(-0.32, 1.66, 0.67);
+      panda.add(rightPupil);
+      
+      // Nose detail
+      const noseGeometry = new THREE.SphereGeometry(0.15, 8, 6);
+      const nose = new THREE.Mesh(noseGeometry, blackMaterial);
+      nose.position.set(0, 1.36, 0.78);
+      nose.scale.set(0.7, 0.5, 0.5);
+      nose.castShadow = true;
+      panda.add(nose);
+      
+      // Mouth line
+      const mouthGeometry = new THREE.TorusGeometry(0.14, 0.02, 10, 12, Math.PI);
+      const mouth = new THREE.Mesh(mouthGeometry, blackMaterial);
+      mouth.position.set(0, 1.25, 0.7);
+      mouth.rotation.x = -Math.PI / 2;
+      mouth.rotation.z = Math.PI;
+      panda.add(mouth);
+      
+      // ----- EARS -----
+      const earGeometry = new THREE.SphereGeometry(0.25, 10, 6);
+      
+      const leftEar = new THREE.Mesh(earGeometry, blackMaterial);
+      leftEar.position.set(0.45, 2.0, 0);
+      leftEar.scale.set(1, 1.2, 0.6);
+      leftEar.castShadow = true;
+      panda.add(leftEar);
+      
+      const rightEar = new THREE.Mesh(earGeometry.clone(), blackMaterial);
+      rightEar.position.set(-0.45, 2.0, 0);
+      rightEar.scale.set(1, 1.2, 0.6);
+      rightEar.castShadow = true;
+      panda.add(rightEar);
+      
+      // Inner ears
+      const innerEarGeometry = new THREE.SphereGeometry(0.15, 8, 6);
+      
+      const leftInnerEar = new THREE.Mesh(innerEarGeometry, redMaterial);
+      leftInnerEar.position.set(0.45, 2.0, 0.05);
+      leftInnerEar.scale.set(0.7, 0.7, 0.3);
+      panda.add(leftInnerEar);
+      
+      const rightInnerEar = new THREE.Mesh(innerEarGeometry.clone(), redMaterial);
+      rightInnerEar.position.set(-0.45, 2.0, 0.05);
+      rightInnerEar.scale.set(0.7, 0.7, 0.3);
+      panda.add(rightInnerEar);
+      
+      // ----- BODY -----
+      const torsoGeometry = new THREE.CylinderGeometry(0.4, 0.45, 1.1, 12, 3);
+      const torso = new THREE.Mesh(torsoGeometry, whiteMaterial);
+      torso.position.y = 0.85;
+      torso.castShadow = true;
+      panda.add(torso);
+      
+      // Black back patch
+      const backPatchGeometry = new THREE.SphereGeometry(0.4, 10, 8);
+      const backPatch = new THREE.Mesh(backPatchGeometry, blackMaterial);
+      backPatch.position.set(0, 0.9, -0.15);
+      backPatch.scale.set(0.8, 0.8, 0.3);
+      backPatch.castShadow = true;
+      panda.add(backPatch);
+      
+      // ----- ARMS -----
+      const upperArmGeometry = new THREE.CylinderGeometry(0.12, 0.13, 0.5, 10, 3);
+      
+      const leftUpperArm = new THREE.Mesh(upperArmGeometry, blackMaterial);
+      leftUpperArm.position.set(0.5, 1.2, 0);
+      leftUpperArm.rotation.z = -0.3;
+      leftUpperArm.castShadow = true;
+      panda.add(leftUpperArm);
+      
+      const rightUpperArm = new THREE.Mesh(upperArmGeometry.clone(), blackMaterial);
+      rightUpperArm.position.set(-0.5, 1.2, 0);
+      rightUpperArm.rotation.z = 0.3;
+      rightUpperArm.castShadow = true;
+      panda.add(rightUpperArm);
+      
+      // Lower arms
+      const lowerArmGeometry = new THREE.CylinderGeometry(0.11, 0.12, 0.45, 10, 3);
+      
+      const leftLowerArm = new THREE.Mesh(lowerArmGeometry, blackMaterial);
+      leftLowerArm.position.set(0.7, 1.0, 0.1);
+      leftLowerArm.rotation.z = -0.5;
+      leftLowerArm.castShadow = true;
+      panda.add(leftLowerArm);
+      
+      const rightLowerArm = new THREE.Mesh(lowerArmGeometry.clone(), blackMaterial);
+      rightLowerArm.position.set(-0.7, 1.0, 0.1);
+      rightLowerArm.rotation.z = 0.5;
+      rightLowerArm.castShadow = true;
+      panda.add(rightLowerArm);
+      
+      // Hands
+      const handGeometry = new THREE.SphereGeometry(0.13, 10, 8);
+      
+      const leftHand = new THREE.Mesh(handGeometry, blackMaterial);
+      leftHand.position.set(0.85, 0.85, 0.15);
+      leftHand.scale.set(1.1, 0.8, 0.9);
+      leftHand.castShadow = true;
+      panda.add(leftHand);
+      
+      const rightHand = new THREE.Mesh(handGeometry.clone(), blackMaterial);
+      rightHand.position.set(-0.85, 0.85, 0.15);
+      rightHand.scale.set(1.1, 0.8, 0.9);
+      rightHand.castShadow = true;
+      panda.add(rightHand);
+      
+      // ----- LEGS -----
+      // Hips
+      const hipsGeometry = new THREE.BoxGeometry(0.6, 0.2, 0.5, 3, 2, 3);
+      const hips = new THREE.Mesh(hipsGeometry, whiteMaterial);
+      hips.position.y = 0.35;
+      hips.castShadow = true;
+      panda.add(hips);
+      
+// Upper legs
+      const upperLegGeometry = new THREE.CylinderGeometry(0.15, 0.14, 0.5, 10, 3);
+      
+      const leftUpperLeg = new THREE.Mesh(upperLegGeometry, blackMaterial);
+      leftUpperLeg.position.set(0.2, 0.1, 0);
+      leftUpperLeg.castShadow = true;
+      panda.add(leftUpperLeg);
+      
+      const rightUpperLeg = new THREE.Mesh(upperLegGeometry.clone(), blackMaterial);
+      rightUpperLeg.position.set(-0.2, 0.1, 0);
+      rightUpperLeg.castShadow = true;
+      panda.add(rightUpperLeg);
+      
+      // Lower legs
+      const lowerLegGeometry = new THREE.CylinderGeometry(0.13, 0.15, 0.5, 10, 3);
+      
+      const leftLowerLeg = new THREE.Mesh(lowerLegGeometry, blackMaterial);
+      leftLowerLeg.position.set(0.2, -0.3, 0);
+      leftLowerLeg.castShadow = true;
+      panda.add(leftLowerLeg);
+      
+      const rightLowerLeg = new THREE.Mesh(lowerLegGeometry.clone(), blackMaterial);
+      rightLowerLeg.position.set(-0.2, -0.3, 0);
+      rightLowerLeg.castShadow = true;
+      panda.add(rightLowerLeg);
+      
+      // Feet
+      const footGeometry = new THREE.SphereGeometry(0.15, 10, 8);
+      
+      const leftFoot = new THREE.Mesh(footGeometry, redMaterial);
+      leftFoot.position.set(0.2, -0.6, 0.1);
+      leftFoot.scale.set(1.3, 0.6, 1.6);
+      leftFoot.castShadow = true;
+      panda.add(leftFoot);
+      
+      const rightFoot = new THREE.Mesh(footGeometry.clone(), redMaterial);
+      rightFoot.position.set(-0.2, -0.6, 0.1);
+      rightFoot.scale.set(1.3, 0.6, 1.6);
+      rightFoot.castShadow = true;
+      panda.add(rightFoot);
+      
+      // ----- TAIL -----
+      const tailBaseGeometry = new THREE.SphereGeometry(0.15, 10, 8);
+      const tailBase = new THREE.Mesh(tailBaseGeometry, blackMaterial);
+      tailBase.position.set(0, 0.5, -0.5);
+      tailBase.castShadow = true;
+      panda.add(tailBase);
+      
+      const tailMidGeometry = new THREE.SphereGeometry(0.12, 8, 6);
+      const tailMid = new THREE.Mesh(tailMidGeometry, blackMaterial);
+      tailMid.position.set(0, 0.55, -0.7);
+      tailMid.castShadow = true;
+      panda.add(tailMid);
+      
+      const tailTipGeometry = new THREE.SphereGeometry(0.08, 8, 6);
+      const tailTip = new THREE.Mesh(tailTipGeometry, blackMaterial);
+      tailTip.position.set(0, 0.6, -0.85);
+      tailTip.castShadow = true;
+      panda.add(tailTip);
+      
+      // ----- ACCESSORIES -----
+      // Backpack
+      const backpackGeometry = new THREE.BoxGeometry(0.6, 0.7, 0.3, 4, 4, 2);
+      const backpack = new THREE.Mesh(backpackGeometry, blueMaterial);
+      backpack.position.set(0, 0.9, -0.35);
+      backpack.castShadow = true;
+      panda.add(backpack);
+      
+      // Backpack strap
+      const backpackStrapGeometry = new THREE.BoxGeometry(0.6, 0.1, 0.8, 3, 1, 3);
+      const backpackStrap = new THREE.Mesh(backpackStrapGeometry, blueMaterial);
+      backpackStrap.position.set(0, 1.3, 0.05);
+      backpackStrap.rotation.x = Math.PI / 8;
+      backpackStrap.castShadow = true;
+      panda.add(backpackStrap);
+      
+      // Backpack details
+      const backpackDetailGeometry = new THREE.BoxGeometry(0.5, 0.2, 0.05, 2, 2, 1);
+      const backpackDetail = new THREE.Mesh(backpackDetailGeometry, redMaterial);
+      backpackDetail.position.set(0, 0.95, -0.18);
+      backpackDetail.castShadow = true;
+      panda.add(backpackDetail);
+      
+      // Sunglasses on head
+      const sunglassFrameGeometry = new THREE.BoxGeometry(0.6, 0.12, 0.05, 3, 2, 1);
+      const sunglassFrame = new THREE.Mesh(sunglassFrameGeometry, redMaterial);
+      sunglassFrame.position.set(0, 2.0, 0.4);
+      sunglassFrame.rotation.x = 0.4;
+      sunglassFrame.scale.set(1.1, 1.2, 1);
+      sunglassFrame.castShadow = true;
+      panda.add(sunglassFrame);
+      
+      // Sunglass lenses
+      const lensGeometry = new THREE.CylinderGeometry(0.13, 0.13, 0.03, 12, 1);
+      
+      const leftLens = new THREE.Mesh(lensGeometry, blackMaterial);
+      leftLens.position.set(0.20, 2.0, 0.42);
+      leftLens.rotation.x = 0.4;
+      panda.add(leftLens);
+      
+      const rightLens = new THREE.Mesh(lensGeometry.clone(), blackMaterial);
+      rightLens.position.set(-0.20, 2.0, 0.42);
+      rightLens.rotation.x = 0.4;
+      panda.add(rightLens);
+      
+      // Store references for animations
+      panda.head = head;
+      panda.muzzle = muzzle;
+      panda.leftEyePatch = leftEyePatch;
+      panda.rightEyePatch = rightEyePatch;
+      panda.leftEye = leftEye;
+      panda.rightEye = rightEye;
+      panda.leftPupil = leftPupil;
+      panda.rightPupil = rightPupil;
+      panda.mouth = mouth;
+      panda.leftEar = leftEar;
+      panda.rightEar = rightEar;
+      panda.torso = torso;
+      
+      // Arms
+      panda.leftUpperArm = leftUpperArm;
+      panda.rightUpperArm = rightUpperArm;
+      panda.leftLowerArm = leftLowerArm;
+      panda.rightLowerArm = rightLowerArm;
+      panda.leftHand = leftHand;
+      panda.rightHand = rightHand;
+      
+      // Legs
+      panda.hips = hips;
+      panda.leftUpperLeg = leftUpperLeg;
+      panda.rightUpperLeg = rightUpperLeg;
+      panda.leftLowerLeg = leftLowerLeg;
+      panda.rightLowerLeg = rightLowerLeg;
+      panda.leftFoot = leftFoot;
+      panda.rightFoot = rightFoot;
+      
+      // Tail and accessories
+      panda.tailBase = tailBase;
+      panda.tailMid = tailMid;
+      panda.tailTip = tailTip;
+      panda.backpack = backpack;
+      panda.sunglassFrame = sunglassFrame;
+      
+      // Initialize animation state management
+      panda.animationState = {
+        isWalking: false,
+        isJumping: false,
+        isInAir: false,
+        jumpVelocity: 0,
+        groundY: 0,
+        blink: {
+          timer: 0,
+          interval: 4 + Math.random() * 3,
+          duration: 0.15
+        }
+      };
+      
+      return panda;
+    }
+    
+    // Create bamboo with textures
+    function createBamboo(x, z) {
+      const bambooGroup = new THREE.Group();
+      
+      const height = 3 + Math.random() * 4;
+      const segments = Math.floor(height * 2);
+      
+      // Create the bamboo texture
+      const bambooTexture = createBambooTexture();
+      bambooTexture.wrapS = THREE.RepeatWrapping;
+      bambooTexture.wrapT = THREE.RepeatWrapping;
+      bambooTexture.repeat.set(1, segments/2);
+      
+      // Materials with texture
+      const materialA = new THREE.MeshStandardMaterial({ 
+        map: bambooTexture,
+        color: 0x2d4f1e,
+        roughness: 0.8,
+        metalness: 0.1
+      });
+      
+      const materialB = new THREE.MeshStandardMaterial({ 
+        map: bambooTexture,
+        color: 0x3a6324,
+        roughness: 0.8,
+        metalness: 0.1
+      });
+      
+      for (let i = 0; i < segments; i++) {
+        const segHeight = height / segments;
+        const y = i * segHeight;
+        const radius = 0.2 - (i * 0.01);
+        
+        const geometry = new THREE.CylinderGeometry(
+          radius,
+          radius - 0.01,
+          segHeight,
+          8,
+          1
+        );
+        
+        const material = i % 2 === 0 ? materialA : materialB;
+        const segment = new THREE.Mesh(geometry, material);
+        segment.position.y = y + segHeight/2;
+        segment.castShadow = true;
+        
+        bambooGroup.add(segment);
+      }
+      
+      // PS2 era leaf details
+      for (let i = 0; i < 3 + Math.floor(Math.random() * 3); i++) {
+        const leafGeometry = new THREE.PlaneGeometry(0.7, 0.3, 3, 2);
+        const leafMaterial = new THREE.MeshStandardMaterial({
+          color: 0x44aa44,
+          roughness: 0.8,
+          metalness: 0.1,
+          side: THREE.DoubleSide
+        });
+        
+        const leaf = new THREE.Mesh(leafGeometry, leafMaterial);
+        
+        const segment = Math.floor(segments * 0.7) + i;
+        const yPos = (segment * height / segments);
+        leaf.position.set(
+          (Math.random() - 0.5) * 0.4,
+          yPos,
+          (Math.random() - 0.5) * 0.4
+        );
+        
+        leaf.rotation.x = Math.random() * Math.PI;
+        leaf.rotation.y = Math.random() * Math.PI * 2;
+        leaf.rotation.z = Math.random() * Math.PI / 4;
+        
+        leaf.castShadow = true;
+        bambooGroup.add(leaf);
+      }
+      
+      bambooGroup.position.set(x, 0, z);
+      return bambooGroup;
+    }
+    
+    // PS2-quality gems with textures
+    function createGem(x, y, z) {
+      const gemGroup = new THREE.Group();
+      
+      const gemGeometry = new THREE.OctahedronGeometry(0.3, 2);
+      const gemMaterial = new THREE.MeshStandardMaterial({
+        color: 0xff44ff,
+        roughness: 0.2,
+        metalness: 0.7,
+        emissive: 0x550055,
+        emissiveIntensity: 0.5
+      });
+      
+      const gem = new THREE.Mesh(gemGeometry, gemMaterial);
+      gem.castShadow = true;
+      gemGroup.add(gem);
+      
+      // Particle system for gem sparkle
+      const sparkleGeometry = new THREE.BufferGeometry();
+      const sparkleCount = 5;
+      const positionArray = new Float32Array(sparkleCount * 3);
+      const sizeArray = new Float32Array(sparkleCount);
+      
+      for (let i = 0; i < sparkleCount; i++) {
+        positionArray[i * 3] = (Math.random() - 0.5) * 0.5;
+        positionArray[i * 3 + 1] = (Math.random() - 0.5) * 0.5;
+        positionArray[i * 3 + 2] = (Math.random() - 0.5) * 0.5;
+        
+        sizeArray[i] = 0.05 + Math.random() * 0.05;
+      }
+      
+      sparkleGeometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
+      sparkleGeometry.setAttribute('size', new THREE.BufferAttribute(sizeArray, 1));
+      
+      const sparkleMaterial = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.1,
+        sizeAttenuation: true,
+        transparent: true,
+        blending: THREE.AdditiveBlending
+      });
+      
+      const sparkles = new THREE.Points(sparkleGeometry, sparkleMaterial);
+      gemGroup.add(sparkles);
+      
+      // Add animation
+      gemGroup.update = function(time) {
+        gem.rotation.y = time * 1.5;
+        gem.rotation.z = time * 0.7;
+        gem.position.y = Math.sin(time * 3) * 0.1 + 0.2;
+        
+        for (let i = 0; i < sparkleCount; i++) {
+          const offset = i * 0.5;
+          const scale = Math.sin(time * 5 + offset) * 0.5 + 0.5;
+          sparkleGeometry.attributes.size.array[i] = 0.05 + 0.05 * scale;
+        }
+        sparkleGeometry.attributes.size.needsUpdate = true;
+      };
+      
+      gemGroup.position.set(x, y, z);
+      return gemGroup;
+    }
+    
+    // Add bamboo to the scene
+    const bamboos = [];
+    for (let i = 0; i < 30; i++) {
+      const distance = 5 + Math.random() * 20;
+      const angle = Math.random() * Math.PI * 2;
+      const x = Math.sin(angle) * distance;
+      const z = Math.cos(angle) * distance;
+      const bamboo = createBamboo(x, z);
+      scene.add(bamboo);
+      bamboos.push(bamboo);
+    }
+    
+    // Add PS2-quality collectible gems
+    const gems = [];
+    for (let i = 0; i < 10; i++) {
+      const distance = 3 + Math.random() * 15;
+      const angle = Math.random() * Math.PI * 2;
+      const x = Math.sin(angle) * distance;
+      const z = Math.cos(angle) * distance;
+      const gem = createGem(x, 0.8, z);
+      scene.add(gem);
+      gems.push(gem);
+    }
+    
+    // Create the panda
+    const panda = createPS2Panda();
+    scene.add(panda);
+    
+    // Control state for player input
+    const controls = {};
+    
+    function setupTouchControls() {
+      const buttons = {
+        'btn-n': 'moveForward',
+        'btn-s': 'moveBackward',
+        'btn-w': 'moveRight',
+        'btn-e': 'moveLeft',
+        'btn-nw': 'moveForwardRight',
+        'btn-ne': 'moveForwardLeft',
+        'btn-sw': 'moveBackwardRight',
+        'btn-se': 'moveBackwardLeft',
+        'cam-left': 'cameraTurnLeft',
+        'cam-right': 'cameraTurnRight',
+        'cam-up': 'cameraTiltUp',
+        'cam-down': 'cameraTiltDown',
+        'cam-zoom-in': 'cameraZoomIn',
+        'cam-zoom-out': 'cameraZoomOut'
+      };
+      
+      // Helper to setup touch events for a button
+      function setupButtonEvents(buttonId, controlName) {
+        const button = document.getElementById(buttonId);
+        if (!button) return;
+        
+        // Start pressing button
+        button.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          controls[controlName] = true;
+          button.classList.add('active');
+          
+          // Double-tap to jump
+          if (controlName === 'moveForward' && 
+              e.timeStamp - (button.lastTap || 0) < 300) {
+            controls.jump = true;
+            setTimeout(() => { controls.jump = false; }, 100);
+          }
+          button.lastTap = e.timeStamp;
+        }, { passive: false });
+        
+        // Release button
+        ['touchend', 'touchcancel'].forEach(eventType => {
+          button.addEventListener(eventType, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            controls[controlName] = false;
+            button.classList.remove('active');
+          }, { passive: false });
+        });
+        
+        // Prevent default
+        button.addEventListener('touchmove', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }, { passive: false });
+      }
+      
+      // Set up all buttons
+      for (const [buttonId, controlName] of Object.entries(buttons)) {
+        setupButtonEvents(buttonId, controlName);
+      }
+    }
+    
+    // Initialize touch controls
+    setupTouchControls();
+    
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    
+    // Prevent pinch zoom on mobile
+    document.addEventListener('touchmove', (e) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+    
+    // Camera and physics variables
+    let cameraAngle = 0;
+    let cameraHeight = 3;
+    let cameraDistance = 6;
+    let gravity = 20;
+    let score = 0;
+    
+    // Create FPS counter and update it
+    const fpsElement = document.getElementById('fps-counter');
+    const gemCountElement = document.getElementById('gem-count');
+    let frameCount = 0;
+    let lastTime = performance.now();
+    
+    function updateFPS() {
+      frameCount++;
+      const currentTime = performance.now();
+      const elapsed = (currentTime - lastTime) / 1000;
+      
+      if (elapsed >= 1) {
+        const fps = Math.round(frameCount / elapsed);
+        fpsElement.textContent = `FPS: ${fps}`;
+        frameCount = 0;
+        lastTime = currentTime;
+      }
+    }
+    
+    // PS2-era character controller with physics
+    function updateCharacter(delta) {
+      // Process jump input
+      if (controls.jump && !panda.animationState.isInAir) {
+        panda.animationState.isJumping = true;
+        panda.animationState.isInAir = true;
+        panda.animationState.jumpVelocity = 8;
+      }
+      
+      // Apply gravity
+      if (panda.animationState.isInAir) {
+        panda.animationState.jumpVelocity -= gravity * delta;
+        panda.position.y += panda.animationState.jumpVelocity * delta;
+        
+        if (panda.position.y <= panda.animationState.groundY) {
+          panda.position.y = panda.animationState.groundY;
+          panda.animationState.isInAir = false;
+          panda.animationState.isJumping = false;
+          
+          // Spawn dust particles on landing
+          particleSystem.spawn(
+            new THREE.Vector3(
+              panda.position.x,
+              panda.position.y - 0.5,
+              panda.position.z
+            ),
+            10,
+            'dust'
+          );
+        }
+      }
+      
+      // Handle movement
+      let moving = false;
+      const moveSpeed = 5.0 * delta;
+      
+      // Get camera direction for relative movement
+      let cameraForward = new THREE.Vector3(0, 0, -1);
+      cameraForward.applyQuaternion(camera.quaternion);
+      cameraForward.y = 0; // Project onto XZ plane
+      cameraForward.normalize();
+      
+      // Get the right vector
+      let cameraRight = new THREE.Vector3(cameraForward.z, 0, -cameraForward.x);
+      
+      // Initialize movement vector
+      let moveVector = new THREE.Vector3(0, 0, 0);
+      let targetRotationY = panda.rotation.y;
+      
+      // Calculate movement based on camera orientation
+      if (controls.moveForward) {
+        moveVector.add(cameraForward);
+        targetRotationY = Math.atan2(cameraForward.x, cameraForward.z);
+        moving = true;
+      }
+      if (controls.moveBackward) {
+        moveVector.sub(cameraForward);
+        targetRotationY = Math.atan2(-cameraForward.x, -cameraForward.z);
+        moving = true;
+      }
+      if (controls.moveLeft) {
+        moveVector.sub(cameraRight);
+        targetRotationY = Math.atan2(-cameraRight.x, -cameraRight.z);
+        moving = true;
+      }
+      if (controls.moveRight) {
+        moveVector.add(cameraRight);
+        targetRotationY = Math.atan2(cameraRight.x, cameraRight.z);
+        moving = true;
+      }
+      
+      // Calculate diagonal movement
+      if (controls.moveForwardLeft) {
+        let diagonalDir = new THREE.Vector3().addVectors(cameraForward, cameraRight.clone().multiplyScalar(-1)).normalize();
+        moveVector.add(diagonalDir);
+        targetRotationY = Math.atan2(diagonalDir.x, diagonalDir.z);
+        moving = true;
+      }
+      if (controls.moveForwardRight) {
+        let diagonalDir = new THREE.Vector3().addVectors(cameraForward, cameraRight).normalize();
+        moveVector.add(diagonalDir);
+        targetRotationY = Math.atan2(diagonalDir.x, diagonalDir.z);
+        moving = true;
+      }
+      if (controls.moveBackwardLeft) {
+        let diagonalDir = new THREE.Vector3().addVectors(cameraForward.clone().multiplyScalar(-1), cameraRight.clone().multiplyScalar(-1)).normalize();
+        moveVector.add(diagonalDir);
+        targetRotationY = Math.atan2(diagonalDir.x, diagonalDir.z);
+        moving = true;
+      }
+      if (controls.moveBackwardRight) {
+        let diagonalDir = new THREE.Vector3().addVectors(cameraForward.clone().multiplyScalar(-1), cameraRight).normalize();
+        moveVector.add(diagonalDir);
+        targetRotationY = Math.atan2(diagonalDir.x, diagonalDir.z);
+        moving = true;
+      }
+      
+      // Normalize and apply movement
+      if (moving) {
+        moveVector.normalize();
+        
+        // Apply movement speed
+        panda.position.x += moveVector.x * moveSpeed;
+        panda.position.z += moveVector.z * moveSpeed;
+        
+        // Smoothly rotate panda to face movement direction
+        const rotationSpeed = 10 * delta;
+        panda.rotation.y = THREE.MathUtils.lerp(
+          panda.rotation.y,
+          targetRotationY,
+          rotationSpeed
+        );
+        
+        // Generate footstep particles
+        if (!panda.animationState.isInAir && Math.sin(performance.now() * 0.01) > 0.9) {
+          particleSystem.spawn(
+            new THREE.Vector3(
+              panda.position.x,
+              panda.position.y - 0.5,
+              panda.position.z
+            ),
+            3,
+            'dust'
+          );
+        }
+      }
+      
+      // Check if panda is near water and add ripples
+      const distanceToWater = new THREE.Vector2(panda.position.x - water.position.x, panda.position.z - water.position.z).length();
+      if (distanceToWater < 20 && moving && Math.random() < 0.03) {
+        water.addRipple({
+          x: panda.position.x,
+          z: panda.position.z
+        });
+      }
+      
+      // Set animation state
+      panda.animationState.isWalking = moving && !panda.animationState.isInAir;
+      
+      // Return movement status
+      return moving;
+    }
+    
+    // Camera controller
+    function updateCamera(delta) {
+      // Camera controls
+      if (controls.cameraTurnLeft) {
+        cameraAngle += 2 * delta;
+      }
+      if (controls.cameraTurnRight) {
+        cameraAngle -= 2 * delta;
+      }
+      if (controls.cameraTiltUp) {
+        cameraHeight += 2 * delta;
+        cameraHeight = Math.min(6, cameraHeight);
+      }
+      if (controls.cameraTiltDown) {
+        cameraHeight -= 2 * delta;
+        cameraHeight = Math.max(1.5, cameraHeight);
+      }
+      if (controls.cameraZoomIn) {
+        cameraDistance -= 3 * delta;
+        cameraDistance = Math.max(3, cameraDistance);
+      }
+      if (controls.cameraZoomOut) {
+        cameraDistance += 3 * delta;
+        cameraDistance = Math.min(10, cameraDistance);
+      }
+      
+      // Smoothly update camera position
+      const targetX = panda.position.x + Math.sin(cameraAngle) * cameraDistance;
+      const targetZ = panda.position.z + Math.cos(cameraAngle) * cameraDistance;
+      const targetY = panda.position.y + cameraHeight;
+      
+      camera.position.x += (targetX - camera.position.x) * 5 * delta;
+      camera.position.z += (targetZ - camera.position.z) * 5 * delta;
+      camera.position.y += (targetY - camera.position.y) * 5 * delta;
+      
+      // Look at character with slight offset
+      camera.lookAt(
+        panda.position.x,
+        panda.position.y + 1,
+        panda.position.z
+      );
+    }
+    
+    // Character animations
+    function updateCharacterAnimations(time, delta, moving) {
+      // Update blinking
+      panda.animationState.blink.timer += delta;
+      if (panda.animationState.blink.timer >= panda.animationState.blink.interval) {
+        panda.animationState.blink.timer = 0;
+        panda.animationState.blink.interval = 2 + Math.random() * 4;
+      }
+      
+      // Perform blink
+      const blinkPhase = panda.animationState.blink.timer / panda.animationState.blink.interval;
+      const isBlinking = blinkPhase < panda.animationState.blink.duration / panda.animationState.blink.interval;
+      
+      if (isBlinking) {
+        panda.leftEye.scale.y = 0.1;
+        panda.rightEye.scale.y = 0.1;
+      } else {
+        panda.leftEye.scale.y = 1;
+        panda.rightEye.scale.y = 1;
+      }
+      
+      // Head animations
+      if (!panda.animationState.isInAir) {
+        // Normal head bob when on ground
+        panda.head.position.y = 1.6 + Math.sin(time * 1.5) * 0.05;
+        panda.head.rotation.y = Math.sin(time * 0.8) * 0.1;
+      } else {
+        // Look down when jumping/falling
+        panda.head.rotation.x = panda.animationState.jumpVelocity > 0 ? -0.2 : 0.3;
+      }
+      
+      // Eye movements
+      panda.leftPupil.position.x = 0.32 + Math.sin(time * 0.6) * 0.04;
+      panda.rightPupil.position.x = -0.32 + Math.sin(time * 0.6) * 0.04;
+      
+      // Mouth animation
+      panda.mouth.scale.x = 1 + Math.sin(time * 2) * 0.1;
+      
+      // Ear animations
+      panda.leftEar.rotation.z = -0.1 + Math.sin(time * 1.2) * 0.05;
+      panda.rightEar.rotation.z = 0.1 - Math.sin(time * 1.2) * 0.05;
+      
+      // Idle animations when not moving
+      if (!moving && !panda.animationState.isInAir) {
+        // Breathing animation
+        panda.torso.scale.y = 1 + Math.sin(time * 1.2) * 0.03;
+        panda.torso.scale.z = 1 - Math.sin(time * 1.2) * 0.01;
+        
+        // Subtle arm movements
+        panda.leftUpperArm.rotation.x = Math.sin(time * 0.7) * 0.1;
+        panda.rightUpperArm.rotation.x = Math.sin(time * 0.7 + 0.5) * 0.1;
+        
+        // Reset legs
+        panda.leftUpperLeg.rotation.x = 0;
+        panda.rightUpperLeg.rotation.x = 0;
+        panda.leftLowerLeg.rotation.x = 0;
+        panda.rightLowerLeg.rotation.x = 0;
+      }
+      
+      // Walking animations
+      if (panda.animationState.isWalking) {
+        // Leg animations
+        panda.leftUpperLeg.rotation.x = Math.sin(time * 10) * 0.7;
+        panda.rightUpperLeg.rotation.x = Math.sin(time * 10 + Math.PI) * 0.7;
+        
+        // Lower legs follow with a delay
+        panda.leftLowerLeg.rotation.x = Math.sin(time * 10 - Math.PI/3) * 0.5;
+        panda.rightLowerLeg.rotation.x = Math.sin(time * 10 + Math.PI - Math.PI/3) * 0.5;
+        
+        // Arm swing animations
+        panda.leftUpperArm.rotation.x = Math.sin(time * 10 + Math.PI) * 0.5;
+        panda.rightUpperArm.rotation.x = Math.sin(time * 10) * 0.5;
+        panda.leftLowerArm.rotation.x = Math.sin(time * 10 + Math.PI + Math.PI/4) * 0.3;
+        panda.rightLowerArm.rotation.x = Math.sin(time * 10 + Math.PI/4) * 0.3;
+        
+        // Body movement
+        panda.torso.rotation.y = Math.sin(time * 5) * 0.05;
+        
+        // Secondary animations
+        panda.backpack.rotation.x = Math.sin(time * 10) * 0.1;
+        panda.tailBase.rotation.y = Math.sin(time * 5) * 0.2;
+      }
+      
+      // Jump animation
+      if (panda.animationState.isInAir) {
+        // Different poses for rising and falling
+        if (panda.animationState.jumpVelocity > 0) {
+          // Rising
+          panda.leftUpperLeg.rotation.x = -0.4;
+          panda.rightUpperLeg.rotation.x = -0.4;
+          panda.leftLowerLeg.rotation.x = 0.6;
+          panda.rightLowerLeg.rotation.x = 0.6;
+          
+          // Arms raised
+          panda.leftUpperArm.rotation.x = -0.7;
+          panda.rightUpperArm.rotation.x = -0.7;
+          panda.leftLowerArm.rotation.x = -0.4;
+          panda.rightLowerArm.rotation.x = -0.4;
+        } else {
+          // Falling
+          panda.leftUpperLeg.rotation.x = 0.2;
+          panda.rightUpperLeg.rotation.x = 0.2;
+          panda.leftLowerLeg.rotation.x = 0.6;
+          panda.rightLowerLeg.rotation.x = 0.6;
+          
+          // Arms out for balance
+          panda.leftUpperArm.rotation.x = 0;
+          panda.rightUpperArm.rotation.x = 0;
+          panda.leftUpperArm.rotation.z = -0.6;
+          panda.rightUpperArm.rotation.z = 0.6;
+        }
+      } else {
+        // Reset arm rotation when not jumping
+        panda.leftUpperArm.rotation.z = -0.3;
+        panda.rightUpperArm.rotation.z = 0.3;
+      }
+      
+      // Tail animations
+      panda.tailBase.rotation.z = Math.sin(time * 2) * 0.2;
+      panda.tailMid.rotation.z = Math.sin(time * 2 + 0.3) * 0.3;
+      panda.tailTip.rotation.z = Math.sin(time * 2 + 0.6) * 0.4;
+    }
+    
+    // Check for collectible gems
+    function checkCollectibles() {
+      gems.forEach((gem, index) => {
+        if (gem.visible) {
+          const distance = panda.position.distanceTo(gem.position);
+          if (distance < 1.5) {
+            // Collect the gem
+            gem.visible = false;
+            score++;
+            gemCountElement.textContent = score;
+            
+            // Collection effect
+            particleSystem.spawn(gem.position, 15, 'sparkle');
+            
+            // Respawn gem in a new location after delay
+            setTimeout(() => {
+              const distance = 5 + Math.random() * 15;
+              const angle = Math.random() * Math.PI * 2;
+              const x = Math.sin(angle) * distance;
+              const z = Math.cos(angle) * distance;
+              gem.position.set(x, 0.8, z);
+              gem.visible = true;
+            }, 5000);
+          }
+        }
+      });
+    }
+    
+    // Main rendering loop
+    const clock = new THREE.Clock();
+    
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      // Get delta time and elapsed time
+      const delta = Math.min(clock.getDelta(), 0.1);
+      const time = clock.getElapsedTime();
+      
+      // Update FPS counter
+      updateFPS();
+      
+      // Update character controller
+      const moving = updateCharacter(delta);
+      
+      // Update character animations
+      updateCharacterAnimations(time, delta, moving);
+      
+      // Update camera position
+      updateCamera(delta);
+      
+      // Update skybox (day/night cycle)
+      sky.update(time);
+      
+      // Update water effects
+      water.update(time);
+      
+      // Update particle system
+      particleSystem.update(delta);
+      
+      // Update collectible gems
+      gems.forEach(gem => {
+        if (gem.update) gem.update(time);
+      });
+      
+      // Check for collectibles
+      checkCollectibles();
+      
+      // Render the scene
+      renderer.render(scene, camera);
+    }
+    
+    // Start the animation loop
+    animate();
+    
+    // Hide instructions after 10 seconds
+    setTimeout(() => {
+      const instructions = document.querySelector('.instructions');
+      if (instructions) {
+        instructions.style.opacity = '0';
+        instructions.style.transition = 'opacity 1s';
+      }
+    }, 10000);
+  </script>
+</body>
+</html>
