@@ -859,7 +859,7 @@
         function init() {
             setupTabs();
             setupTouch();
-            loadSampleData();
+            loadFromStorage(); // Load saved data first
             renderCurrentTab();
             
             // Setup emotion slider
@@ -876,6 +876,9 @@
             document.getElementById('chapter-form').addEventListener('submit', saveChapter);
             document.getElementById('character-form').addEventListener('submit', saveCharacter);
             document.getElementById('symbol-form').addEventListener('submit', saveSymbol);
+            
+            // Show storage status
+            showStorageStatus();
         }
 
         // Tab management
@@ -1201,6 +1204,7 @@
             scene.chapterId = targetChapterId;
             targetChapter.scenes.splice(insertIndex, 0, scene);
             
+            saveToStorage(); // Auto-save
             renderCurrentTab();
         }
 
@@ -1235,6 +1239,7 @@
             if (insertIndex !== draggedChapterIndex) {
                 const draggedChapter = chapters.splice(draggedChapterIndex, 1)[0];
                 chapters.splice(insertIndex, 0, draggedChapter);
+                saveToStorage(); // Auto-save
                 renderCurrentTab();
             }
         }
@@ -1652,6 +1657,7 @@
                 }
             }
 
+            saveToStorage(); // Auto-save
             closeModal('scene-modal');
             renderCurrentTab();
         }
@@ -1664,6 +1670,7 @@
                 if (chapter) {
                     chapter.scenes = chapter.scenes.filter(s => s.id !== currentEditingScene.id);
                 }
+                saveToStorage(); // Auto-save
                 closeModal('scene-modal');
                 renderCurrentTab();
             }
@@ -1722,6 +1729,7 @@
                 chapters.push(newChapter);
             }
 
+            saveToStorage(); // Auto-save
             closeModal('chapter-modal');
             renderCurrentTab();
         }
@@ -1731,6 +1739,7 @@
             
             if (confirm('Are you sure you want to delete this chapter and all its scenes?')) {
                 chapters = chapters.filter(c => c.id !== currentEditingChapter.id);
+                saveToStorage(); // Auto-save
                 closeModal('chapter-modal');
                 renderCurrentTab();
             }
@@ -1761,6 +1770,7 @@
             };
 
             characters[characterName] = characterData;
+            saveToStorage(); // Auto-save
 
             closeModal('character-modal');
             renderCurrentTab();
@@ -1826,6 +1836,7 @@
                 symbols.push(newSymbol);
             }
 
+            saveToStorage(); // Auto-save
             closeModal('symbol-modal');
             renderCurrentTab();
         }
@@ -1835,6 +1846,7 @@
             
             if (confirm('Are you sure you want to delete this symbol?')) {
                 symbols = symbols.filter(s => s.id !== currentEditingSymbol.id);
+                saveToStorage(); // Auto-save
                 closeModal('symbol-modal');
                 renderCurrentTab();
             }
@@ -1993,6 +2005,7 @@
                         symbols = data.symbols;
                     }
                     
+                    saveToStorage(); // Auto-save imported data
                     renderCurrentTab();
                     alert('Data imported successfully!');
                 } catch (error) {
@@ -2011,12 +2024,117 @@
                     chapters = [];
                     characters = {};
                     symbols = [];
+                    saveToStorage(); // Auto-save cleared state
                     renderCurrentTab();
                     toggleTools();
                 }
             }
         }
 
+        // Storage functions
+        function saveToStorage() {
+            try {
+                const data = {
+                    chapters,
+                    characters,
+                    symbols,
+                    timestamp: new Date().toISOString(),
+                    version: '1.0'
+                };
+                localStorage.setItem('novel-storyboard-data', JSON.stringify(data));
+                showSaveIndicator();
+            } catch (error) {
+                console.warn('Could not save to localStorage:', error);
+                // Fallback - still works without localStorage
+            }
+        }
+
+        function loadFromStorage() {
+            try {
+                const savedData = localStorage.getItem('novel-storyboard-data');
+                if (savedData) {
+                    const data = JSON.parse(savedData);
+                    
+                    if (data.chapters && Array.isArray(data.chapters)) {
+                        chapters = data.chapters;
+                    }
+                    if (data.characters && typeof data.characters === 'object') {
+                        characters = data.characters;
+                    }
+                    if (data.symbols && Array.isArray(data.symbols)) {
+                        symbols = data.symbols;
+                    }
+                    
+                    console.log('Data loaded from localStorage');
+                    return true;
+                }
+            } catch (error) {
+                console.warn('Could not load from localStorage:', error);
+            }
+            
+            // Load sample data if no saved data exists
+            loadSampleData();
+            return false;
+        }
+
+        function showSaveIndicator() {
+            // Create a subtle save indicator
+            let indicator = document.getElementById('save-indicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.id = 'save-indicator';
+                indicator.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: rgba(16, 185, 129, 0.9);
+                    color: white;
+                    padding: 0.5rem 1rem;
+                    border-radius: 6px;
+                    font-size: 0.875rem;
+                    z-index: 2000;
+                    opacity: 0;
+                    transition: opacity 0.3s ease;
+                    pointer-events: none;
+                `;
+                indicator.textContent = '✓ Saved';
+                document.body.appendChild(indicator);
+            }
+            
+            indicator.style.opacity = '1';
+            setTimeout(() => {
+                indicator.style.opacity = '0';
+            }, 1500);
+        }
+
+        function showStorageStatus() {
+            try {
+                localStorage.setItem('test', 'test');
+                localStorage.removeItem('test');
+                
+                // Add storage status to header
+                const header = document.querySelector('.app-header');
+                const statusDiv = document.createElement('div');
+                statusDiv.style.cssText = `
+                    font-size: 0.75rem;
+                    color: #10b981;
+                    margin-top: 0.25rem;
+                `;
+                statusDiv.textContent = '✓ Auto-save enabled';
+                header.appendChild(statusDiv);
+            } catch (error) {
+                // Add warning if localStorage not available
+                const header = document.querySelector('.app-header');
+                const statusDiv = document.createElement('div');
+                statusDiv.style.cssText = `
+                    font-size: 0.75rem;
+                    color: #f59e0b;
+                    margin-top: 0.25rem;
+                `;
+                statusDiv.textContent = '⚠ Auto-save not available - use Export/Import';
+                header.appendChild(statusDiv);
+            }
+        }
         // Sample data for demonstration
         function loadSampleData() {
             chapters = [
