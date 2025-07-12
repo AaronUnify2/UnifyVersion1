@@ -450,12 +450,41 @@
     <div id="root"></div>
     
     <script>
-        // Game Constants
-        const GAME_VERSION = '1.0.0';
-        const SAVE_KEY = 'labyrinthLegacySave';
+        // Wait for Three.js to load
+        let initAttempts = 0;
+        const maxAttempts = 50; // 5 seconds
         
-        // Add console logging for debugging
-        console.log('Labyrinth Legacy starting...');
+        function initGame() {
+            if (typeof THREE === 'undefined') {
+                initAttempts++;
+                if (initAttempts < maxAttempts) {
+                    setTimeout(initGame, 100);
+                    return;
+                } else {
+                    document.body.innerHTML = '<div style="color:white;text-align:center;padding:50px;">Error: Three.js failed to load. Please check your internet connection and refresh.</div>';
+                    return;
+                }
+            }
+            
+            if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+                document.body.innerHTML = '<div style="color:white;text-align:center;padding:50px;">Error: React failed to load. Please check your internet connection and refresh.</div>';
+                return;
+            }
+            
+            // Game Constants
+            const GAME_VERSION = '1.0.0';
+            const SAVE_KEY = 'labyrinthLegacySave';
+            
+            // Debug loading messages
+            const updateLoadingDebug = (msg) => {
+                const debugEl = document.getElementById('loading-debug');
+                if (debugEl) {
+                    debugEl.textContent = msg;
+                }
+                console.log('Loading:', msg);
+            };
+            
+            updateLoadingDebug('Starting game initialization...');
         
         // Game State Management
         class GameState {
@@ -830,7 +859,91 @@
         // React Components
         const { useState, useEffect, useRef, useCallback, useMemo } = React;
         
-        // Loading Screen Component
+        // Touch Controls Component
+        const TouchControls = ({ onMove, onRotate, onAction }) => {
+            const joystickRef = useRef(null);
+            const [joystickTouch, setJoystickTouch] = useState(null);
+            
+            const handleJoystickStart = (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                setJoystickTouch(touch.identifier);
+            };
+            
+            const handleJoystickMove = (e) => {
+                if (joystickTouch === null) return;
+                
+                const touch = Array.from(e.touches).find(t => t.identifier === joystickTouch);
+                if (!touch || !joystickRef.current) return;
+                
+                const rect = joystickRef.current.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                const x = (touch.clientX - centerX) / (rect.width / 2);
+                const y = (touch.clientY - centerY) / (rect.height / 2);
+                
+                const distance = Math.sqrt(x * x + y * y);
+                const maxDistance = 1;
+                
+                if (distance > maxDistance) {
+                    const scale = maxDistance / distance;
+                    onMove(x * scale, y * scale);
+                } else {
+                    onMove(x, y);
+                }
+            };
+            
+            const handleJoystickEnd = () => {
+                setJoystickTouch(null);
+                onMove(0, 0);
+            };
+            
+            useEffect(() => {
+                window.addEventListener('touchmove', handleJoystickMove);
+                window.addEventListener('touchend', handleJoystickEnd);
+                
+                return () => {
+                    window.removeEventListener('touchmove', handleJoystickMove);
+                    window.removeEventListener('touchend', handleJoystickEnd);
+                };
+            }, [joystickTouch]);
+            
+            return React.createElement('div', { style: { pointerEvents: 'auto' } },
+                // Virtual Joystick
+                React.createElement('div', {
+                    ref: joystickRef,
+                    className: 'virtual-joystick',
+                    onTouchStart: handleJoystickStart
+                },
+                    React.createElement('div', { 
+                        className: 'joystick-knob',
+                        style: {
+                            transform: `translate(-50%, -50%)`,
+                            left: '50%',
+                            top: '50%'
+                        }
+                    })
+                ),
+                // Action Buttons
+                React.createElement('div', { className: 'action-buttons' },
+                    React.createElement('div', { 
+                        className: 'action-button',
+                        onTouchStart: (e) => {
+                            e.preventDefault();
+                            onAction('attack');
+                        }
+                    }, 'A'),
+                    React.createElement('div', { 
+                        className: 'action-button',
+                        onTouchStart: (e) => {
+                            e.preventDefault();
+                            onAction('interact');
+                        }
+                    }, 'B')
+                )
+            );
+        };
         const LoadingScreen = ({ progress, message }) => {
             return React.createElement('div', { className: 'loading' },
                 React.createElement('h1', null, 'Labyrinth Legacy'),
@@ -840,7 +953,17 @@
                         style: { width: `${progress}%` }
                     })
                 ),
-                React.createElement('div', { className: 'loading-text' }, message)
+                React.createElement('div', { className: 'loading-text' }, message),
+                React.createElement('div', { 
+                    id: 'loading-debug',
+                    style: { 
+                        marginTop: '20px', 
+                        fontSize: '12px', 
+                        color: '#666',
+                        maxWidth: '400px',
+                        textAlign: 'center'
+                    }
+                }, 'Initializing...')
             );
         };
         
@@ -1689,6 +1812,12 @@
         });
         
         root.render(React.createElement(Game));
+        updateLoadingDebug('React render complete');
+        
+        } // End of initGame function
+        
+        // Start initialization
+        initGame();
     </script>
 </body>
 </html>
