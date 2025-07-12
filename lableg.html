@@ -454,6 +454,9 @@
         const GAME_VERSION = '1.0.0';
         const SAVE_KEY = 'labyrinthLegacySave';
         
+        // Add console logging for debugging
+        console.log('Labyrinth Legacy starting...');
+        
         // Game State Management
         class GameState {
             constructor() {
@@ -1114,8 +1117,9 @@
             useEffect(() => {
                 if (!mountRef.current) return;
                 
-                setLoadingMessage('Creating world...');
-                setLoadingProgress(20);
+                try {
+                    setLoadingMessage('Creating world...');
+                    setLoadingProgress(20);
                 
                 // Scene setup
                 const scene = new THREE.Scene();
@@ -1163,35 +1167,56 @@
                 directionalLight.shadow.mapSize.height = 2048;
                 scene.add(directionalLight);
                 
-                // Player setup
-                const playerGeometry = new THREE.CapsuleGeometry(0.5, 1.5, 4, 8);
+                // Player setup (using cylinder since CapsuleGeometry isn't in r128)
+                const playerGroup = new THREE.Group();
+                
+                // Create player with cylinder body
+                const bodyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1.5, 8);
                 const playerMaterial = new THREE.MeshStandardMaterial({ 
                     color: 0x00ff00,
                     emissive: 0x002200,
                     emissiveIntensity: 0.2
                 });
-                const player = new THREE.Mesh(playerGeometry, playerMaterial);
-                player.position.y = 1;
-                player.castShadow = true;
-                player.receiveShadow = true;
-                scene.add(player);
-                playerRef.current = player;
+                const body = new THREE.Mesh(bodyGeometry, playerMaterial);
+                body.position.y = 0.75;
+                body.castShadow = true;
+                body.receiveShadow = true;
+                playerGroup.add(body);
+                
+                // Add sphere for head
+                const headGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+                const head = new THREE.Mesh(headGeometry, playerMaterial);
+                head.position.y = 1.8;
+                head.castShadow = true;
+                playerGroup.add(head);
+                
+                playerGroup.position.y = 0;
+                scene.add(playerGroup);
+                playerRef.current = playerGroup;
                 
                 setLoadingProgress(60);
                 setLoadingMessage('Generating dungeon...');
                 
-                // Generate initial dungeon
-                setTimeout(() => {
-                    generateDungeonFloor(1);
-                    setLoadingProgress(80);
-                    setLoadingMessage('Preparing adventure...');
-                    
-                    setTimeout(() => {
-                        setLoadingProgress(100);
-                        setLoadingMessage('Ready!');
-                        setTimeout(() => setLoading(false), 500);
-                    }, 500);
-                }, 100);
+                // Store the floor generation for later
+                const initialFloorGeneration = () => {
+                    try {
+                        generateDungeonFloor(1);
+                        setLoadingProgress(80);
+                        setLoadingMessage('Preparing adventure...');
+                        
+                        setTimeout(() => {
+                            setLoadingProgress(100);
+                            setLoadingMessage('Ready!');
+                            setTimeout(() => setLoading(false), 500);
+                        }, 500);
+                    } catch (error) {
+                        console.error('Error generating dungeon:', error);
+                        setLoadingMessage('Error loading game. Please refresh.');
+                    }
+                };
+                
+                // Delay to ensure everything is loaded
+                setTimeout(initialFloorGeneration, 100);
                 
                 // Handle resize
                 const handleResize = () => {
@@ -1206,7 +1231,7 @@
                     requestAnimationFrame(animate);
                     
                     // Update player position from game state
-                    if (playerRef.current && gameState.player) {
+                    if (playerRef.current && gameState && gameState.player) {
                         playerRef.current.position.x = gameState.player.position.x;
                         playerRef.current.position.z = gameState.player.position.z;
                         playerRef.current.rotation.y = gameState.player.rotation;
@@ -1223,20 +1248,37 @@
                         cameraRef.current.lookAt(playerRef.current.position);
                     }
                     
-                    renderer.render(scene, camera);
+                    if (rendererRef.current && sceneRef.current && cameraRef.current) {
+                        rendererRef.current.render(sceneRef.current, cameraRef.current);
+                    }
                 };
                 animate();
                 
                 return () => {
                     window.removeEventListener('resize', handleResize);
-                    mountRef.current?.removeChild(renderer.domElement);
-                    renderer.dispose();
+                    if (mountRef.current && rendererRef.current && rendererRef.current.domElement) {
+                        try {
+                            mountRef.current.removeChild(rendererRef.current.domElement);
+                        } catch (e) {
+                            // Already removed
+                        }
+                    }
+                    if (rendererRef.current) {
+                        rendererRef.current.dispose();
+                    }
                 };
+                } catch (error) {
+                    console.error('Error initializing game:', error);
+                    setLoadingMessage('Error: ' + error.message);
+                    setLoading(false);
+                }
             }, []);
             
-            // Generate dungeon floor
-            const generateDungeonFloor = useCallback((floor) => {
+            // Generate dungeon floor - define before use
+            const generateDungeonFloor = (floor) => {
                 if (!sceneRef.current) return;
+                
+                console.log('Generating floor', floor);
                 
                 // Clear existing dungeon
                 const toRemove = [];
@@ -1374,24 +1416,24 @@
                 });
                 
                 showGameMessage(`Entered Floor ${floor}`);
-            }, [dungeonGenerator]);
+            };
             
             // Show game message
-            const showGameMessage = useCallback((message) => {
+            const showGameMessage = (message) => {
                 setGameMessage(message);
                 setTimeout(() => setGameMessage(''), 3000);
-            }, []);
+            };
             
             // Handle game start
-            const handleStart = useCallback(() => {
+            const handleStart = () => {
                 setGameState(new GameState());
                 generateDungeonFloor(1);
                 setShowMenu(false);
                 showGameMessage('Your journey begins...');
-            }, [generateDungeonFloor, showGameMessage]);
+            };
             
             // Handle continue
-            const handleContinue = useCallback(() => {
+            const handleContinue = () => {
                 const state = new GameState();
                 if (state.load()) {
                     setGameState(state);
@@ -1399,16 +1441,16 @@
                     setShowMenu(false);
                     showGameMessage('Welcome back, adventurer!');
                 }
-            }, [generateDungeonFloor, showGameMessage]);
+            };
             
             // Handle save
-            const handleSave = useCallback(() => {
+            const handleSave = () => {
                 if (gameState.save()) {
                     showGameMessage('Game saved!');
                 } else {
                     showGameMessage('Failed to save game');
                 }
-            }, [gameState, showGameMessage]);
+            };
             
             // Input handling
             useEffect(() => {
@@ -1532,7 +1574,7 @@
             }, [showMenu, loading, gameState, handleSave]);
             
             // Handle item use
-            const handleItemUse = useCallback((item) => {
+            const handleItemUse = (item) => {
                 if (item.type === 'health_potion') {
                     setGameState(prev => ({
                         ...prev,
@@ -1543,10 +1585,10 @@
                     }));
                     showGameMessage('Health restored!');
                 }
-            }, [showGameMessage]);
+            };
             
             // Handle NPC talk
-            const handleNPCTalk = useCallback((npcId) => {
+            const handleNPCTalk = (npcId) => {
                 const dialogs = {
                     mira: "Your sword looks worn. Bring me materials and I can improve it!",
                     kaelin: "The obelisks... they weren't always corrupted. Something changed centuries ago.",
@@ -1559,10 +1601,10 @@
                     speaker: npcId.charAt(0).toUpperCase() + npcId.slice(1),
                     text: dialogs[npcId] || "..."
                 });
-            }, []);
+            };
             
             // Handle weapon upgrade
-            const handleWeaponUpgrade = useCallback((weapon) => {
+            const handleWeaponUpgrade = (weapon) => {
                 if (weapon === 'sword') {
                     const cost = gameState.player.swordLevel * 100;
                     if (gameState.player.xp >= cost) {
@@ -1590,7 +1632,7 @@
                         showGameMessage('Not enough XP!');
                     }
                 }
-            }, [gameState, showGameMessage]);
+            };
             
             // Check for save data
             const hasSaveData = useMemo(() => {
@@ -1636,6 +1678,16 @@
         
         // Render the game
         const root = ReactDOM.createRoot(document.getElementById('root'));
+        
+        // Add error boundary
+        window.addEventListener('error', (e) => {
+            console.error('Game error:', e.error);
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:red;color:white;padding:20px;border-radius:10px;z-index:9999';
+            errorDiv.textContent = 'Game Error: ' + e.error.message;
+            document.body.appendChild(errorDiv);
+        });
+        
         root.render(React.createElement(Game));
     </script>
 </body>
