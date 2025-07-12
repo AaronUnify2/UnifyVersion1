@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Brick Breaker - Game Cartridge</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+            user-select: none;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #threeCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        
+        .ui-overlay {
+            position: absolute;
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        .ui-overlay * {
+            pointer-events: auto;
+        }
+        
+        .hud {
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        
+        .menu {
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0,0,50,0.9);
+            padding: 30px;
+            border-radius: 10px;
+            border: 2px solid #00ffff;
+        }
+        
+        .menu h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+        
+        .menu button {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            margin: 10px;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        
+        .menu button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(255,107,107,0.4);
+        }
+        
+        .powerup-indicator {
+            position: absolute;
+            top: 70px;
+            left: 20px;
+            font-size: 16px;
+            color: #ffff00;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+        
+        .touch-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #888;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .error-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255,0,0,0.8);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        @media (max-width: 768px) {
+            .hud {
+                font-size: 16px;
+            }
+            .menu h1 {
+                font-size: 2em;
+            }
+            .menu button {
+                padding: 12px 20px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script crossorigin src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        console.log('Starting game initialization...');
+        
+        // Check if libraries loaded
+        if (typeof React === 'undefined') {
+            document.body.innerHTML = '<div class="error-message">Failed to load React</div>';
+        }
+        if (typeof ReactDOM === 'undefined') {
+            document.body.innerHTML = '<div class="error-message">Failed to load ReactDOM</div>';
+        }
+        if (typeof THREE === 'undefined') {
+            document.body.innerHTML = '<div class="error-message">Failed to load Three.js</div>';
+        }
+
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // Game constants
+        const GAME_WIDTH = 12;
+        const GAME_HEIGHT = 8;
+        const GAME_DEPTH = 16;
+        
+        // Power-up types
+        const POWERUPS = {
+            MULTI_BALL: 'multiball',
+            BIG_PADDLE: 'bigpaddle',
+            LASER: 'laser',
+            EXTRA_LIFE: 'extralife'
+        };
+
+        // Mathematical level generator
+        const generateLevel = (levelNum) => {
+            const bricks = [];
+            const rows = Math.min(8, 4 + Math.floor(levelNum / 3));
+            const cols = 10;
+            
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    let shouldPlace = true;
+                    
+                    if (levelNum % 4 === 1) {
+                        const sineValue = Math.sin((col / cols) * Math.PI * 2) * 2;
+                        shouldPlace = row < 4 + sineValue;
+                    } else if (levelNum % 4 === 2) {
+                        shouldPlace = (row + col) % 2 === 0 && Math.random() > 0.2;
+                    } else if (levelNum % 4 === 3) {
+                        const centerX = cols / 2;
+                        const centerY = rows / 2;
+                        const distance = Math.sqrt((col - centerX) * (col - centerX) + (row - centerY) * (row - centerY));
+                        shouldPlace = Math.floor(distance + levelNum * 0.5) % 3 !== 0;
+                    } else {
+                        const centerX = cols / 2;
+                        const centerY = rows / 2;
+                        const diamond = Math.abs(col - centerX) + Math.abs(row - centerY);
+                        shouldPlace = diamond < 3 + levelNum * 0.3;
+                    }
+                    
+                    if (shouldPlace) {
+                        const brickType = Math.floor(Math.random() * 4) + 1;
+                        bricks.push({
+                            id: row + '-' + col,
+                            x: (col - cols/2 + 0.5) * 1.1,
+                            y: 2 + row * 0.6,
+                            z: GAME_DEPTH * 0.3,
+                            type: brickType,
+                            health: brickType === 4 ? 3 : brickType === 3 ? 2 : 1
+                        });
+                    }
+                }
+            }
+            
+            return bricks;
+        };
+
+        // Three.js Game Engine
+        class Game3D {
+            constructor(container, gameCallbacks) {
+                console.log('Initializing 3D game engine...');
+                this.container = container;
+                this.gameCallbacks = gameCallbacks;
+                this.isPlaying = false;
+                
+                // Create scene
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.clock = new THREE.Clock();
+                
+                // Game objects
+                this.paddle = null;
+                this.balls = [];
+                this.bricks = [];
+                this.powerups = [];
+                this.walls = [];
+                
+                // Input
+                this.mouseX = 0;
+                this.touchX = 0;
+                
+                // Game settings
+                this.paddleSpeed = 8;
+                this.ballSpeed = 6;
+                this.currentLevel = 1;
+                
+                try {
+                    this.init();
+                    console.log('3D game engine initialized successfully');
+                } catch (error) {
+                    console.error('Failed to initialize 3D engine:', error);
+                }
+            }
+            
+            init() {
+                // Setup renderer
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setClearColor(0x000011);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                this.container.appendChild(this.renderer.domElement);
+                
+                // Setup camera
+                this.camera.position.set(0, -8, 8);
+                this.camera.lookAt(0, 0, 0);
+                
+                // Add lighting
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
+                this.scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(0, -10, 10);
+                directionalLight.castShadow = true;
+                this.scene.add(directionalLight);
+                
+                this.createGameObjects();
+                this.setupControls();
+                this.animate();
+            }
+            
+            createGameObjects() {
+                // Create paddle
+                const paddleGeometry = new THREE.BoxGeometry(2, 0.3, 0.5);
+                const paddleMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+                this.paddle = new THREE.Mesh(paddleGeometry, paddleMaterial);
+                this.paddle.position.set(0, -GAME_HEIGHT/2 + 1, 0);
+                this.paddle.castShadow = true;
+                this.scene.add(this.paddle);
+                
+                // Create walls
+                this.createWalls();
+            }
+            
+            createWalls() {
+                const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+                
+                // Left wall
+                const leftWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.2, GAME_HEIGHT, GAME_DEPTH),
+                    wallMaterial
+                );
+                leftWall.position.set(-GAME_WIDTH/2, 0, 0);
+                this.scene.add(leftWall);
+                
+                // Right wall
+                const rightWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.2, GAME_HEIGHT, GAME_DEPTH),
+                    wallMaterial
+                );
+                rightWall.position.set(GAME_WIDTH/2, 0, 0);
+                this.scene.add(rightWall);
+                
+                // Top wall
+                const topWall = new THREE.Mesh(
+                    new THREE.BoxGeometry(GAME_WIDTH, 0.2, GAME_DEPTH),
+                    wallMaterial
+                );
+                topWall.position.set(0, GAME_HEIGHT/2, 0);
+                this.scene.add(topWall);
+            }
+            
+            startGame(level) {
+                console.log('Starting game at level', level);
+                this.isPlaying = true;
+                this.currentLevel = level;
+                this.clearGame();
+                this.loadLevel(level);
+                this.createBall(0, -GAME_HEIGHT/2 + 2, 0);
+            }
+            
+            stopGame() {
+                this.isPlaying = false;
+                this.clearGame();
+            }
+            
+            clearGame() {
+                // Remove all balls
+                this.balls.forEach(ball => this.scene.remove(ball));
+                this.balls = [];
+                
+                // Remove all bricks
+                this.bricks.forEach(brick => this.scene.remove(brick.mesh));
+                this.bricks = [];
+                
+                // Remove all powerups
+                this.powerups.forEach(powerup => this.scene.remove(powerup));
+                this.powerups = [];
+            }
+            
+            createBall(x, y, z) {
+                const ballGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+                const ballMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+                const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+                ball.position.set(x, y, z);
+                ball.castShadow = true;
+                
+                // Add velocity
+                ball.velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 2,
+                    this.ballSpeed,
+                    0
+                );
+                
+                this.balls.push(ball);
+                this.scene.add(ball);
+                return ball;
+            }
+            
+            loadLevel(levelNum) {
+                console.log('Loading level', levelNum);
+                
+                // Clear existing bricks
+                this.bricks.forEach(brick => this.scene.remove(brick.mesh));
+                this.bricks = [];
+                
+                // Generate new level
+                const brickData = generateLevel(levelNum);
+                const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44];
+                
+                brickData.forEach(data => {
+                    const geometry = new THREE.BoxGeometry(1, 0.4, 0.4);
+                    const material = new THREE.MeshLambertMaterial({ 
+                        color: colors[data.type - 1] 
+                    });
+                    const mesh = new THREE.Mesh(geometry, material);
+                    mesh.position.set(data.x, data.y, data.z);
+                    mesh.castShadow = true;
+                    
+                    const brick = {
+                        mesh: mesh,
+                        health: data.health,
+                        maxHealth: data.health,
+                        type: data.type,
+                        id: data.id
+                    };
+                    
+                    this.bricks.push(brick);
+                    this.scene.add(mesh);
+                });
+                
+                console.log('Level loaded with', this.bricks.length, 'bricks');
+            }
+            
+            setupControls() {
+                // Mouse controls
+                const handleMouseMove = (e) => {
+                    this.mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+                };
+                
+                // Touch controls  
+                const handleTouchMove = (e) => {
+                    e.preventDefault();
+                    if (e.touches.length > 0) {
+                        this.touchX = (e.touches[0].clientX / window.innerWidth) * 2 - 1;
+                    }
+                };
+                
+                window.addEventListener('mousemove', handleMouseMove);
+                window.addEventListener('touchmove', handleTouchMove, { passive: false });
+                
+                // Resize handler
+                const handleResize = () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                };
+                
+                window.addEventListener('resize', handleResize);
+            }
+            
+            update() {
+                if (!this.isPlaying) return;
+                
+                const deltaTime = this.clock.getDelta();
+                
+                // Update paddle position
+                const targetX = (this.touchX || this.mouseX) * (GAME_WIDTH/2 - 1);
+                if (this.paddle) {
+                    this.paddle.position.x += (targetX - this.paddle.position.x) * this.paddleSpeed * deltaTime;
+                }
+                
+                // Update balls
+                for (let i = this.balls.length - 1; i >= 0; i--) {
+                    const ball = this.balls[i];
+                    ball.position.add(ball.velocity.clone().multiplyScalar(deltaTime));
+                    
+                    // Wall collisions
+                    if (ball.position.x <= -GAME_WIDTH/2 + 0.2) {
+                        ball.position.x = -GAME_WIDTH/2 + 0.2;
+                        ball.velocity.x = Math.abs(ball.velocity.x);
+                    }
+                    if (ball.position.x >= GAME_WIDTH/2 - 0.2) {
+                        ball.position.x = GAME_WIDTH/2 - 0.2;
+                        ball.velocity.x = -Math.abs(ball.velocity.x);
+                    }
+                    if (ball.position.y >= GAME_HEIGHT/2 - 0.2) {
+                        ball.position.y = GAME_HEIGHT/2 - 0.2;
+                        ball.velocity.y = -Math.abs(ball.velocity.y);
+                    }
+                    
+                    // Paddle collision
+                    if (this.paddle && 
+                        ball.position.y <= this.paddle.position.y + 0.4 &&
+                        ball.position.y >= this.paddle.position.y - 0.4 &&
+                        ball.position.x >= this.paddle.position.x - 1 &&
+                        ball.position.x <= this.paddle.position.x + 1 &&
+                        ball.velocity.y < 0) {
+                        
+                        ball.velocity.y = Math.abs(ball.velocity.y);
+                        const hitPos = (ball.position.x - this.paddle.position.x) / 1;
+                        ball.velocity.x += hitPos * 2;
+                        ball.velocity.normalize().multiplyScalar(this.ballSpeed);
+                    }
+                    
+                    // Brick collisions
+                    for (let j = this.bricks.length - 1; j >= 0; j--) {
+                        const brick = this.bricks[j];
+                        const distance = ball.position.distanceTo(brick.mesh.position);
+                        if (distance < 0.8) {
+                            ball.velocity.y = -ball.velocity.y;
+                            
+                            brick.health--;
+                            if (brick.health <= 0) {
+                                this.scene.remove(brick.mesh);
+                                this.bricks.splice(j, 1);
+                                this.gameCallbacks.onScore(brick.type * 10);
+                                
+                                // Check level completion
+                                if (this.bricks.length === 0) {
+                                    this.gameCallbacks.onLevelComplete();
+                                }
+                            } else {
+                                brick.mesh.material.color.multiplyScalar(0.7);
+                            }
+                            break;
+                        }
+                    }
+                    
+                    // Ball falls off screen
+                    if (ball.position.y < -GAME_HEIGHT/2 - 2) {
+                        this.scene.remove(ball);
+                        this.balls.splice(i, 1);
+                        
+                        if (this.balls.length === 0) {
+                            this.gameCallbacks.onLifeLost();
+                        }
+                    }
+                }
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                this.update();
+                this.renderer.render(this.scene, this.camera);
+            }
+            
+            cleanup() {
+                if (this.renderer && this.container && this.renderer.domElement) {
+                    this.container.removeChild(this.renderer.domElement);
+                }
+            }
+        }
+
+        // React Components
+        const GameHUD = ({ score, lives, level }) => (
+            React.createElement('div', { className: 'ui-overlay hud' }, 
+                React.createElement('div', null, 'Score: ' + score.toLocaleString()),
+                React.createElement('div', null, 'Level: ' + level),
+                React.createElement('div', null, 'Lives: ' + lives)
+            )
+        );
+
+        const StartMenu = ({ onStart, highScore }) => (
+            React.createElement('div', { className: 'ui-overlay menu' },
+                React.createElement('h1', null, '3D BRICK BREAKER'),
+                React.createElement('p', null, 'High Score: ' + highScore.toLocaleString()),
+                React.createElement('button', { onClick: onStart }, 'START GAME'),
+                React.createElement('div', { className: 'touch-controls' }, 'Move mouse or touch to control paddle')
+            )
+        );
+
+        const GameOverMenu = ({ score, highScore, onRestart, onMenu }) => (
+            React.createElement('div', { className: 'ui-overlay menu' },
+                React.createElement('h1', null, 'GAME OVER'),
+                React.createElement('p', null, 'Final Score: ' + score.toLocaleString()),
+                React.createElement('p', null, 'High Score: ' + highScore.toLocaleString()),
+                React.createElement('button', { onClick: onRestart }, 'PLAY AGAIN'),
+                React.createElement('button', { onClick: onMenu }, 'MAIN MENU')
+            )
+        );
+
+        // Main Game Component
+        const BrickBreakerGame = () => {
+            const [gameState, setGameState] = useState('menu');
+            const [score, setScore] = useState(0);
+            const [lives, setLives] = useState(3);
+            const [level, setLevel] = useState(1);
+            const [highScore, setHighScore] = useState(0);
+            
+            const gameRef = useRef(null);
+            const containerRef = useRef(null);
+
+            // Load high score
+            useEffect(() => {
+                try {
+                    const saved = localStorage.getItem('brickbreaker_highscore');
+                    if (saved) setHighScore(parseInt(saved));
+                } catch (e) {
+                    console.log('Could not load high score');
+                }
+            }, []);
+
+            // Save high score
+            useEffect(() => {
+                if (score > highScore) {
+                    setHighScore(score);
+                    try {
+                        localStorage.setItem('brickbreaker_highscore', score.toString());
+                    } catch (e) {
+                        console.log('Could not save high score');
+                    }
+                }
+            }, [score, highScore]);
+
+            // Initialize 3D engine
+            useEffect(() => {
+                if (containerRef.current && !gameRef.current) {
+                    const gameCallbacks = {
+                        onScore: (points) => setScore(prev => prev + points),
+                        onLifeLost: () => {
+                            setLives(prev => {
+                                if (prev <= 1) {
+                                    setGameState('gameOver');
+                                    return 0;
+                                } else {
+                                    // Restart ball after delay
+                                    setTimeout(() => {
+                                        if (gameRef.current) {
+                                            gameRef.current.createBall(0, -4 + 2, 0);
+                                        }
+                                    }, 1000);
+                                    return prev - 1;
+                                }
+                            });
+                        },
+                        onLevelComplete: () => {
+                            setLevel(prev => {
+                                const newLevel = prev + 1;
+                                setTimeout(() => {
+                                    if (gameRef.current) {
+                                        gameRef.current.loadLevel(newLevel);
+                                        gameRef.current.createBall(1, -4 + 2, 0);
+                                    }
+                                }, 1000);
+                                return newLevel;
+                            });
+                        }
+                    };
+                    
+                    gameRef.current = new Game3D(containerRef.current, gameCallbacks);
+                }
+                
+                return () => {
+                    if (gameRef.current) {
+                        gameRef.current.cleanup();
+                        gameRef.current = null;
+                    }
+                };
+            }, []);
+
+            const startGame = () => {
+                setGameState('playing');
+                setScore(0);
+                setLives(3);
+                setLevel(1);
+                if (gameRef.current) {
+                    gameRef.current.startGame(1);
+                }
+            };
+
+            const restartGame = () => {
+                setScore(0);
+                setLives(3);
+                setLevel(1);
+                setGameState('playing');
+                if (gameRef.current) {
+                    gameRef.current.startGame(1);
+                }
+            };
+
+            const backToMenu = () => {
+                setGameState('menu');
+                if (gameRef.current) {
+                    gameRef.current.stopGame();
+                }
+            };
+
+            return React.createElement('div', { 
+                id: 'gameContainer', 
+                ref: containerRef 
+            }, [
+                gameState === 'playing' && React.createElement(GameHUD, { 
+                    key: 'hud',
+                    score: score, 
+                    lives: lives, 
+                    level: level 
+                }),
+                gameState === 'menu' && React.createElement(StartMenu, { 
+                    key: 'start',
+                    onStart: startGame, 
+                    highScore: highScore 
+                }),
+                gameState === 'gameOver' && React.createElement(GameOverMenu, { 
+                    key: 'gameover',
+                    score: score,
+                    highScore: highScore,
+                    onRestart: restartGame,
+                    onMenu: backToMenu
+                })
+            ]);
+        };
+
+        // Initialize the game
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, starting React app...');
+            ReactDOM.render(
+                React.createElement(BrickBreakerGame), 
+                document.getElementById('root')
+            );
+        });
+    </script>
+</body>
+</html>
