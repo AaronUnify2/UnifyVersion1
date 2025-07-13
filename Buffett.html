@@ -109,9 +109,15 @@
             pointer-events: none;
         }
         
-        .decade-1950s { 
+        .decade-1950s {
             border-color: #666;
             background: repeating-linear-gradient(45deg, #333, #333 10px, #444 10px, #444 20px);
+        }
+        
+        /* Apply grayscale to everything in 1950s except UI elements */
+        .decade-1950s ~ #gameCanvas .bubble,
+        .decade-1950s ~ #gameCanvas .collectable {
+            filter: grayscale(100%);
         }
         
         .decade-1960s { 
@@ -156,6 +162,7 @@
             right: 20px;
             bottom: 120px;
             overflow: hidden;
+            cursor: crosshair;
         }
         
         .game-ui {
@@ -380,6 +387,21 @@
             display: block;
         }
         
+        .trajectory-line {
+            position: absolute;
+            height: 3px;
+            background: repeating-linear-gradient(
+                to right,
+                #ffd700,
+                #ffd700 10px,
+                transparent 10px,
+                transparent 15px
+            );
+            transform-origin: left center;
+            pointer-events: none;
+            opacity: 0.8;
+        }
+        
         .cannon {
             position: absolute;
             bottom: 40px;
@@ -391,6 +413,7 @@
             border-radius: 50%;
             border: 3px solid #888;
             z-index: 5;
+            pointer-events: none;
         }
         
         .cannon-barrel {
@@ -402,6 +425,7 @@
             height: 30px;
             background: #888;
             margin-left: -3px;
+            pointer-events: none;
         }
         
         .bubble {
@@ -409,8 +433,8 @@
             width: 32px;
             height: 32px;
             border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.3);
-            box-shadow: inset 0 0 10px rgba(255,255,255,0.2);
+            border: 2px solid rgba(0,0,0,0.3);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
         
         .bubble-queue {
@@ -438,6 +462,16 @@
             width: 24px;
             height: 24px;
             animation: fall 2s linear;
+        }
+        
+        .bubble.popping {
+            animation: pop 0.3s ease-out forwards;
+        }
+        
+        @keyframes pop {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(0); opacity: 0; }
         }
         
         @keyframes fall {
@@ -536,14 +570,14 @@
         };
         
         // Bubble colors
-        const bubbleColors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b', '#eb4d4b', '#6ab04c', '#c7ecee'];
+        const bubbleColors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#ff6b9d'];
         
         // Game component
         function Game() {
             const [gameState, setGameState] = useState('menu');
-            const [year, setYear] = useState(1951);
+            const [year, setYear] = useState(1953);
             const [lives, setLives] = useState(3);
-            const [coins, setCoins] = useState(500);
+            const [coins, setCoins] = useState(250);
             const [sugar, setSugar] = useState(60);
             const [maxSugar, setMaxSugar] = useState(60);
             const [books, setBooks] = useState(0);
@@ -611,17 +645,17 @@
                 setScrollSpeed(getScrollSpeed(year));
                 setSugar(maxSugar);
                 
-                // Create initial bubble field with extra columns for scrolling
+                // Create initial bubble field
                 const colorCount = getBubbleColorCount(year);
                 const colors = bubbleColors.slice(0, colorCount);
                 const newBubbles = [];
                 
-                // Create 5 rows x 30 columns (double width for scrolling)
+                // Create 5 rows x 15 visible columns
                 for (let row = 0; row < 5; row++) {
-                    for (let col = 0; col < 30; col++) {
+                    for (let col = 0; col < 15; col++) {
                         newBubbles.push({
                             id: `${row}-${col}-${Date.now()}`,
-                            x: col * 35 - 525, // Start some off-screen to the left
+                            x: col * 35 + 20,
                             y: row * 35 + 20,
                             color: colors[Math.floor(Math.random() * colors.length)],
                             popping: false
@@ -645,72 +679,64 @@
                 initLevel();
             };
             
-            // Handle cannon aim
-            const handleCannonAim = (e) => {
-                if (gameState !== 'playing') return;
+            // Initialize event handlers for game
+            useEffect(() => {
+                if (gameState !== 'playing' || !gameRef.current) return;
                 
-                if (e.touches) e.preventDefault();
+                const handleMove = (e) => {
+                    const rect = gameRef.current.getBoundingClientRect();
+                    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+                    const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+                    const cannonX = rect.width / 2;
+                    const cannonY = rect.height - 60;
+                    
+                    const angle = Math.atan2(y - cannonY, x - cannonX);
+                    const degrees = angle * 180 / Math.PI - 90;
+                    const clamped = Math.max(-89, Math.min(89, degrees));
+                    
+                    setCannonAngle(clamped);
+                };
                 
-                const rect = gameRef.current.getBoundingClientRect();
-                const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-                const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-                const cannonX = rect.width / 2;
-                const cannonY = rect.height - 60;
-                
-                const angle = Math.atan2(y - cannonY, x - cannonX);
-                const degrees = angle * 180 / Math.PI - 90; // Adjust for vertical orientation
-                const clamped = Math.max(-89, Math.min(89, degrees));
-                
-                setCannonAngle(clamped);
-            };
-            
-            // Shoot bubble
-            const shootBubble = (e) => {
-                if (bubbleQueue.length === 0 || gameState !== 'playing') return;
-                
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const color = bubbleQueue[0];
-                setBubbleQueue(queue => queue.slice(1));
-                
-                // Simplified bubble shooting - find nearest bubble in direction
-                const angleRad = (cannonAngle + 90) * Math.PI / 180;
-                const targetX = Math.cos(angleRad) * 500;
-                const targetY = Math.sin(angleRad) * 500;
-                
-                // Find bubbles in the general direction
-                const possibleHits = bubbles.filter(bubble => {
-                    const dx = bubble.x + 16 - 400; // Adjust for center
-                    const dy = bubble.y + 16 - 500; // Adjust for cannon position
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    const angle = Math.atan2(dy, dx);
-                    const angleDiff = Math.abs(angle - angleRad);
-                    return distance < 400 && angleDiff < 0.5;
-                });
-                
-                if (possibleHits.length > 0) {
-                    const hitBubble = possibleHits[0];
-                    if (hitBubble.color === color) {
-                        popBubble(hitBubble);
-                        // Check for adjacent bubbles of same color
-                        const adjacentBubbles = bubbles.filter(b => {
-                            const dx = Math.abs(b.x - hitBubble.x);
-                            const dy = Math.abs(b.y - hitBubble.y);
-                            return b.color === color && dx <= 36 && dy <= 36 && b.id !== hitBubble.id;
-                        });
-                        adjacentBubbles.forEach(b => popBubble(b));
+                const handleClick = (e) => {
+                    e.preventDefault();
+                    handleMove(e);
+                    
+                    if (bubbleQueue.length === 0) return;
+                    
+                    const color = bubbleQueue[0];
+                    setBubbleQueue(queue => queue.slice(1));
+                    
+                    // Simple test - just pop any matching color bubble
+                    setBubbles(prev => {
+                        const matching = prev.find(b => b.color === color);
+                        if (matching) {
+                            // Pop the bubble
+                            setTimeout(() => popBubble(matching), 100);
+                        }
+                        return prev;
+                    });
+                    
+                    if (bubbleQueue.length === 1) {
+                        setTimeout(() => endLevel(), 2000);
                     }
-                }
+                };
                 
-                // End level if out of bubbles
-                if (bubbleQueue.length === 0) {
-                    setTimeout(() => endLevel(), 1000);
-                }
-            };
+                const gameArea = gameRef.current;
+                gameArea.addEventListener('mousemove', handleMove);
+                gameArea.addEventListener('touchmove', handleMove);
+                gameArea.addEventListener('click', handleClick);
+                gameArea.addEventListener('touchstart', handleClick);
+                
+                return () => {
+                    gameArea.removeEventListener('mousemove', handleMove);
+                    gameArea.removeEventListener('touchmove', handleMove);
+                    gameArea.removeEventListener('click', handleClick);
+                    gameArea.removeEventListener('touchstart', handleClick);
+                };
+            }, [gameState, bubbleQueue, bubbles, popBubble, endLevel]);
             
             // Pop bubble and create collectables
-            const popBubble = (bubble) => {
+            const popBubble = useCallback((bubble) => {
                 setBubbles(prev => prev.filter(b => b.id !== bubble.id));
                 
                 // Drop collectables
@@ -752,7 +778,7 @@
                     });
                     setCollectables(prev => prev.filter(c => !drops.find(d => d.id === c.id)));
                 }, 2000);
-            };
+            }, [maxSugar]);
             
             // Game loop
             useEffect(() => {
@@ -786,10 +812,18 @@
                         // Remove bubbles that have scrolled off screen
                         updated = updated.filter(bubble => bubble.x < 800);
                         
-                        // Add new bubbles from the left
-                        const rightmostX = Math.max(...updated.map(b => b.x));
-                        if (rightmostX < 600) {
-                            for (let row = 0; row < 5; row++) {
+                        // Check if we need to add new bubbles
+                        const leftmostInRow = {};
+                        updated.forEach(bubble => {
+                            const row = Math.round((bubble.y - 20) / 35);
+                            if (leftmostInRow[row] === undefined || bubble.x < leftmostInRow[row]) {
+                                leftmostInRow[row] = bubble.x;
+                            }
+                        });
+                        
+                        // Add new bubbles if there's enough space (at least 2 bubble widths)
+                        for (let row = 0; row < 5; row++) {
+                            if (leftmostInRow[row] === undefined || leftmostInRow[row] > 70) {
                                 updated.push({
                                     id: `${row}-new-${Date.now()}-${Math.random()}`,
                                     x: -35,
@@ -816,7 +850,7 @@
             }, [gameState, scrollSpeed, year]);
             
             // End level
-            const endLevel = () => {
+            const endLevel = useCallback(() => {
                 if (gameState !== 'playing') return;
                 setGameState('shop');
                 
@@ -828,7 +862,7 @@
                     }
                 });
                 setCoins(prev => prev + dividends);
-            };
+            }, [gameState, portfolio]);
             
             // Shop items
             const shopItems = [
@@ -952,10 +986,6 @@
                     <div 
                         className={`game-screen ${gameState === 'playing' ? 'active' : ''}`} 
                         ref={gameRef}
-                        onMouseMove={handleCannonAim}
-                        onTouchMove={handleCannonAim}
-                        onClick={shootBubble}
-                        onTouchEnd={shootBubble}
                     >
                         <div className={`decade-border decade-${getDecade(year)}`}></div>
                         
@@ -984,6 +1014,20 @@
                                     }}
                                 />
                             ))}
+                            
+                            {/* Trajectory Line */}
+                            {gameState === 'playing' && bubbleQueue.length > 0 && (
+                                <div 
+                                    className="trajectory-line"
+                                    style={{
+                                        bottom: '60px',
+                                        left: '50%',
+                                        width: '200px',
+                                        transform: `translateX(-2px) rotate(${cannonAngle}deg)`,
+                                        transformOrigin: '2px center'
+                                    }}
+                                />
+                            )}
                             
                             {/* Cannon */}
                             <div className="cannon">
