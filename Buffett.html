@@ -155,6 +155,7 @@
             left: 20px;
             right: 20px;
             bottom: 120px;
+            overflow: hidden;
         }
         
         .game-ui {
@@ -389,6 +390,7 @@
             background: #666;
             border-radius: 50%;
             border: 3px solid #888;
+            z-index: 5;
         }
         
         .cannon-barrel {
@@ -413,11 +415,15 @@
         
         .bubble-queue {
             position: absolute;
-            bottom: 0;
+            bottom: 5px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
             gap: 5px;
+            align-items: center;
+            background: rgba(0,0,0,0.7);
+            padding: 5px 10px;
+            border-radius: 20px;
         }
         
         .queue-bubble {
@@ -537,13 +543,13 @@
             const [gameState, setGameState] = useState('menu');
             const [year, setYear] = useState(1951);
             const [lives, setLives] = useState(3);
-            const [coins, setCoins] = useState(1000);
+            const [coins, setCoins] = useState(500);
             const [sugar, setSugar] = useState(60);
             const [maxSugar, setMaxSugar] = useState(60);
             const [books, setBooks] = useState(0);
             const [portfolio, setPortfolio] = useState({});
             const [upgrades, setUpgrades] = useState({
-                startingBubbles: 10,
+                startingBubbles: 5,
                 seesCandyLevel: 0,
                 mungerPartner: false,
                 tedTodd: false
@@ -605,16 +611,17 @@
                 setScrollSpeed(getScrollSpeed(year));
                 setSugar(maxSugar);
                 
-                // Create initial bubble field
+                // Create initial bubble field with extra columns for scrolling
                 const colorCount = getBubbleColorCount(year);
                 const colors = bubbleColors.slice(0, colorCount);
                 const newBubbles = [];
                 
+                // Create 5 rows x 30 columns (double width for scrolling)
                 for (let row = 0; row < 5; row++) {
-                    for (let col = 0; col < 15; col++) {
+                    for (let col = 0; col < 30; col++) {
                         newBubbles.push({
-                            id: `${row}-${col}`,
-                            x: col * 35 + 20,
+                            id: `${row}-${col}-${Date.now()}`,
+                            x: col * 35 - 525, // Start some off-screen to the left
                             y: row * 35 + 20,
                             color: colors[Math.floor(Math.random() * colors.length)],
                             popping: false
@@ -642,40 +649,64 @@
             const handleCannonAim = (e) => {
                 if (gameState !== 'playing') return;
                 
+                if (e.touches) e.preventDefault();
+                
                 const rect = gameRef.current.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+                const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+                const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
                 const cannonX = rect.width / 2;
                 const cannonY = rect.height - 60;
                 
                 const angle = Math.atan2(y - cannonY, x - cannonX);
-                const degrees = angle * 180 / Math.PI;
+                const degrees = angle * 180 / Math.PI - 90; // Adjust for vertical orientation
                 const clamped = Math.max(-89, Math.min(89, degrees));
                 
                 setCannonAngle(clamped);
             };
             
             // Shoot bubble
-            const shootBubble = () => {
-                if (bubbleQueue.length === 0) return;
+            const shootBubble = (e) => {
+                if (bubbleQueue.length === 0 || gameState !== 'playing') return;
+                
+                e.preventDefault();
+                e.stopPropagation();
                 
                 const color = bubbleQueue[0];
                 setBubbleQueue(queue => queue.slice(1));
                 
-                // Create projectile bubble
-                // Simplified - would need proper physics
+                // Simplified bubble shooting - find nearest bubble in direction
+                const angleRad = (cannonAngle + 90) * Math.PI / 180;
+                const targetX = Math.cos(angleRad) * 500;
+                const targetY = Math.sin(angleRad) * 500;
                 
-                // Check for matches and pops
-                setTimeout(() => {
-                    const hitBubble = bubbles.find(b => {
-                        // Simplified collision detection
-                        return Math.random() > 0.7;
-                    });
-                    
-                    if (hitBubble && hitBubble.color === color) {
+                // Find bubbles in the general direction
+                const possibleHits = bubbles.filter(bubble => {
+                    const dx = bubble.x + 16 - 400; // Adjust for center
+                    const dy = bubble.y + 16 - 500; // Adjust for cannon position
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const angle = Math.atan2(dy, dx);
+                    const angleDiff = Math.abs(angle - angleRad);
+                    return distance < 400 && angleDiff < 0.5;
+                });
+                
+                if (possibleHits.length > 0) {
+                    const hitBubble = possibleHits[0];
+                    if (hitBubble.color === color) {
                         popBubble(hitBubble);
+                        // Check for adjacent bubbles of same color
+                        const adjacentBubbles = bubbles.filter(b => {
+                            const dx = Math.abs(b.x - hitBubble.x);
+                            const dy = Math.abs(b.y - hitBubble.y);
+                            return b.color === color && dx <= 36 && dy <= 36 && b.id !== hitBubble.id;
+                        });
+                        adjacentBubbles.forEach(b => popBubble(b));
                     }
-                }, 500);
+                }
+                
+                // End level if out of bubbles
+                if (bubbleQueue.length === 0) {
+                    setTimeout(() => endLevel(), 1000);
+                }
             };
             
             // Pop bubble and create collectables
@@ -743,10 +774,34 @@
                     }
                     
                     // Scroll bubbles
-                    setBubbles(prev => prev.map(bubble => ({
-                        ...bubble,
-                        x: bubble.x + scrollSpeed
-                    })));
+                    setBubbles(prev => {
+                        const colorCount = getBubbleColorCount(year);
+                        const colors = bubbleColors.slice(0, colorCount);
+                        
+                        let updated = prev.map(bubble => ({
+                            ...bubble,
+                            x: bubble.x + scrollSpeed
+                        }));
+                        
+                        // Remove bubbles that have scrolled off screen
+                        updated = updated.filter(bubble => bubble.x < 800);
+                        
+                        // Add new bubbles from the left
+                        const rightmostX = Math.max(...updated.map(b => b.x));
+                        if (rightmostX < 600) {
+                            for (let row = 0; row < 5; row++) {
+                                updated.push({
+                                    id: `${row}-new-${Date.now()}-${Math.random()}`,
+                                    x: -35,
+                                    y: row * 35 + 20,
+                                    color: colors[Math.floor(Math.random() * colors.length)],
+                                    popping: false
+                                });
+                            }
+                        }
+                        
+                        return updated;
+                    });
                     
                     animationRef.current = requestAnimationFrame(gameLoop);
                 };
@@ -758,10 +813,11 @@
                         cancelAnimationFrame(animationRef.current);
                     }
                 };
-            }, [gameState, scrollSpeed]);
+            }, [gameState, scrollSpeed, year]);
             
             // End level
             const endLevel = () => {
+                if (gameState !== 'playing') return;
                 setGameState('shop');
                 
                 // Calculate dividends
@@ -893,7 +949,14 @@
                     )}
                     
                     {/* Game Screen */}
-                    <div className={`game-screen ${gameState === 'playing' ? 'active' : ''}`} ref={gameRef}>
+                    <div 
+                        className={`game-screen ${gameState === 'playing' ? 'active' : ''}`} 
+                        ref={gameRef}
+                        onMouseMove={handleCannonAim}
+                        onTouchMove={handleCannonAim}
+                        onClick={shootBubble}
+                        onTouchEnd={shootBubble}
+                    >
                         <div className={`decade-border decade-${getDecade(year)}`}></div>
                         
                         <div id="gameCanvas">
@@ -923,7 +986,7 @@
                             ))}
                             
                             {/* Cannon */}
-                            <div className="cannon" onMouseMove={handleCannonAim} onClick={shootBubble}>
+                            <div className="cannon">
                                 <div 
                                     className="cannon-barrel" 
                                     style={{ transform: `rotate(${cannonAngle}deg)` }}
@@ -936,9 +999,16 @@
                                     <div
                                         key={i}
                                         className="queue-bubble"
-                                        style={{ backgroundColor: color }}
+                                        style={{ 
+                                            backgroundColor: color,
+                                            opacity: i === 0 ? 1 : 0.6,
+                                            transform: i === 0 ? 'scale(1.2)' : 'scale(1)'
+                                        }}
                                     />
                                 ))}
+                                {bubbleQueue.length > 5 && (
+                                    <div style={{ color: '#ffd700', marginLeft: '10px' }}>+{bubbleQueue.length - 5}</div>
+                                )}
                             </div>
                         </div>
                         
@@ -955,6 +1025,11 @@
                                 <div className="sugar-bar">
                                     <div className="sugar-fill" style={{ width: `${(sugar / maxSugar) * 100}%` }} />
                                 </div>
+                            </div>
+                            
+                            <div className="stat-display">
+                                <span className="stat-label">Bubbles</span>
+                                <span className="stat-value">{bubbleQueue.length}</span>
                             </div>
                             
                             <div className="stat-display">
@@ -977,6 +1052,9 @@
                     {/* Shop Screen */}
                     <div className={`shop-screen ${gameState === 'shop' ? 'active' : ''}`}>
                         <h2 className="shop-header">The Value Shop - Year {year}</h2>
+                        <p style={{ textAlign: 'center', fontSize: '1.2em', color: '#ffd700', marginBottom: '20px' }}>
+                            Your Coins: ${coins}
+                        </p>
                         
                         <div className="shop-items">
                             {shopItems.map(item => (
@@ -1003,41 +1081,62 @@
                     {/* Investment Screen */}
                     <div className={`investment-screen ${gameState === 'investment' ? 'active' : ''}`}>
                         <h2 className="shop-header">Investment Board - {year}</h2>
+                        <p style={{ textAlign: 'center', fontSize: '1.2em', color: '#ffd700', marginBottom: '20px' }}>
+                            Your Coins: ${coins}
+                        </p>
                         
                         <div className="stock-board">
-                            {Object.entries(stockData).map(([symbol, stock]) => {
-                                if (stock.startYear > year) return null;
-                                if (symbol === 'AAPL' && !upgrades.tedTodd) return null;
+                            {(() => {
+                                const availableStocks = Object.entries(stockData).filter(([symbol, stock]) => {
+                                    if (stock.startYear > year) return false;
+                                    if (symbol === 'AAPL' && !upgrades.tedTodd) return false;
+                                    return true;
+                                });
                                 
-                                const price = stock.prices[year] || stock.prices[Math.max(...Object.keys(stock.prices).filter(y => y <= year))];
-                                const owned = portfolio[symbol]?.shares || 0;
+                                if (availableStocks.length === 0) {
+                                    return (
+                                        <div style={{ textAlign: 'center', padding: '40px', color: '#ccc' }}>
+                                            <h3 style={{ color: '#ffd700', marginBottom: '20px' }}>Investment Market Closed</h3>
+                                            <p>No public companies available for investment yet.</p>
+                                            <p>Keep playing to unlock investment opportunities!</p>
+                                            <p style={{ marginTop: '20px', fontSize: '0.9em' }}>
+                                                First investments available in the 1960s.
+                                            </p>
+                                        </div>
+                                    );
+                                }
                                 
-                                return (
-                                    <div key={symbol} className="stock-item">
-                                        <div className="stock-info">
-                                            <div className="stock-name">{stock.name}</div>
-                                            <div className="stock-price">Price: ${price}</div>
-                                            <div>Owned: {owned} shares</div>
+                                return availableStocks.map(([symbol, stock]) => {
+                                    const price = stock.prices[year] || stock.prices[Math.max(...Object.keys(stock.prices).filter(y => y <= year))];
+                                    const owned = portfolio[symbol]?.shares || 0;
+                                    
+                                    return (
+                                        <div key={symbol} className="stock-item">
+                                            <div className="stock-info">
+                                                <div className="stock-name">{stock.name}</div>
+                                                <div className="stock-price">Price: ${price}</div>
+                                                <div>Owned: {owned} shares</div>
+                                            </div>
+                                            <div className="stock-controls">
+                                                <button 
+                                                    className="stock-button"
+                                                    onClick={() => buyStock(symbol)}
+                                                    disabled={coins < price}
+                                                >
+                                                    Buy
+                                                </button>
+                                                <button 
+                                                    className="stock-button sell"
+                                                    onClick={() => sellStock(symbol)}
+                                                    disabled={owned === 0}
+                                                >
+                                                    Sell
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="stock-controls">
-                                            <button 
-                                                className="stock-button"
-                                                onClick={() => buyStock(symbol)}
-                                                disabled={coins < price}
-                                            >
-                                                Buy
-                                            </button>
-                                            <button 
-                                                className="stock-button sell"
-                                                onClick={() => sellStock(symbol)}
-                                                disabled={owned === 0}
-                                            >
-                                                Sell
-                                            </button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                });
+                            })()}
                         </div>
                         
                         <button className="continue-button" onClick={continueToNextYear}>
