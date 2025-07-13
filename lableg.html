@@ -375,6 +375,30 @@
                 left: 10px;
                 font-size: 14px;
                 padding: 10px;
+            .error-log {
+                position: fixed;
+                bottom: 10px;
+                left: 10px;
+                right: 10px;
+                max-height: 300px;
+                overflow-y: auto;
+                background: rgba(0, 0, 0, 0.9);
+                border: 2px solid #ff3333;
+                border-radius: 5px;
+                padding: 15px;
+                font-size: 12px;
+                font-family: monospace;
+                color: #ff9999;
+                z-index: 9999;
+                box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+            }
+            
+            .error-log::before {
+                content: 'DEBUG LOG:';
+                display: block;
+                color: #ff3333;
+                font-weight: bold;
+                margin-bottom: 10px;
             }
             
             .minimap {
@@ -442,49 +466,96 @@
             }
         }
     </style>
+    <script>
+        // Script loading verification
+        window.addEventListener('load', function() {
+            console.log('Page fully loaded');
+            console.log('React available:', typeof React !== 'undefined');
+            console.log('ReactDOM available:', typeof ReactDOM !== 'undefined');
+            console.log('THREE available:', typeof THREE !== 'undefined');
+        });
+    </script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <div style="color: white; text-align: center; padding: 50px;">
+            Loading scripts...
+        </div>
+    </div>
+    <div id="error-log" class="error-log" style="display:none;"></div>
     
     <script>
-        // Wait for Three.js to load
-        let initAttempts = 0;
-        const maxAttempts = 50; // 5 seconds
+        // Create a more robust initialization system
+        window.gameInitialized = false;
+        window.initializationErrors = [];
         
-        function initGame() {
-            if (typeof THREE === 'undefined') {
-                initAttempts++;
-                if (initAttempts < maxAttempts) {
-                    setTimeout(initGame, 100);
-                    return;
-                } else {
-                    document.body.innerHTML = '<div style="color:white;text-align:center;padding:50px;">Error: Three.js failed to load. Please check your internet connection and refresh.</div>';
-                    return;
-                }
+        function updateLoadingMessage(msg) {
+            const root = document.getElementById('root');
+            if (root) {
+                root.innerHTML = '<div style="color: white; text-align: center; padding: 50px;">' + msg + '</div>';
             }
+        }
+        
+        function checkDependencies() {
+            updateLoadingMessage('Checking dependencies...');
             
-            if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
-                document.body.innerHTML = '<div style="color:white;text-align:center;padding:50px;">Error: React failed to load. Please check your internet connection and refresh.</div>';
+            if (typeof React === 'undefined') {
+                window.initializationErrors.push('React not loaded');
+                return false;
+            }
+            if (typeof ReactDOM === 'undefined') {
+                window.initializationErrors.push('ReactDOM not loaded');
+                return false;
+            }
+            if (typeof THREE === 'undefined') {
+                window.initializationErrors.push('Three.js not loaded');
+                return false;
+            }
+            return true;
+        }
+        
+        function initializeGame() {
+            if (window.gameInitialized) return;
+            
+            if (!checkDependencies()) {
+                const errorDiv = document.getElementById('error-log');
+                errorDiv.innerHTML = 'Missing dependencies: ' + window.initializationErrors.join(', ');
+                errorDiv.style.display = 'block';
+                updateLoadingMessage('Failed to load dependencies');
                 return;
             }
             
+            updateLoadingMessage('Dependencies loaded, initializing game...');
+            window.gameInitialized = true;
+            
+            // Now run the main game code
+            try {
+            
             // Game Constants
-            const GAME_VERSION = '1.0.0';
-            const SAVE_KEY = 'labyrinthLegacySave';
+        const GAME_VERSION = '1.0.0';
+        const SAVE_KEY = 'labyrinthLegacySave';
+        
+        // Global error tracking for mobile debugging
+        window.gameErrors = [];
+        window.logError = (message, error) => {
+            const errorMsg = `${new Date().toISOString().substr(11, 8)}: ${message} ${error ? '- ' + (error.message || error) : ''}`;
+            window.gameErrors.push(errorMsg);
+            console.error(message, error);
             
-            // Debug loading messages
-            const updateLoadingDebug = (msg) => {
-                const debugEl = document.getElementById('loading-debug');
-                if (debugEl) {
-                    debugEl.textContent = msg;
-                }
-                console.log('Loading:', msg);
-            };
-            
-            updateLoadingDebug('Starting game initialization...');
+            // Display errors on screen
+            const errorDiv = document.getElementById('error-log');
+            if (errorDiv) {
+                errorDiv.innerHTML = window.gameErrors.slice(-5).join('<br>');
+                errorDiv.style.display = 'block';
+            }
+        };
+        
+        // Add console logging for debugging
+        console.log('Labyrinth Legacy starting...');
+        window.logError('Game script loaded');
         
         // Game State Management
         class GameState {
@@ -859,91 +930,15 @@
         // React Components
         const { useState, useEffect, useRef, useCallback, useMemo } = React;
         
-        // Touch Controls Component
-        const TouchControls = ({ onMove, onRotate, onAction }) => {
-            const joystickRef = useRef(null);
-            const [joystickTouch, setJoystickTouch] = useState(null);
-            
-            const handleJoystickStart = (e) => {
-                e.preventDefault();
-                const touch = e.touches[0];
-                setJoystickTouch(touch.identifier);
-            };
-            
-            const handleJoystickMove = (e) => {
-                if (joystickTouch === null) return;
-                
-                const touch = Array.from(e.touches).find(t => t.identifier === joystickTouch);
-                if (!touch || !joystickRef.current) return;
-                
-                const rect = joystickRef.current.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2;
-                const centerY = rect.top + rect.height / 2;
-                
-                const x = (touch.clientX - centerX) / (rect.width / 2);
-                const y = (touch.clientY - centerY) / (rect.height / 2);
-                
-                const distance = Math.sqrt(x * x + y * y);
-                const maxDistance = 1;
-                
-                if (distance > maxDistance) {
-                    const scale = maxDistance / distance;
-                    onMove(x * scale, y * scale);
-                } else {
-                    onMove(x, y);
-                }
-            };
-            
-            const handleJoystickEnd = () => {
-                setJoystickTouch(null);
-                onMove(0, 0);
-            };
-            
-            useEffect(() => {
-                window.addEventListener('touchmove', handleJoystickMove);
-                window.addEventListener('touchend', handleJoystickEnd);
-                
-                return () => {
-                    window.removeEventListener('touchmove', handleJoystickMove);
-                    window.removeEventListener('touchend', handleJoystickEnd);
-                };
-            }, [joystickTouch]);
-            
-            return React.createElement('div', { style: { pointerEvents: 'auto' } },
-                // Virtual Joystick
-                React.createElement('div', {
-                    ref: joystickRef,
-                    className: 'virtual-joystick',
-                    onTouchStart: handleJoystickStart
-                },
-                    React.createElement('div', { 
-                        className: 'joystick-knob',
-                        style: {
-                            transform: `translate(-50%, -50%)`,
-                            left: '50%',
-                            top: '50%'
-                        }
-                    })
-                ),
-                // Action Buttons
-                React.createElement('div', { className: 'action-buttons' },
-                    React.createElement('div', { 
-                        className: 'action-button',
-                        onTouchStart: (e) => {
-                            e.preventDefault();
-                            onAction('attack');
-                        }
-                    }, 'A'),
-                    React.createElement('div', { 
-                        className: 'action-button',
-                        onTouchStart: (e) => {
-                            e.preventDefault();
-                            onAction('interact');
-                        }
-                    }, 'B')
-                )
-            );
+        // Test component to verify React is working
+        const TestComponent = () => {
+            window.logError('TestComponent rendered');
+            return React.createElement('div', { 
+                style: { color: 'white', padding: '20px', textAlign: 'center' } 
+            }, 'React is working! Loading game...');
         };
+        
+        // Loading Screen Component
         const LoadingScreen = ({ progress, message }) => {
             return React.createElement('div', { className: 'loading' },
                 React.createElement('h1', null, 'Labyrinth Legacy'),
@@ -955,15 +950,14 @@
                 ),
                 React.createElement('div', { className: 'loading-text' }, message),
                 React.createElement('div', { 
-                    id: 'loading-debug',
                     style: { 
                         marginTop: '20px', 
                         fontSize: '12px', 
                         color: '#666',
                         maxWidth: '400px',
                         textAlign: 'center'
-                    }
-                }, 'Initializing...')
+                    } 
+                }, 'If stuck here, the game may have encountered an error during initialization.')
             );
         };
         
@@ -1218,6 +1212,8 @@
         
         // Main Game Component
         const Game = () => {
+            window.logError('Game component rendering');
+            
             const mountRef = useRef(null);
             const sceneRef = useRef(null);
             const rendererRef = useRef(null);
@@ -1228,11 +1224,14 @@
             const [loadingProgress, setLoadingProgress] = useState(0);
             const [loadingMessage, setLoadingMessage] = useState('Initializing...');
             
+            window.logError('Game state initialized');
+            
             const [gameState, setGameState] = useState(() => new GameState());
             const [showMenu, setShowMenu] = useState(true);
             const [showHub, setShowHub] = useState(false);
             const [currentDialog, setCurrentDialog] = useState(null);
             const [gameMessage, setGameMessage] = useState('');
+            const [errors, setErrors] = useState([]);
             
             const dungeonGenerator = useMemo(() => new DungeonGenerator(), []);
             
@@ -1759,8 +1758,198 @@
             
             // Check for save data
             const hasSaveData = useMemo(() => {
+                try {
+                    return localStorage.getItem(SAVE_KEY) !== null;
+                } catch (e) {
+                    return false;
+                }
+            }, []);
+            
+            window.logError('Game component about to return JSX');
+            
+            if (loading) {
+                return React.createElement(LoadingScreen, {
+                    progress: loadingProgress,
+                    message: loadingMessage
+                });
+            }
+            
+            return React.createElement('div', null,
+                React.createElement('div', { ref: mountRef, style: { position: 'absolute', top: 0, left: 0 } }),
+                React.createElement('div', { className: 'game-ui' },
+                    !showMenu && !showHub && React.createElement(React.Fragment, null,
+                        React.createElement(HUD, { gameState }),
+                        React.createElement(Inventory, { gameState, onItemUse: handleItemUse }),
+                        React.createElement(Minimap, { gameState }),
+                        React.createElement(GameMessage, { message: gameMessage }),
+                        currentDialog && React.createElement(Dialog, {
+                            speaker: currentDialog.speaker,
+                            text: currentDialog.text,
+                            onContinue: () => setCurrentDialog(null)
+                        })
+                    ),
+                    showMenu && React.createElement(MainMenu, {
+                        onStart: handleStart,
+                        onContinue: handleContinue,
+                        onSettings: () => showGameMessage('Settings coming soon!'),
+                        hasSave: hasSaveData
+                    }),
+                    showHub && React.createElement(HubMenu, {
+                        gameState,
+                        onClose: () => setShowHub(false),
+                        onUpgrade: handleWeaponUpgrade,
+                        onTalk: handleNPCTalk
+                    })
+                )
+            );
+        };
+        
+        // Check for save data
+        const hasSaveData = useMemo(() => {
+            return localStorage.getItem(SAVE_KEY) !== null;
+        }, []);
+        
+        // Add error boundary
+        window.addEventListener('error', (e) => {
+            window.logError('Runtime error', e.error);
+        });
+        
+        window.addEventListener('unhandledrejection', (e) => {
+            window.logError('Promise rejection', e.reason);
+        });
+        
+        // Check if Three.js loaded
+        if (typeof THREE === 'undefined') {
+            window.logError('Three.js failed to load', 'THREE is undefined');
+        } else {
+            window.logError('Three.js loaded successfully');
+        }
+        
+        // Check if React loaded
+        if (typeof React === 'undefined') {
+            window.logError('React failed to load', 'React is undefined');
+        } else {
+            window.logError('React loaded successfully');
+        }
+        
+        // Render the game
+        try {
+            const rootElement = document.getElementById('root');
+            if (!rootElement) {
+                window.logError('Root element not found');
+                return;
+            }
+            
+            // First test with simple component
+            window.logError('Testing with simple component first');
+            
+            // Try React 18 createRoot first, fallback to React 17 render
+            if (ReactDOM.createRoot) {
+                window.logError('Using React 18 createRoot');
+                const root = ReactDOM.createRoot(rootElement);
+                // Test with simple component first
+                root.render(React.createElement(TestComponent));
+                window.logError('Test component rendered, now rendering game in 1 second...');
+                
+                // Then render the actual game
+                setTimeout(() => {
+                    try {
+                        window.logError('Rendering actual game');
+                        root.render(React.createElement(Game));
+                        window.logError('Game rendered successfully');
+                    } catch (gameError) {
+                        window.logError('Error rendering game', gameError);
+                        root.render(React.createElement('div', { 
+                            style: { color: 'red', padding: '20px' } 
+                        }, 'Game error: ' + gameError.message));
+                    }
+                }, 1000);
+            } else {
+                window.logError('Using React 17 render');
+                ReactDOM.render(React.createElement(TestComponent), rootElement);
+                setTimeout(() => {
+                    ReactDOM.render(React.createElement(Game), rootElement);
+                }, 1000);
+            }
+        } catch (error) {
+            window.logError('Failed to render React app', error);
+            // Show error in root element as fallback
+            const rootElement = document.getElementById('root');
+            if (rootElement) {
+                rootElement.innerHTML = '<div style="color: red; padding: 20px;">Failed to initialize: ' + error.message + '</div>';
+            }
+        }
+        
+            } catch (error) {
+                const errorDiv = document.getElementById('error-log');
+                errorDiv.innerHTML = 'Game initialization error: ' + error.message + '<br>' + error.stack;
+                errorDiv.style.display = 'block';
+                updateLoadingMessage('Game initialization failed');
+            }
+        }
+        
+        // Try to initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeGame);
+        } else {
+            initializeGame();
+        }
+        
+        // Also try when all resources are loaded
+        window.addEventListener('load', initializeGame);
+        
+        // Fallback timer
+        setTimeout(initializeGame, 3000);
+    </script>
+</body>
+</html>d. The labyrinth takes its toll on everyone.",
+                    corvus: "I've seen strange things in my travels. The capital grows restless.",
+                    soren: "These visions... they speak of a consciousness that refuses to die."
+                };
+                
+                setCurrentDialog({
+                    speaker: npcId.charAt(0).toUpperCase() + npcId.slice(1),
+                    text: dialogs[npcId] || "..."
+                });
+            };
+            
+            // Handle weapon upgrade
+            const handleWeaponUpgrade = (weapon) => {
+                if (weapon === 'sword') {
+                    const cost = gameState.player.swordLevel * 100;
+                    if (gameState.player.xp >= cost) {
+                        setGameState(prev => ({
+                            ...prev,
+                            player: {
+                                ...prev.player,
+                                xp: prev.player.xp - cost,
+                                swordLevel: prev.player.swordLevel + 1
+                            },
+                            inventory: {
+                                ...prev.inventory,
+                                equipped: {
+                                    ...prev.inventory.equipped,
+                                    weapon: {
+                                        ...prev.inventory.equipped.weapon,
+                                        level: prev.player.swordLevel + 1,
+                                        damage: 10 + (prev.player.swordLevel + 1) * 5
+                                    }
+                                }
+                            }
+                        }));
+                        showGameMessage(`Sword upgraded to level ${gameState.player.swordLevel + 1}!`);
+                    } else {
+                        showGameMessage('Not enough XP!');
+                    }
+                }
+            };
+            
+            // Check for save data
+            const hasSaveData = useMemo(() => {
                 return localStorage.getItem(SAVE_KEY) !== null;
             }, []);
+            
+            window.logError('Game component about to return JSX');
             
             if (loading) {
                 return React.createElement(LoadingScreen, {
@@ -1800,24 +1989,73 @@
         };
         
         // Render the game
-        const root = ReactDOM.createRoot(document.getElementById('root'));
+        try {
+            const rootElement = document.getElementById('root');
+            if (!rootElement) {
+                window.logError('Root element not found');
+                return;
+            }
+            
+            // First test with simple component
+            window.logError('Testing with simple component first');
+            
+            // Try React 18 createRoot first, fallback to React 17 render
+            if (ReactDOM.createRoot) {
+                window.logError('Using React 18 createRoot');
+                const root = ReactDOM.createRoot(rootElement);
+                // Test with simple component first
+                root.render(React.createElement(TestComponent));
+                window.logError('Test component rendered, now rendering game in 1 second...');
+                
+                // Then render the actual game
+                setTimeout(() => {
+                    try {
+                        window.logError('Rendering actual game');
+                        root.render(React.createElement(Game));
+                        window.logError('Game rendered successfully');
+                    } catch (gameError) {
+                        window.logError('Error rendering game', gameError);
+                        root.render(React.createElement('div', { 
+                            style: { color: 'red', padding: '20px' } 
+                        }, 'Game error: ' + gameError.message));
+                    }
+                }, 1000);
+            } else {
+                window.logError('Using React 17 render');
+                ReactDOM.render(React.createElement(TestComponent), rootElement);
+                setTimeout(() => {
+                    ReactDOM.render(React.createElement(Game), rootElement);
+                }, 1000);
+            }
+        } catch (error) {
+            window.logError('Failed to render React app', error);
+            // Show error in root element as fallback
+            const rootElement = document.getElementById('root');
+            if (rootElement) {
+                rootElement.innerHTML = '<div style="color: red; padding: 20px;">Failed to initialize: ' + error.message + '</div>';
+            }
+        }
         
-        // Add error boundary
-        window.addEventListener('error', (e) => {
-            console.error('Game error:', e.error);
-            const errorDiv = document.createElement('div');
-            errorDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:red;color:white;padding:20px;border-radius:10px;z-index:9999';
-            errorDiv.textContent = 'Game Error: ' + e.error.message;
-            document.body.appendChild(errorDiv);
-        });
+            } catch (error) {
+                const errorDiv = document.getElementById('error-log');
+                errorDiv.innerHTML = 'Game initialization error: ' + error.message + '<br>' + error.stack;
+                errorDiv.style.display = 'block';
+                updateLoadingMessage('Game initialization failed');
+            }
+        }
         
-        root.render(React.createElement(Game));
-        updateLoadingDebug('React render complete');
+        // Try to initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeGame);
+        } else {
+            initializeGame();
+        }
         
-        } // End of initGame function
+        // Also try when all resources are loaded
+        window.addEventListener('load', initializeGame);
         
-        // Start initialization
-        initGame();
+        // Fallback timer
+        setTimeout(initializeGame, 3000);
     </script>
 </body>
 </html>
