@@ -5,1688 +5,418 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Warren Buffett's Bubble Pop Investment Adventure</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        /* Global Styles */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Arial', sans-serif; 
+            background: #1a1a1a; 
+            color: #fff; 
+            overflow: hidden; 
+            touch-action: none; 
         }
-        
-        html, body {
-            width: 100%;
-            height: 100%;
-            overscroll-behavior: none; /* Prevent pull-to-refresh */
+        #game { width: 100vw; height: 100vh; position: relative; }
+        canvas { width: 100%; height: 100%; display: block; }
+        .ui-overlay { 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            pointer-events: none; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
         }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a1a1a;
-            color: #fff;
-            overflow: hidden;
-            touch-action: none;
+        .ui-overlay > * { pointer-events: auto; }
+        .menu, .shop, .investment, .game-over { 
+            position: absolute; 
+            top: 50%; left: 50%; 
+            transform: translate(-50%, -50%); 
+            background: rgba(0, 0, 0, 0.85); 
+            padding: 2vw; 
+            border-radius: 10px; 
+            text-align: center; 
+            max-width: 90vw; 
+            max-height: 90vh; 
+            overflow-y: auto; 
         }
-        
-        #root {
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: #000;
+        .menu-title { font-size: 5vw; color: #ffd700; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        .menu-subtitle { font-size: 3vw; color: #ccc; margin-bottom: 2vw; }
+        button { 
+            padding: 1vw 2vw; 
+            margin: 1vw; 
+            font-size: 3vw; 
+            background: #4CAF50; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            transition: all 0.3s; 
         }
-        
-        .game-container {
-            width: 100vw;
-            height: 100vh; /* Use full viewport height */
-            aspect-ratio: 3 / 2; /* Maintain 3:2 aspect ratio */
-            position: relative;
-            background: #000;
+        button:hover:not(:disabled) { background: #45a049; transform: scale(1.05); }
+        button:disabled { background: #666; cursor: not-allowed; }
+        .resource-bar { 
+            display: flex; 
+            justify-content: space-between; 
+            padding: 1vw; 
+            background: rgba(0,0,0,0.7); 
+            font-size: 2.5vw; 
         }
-        
-        .menu-screen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: #1a1a1a;
-            z-index: 10;
+        .sugar-bar { 
+            width: 20vw; 
+            height: 2vw; 
+            background: #333; 
+            border-radius: 5px; 
+            overflow: hidden; 
         }
-        
-        .menu-title {
-            font-size: 2em; /* Reduced for mobile */
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 15px;
-            color: #ffd700;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        .sugar-fill { 
+            height: 100%; 
+            background: #ff6b6b; 
+            transition: width 0.3s; 
         }
-        
-        .menu-subtitle {
-            font-size: 1em;
-            margin-bottom: 20px;
-            color: #ccc;
+        .queue-container { 
+            display: flex; 
+            justify-content: center; 
+            gap: 0.5vw; 
+            padding: 0.5vw; 
+            background: rgba(0,0,0,0.7); 
+            border-radius: 10px; 
         }
-        
-        .menu-button {
-            padding: 10px 30px; /* Smaller buttons */
-            font-size: 1em;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 10px;
-            transition: all 0.3s;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        .queue-bubble { 
+            width: 3vw; 
+            height: 3vw; 
+            border-radius: 50%; 
+            border: 1px solid #fff; 
         }
-        
-        .menu-button:hover {
-            background: #45a049;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 8px rgba(0,0,0,0.4);
+        .quote-box { 
+            text-align: center; 
+            font-size: 2.5vw; 
+            color: #ffd700; 
+            background: rgba(0,0,0,0.7); 
+            padding: 1vw; 
+            margin: 1vw; 
+            border-radius: 5px; 
         }
-        
-        .menu-button:active {
-            transform: translateY(0);
+        .shop-item, .investment-item { 
+            background: rgba(255,255,255,0.1); 
+            padding: 1vw; 
+            margin: 1vw; 
+            border-radius: 5px; 
         }
-        
-        .game-screen {
-            width: 100%;
-            height: 100%;
-            position: relative;
-            display: none;
-        }
-        
-        .game-screen.active {
-            display: block;
-        }
-        
-        /* Decade-specific visual themes */
-        .decade-border {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            border: 10px solid #666; /* Thinner border */
-            pointer-events: none;
-        }
-        
-        .decade-1950s {
-            border-color: #666;
-            background: repeating-linear-gradient(45deg, #333, #333 10px, #444 10px, #444 20px);
-            font-family: 'Courier New', Courier, monospace;
-        }
-        
-        .decade-1960s { 
-            border-color: #ff6b6b;
-            background: repeating-linear-gradient(45deg, #ff6b6b, #ff6b6b 10px, #feca57 10px, #feca57 20px);
-            font-family: 'Bubblegum Sans', cursive;
-        }
-        
-        .decade-1970s { 
-            border-color: #8b4513;
-            background: repeating-linear-gradient(45deg, #d2691e, #d2691e 10px, #ff8c00 10px, #ff8c00 20px);
-            font-family: 'Disco', sans-serif;
-        }
-        
-        .decade-1980s { 
-            border-color: #ff00ff;
-            background: repeating-linear-gradient(45deg, #ff00ff, #ff00ff 10px, #00ffff 10px, #00ffff 20px);
-            font-family: 'OCR-A', monospace;
-        }
-        
-        .decade-1990s { 
-            border-color: #0066cc;
-            background: repeating-linear-gradient(45deg, #0066cc, #0066cc 10px, #ffcc00 10px, #ffcc00 20px);
-            font-family: 'Comic Sans MS', cursive;
-        }
-        
-        .decade-2000s { 
-            border-color: #4285f4;
-            background: linear-gradient(135deg, #4285f4 0%, #34a853 50%, #fbbc05 100%);
-            font-family: 'Helvetica', Arial, sans-serif;
-        }
-        
-        .decade-2010s { 
-            border-color: #f0f0f0;
-            background: #fff;
-            font-family: 'Roboto', sans-serif;
-        }
-        
-        .decade-2020s { 
-            border-color: #6366f1;
-            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
-            font-family: 'Inter', sans-serif;
-        }
-        
-        #gameCanvas {
-            position: absolute;
-            top: 40px; /* Space for year and quote */
-            left: 10px;
-            right: 10px;
-            bottom: 60px; /* Reduced for smaller UI bar */
-            overflow: hidden;
-            cursor: crosshair;
-            background: rgba(0,0,0,0.1);
-        }
-        
-        .game-ui {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            right: 10px;
-            height: 50px; /* Reduced height */
-            background: rgba(0,0,0,0.8);
-            border-radius: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 5px 10px;
-        }
-        
-        .stat-display {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            flex: 1;
-        }
-        
-        .stat-label {
-            font-size: 0.7em; /* Smaller font */
-            color: #ccc;
-        }
-        
-        .stat-value {
-            font-size: 1em;
-            font-weight: bold;
-            color: #ffd700;
-        }
-        
-        .sugar-bar {
-            width: 100px; /* Smaller sugar bar */
-            height: 15px;
-            background: #333;
-            border-radius: 8px;
-            overflow: hidden;
-            border: 1px solid #666;
-        }
-        
-        .sugar-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #ff6b6b 0%, #ff8e53 100%);
-            transition: width 0.3s;
-        }
-        
-        .quote-box {
-            position: absolute;
-            top: 10px; /* Moved to top */
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80%;
-            background: rgba(0,0,0,0.7); /* Semi-transparent */
-            border-radius: 5px;
-            padding: 5px;
-            font-size: 0.8em;
-            color: #ffd700;
-            text-align: center;
-            min-height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .shop-screen, .investment-screen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.95);
-            display: none;
-            flex-direction: column;
-            padding: 10px;
-            overflow-y: auto;
-        }
-        
-        .shop-screen.active, .investment-screen.active {
-            display: flex;
-        }
-        
-        .shop-header, .investment-header {
-            font-size: 1.5em; /* Smaller for mobile */
-            color: #ffd700;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-        
-        .shop-items, .investment-tabs {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Smaller items */
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        
-        .shop-item, .stock-item, .subsidiary-item {
-            background: rgba(255,255,255,0.1);
-            border-radius: 8px;
-            padding: 10px;
-            border: 1px solid #444;
-            transition: all 0.3s;
-        }
-        
-        .shop-item:hover, .stock-item:hover, .subsidiary-item:hover {
-            border-color: #ffd700;
-            transform: translateY(-2px);
-        }
-        
-        .shop-item-name, .stock-name, .subsidiary-name {
-            font-size: 1em;
-            font-weight: bold;
-            color: #ffd700;
-            margin-bottom: 5px;
-        }
-        
-        .shop-item-desc, .stock-info, .subsidiary-info {
-            font-size: 0.8em;
-            color: #ccc;
-            margin-bottom: 5px;
-        }
-        
-        .shop-item-price, .stock-price, .subsidiary-price {
-            font-size: 0.9em;
-            color: #4CAF50;
-            margin-bottom: 5px;
-        }
-        
-        .shop-buy-button, .stock-button, .subsidiary-buy-button {
-            width: 100%;
-            padding: 6px;
-            font-size: 0.9em;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .shop-buy-button:hover:not(:disabled), .stock-button:hover:not(:disabled), .subsidiary-buy-button:hover:not(:disabled) {
-            background: #45a049;
-        }
-        
-        .shop-buy-button:disabled, .stock-button:disabled, .subsidiary-buy-button:disabled {
-            background: #666;
-            cursor: not-allowed;
-        }
-        
-        .stock-button.sell {
-            background: #f44336;
-        }
-        
-        .stock-button.sell:hover:not(:disabled) {
-            background: #d32f2f;
-        }
-        
-        .continue-button {
-            padding: 10px 30px;
-            font-size: 1em;
-            background: #2196F3;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 10px auto;
-            display: block;
-        }
-        
-        .powerup-selector {
-            position: absolute;
-            bottom: 70px; /* Above game UI */
-            right: 10px;
-            display: flex;
-            gap: 5px;
-        }
-        
-        .powerup-button {
-            padding: 4px 8px;
-            font-size: 0.8em;
-            background: #2196F3;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-        
-        .cannon {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 24px;
-            height: 24px;
-            background: #666;
-            border-radius: 50%;
-            border: 3px solid #888;
-            z-index: 5;
-            pointer-events: none;
-        }
-        
-        .cannon-hitbox {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 32px; /* Larger touch area */
-            height: 32px;
-            z-index: 10;
-        }
-        
-        .cannon-barrel {
-            position: absolute;
-            bottom: 12px;
-            left: 50%;
-            transform-origin: bottom center;
-            width: 6px;
-            height: 18px;
-            background: #888;
-            margin-left: -3px;
-            pointer-events: none;
-        }
-        
-        .bubble {
-            position: absolute;
-            width: 20px; /* Increased for touch */
-            height: 20px;
-            border-radius: 50%;
-            border: 1px solid rgba(255,255,255,0.3);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            transition: left 0.1s, top 0.1s;
-        }
-        
-        .bubble.popping {
-            animation: pop 0.3s ease-out forwards;
-        }
-        
-        @keyframes pop {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(0); opacity: 0; }
-        }
-        
-        .bubble-queue {
-            position: absolute;
-            bottom: 5px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 3px; /* Smaller gap */
-            align-items: center;
-            background: rgba(0,0,0,0.7);
-            padding: 3px 6px; /* Less padding */
-            border-radius: 15px;
-        }
-        
-        .queue-bubble {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            border: 1px solid rgba(255,255,255,0.3);
-            transition: all 0.3s;
-        }
-        
-        .queue-bubble:first-child {
-            border-color: #ffd700;
-            box-shadow: 0 0 8px rgba(255,215,0,0.5);
-        }
-        
-        .collectable {
-            position: absolute;
-            width: 12px;
-            height: 12px;
-            animation: fall 2s linear;
-        }
-        
-        @keyframes fall {
-            from { transform: translateY(0); }
-            to { transform: translateY(100vh); } /* Use viewport height */
-        }
-        
-        .coin {
-            background: #ffd700;
-            border-radius: 50%;
-            box-shadow: 0 0 8px rgba(255,215,0,0.5);
-        }
-        
-        .sweet {
-            background: #ff69b4;
-            border-radius: 5px;
-        }
-        
-        .book {
-            background: #8b4513;
-            border-radius: 3px;
-        }
-        
-        .trajectory-line {
-            position: absolute;
-            height: 2px; /* Thinner for clarity */
-            background: repeating-linear-gradient(
-                to right,
-                #ffd700,
-                #ffd700 8px,
-                transparent 8px,
-                transparent 12px
-            );
-            transform-origin: left center;
-            pointer-events: none;
-            opacity: 0.9;
-        }
+        .item-name { font-size: 3vw; color: #ffd700; }
+        .item-desc { font-size: 2vw; color: #ccc; }
+        .item-price { font-size: 2.5vw; color: #4CAF50; }
+
+        /* Decade Themes */
+        .theme-1950s { background: linear-gradient(135deg, #666, #999); font-family: 'Courier New', monospace; }
+        .theme-1960s { background: linear-gradient(135deg, #ff6b6b, #feca57); font-family: 'Bubblegum Sans', cursive; }
+        .theme-1970s { background: linear-gradient(135deg, #d2691e, #ff8c00); }
+        .theme-1980s { background: linear-gradient(135deg, #ff00ff, #00ffff); font-family: 'OCR-A', monospace; }
+        .theme-1990s { background: linear-gradient(135deg, #0066cc, #ffcc00); font-family: 'Comic Sans MS', cursive; }
+        .theme-2000s { background: linear-gradient(135deg, #4285f4, #34a853); }
+        .theme-2010s { background: linear-gradient(135deg, #f0f0f0, #fff); }
+        .theme-2020s { background: linear-gradient(135deg, #6366f1, #ec4899); font-family: 'Inter', sans-serif; }
     </style>
 </head>
 <body>
-    <div id="root">
-        <div style="text-align: center; padding: 50px;">
-            <h2>Loading Game...</h2>
-        </div>
-    </div>
-    
-    <script crossorigin src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    
-    <script type="text/babel">
-        const { useState, useEffect, useRef, useCallback } = React;
-        
-        // Game quotes (abridged)
-        const levelStartQuotes = [
+    <div id="game"></div>
+    <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+    <script>
+        const { useState, useEffect, useRef } = React;
+
+        // Data
+        const quotes = [
             "The stock market is a device for transferring money from the impatient to the patient.",
             "Price is what you pay. Value is what you get.",
-            "Our favorite holding period is forever.",
-            // ... (full list in InvestmentQuotes.txt)
+            "Our favorite holding period is forever."
         ];
-        
-        const powerupQuotes = {
-            munger: ["Invert, always invert.", "Show me the incentive and I will show you the outcome."],
-            graham: ["In the short run, the market is a voting machine...", "The investor's chief problem is likely to be himself."]
-        };
-        
-        const bookFacts = [
-            "Compound interest is the eighth wonder of the world.",
-            "Risk comes from not knowing what you're doing.",
-            // ... (full list in InvestmentQuotes.txt)
-        ];
-        
-        // Sound effects (placeholders)
-        const sounds = {
-            pop: "data:audio/wav;base64,...",
-            shoot: "data:audio/wav;base64,...",
-            bomb: "data:audio/wav;base64,...",
-            bounce: "data:audio/wav;base64,...",
-            shimmer: "data:audio/wav;base64,...",
-            collect: "data:audio/wav;base64,...",
-            levelComplete: "data:audio/wav;base64,..."
-        };
-        
-        // Stock and subsidiary data (abridged for brevity)
-        const stockData = {
-            BRK: { name: "Berkshire Hathaway", startYear: 1965, bookCost: 20, prices: { 1965: 18, 1970: 42, /* ... */ 2025: 795000 } },
-            DIS: { name: "Disney", startYear: 1957, bookCost: 30, prices: { 1963: 0.067, /* ... */ 2025: 92.49 } },
-            KO: { name: "Coca-Cola", startYear: 1919, bookCost: 40, unlockedBy: "Buy 5 Cokes from store", prices: { 1963: 0.0667, /* ... */ 2025: 92.49 } },
-            AXP: { name: "American Express", startYear: 1958, bookCost: 60, prices: { 1972: 10, /* ... */ 2025: 110 } },
-            BAC: { name: "Bank of America", startYear: 1956, bookCost: 80, prices: { 1985: 1.8605, /* ... */ 2025: 43.20 } },
-            AAPL: { name: "Apple", startYear: 1980, bookCost: 150, unlockedBy: "Ted and Todd Recruited", prices: { 1981: 0.076, /* ... */ 2025: 202.52 } }
-        };
-        
-        const subsidiaryData = {
-            SEES: { name: "See's Candy", bookCost: 25, cashReturn: 100, unlockedBy: "Charlie Munger Partnership" },
-            GEICO: { name: "GEICO", bookCost: 50, cashReturn: 200, unlockedBy: "The Intelligent Investor" },
-            BNSF: { name: "BNSF Railway", bookCost: 100, cashReturn: 300, unlockedBy: "Poor Charlie's Almanack" },
-            DURACELL: { name: "Duracell", bookCost: 80, cashReturn: 250, unlockedBy: "Essays of Warren Buffett" },
-            DAIRYQUEEN: { name: "Dairy Queen", bookCost: 40, cashReturn: 150, unlockedBy: "Common Stocks and Uncommon Profits" },
-            FRUIT: { name: "Fruit of the Loom", bookCost: 60, cashReturn: 180, unlockedBy: "The Little Book of Common Sense Investing" },
-            GILLETTE: { name: "Gillette", bookCost: 70, cashReturn: 220, unlockedBy: "The Intelligent Investor" },
-            NFM: { name: "Nebraska Furniture Mart", bookCost: 30, cashReturn: 120, unlockedBy: null }
-        };
-        
         const bubbleColors = {
-            '1951-1960': ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#ff6b9d'],
-            '1961-1970': ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#a29bfe'],
-            '1971-1990': ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#a29bfe', '#55efc4'],
+            '1951-1960': ['#ff6b6b', '#4ecdc4', '#45b7d1'],
+            '1961-1970': ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24'],
+            '1971-1990': ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#a29bfe'],
             '1991-2000': ['#ff6b6b', '#4ecdc4', '#45b7d1'],
-            '2001-2010': ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#a29bfe'],
-            '2011-2020': ['#ff6b6b', '#45b7d1', '#f9ca24', '#a29bfe', '#55efc4', '#fd79a8'],
-            '2021-2025': ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#a29bfe', '#55efc4', '#fd79a8', '#00b894']
+            '2001-2010': ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24'],
+            '2011-2020': ['#ff6b6b', '#45b7d1', '#f9ca24', '#a29bfe'],
+            '2021-2025': ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#a29bfe']
         };
-        
+        const stockData = {
+            BRK: { name: "Berkshire Hathaway", startYear: 1965, bookCost: 20, prices: { 1965: 18, 2025: 795000 } },
+            KO: { name: "Coca-Cola", startYear: 1919, bookCost: 40, prices: { 1963: 0.0667, 2025: 92.49 } }
+        };
+        const subsidiaryData = {
+            SEES: { name: "See's Candy", bookCost: 25, cashReturn: 100 },
+            GEICO: { name: "GEICO", bookCost: 50, cashReturn: 200 }
+        };
+
         function Game() {
             const [gameState, setGameState] = useState('menu');
             const [year, setYear] = useState(1951);
-            const [lives, setLives] = useState(3);
-            const [coins, setCoins] = useState(0);
-            const [sugar, setSugar] = useState(30);
-            const [maxSugar, setMaxSugar] = useState(30);
+            const [coins, setCoins] = useState(100);
+            const [sugar, setSugar] = useState(100);
+            const [maxSugar, setMaxSugar] = useState(100);
             const [books, setBooks] = useState(0);
             const [portfolio, setPortfolio] = useState({ stocks: {}, subsidiaries: {} });
-            const [upgrades, setUpgrades] = useState({
-                sugarMax: 30,
-                startingBubbles: 10,
-                seesCandyLevel: 0,
-                mungerPartner: false,
-                ditchCigar: false,
-                removeBankers: false,
-                tedTodd: false,
-                mungerDietCoke: 0
-            });
-            const [unlocks, setUnlocks] = useState({ stocks: ['BRK'], items: [] });
-            const [statistics, setStatistics] = useState({
-                totalBubblesPopped: 0,
-                totalCoinsEarned: 0,
-                totalInvestmentGains: 0,
-                bestYear: { year: 1951, score: 0 }
-            });
-            const [currentQuote, setCurrentQuote] = useState('Welcome to Warren Buffett\'s Bubble Pop Adventure!');
             const [bubbles, setBubbles] = useState([]);
-            const [cannonAngle, setCannonAngle] = useState(0);
             const [bubbleQueue, setBubbleQueue] = useState([]);
-            const [scrollSpeed, setScrollSpeed] = useState(0.5);
-            const [collectables, setCollectables] = useState([]);
-            const [activePowerup, setActivePowerup] = useState(null);
-            const [cokePurchases, setCokePurchases] = useState(0);
-            const [lastTouchTime, setLastTouchTime] = useState(0);
-            
-            const gameRef = useRef(null);
-            const animationRef = useRef(null);
-            const lastTimeRef = useRef(0);
-            
-            // Grid constants
-            const GRID_WIDTH = 20; // Matches larger bubble size
+            const [cannonAngle, setCannonAngle] = useState(0);
+            const [currentQuote, setCurrentQuote] = useState(quotes[0]);
+            const canvasRef = useRef(null);
+            const sceneRef = useRef(null);
+            const cameraRef = useRef(null);
+            const rendererRef = useRef(null);
+            const lastTouchTime = useRef(0);
+
+            // Game Constants
+            const GRID_WIDTH = 20;
             const GRID_HEIGHT = 20 * Math.sqrt(3) / 2;
-            const ROW_OFFSET = GRID_WIDTH / 2;
             const MAX_ROWS = 6;
-            const MAX_COLS = 16; // Reduced for mobile
-            
-            const saveGame = useCallback(() => {
-                const saveData = {
-                    version: "1.0",
-                    currentYear: year,
-                    lives,
-                    coins,
-                    portfolio,
-                    upgrades,
-                    unlocks,
-                    statistics
-                };
-                localStorage.setItem('bubbleBuffettSave', JSON.stringify(saveData));
-            }, [year, lives, coins, portfolio, upgrades, unlocks, statistics]);
-            
-            const loadGame = useCallback(() => {
-                const saved = localStorage.getItem('bubbleBuffettSave');
-                if (saved) {
-                    const data = JSON.parse(saved);
-                    if (data.version === "1.0") {
-                        setYear(data.currentYear);
-                        setLives(data.lives);
-                        setCoins(data.coins);
-                        setPortfolio(data.portfolio);
-                        setUpgrades(data.upgrades);
-                        setUnlocks(data.unlocks);
-                        setStatistics(data.statistics);
-                        setMaxSugar(data.upgrades.sugarMax);
-                        setSugar(Math.min(data.upgrades.sugarMax, 30));
-                    }
-                }
-            }, []);
-            
+            const MAX_COLS = 10;
+            const BUBBLE_SIZE = 20;
+
+            // Initialize Three.js
             useEffect(() => {
-                loadGame();
-            }, [loadGame]);
-            
-            const getDecade = (year) => {
-                if (year <= 1959) return '1950s';
-                if (year <= 1969) return '1960s';
-                if (year <= 1979) return '1970s';
-                if (year <= 1989) return '1980s';
-                if (year <= 1999) return '1990s';
-                if (year <= 2009) return '2000s';
-                if (year <= 2019) return '2010s';
-                return '2020s';
-            };
-            
-            const getBubbleColorCount = (year) => {
-                const periods = {
-                    '1951-1960': [3, 4, 5],
-                    '1961-1970': [4, 5, 6],
-                    '1971-1990': [5, 6, 7],
-                    '1991-2000': [3, 4, 5],
-                    '2001-2010': [5, 6, 7],
-                    '2011-2020': [3, 7, 8],
-                    '2021-2025': [6, 8, 10]
+                const canvas = canvasRef.current;
+                const scene = new THREE.Scene();
+                const camera = new THREE.OrthographicCamera(0, canvas.clientWidth, canvas.clientHeight, 0, -1, 1);
+                const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+                renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+                sceneRef.current = scene;
+                cameraRef.current = camera;
+                rendererRef.current = renderer;
+
+                const resize = () => {
+                    const aspect = canvas.clientWidth / canvas.clientHeight;
+                    camera.left = 0;
+                    camera.right = canvas.clientWidth;
+                    camera.top = canvas.clientHeight;
+                    camera.bottom = 0;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
                 };
-                const period = Object.keys(periods).find(p => {
-                    const [start, end] = p.split('-').map(Number);
-                    return year >= start && year <= end;
-                });
-                const range = periods[period] || [3, 4, 5];
-                const decadeProgress = (year % 10) / 10;
-                return Math.floor(range[0] + (range[2] - range[0]) * decadeProgress);
-            };
-            
-            const getScrollSpeed = (year) => {
-                const speeds = {
-                    '1951-1960': 0.5,
-                    '1961-1970': 0.5,
-                    '1971-1990': 0.5,
-                    '1991-2000': 1.0,
-                    '2001-2010': 1.0,
-                    '2011-2020': 1.5,
-                    '2021-2025': 2.0
-                };
-                const period = Object.keys(speeds).find(p => {
-                    const [start, end] = p.split('-').map(Number);
-                    return year >= start && year <= end;
-                });
-                return speeds[period] || 0.5;
-            };
-            
-            const snapToGrid = (x, y) => {
-                const row = Math.round((y - 20) / GRID_HEIGHT);
-                const isEvenRow = row % 2 === 0;
-                const col = Math.round((x - 20 - (isEvenRow ? 0 : ROW_OFFSET)) / GRID_WIDTH);
-                return {
-                    x: col * GRID_WIDTH + 20 + (isEvenRow ? 0 : ROW_OFFSET),
-                    y: row * GRID_HEIGHT + 20,
-                    row,
-                    col
-                };
-            };
-            
-            const checkCollision = (x, y, bubbles) => {
-                if (y <= 20) return true;
-                return bubbles.some(b => !b.popping && !b.moving && 
-                    Math.hypot(x - b.x, y - b.y) < GRID_WIDTH - 2);
-            };
-            
-            const findConnectedBubbles = (startBubble, bubbles, color) => {
-                const connected = [startBubble];
-                const checked = new Set([startBubble.id]);
-                
-                while (connected.length > 0) {
-                    const current = connected.shift();
-                    bubbles.forEach(b => {
-                        if (!checked.has(b.id) && !b.popping && b.color === color) {
-                            const dx = Math.abs(b.x - current.x);
-                            const dy = Math.abs(b.y - current.y);
-                            if (dx <= GRID_WIDTH + 2 && dy <= GRID_HEIGHT + 2 &&
-                                Math.hypot(b.x - current.x, b.y - current.y) < GRID_WIDTH + 2) {
-                                connected.push(b);
-                                checked.add(b.id);
-                            }
-                        }
-                    });
-                }
-                
-                return checked.size >= 3 ? Array.from(checked).map(id => bubbles.find(b => b.id === id)) : [];
-            };
-            
+                window.addEventListener('resize', resize);
+                resize();
+
+                return () => window.removeEventListener('resize', resize);
+            }, []);
+
+            // Initialize Level
             const initLevel = () => {
-                setCurrentQuote(levelStartQuotes[Math.floor(Math.random() * levelStartQuotes.length)] || "Time to start investing!");
-                setScrollSpeed(getScrollSpeed(year));
+                setCurrentQuote(quotes[Math.floor(Math.random() * quotes.length)]);
                 setSugar(maxSugar);
-                
-                const colorCount = getBubbleColorCount(year);
                 const period = Object.keys(bubbleColors).find(p => {
                     const [start, end] = p.split('-').map(Number);
                     return year >= start && year <= end;
                 });
-                const colors = bubbleColors[period].slice(0, colorCount);
-                
+                const colors = bubbleColors[period];
                 const newBubbles = [];
                 for (let row = 0; row < MAX_ROWS; row++) {
-                    const fillPercentage = row === 0 ? 1.0 : row === MAX_ROWS - 1 ? 0.4 : 1.0 - (row / (MAX_ROWS - 1)) * 0.6;
-                    const isEvenRow = row % 2 === 0;
                     for (let col = 0; col < MAX_COLS; col++) {
-                        if (Math.random() < fillPercentage) {
+                        if (Math.random() < 0.6) {
                             newBubbles.push({
-                                id: `init-${row}-${col}`,
-                                x: col * GRID_WIDTH + 20 + (isEvenRow ? 0 : ROW_OFFSET),
-                                y: row * GRID_HEIGHT + 20,
-                                row,
-                                col,
+                                id: `bubble-${row}-${col}`,
+                                x: col * GRID_WIDTH + (row % 2 ? GRID_WIDTH / 2 : 0),
+                                y: row * GRID_HEIGHT,
                                 color: colors[Math.floor(Math.random() * colors.length)],
-                                popping: false
+                                mesh: null
                             });
                         }
                     }
                 }
-                
-                if (newBubbles.length > 80) {
-                    newBubbles.splice(80); // Cap at 80 bubbles
-                }
-                
                 setBubbles(newBubbles);
-                
-                const queue = [];
-                const extraBubbles = upgrades.removeBankers ? 5 : 0;
-                for (let i = 0; i < upgrades.startingBubbles + extraBubbles; i++) {
-                    queue.push(colors[Math.floor(Math.random() * colors.length)]);
-                }
-                setBubbleQueue(queue);
-                
-                let subsidiaryIncome = 0;
-                Object.entries(portfolio.subsidiaries).forEach(([id, data]) => {
-                    if (data.owned) {
-                        subsidiaryIncome += subsidiaryData[id].cashReturn;
+                setBubbleQueue([colors[Math.floor(Math.random() * colors.length)], colors[Math.floor(Math.random() * colors.length)]]);
+            };
+
+            // Game Loop
+            useEffect(() => {
+                if (gameState !== 'playing') return;
+                const scene = sceneRef.current;
+                const renderer = rendererRef.current;
+                const camera = cameraRef.current;
+
+                bubbles.forEach(bubble => {
+                    if (!bubble.mesh) {
+                        const geometry = new THREE.CircleGeometry(BUBBLE_SIZE / 2, 32);
+                        const material = new THREE.MeshBasicMaterial({ color: bubble.color });
+                        const mesh = new THREE.Mesh(geometry, material);
+                        mesh.position.set(bubble.x + BUBBLE_SIZE / 2, bubble.y + BUBBLE_SIZE / 2, 0);
+                        scene.add(mesh);
+                        bubble.mesh = mesh;
                     }
                 });
-                setCoins(prev => prev + subsidiaryIncome);
-                
-                saveGame();
-                new Audio(sounds.levelComplete).play();
-            };
-            
-            const startGame = () => {
-                try {
-                    setGameState('playing');
-                    initLevel();
-                } catch (error) {
-                    alert('Error starting game: ' + error.message);
-                }
-            };
-            
-            const popBubble = (bubble, popCount = 1) => {
-                setBubbles(prev => prev.map(b => 
-                    b.id === bubble.id ? { ...b, popping: true } : b
-                ));
-                
-                setTimeout(() => {
-                    setBubbles(prev => prev.filter(b => b.id !== bubble.id));
-                    setStatistics(prev => ({
-                        ...prev,
-                        totalBubblesPopped: prev.totalBubblesPopped + 1
-                    }));
-                    new Audio(sounds.pop).play();
-                }, 300);
-                
-                const dropChance = Math.min(1, 0.3 + (popCount - 1) * 0.1);
-                const drops = [];
-                if (Math.random() < dropChance) {
-                    drops.push({
-                        type: 'coin',
-                        x: bubble.x,
-                        y: bubble.y,
-                        id: Math.random()
+
+                const animate = () => {
+                    setSugar(prev => {
+                        const newSugar = Math.max(0, prev - 0.05);
+                        if (newSugar <= 0) setGameState('shop');
+                        return newSugar;
                     });
-                }
-                if (Math.random() < 0.15) {
-                    drops.push({
-                        type: 'sweet',
-                        x: bubble.x,
-                        y: bubble.y,
-                        id: Math.random()
-                    });
-                }
-                if (Math.random() < 0.05) {
-                    drops.push({
-                        type: 'book',
-                        x: bubble.x,
-                        y: bubble.y,
-                        id: Math.random()
-                    });
-                    setCurrentQuote(bookFacts[Math.floor(Math.random() * bookFacts.length)]);
-                }
-                
-                setCollectables(prev => [...prev, ...drops]);
-                
-                setTimeout(() => {
-                    drops.forEach(drop => {
-                        if (drop.type === 'coin') {
-                            const coinValue = Math.ceil(year / 10);
-                            setCoins(prev => prev + coinValue);
-                            setStatistics(prev => ({
-                                ...prev,
-                                totalCoinsEarned: prev.totalCoinsEarned + coinValue
-                            }));
-                            new Audio(sounds.collect).play();
-                        }
-                        if (drop.type === 'sweet') setSugar(prev => Math.min(prev + 10, maxSugar));
-                        if (drop.type === 'book') setBooks(prev => prev + 1);
-                    });
-                    setCollectables(prev => prev.filter(c => !drops.find(d => d.id === c.id)));
-                }, 2000);
-            };
-            
-            const endLevel = () => {
+                    renderer.render(scene, camera);
+                    requestAnimationFrame(animate);
+                };
+                const id = requestAnimationFrame(animate);
+                return () => cancelAnimationFrame(id);
+            }, [gameState, bubbles]);
+
+            // Handle Input
+            const handleInput = (e) => {
                 if (gameState !== 'playing') return;
-                setGameState('shop');
-                saveGame();
-            };
-            
-            const handlePointerMove = (e) => {
-                if (gameState !== 'playing' || !gameRef.current) return;
-                
-                const rect = gameRef.current.getBoundingClientRect();
+                const now = Date.now();
+                if (now - lastTouchTime.current < 200) return;
+                lastTouchTime.current = now;
+
+                const rect = canvasRef.current.getBoundingClientRect();
                 const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
                 const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-                const cannonX = rect.width / 2;
-                const cannonY = rect.height - 60;
-                
-                const angle = Math.atan2(y - cannonY, x - cannonX);
-                const degrees = angle * 180 / Math.PI - 90;
-                const clamped = Math.max(-89, Math.min(89, degrees));
-                
-                setCannonAngle(clamped);
-            };
-            
-            const handleShoot = (e) => {
-                if (gameState !== 'playing' || bubbleQueue.length === 0) return;
-                
-                const now = Date.now();
-                if (now - lastTouchTime < 200) return; // Debounce touch
-                setLastTouchTime(now);
-                
-                e.preventDefault();
-                
-                const color = bubbleQueue[0];
-                let effect = null;
-                if (activePowerup) {
-                    effect = activePowerup;
-                    setActivePowerup(null);
-                    setCurrentQuote(powerupQuotes[effect.type][Math.floor(Math.random() * powerupQuotes[effect.type].length)]);
+                const angle = Math.atan2(y - rect.height, x - rect.width / 2) * 180 / Math.PI + 90;
+                setCannonAngle(Math.max(-80, Math.min(80, angle)));
+
+                if (bubbleQueue.length > 0) {
+                    const newBubble = {
+                        id: `shot-${Date.now()}`,
+                        x: rect.width / 2,
+                        y: rect.height - BUBBLE_SIZE,
+                        vx: Math.cos((angle - 90) * Math.PI / 180) * 5,
+                        vy: Math.sin((angle - 90) * Math.PI / 180) * 5,
+                        color: bubbleQueue[0],
+                        moving: true,
+                        mesh: null
+                    };
+                    setBubbles(prev => [...prev, newBubble]);
+                    setBubbleQueue(prev => prev.slice(1).concat([bubbleColors[Object.keys(bubbleColors).find(p => {
+                        const [start, end] = p.split('-').map(Number);
+                        return year >= start && year <= end;
+                    })][Math.floor(Math.random() * bubbleColors[Object.keys(bubbleColors)[0]].length)]]));
+                    setSugar(prev => Math.max(0, prev - 10));
                 }
-                
-                setBubbleQueue(prev => {
-                    const newQueue = prev.slice(1);
-                    if (newQueue.length < upgrades.startingBubbles) {
-                        const colorCount = getBubbleColorCount(year);
-                        const period = Object.keys(bubbleColors).find(p => {
-                            const [start, end] = p.split('-').map(Number);
-                            return year >= start && year <= end;
-                        });
-                        const colors = bubbleColors[period].slice(0, colorCount);
-                        newQueue.push(colors[Math.floor(Math.random() * colors.length)]);
-                    }
-                    return newQueue;
-                });
-                
-                const rect = gameRef.current.getBoundingClientRect();
-                const angleRad = (cannonAngle + 90) * Math.PI / 180;
-                const speed = 10;
-                
-                const newBubble = {
-                    id: `shot-${Date.now()}-${Math.random()}`,
-                    x: rect.width / 2,
-                    y: rect.height - 60,
-                    vx: Math.cos(angleRad) * speed,
-                    vy: Math.sin(angleRad) * speed,
-                    color,
-                    moving: true,
-                    effect
-                };
-                
-                setBubbles(prev => [...prev, newBubble]);
-                new Audio(sounds.shoot).play();
             };
-            
-            useEffect(() => {
-                if (gameState !== 'playing') return;
-                
-                const gameLoop = (timestamp) => {
-                    const deltaTime = timestamp - lastTimeRef.current;
-                    lastTimeRef.current = timestamp;
-                    
-                    if (deltaTime > 0) {
-                        setSugar(prev => {
-                            const newSugar = Math.max(0, prev - deltaTime / 1000);
-                            if (newSugar === 0 || bubbleQueue.length === 0) {
-                                endLevel();
-                            }
-                            return newSugar;
-                        });
-                    }
-                    
-                    setBubbles(prev => {
-                        const colorCount = getBubbleColorCount(year);
-                        const period = Object.keys(bubbleColors).find(p => {
-                            const [start, end] = p.split('-').map(Number);
-                            return year >= start && year <= end;
-                        });
-                        const colors = bubbleColors[period].slice(0, colorCount);
-                        const rect = gameRef.current.getBoundingClientRect();
-                        
-                        let updated = prev.map(bubble => {
-                            if (bubble.moving) {
-                                let newX = bubble.x + bubble.vx * (deltaTime / 16);
-                                let newY = bubble.y + bubble.vy * (deltaTime / 16);
-                                
-                                if (newX <= 20 || newX >= rect.width - 20) {
-                                    bubble.vx = -bubble.vx;
-                                    newX = Math.max(20, Math.min(rect.width - 20, newX));
-                                    new Audio(sounds.bounce).play();
-                                }
-                                
-                                if (checkCollision(newX, newY, prev)) {
-                                    const snapped = snapToGrid(newX, newY);
-                                    let connected = [];
-                                    if (bubble.effect?.type === 'explosive') {
-                                        connected = prev.filter(b => 
-                                            !b.popping && 
-                                            Math.abs(b.row - snapped.row) <= 1 &&
-                                            Math.abs(b.col - snapped.col) <= 1
-                                        );
-                                        new Audio(sounds.bomb).play();
-                                    } else if (bubble.effect?.type === 'converter') {
-                                        connected = prev.filter(b => 
-                                            !b.popping && 
-                                            Math.hypot(b.x - snapped.x, b.y - snapped.y) < GRID_WIDTH + 2
-                                        ).map(b => ({ ...b, color: '#999' }));
-                                        new Audio(sounds.shimmer).play();
-                                    } else {
-                                        connected = findConnectedBubbles(
-                                            { ...bubble, x: snapped.x, y: snapped.y, id: bubble.id, row: snapped.row, col: snapped.col },
-                                            prev,
-                                            bubble.color
-                                        );
-                                    }
-                                    
-                                    if (connected.length >= 3 || bubble.effect) {
-                                        const popCount = connected.length;
-                                        connected.forEach(b => popBubble(b, popCount));
-                                        return null;
-                                    }
-                                    return { ...bubble, x: snapped.x, y: snapped.y, row: snapped.row, col: snapped.col, moving: false, effect: null };
-                                }
-                                
-                                return { ...bubble, x: newX, y: newY };
-                            }
-                            
-                            return { ...bubble, x: bubble.x + scrollSpeed * (deltaTime / 16) };
-                        }).filter(Boolean);
-                        
-                        updated = updated.filter(bubble => bubble.x < rect.width - 20);
-                        
-                        const topRowBubbles = updated.filter(b => b.row === 0);
-                        if (topRowBubbles.length < MAX_COLS) {
-                            const isEvenRow = 0 % 2 === 0;
-                            const spawnX = (topRowBubbles.length * GRID_WIDTH) + 20 + (isEvenRow ? 0 : ROW_OFFSET);
-                            updated.push({
-                                id: `top-new-${Date.now()}-${Math.random()}`,
-                                x: spawnX,
-                                y: 20,
-                                row: 0,
-                                col: topRowBubbles.length,
-                                color: colors[Math.floor(Math.random() * colors.length)],
-                                popping: false
-                            });
-                        }
-                        
-                        return updated.slice(0, 80); // Cap at 80 bubbles
-                    });
-                    
-                    animationRef.current = requestAnimationFrame(gameLoop);
-                };
-                
-                animationRef.current = requestAnimationFrame(gameLoop);
-                
-                return () => {
-                    if (animationRef.current) {
-                        cancelAnimationFrame(animationRef.current);
-                    }
-                };
-            }, [gameState, scrollSpeed, year]);
-            
-            useEffect(() => {
-                const handleKeyPress = (e) => {
-                    if (gameState !== 'playing') return;
-                    if (e.code === 'Space' && bubbleQueue.length > 0) {
-                        e.preventDefault();
-                        handleShoot(e);
-                    }
-                };
-                
-                window.addEventListener('keydown', handleKeyPress);
-                return () => window.removeEventListener('keydown', handleKeyPress);
-            }, [gameState, bubbleQueue]);
-            
-            const shopItems = [
-                {
-                    id: 'sees-candy',
-                    name: "See's Candy",
-                    desc: "Increase max sugar by 20",
-                    basePrice: 100,
-                    priceMultiplier: 1.5,
-                    requires: upgrades.mungerPartner,
-                    action: () => {
-                        setMaxSugar(prev => prev + 20);
-                        setUpgrades(prev => ({ ...prev, seesCandyLevel: prev.seesCandyLevel + 1 }));
-                        saveGame();
-                    }
-                },
-                {
-                    id: 'coke',
-                    name: "Coke",
-                    desc: "Restore 20% sugar",
-                    basePrice: 50,
-                    priceMultiplier: 1.2,
-                    maxPurchases: 99,
-                    action: () => {
-                        setSugar(prev => Math.min(prev + maxSugar * 0.2, maxSugar));
-                        setCokePurchases(prev => prev + 1);
-                        if (cokePurchases + 1 >= 5) {
-                            setUnlocks(prev => ({ ...prev, stocks: [...prev.stocks, 'KO'] }));
-                        }
-                        saveGame();
-                    }
-                },
-                {
-                    id: 'mungers-lollapaloozas',
-                    name: "Munger's Lollapaloozas",
-                    desc: "Next shot destroys 3x3 area",
-                    price: 200,
-                    requires: upgrades.mungerPartner,
-                    action: () => {
-                        setActivePowerup({ type: 'munger', effect: 'explosive' });
-                    }
-                },
-                {
-                    id: 'grahams-nets',
-                    name: "Graham's Nets",
-                    desc: "Next shot turns hit bubbles grey",
-                    price: 300,
-                    requires: unlocks.items.includes('The Intelligent Investor'),
-                    action: () => {
-                        setActivePowerup({ type: 'graham', effect: 'converter' });
-                    }
-                },
-                {
-                    id: 'munger-partner',
-                    name: "Partner with Charlie",
-                    desc: "+1 starting bubble",
-                    price: 500,
-                    purchased: upgrades.mungerPartner,
-                    action: () => {
-                        setUpgrades(prev => ({ ...prev, mungerPartner: true, startingBubbles: prev.startingBubbles + 1 }));
-                        setPortfolio(prev => ({
-                            ...prev,
-                            subsidiaries: {
-                                ...prev.subsidiaries,
-                                SEES: { owned: true, booksSpent: 0 }
-                            }
-                        }));
-                        saveGame();
-                    }
-                },
-                {
-                    id: 'ditch-cigar',
-                    name: "Ditch the Cigar Butts",
-                    desc: "Better bubble colors distribution",
-                    price: 1000,
-                    purchased: upgrades.ditchCigar,
-                    requires: unlocks.items.includes('Poor Charlie\'s Almanack'),
-                    action: () => {
-                        setUpgrades(prev => ({ ...prev, ditchCigar: true }));
-                        saveGame();
-                    }
-                },
-                {
-                    id: 'remove-bankers',
-                    name: "Remove Investment Bankers",
-                    desc: "+5 explosive bubbles per level",
-                    price: 2000,
-                    purchased: upgrades.removeBankers,
-                    action: () => {
-                        setUpgrades(prev => ({ ...prev, removeBankers: true }));
-                        saveGame();
-                    }
-                },
-                {
-                    id: 'ted-todd',
-                    name: "Ted and Todd Recruited",
-                    desc: "+1 starting bubble, unlocks Apple",
-                    price: 5000,
-                    purchased: upgrades.tedTodd,
-                    action: () => {
-                        setUpgrades(prev => ({ ...prev, tedTodd: true, startingBubbles: prev.startingBubbles + 1 }));
-                        setUnlocks(prev => ({ ...prev, stocks: [...prev.stocks, 'AAPL'] }));
-                        saveGame();
-                    }
-                },
-                {
-                    id: 'mungers-diet-coke',
-                    name: "Munger's Diet Coke",
-                    desc: "+1 life",
-                    basePrice: 1000,
-                    priceMultiplier: 2.0,
-                    action: () => {
-                        setLives(prev => prev + 1);
-                        setUpgrades(prev => ({ ...prev, mungerDietCoke: prev.mungerDietCoke + 1 }));
-                        saveGame();
-                    }
-                },
-                {
-                    id: 'intelligent-investor',
-                    name: "The Intelligent Investor",
-                    desc: "Unlocks investments (50 book points)",
-                    price: 1000,
-                    bookValue: 50,
-                    purchased: unlocks.items.includes('The Intelligent Investor'),
-                    action: () => {
-                        setBooks(prev => prev + 50);
-                        setUnlocks(prev => ({ ...prev, items: [...prev.items, 'The Intelligent Investor'] }));
-                        saveGame();
-                    }
-                },
-                {
-                    id: 'common-stocks',
-                    name: "Common Stocks and Uncommon Profits",
-                    desc: "Unlocks investments (75 book points)",
-                    price: 1500,
-                    bookValue: 75,
-                    purchased: unlocks.items.includes('Common Stocks and Uncommon Profits'),
-                    action: () => {
-                        setBooks(prev => prev + 75);
-                        setUnlocks(prev => ({ ...prev, items: [...prev.items, 'Common Stocks and Uncommon Profits'] }));
-                        saveGame();
-                    }
-                },
-                {
-                    id: 'poor-charlies',
-                    name: "Poor Charlie's Almanack",
-                    desc: "Unlocks investments (100 book points)",
-                    price: 2000,
-                    bookValue: 100,
-                    purchased: unlocks.items.includes('Poor Charlie\'s Almanack'),
-                    action: () => {
-                        setBooks(prev => prev + 100);
-                        setUnlocks(prev => ({ ...prev, items: [...prev.items, 'Poor Charlie\'s Almanack'] }));
-                        saveGame();
-                    }
-                },
-                {
-                    id: 'common-sense',
-                    name: "The Little Book of Common Sense Investing",
-                    desc: "Unlocks investments (40 book points)",
-                    price: 800,
-                    bookValue: 40,
-                    purchased: unlocks.items.includes('The Little Book of Common Sense Investing'),
-                    action: () => {
-                        setBooks(prev => prev + 40);
-                        setUnlocks(prev => ({ ...prev, items: [...prev.items, 'The Little Book of Common Sense Investing'] }));
-                        saveGame();
-                    }
-                },
-                {
-                    id: 'essays-buffett',
-                    name: "Essays of Warren Buffett",
-                    desc: "Unlocks investments (100 book points)",
-                    price: 2500,
-                    bookValue: 100,
-                    purchased: unlocks.items.includes('Essays of Warren Buffett'),
-                    action: () => {
-                        setBooks(prev => prev + 100);
-                        setUnlocks(prev => ({ ...prev, items: [...prev.items, 'Essays of Warren Buffett'] }));
-                        saveGame();
-                    }
-                }
-            ];
-            
+
+            // Start Game
+            const startGame = () => {
+                setGameState('playing');
+                initLevel();
+            };
+
+            // Shop and Investment
             const buyItem = (item) => {
-                const price = item.basePrice ? Math.floor(item.basePrice * Math.pow(item.priceMultiplier, upgrades[item.id]?.level || 0)) : item.price;
-                if (coins >= price && (!item.purchased || item.maxPurchases) && (item.requires === undefined || item.requires)) {
-                    setCoins(prev => prev - price);
+                if (coins >= item.price) {
+                    setCoins(prev => prev - item.price);
                     item.action();
-                    new Audio(sounds.collect).play();
-                    saveGame();
                 }
             };
-            
-            const continueToInvestment = () => {
-                setGameState(year >= 1960 ? 'investment' : 'playing');
-                if (year < 1960) {
-                    continueToNextYear();
-                }
-            };
-            
-            const buyStock = (stockSymbol, percentage = 1) => {
-                const stock = stockData[stockSymbol];
-                const priceYears = Object.keys(stock.prices).map(Number).filter(y => y <= year);
-                const price = stock.prices[year] || stock.prices[Math.max(...priceYears)];
-                const amount = percentage === 'max' ? Math.floor(coins / price) : Math.floor((coins * percentage) / price);
-                
-                if (amount > 0 && coins >= price * amount && books >= stock.bookCost) {
-                    const cost = price * amount;
-                    setCoins(prev => prev - cost);
+
+            const buyStock = (symbol) => {
+                const stock = stockData[symbol];
+                const price = stock.prices[year] || stock.prices[Object.keys(stock.prices)[0]];
+                if (coins >= price && books >= stock.bookCost) {
+                    setCoins(prev => prev - price);
                     setBooks(prev => prev - stock.bookCost);
                     setPortfolio(prev => ({
                         ...prev,
-                        stocks: {
-                            ...prev.stocks,
-                            [stockSymbol]: {
-                                shares: (prev.stocks[stockSymbol]?.shares || 0) + amount,
-                                totalInvested: (prev.stocks[stockSymbol]?.totalInvested || 0) + cost
-                            }
-                        }
+                        stocks: { ...prev.stocks, [symbol]: (prev.stocks[symbol] || 0) + 1 }
                     }));
-                    setStatistics(prev => ({
-                        ...prev,
-                        totalInvestmentGains: prev.totalInvestmentGains + cost
-                    }));
-                    saveGame();
                 }
             };
-            
-            const sellStock = (stockSymbol, percentage = 1) => {
-                const stock = stockData[stockSymbol];
-                const priceYears = Object.keys(stock.prices).map(Number).filter(y => y <= year);
-                const price = stock.prices[year] || stock.prices[Math.max(...priceYears)];
-                const owned = portfolio.stocks[stockSymbol]?.shares || 0;
-                const amount = percentage === 'max' ? owned : Math.floor(owned * percentage);
-                
-                if (amount > 0 && owned >= amount) {
-                    const proceeds = price * amount;
-                    setCoins(prev => prev + proceeds);
-                    setPortfolio(prev => ({
-                        ...prev,
-                        stocks: {
-                            ...prev.stocks,
-                            [stockSymbol]: {
-                                shares: prev.stocks[stockSymbol].shares - amount,
-                                totalInvested: prev.stocks[stockSymbol].totalInvested
-                            }
-                        }
-                    }));
-                    setStatistics(prev => ({
-                        ...prev,
-                        totalInvestmentGains: prev.totalInvestmentGains + proceeds
-                    }));
-                    saveGame();
-                }
-            };
-            
-            const buySubsidiary = (subId) => {
-                const sub = subsidiaryData[subId];
-                if (books >= sub.bookCost && !portfolio.subsidiaries[subId]?.owned && (!sub.unlockedBy || unlocks.items.includes(sub.unlockedBy))) {
-                    setBooks(prev => prev - sub.bookCost);
-                    setPortfolio(prev => ({
-                        ...prev,
-                        subsidiaries: {
-                            ...prev.subsidiaries,
-                            [subId]: { owned: true, booksSpent: sub.bookCost }
-                        }
-                    }));
-                    saveGame();
-                }
-            };
-            
-            const continueToNextYear = () => {
-                const nextYear = year + 1;
-                if (nextYear > 2025) {
-                    setGameState('gameOver');
-                } else {
-                    setYear(nextYear);
-                    setStatistics(prev => ({
-                        ...prev,
-                        bestYear: prev.bestYear.score < coins ? { year: nextYear, score: coins } : prev.bestYear
-                    }));
+
+            const nextYear = () => {
+                setYear(prev => {
+                    const next = prev + 1;
+                    if (next > 2025) {
+                        setGameState('game-over');
+                        return prev;
+                    }
                     setGameState('playing');
                     initLevel();
-                }
+                    return next;
+                });
             };
-            
+
+            // Save Game
+            const saveGame = () => {
+                localStorage.setItem('bubbleBuffett', JSON.stringify({ year, coins, sugar, maxSugar, books, portfolio }));
+            };
+            useEffect(() => {
+                const saved = localStorage.getItem('bubbleBuffett');
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    setYear(data.year);
+                    setCoins(data.coins);
+                    setSugar(data.sugar);
+                    setMaxSugar(data.maxSugar);
+                    setBooks(data.books);
+                    setPortfolio(data.portfolio);
+                }
+            }, []);
+
             return (
-                <div className="game-container">
-                    {/* Main Menu */}
-                    {gameState === 'menu' && (
-                        <div className="menu-screen">
-                            <h1 className="menu-title">Warren Buffett's<br/>Bubble Pop Adventure</h1>
-                            <p className="menu-subtitle">An Investment Journey: 1951-2025</p>
-                            <button className="menu-button" onClick={startGame}>Start Game</button>
-                            <p style={{ marginTop: '10px', fontSize: '0.8em', opacity: 0.7 }}>
-                                Click Start Game to begin your journey!
-                            </p>
-                        </div>
-                    )}
-                    
-                    {/* Game Screen */}
-                    <div 
-                        className={`game-screen ${gameState === 'playing' ? 'active' : ''}`} 
-                        ref={gameRef}
-                        onMouseMove={handlePointerMove}
-                        onTouchMove={handlePointerMove}
-                        onClick={handleShoot}
-                        onTouchStart={handleShoot}
-                    >
-                        <div className={`decade-border decade-${getDecade(year)}`} />
-                        
-                        <div id="gameCanvas">
-                            {bubbles.map(bubble => (
-                                <div
-                                    key={bubble.id}
-                                    className={`bubble ${bubble.popping ? 'popping' : ''}`}
-                                    style={{
-                                        left: bubble.x + 'px',
-                                        top: bubble.y + 'px',
-                                        backgroundColor: bubble.color
-                                    }}
-                                />
-                            ))}
-                            
-                            {collectables.map(item => (
-                                <div
-                                    key={item.id}
-                                    className={`collectable ${item.type}`}
-                                    style={{
-                                        left: item.x + 'px',
-                                        top: item.y + 'px'
-                                    }}
-                                />
-                            ))}
-                            
-                            {gameState === 'playing' && bubbleQueue.length > 0 && (
-                                <div 
-                                    className="trajectory-line"
-                                    style={{
-                                        bottom: '50px',
-                                        left: '50%',
-                                        width: '40vw', /* Scales with screen */
-                                        transform: `translateX(-3px) rotate(${cannonAngle}deg)`,
-                                        transformOrigin: '3px center'
-                                    }}
-                                />
-                            )}
-                            
-                            <div className="cannon">
-                                <div 
-                                    className="cannon-barrel" 
-                                    style={{ transform: `rotate(${cannonAngle}deg)` }}
-                                />
+                <div id="game" className={`theme-${Math.floor(year / 10) * 10}s`}>
+                    <canvas ref={canvasRef} onClick={handleInput} onTouchStart={handleInput} />
+                    <div className="ui-overlay">
+                        {gameState === 'menu' && (
+                            <div className="menu">
+                                <h1 className="menu-title">Warren Buffett's Bubble Pop</h1>
+                                <p className="menu-subtitle">Invest from 1951 to 2025</p>
+                                <button onClick={startGame}>Start Game</button>
                             </div>
-                            <div className="cannon-hitbox" />
-                            
-                            <div className="bubble-queue">
-                                {bubbleQueue.slice(0, 3).map((color, i) => (
-                                    <div
-                                        key={i}
-                                        className="queue-bubble"
-                                        style={{ 
-                                            backgroundColor: color,
-                                            opacity: i === 0 ? 1 : 0.6,
-                                            transform: i === 0 ? 'scale(1.2)' : 'scale(1)'
-                                        }}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                        
-                        <div className="quote-box">
-                            {currentQuote}
-                        </div>
-                        
-                        <div className="game-ui">
-                            <div className="stat-display">
-                                <span className="stat-label">Year</span>
-                                <span className="stat-value">{year}</span>
-                            </div>
-                            <div className="stat-display">
-                                <span className="stat-label">Sugar</span>
-                                <div className="sugar-bar">
-                                    <div className="sugar-fill" style={{ width: `${(sugar / maxSugar) * 100}%` }} />
-                                </div>
-                            </div>
-                            <div className="stat-display">
-                                <span className="stat-label">Bubbles</span>
-                                <span className="stat-value">{bubbleQueue.length}</span>
-                            </div>
-                            <div className="stat-display">
-                                <span className="stat-label">Lives</span>
-                                <span className="stat-value">{lives}</span>
-                            </div>
-                            <div className="stat-display">
-                                <span className="stat-label">Coins</span>
-                                <span className="stat-value">${coins}</span>
-                            </div>
-                            <div className="stat-display">
-                                <span className="stat-label">Books</span>
-                                <span className="stat-value">{books}</span>
-                            </div>
-                            <div className="stat-display">
-                                <select
-                                    style={{ fontSize: '0.8em', padding: '2px' }}
-                                    onChange={(e) => buyItem(shopItems.find(item => item.id === e.target.value))}
-                                    disabled={!shopItems.some(item => item.desc.includes('Next shot') && coins >= (item.basePrice ? Math.floor(item.basePrice * Math.pow(item.priceMultiplier, upgrades[item.id]?.level || 0)) : item.price) && (item.requires === undefined || item.requires))}
-                                >
-                                    <option value="">Power-ups</option>
-                                    {shopItems.filter(item => item.desc.includes('Next shot')).map(item => (
-                                        <option key={item.id} value={item.id} disabled={coins < item.price || (item.requires !== undefined && !item.requires)}>
-                                            {item.name} (${item.price})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    {/* Shop Screen */}
-                    <div className={`shop-screen ${gameState === 'shop' ? 'active' : ''}`}>
-                        <h2 className="shop-header">The Value Shop - Year {year}</h2>
-                        <p style={{ textAlign: 'center', fontSize: '1em', color: '#ffd700', marginBottom: '10px' }}>
-                            Your Coins: ${coins} | Your Books: {books}
-                        </p>
-                        
-                        <div className="shop-items">
-                            {shopItems.map(item => (
-                                <div key={item.id} className="shop-item">
-                                    <h3 className="shop-item-name">{item.name}</h3>
-                                    <p className="shop-item-desc">{item.desc}</p>
-                                    <p className="shop-item-price">Price: ${Math.floor(item.basePrice ? item.basePrice * Math.pow(item.priceMultiplier, upgrades[item.id]?.level || 0) : item.price)}</p>
-                                    <button
-                                        className="shop-buy-button"
-                                        onClick={() => buyItem(item)}
-                                        disabled={coins < (item.basePrice ? Math.floor(item.basePrice * Math.pow(item.priceMultiplier, upgrades[item.id]?.level || 0)) : item.price) || item.purchased || (item.requires !== undefined && !item.requires) || (item.maxPurchases && (upgrades[item.id]?.level || 0) >= item.maxPurchases)}
-                                    >
-                                        {item.purchased ? 'Purchased' : 'Buy'}
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                        
-                        <button className="continue-button" onClick={continueToInvestment}>
-                            Continue to Investments
-                        </button>
-                    </div>
-                    
-                    {/* Investment Screen */}
-                    <div className={`investment-screen ${gameState === 'investment' ? 'active' : ''}`}>
-                        <h2 className="investment-header">Investment Board - {year}</h2>
-                        <p style={{ textAlign: 'center', fontSize: '1em', color: '#ffd700', marginBottom: '10px' }}>
-                            Your Coins: ${coins} | Your Books: {books}
-                        </p>
-                        
-                        <h3 style={{ color: '#ffd700', marginBottom: '5px' }}>Stocks</h3>
-                        <div className="investment-tabs">
-                            {(() => {
-                                const availableStocks = Object.entries(stockData).filter(([symbol, stock]) => {
-                                    if (stock.startYear > year) return false;
-                                    if (symbol === 'AAPL' && !upgrades.tedTodd) return false;
-                                    if (symbol === 'KO' && cokePurchases < 5) return false;
-                                    return true;
-                                });
-                                
-                                if (availableStocks.length === 0) {
-                                    return (
-                                        <div style={{ textAlign: 'center', padding: '20px', color: '#ccc' }}>
-                                            <h3 style={{ color: '#ffd700', marginBottom: '10px' }}>Investment Market Closed</h3>
-                                            <p>No public companies available yet.</p>
-                                            <p style={{ marginTop: '10px', fontSize: '0.8em' }}>
-                                                First investments available in the 1960s.
-                                            </p>
-                                        </div>
-                                    );
-                                }
-                                
-                                return availableStocks.map(([symbol, stock]) => {
-                                    const priceYears = Object.keys(stock.prices).map(Number).filter(y => y <= year);
-                                    const price = stock.prices[year] || stock.prices[Math.max(...priceYears)];
-                                    const prevPrice = stock.prices[year - 1] || stock.prices[Math.max(...priceYears.filter(y => y < year))];
-                                    const priceChange = prevPrice ? ((price - prevPrice) / prevPrice * 100).toFixed(2) : 0;
-                                    const owned = portfolio.stocks[symbol]?.shares || 0;
-                                    
-                                    return (
-                                        <div key={symbol} className="stock-item">
-                                            <div className="stock-info">
-                                                <div className="stock-name">{stock.name}</div>
-                                                <div className="stock-price">Price: ${price} ({priceChange > 0 ? '+' : ''}{priceChange}%)</div>
-                                                <div>Owned: {owned} shares</div>
-                                                <div>Book Cost: {stock.bookCost}</div>
-                                            </div>
-                                            <div className="stock-controls" style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                                                <button 
-                                                    className="stock-button"
-                                                    onClick={() => buyStock(symbol, 1)}
-                                                    disabled={coins < price || books < stock.bookCost}
-                                                >
-                                                    Buy 1
-                                                </button>
-                                                <button 
-                                                    className="stock-button"
-                                                    onClick={() => buyStock(symbol, 0.1)}
-                                                    disabled={coins < price * 0.1 || books < stock.bookCost}
-                                                >
-                                                    Buy 10%
-                                                </button>
-                                                <button 
-                                                    className="stock-button"
-                                                    onClick={() => buyStock(symbol, 0.25)}
-                                                    disabled={coins < price * 0.25 || books < stock.bookCost}
-                                                >
-                                                    Buy 25%
-                                                </button>
-                                                <button 
-                                                    className="stock-button"
-                                                    onClick={() => buyStock(symbol, 'max')}
-                                                    disabled={coins < price || books < stock.bookCost}
-                                                >
-                                                    Buy Max
-                                                </button>
-                                                <button 
-                                                    className="stock-button sell"
-                                                    onClick={() => sellStock(symbol, 'max')}
-                                                    disabled={owned === 0}
-                                                >
-                                                    Sell All
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                });
-                            })()}
-                        </div>
-                        
-                        <h3 style={{ color: '#ffd700', marginBottom: '5px', marginTop: '10px' }}>Subsidiaries</h3>
-                        <div className="investment-tabs">
-                            {Object.entries(subsidiaryData).map(([subId, sub]) => {
-                                const owned = portfolio.subsidiaries[subId]?.owned || false;
-                                return (
-                                    <div key={subId} className="subsidiary-item">
-                                        <div className="subsidiary-info">
-                                            <div className="subsidiary-name">{sub.name}</div>
-                                            <div className="subsidiary-price">Book Cost: {sub.bookCost}</div>
-                                            <div>Cash Return: ${sub.cashReturn}/year</div>
-                                            <div>{owned ? 'Owned' : sub.unlockedBy ? `Requires: ${sub.unlockedBy}` : ''}</div>
-                                        </div>
-                                        <button
-                                            className="subsidiary-buy-button"
-                                            onClick={() => buySubsidiary(subId)}
-                                            disabled={owned || books < sub.bookCost || (sub.unlockedBy && !unlocks.items.includes(sub.unlockedBy))}
-                                        >
-                                            {owned ? 'Owned' : 'Buy'}
-                                        </button>
+                        )}
+                        {gameState === 'playing' && (
+                            <>
+                                <div className="resource-bar">
+                                    <span>Year: {year}</span>
+                                    <span>Coins: ${coins}</span>
+                                    <span>Books: {books}</span>
+                                    <div className="sugar-bar">
+                                        <div className="sugar-fill" style={{ width: `${(sugar / maxSugar) * 100}%` }} />
                                     </div>
-                                );
-                            })}
-                        </div>
-                        
-                        <div style={{ textAlign: 'center', fontSize: '1em', color: '#ffd700', marginTop: '10px' }}>
-                            Portfolio Value: ${
-                                Object.entries(portfolio.stocks).reduce((total, [symbol, data]) => {
-                                    const stock = stockData[symbol];
-                                    const priceYears = Object.keys(stock.prices).map(Number).filter(y => y <= year);
-                                    const price = stock.prices[year] || stock.prices[Math.max(...priceYears)];
-                                    return total + (data.shares * price);
-                                }, 0).toFixed(0)
-                            }
-                        </div>
-                        
-                        <button className="continue-button" onClick={continueToNextYear}>
-                            Continue to {year + 1}
-                        </button>
-                    </div>
-                    
-                    {/* Game Over */}
-                    {gameState === 'gameOver' && (
-                        <div className="menu-screen">
-                            <h1 className="menu-title">Congratulations!</h1>
-                            <p className="menu-subtitle">You've completed Buffett's journey!</p>
-                            <div style={{ marginTop: '10px', fontSize: '1em' }}>
-                                <p>Final Portfolio Value: ${
-                                    Object.entries(portfolio.stocks).reduce((total, [symbol, data]) => {
-                                        const stock = stockData[symbol];
-                                        const price = stock.prices[2025] || stock.prices[Math.max(...Object.keys(stock.prices))];
-                                        return total + (data.shares * price);
-                                    }, 0).toFixed(0)
-                                }</p>
-                                <p>Total Coins: ${coins}</p>
-                                <p>Total Bubbles Popped: {statistics.totalBubblesPopped}</p>
-                                <p>Best Year: {statistics.bestYear.year} (${statistics.bestYear.score})</p>
+                                    <button onClick={() => setGameState('shop')}>Shop</button>
+                                </div>
+                                <div className="queue-container">
+                                    {bubbleQueue.map((color, i) => (
+                                        <div key={i} className="queue-bubble" style={{ backgroundColor: color }} />
+                                    ))}
+                                </div>
+                                <div className="quote-box">{currentQuote}</div>
+                            </>
+                        )}
+                        {gameState === 'shop' && (
+                            <div className="shop">
+                                <h2>Shop - Year {year}</h2>
+                                <div className="shop-item">
+                                    <div className="item-name">Coke</div>
+                                    <div className="item-desc">Restore 20 sugar</div>
+                                    <div className="item-price">$50</div>
+                                    <button onClick={() => buyItem({ price: 50, action: () => setSugar(prev => Math.min(prev + 20, maxSugar)) })}>Buy</button>
+                                </div>
+                                <button onClick={() => setGameState(year >= 1960 ? 'investment' : 'playing')}>Continue</button>
                             </div>
-                            <button className="menu-button" onClick={() => window.location.reload()}>
-                                Play Again
-                            </button>
-                        </div>
-                    )}
+                        )}
+                        {gameState === 'investment' && (
+                            <div className="investment">
+                                <h2>Investments - Year {year}</h2>
+                                {Object.entries(stockData).map(([symbol, stock]) => (
+                                    stock.startYear <= year && (
+                                        <div key={symbol} className="investment-item">
+                                            <div className="item-name">{stock.name}</div>
+                                            <div className="item-price">Price: ${stock.prices[year] || stock.prices[Object.keys(stock.prices)[0]]}</div>
+                                            <button onClick={() => buyStock(symbol)}>Buy</button>
+                                        </div>
+                                    )
+                                ))}
+                                <button onClick={nextYear}>Next Year</button>
+                            </div>
+                        )}
+                        {gameState === 'game-over' && (
+                            <div className="game-over">
+                                <h1 className="menu-title">Game Over!</h1>
+                                <p>Final Portfolio: ${Object.entries(portfolio.stocks).reduce((sum, [symbol, shares]) => sum + shares * (stockData[symbol].prices[2025] || 0), 0)}</p>
+                                <button onClick={() => window.location.reload()}>Play Again</button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             );
         }
-        
-        class ErrorBoundary extends React.Component {
-            constructor(props) {
-                super(props);
-                this.state = { hasError: false, error: null };
-            }
-            
-            static getDerivedStateFromError(error) {
-                return { hasError: true, error: error.toString() };
-            }
-            
-            componentDidCatch(error, errorInfo) {
-                console.error('Game error:', error, errorInfo);
-            }
-            
-            render() {
-                if (this.state.hasError) {
-                    return (
-                        <div style={{ padding: '20px', color: 'red', textAlign: 'center' }}>
-                            <h2>Something went wrong!</h2>
-                            <p>{this.state.error}</p>
-                            <button onClick={() => window.location.reload()}>Reload</button>
-                        </div>
-                    );
-                }
-                return this.props.children;
-            }
-        }
-        
-        ReactDOM.render(
-            <ErrorBoundary>
-                <Game />
-            </ErrorBoundary>, 
-            document.getElementById('root')
-        );
+
+        ReactDOM.render(<Game />, document.getElementById('game'));
     </script>
 </body>
 </html>
