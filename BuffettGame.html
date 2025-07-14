@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Warren Buffett's Bubble Pop Investment Adventure</title>
     <style>
-        /* Global Styles */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: 'Arial', sans-serif; 
@@ -15,7 +14,7 @@
             touch-action: none; 
         }
         #game { width: 100vw; height: 100vh; position: relative; }
-        canvas { width: 100%; height: 100%; display: block; }
+        canvas { width: 100%; height: 100%; display: block; background: #333; }
         .ui-overlay { 
             position: absolute; 
             top: 0; left: 0; 
@@ -26,7 +25,7 @@
             justify-content: space-between; 
         }
         .ui-overlay > * { pointer-events: auto; }
-        .menu, .shop, .investment, .game-over { 
+        .menu, .shop, .investment, .game-over, .error { 
             position: absolute; 
             top: 50%; left: 50%; 
             transform: translate(-50%, -50%); 
@@ -104,16 +103,15 @@
         .item-name { font-size: 3vw; color: #ffd700; }
         .item-desc { font-size: 2vw; color: #ccc; }
         .item-price { font-size: 2.5vw; color: #4CAF50; }
-
-        /* Decade Themes */
+        .error { color: #ff6b6b; }
         .theme-1950s { background: linear-gradient(135deg, #666, #999); font-family: 'Courier New', monospace; }
-        .theme-1960s { background: linear-gradient(135deg, #ff6b6b, #feca57); font-family: 'Bubblegum Sans', cursive; }
+        .theme-1960s { background: linear-gradient(135deg, #ff6b6b, #feca57); }
         .theme-1970s { background: linear-gradient(135deg, #d2691e, #ff8c00); }
-        .theme-1980s { background: linear-gradient(135deg, #ff00ff, #00ffff); font-family: 'OCR-A', monospace; }
-        .theme-1990s { background: linear-gradient(135deg, #0066cc, #ffcc00); font-family: 'Comic Sans MS', cursive; }
+        .theme-1980s { background: linear-gradient(135deg, #ff00ff, #00ffff); font-family: 'Courier New', monospace; }
+        .theme-1990s { background: linear-gradient(135deg, #0066cc, #ffcc00); }
         .theme-2000s { background: linear-gradient(135deg, #4285f4, #34a853); }
         .theme-2010s { background: linear-gradient(135deg, #f0f0f0, #fff); }
-        .theme-2020s { background: linear-gradient(135deg, #6366f1, #ec4899); font-family: 'Inter', sans-serif; }
+        .theme-2020s { background: linear-gradient(135deg, #6366f1, #ec4899); }
     </style>
 </head>
 <body>
@@ -122,6 +120,16 @@
     <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
     <script>
+        console.log("Starting game initialization...");
+        if (!window.React || !window.ReactDOM || !window.THREE) {
+            console.error("Required libraries (React, ReactDOM, or Three.js) failed to load.");
+            document.getElementById('game').innerHTML = `
+                <div class="error">
+                    <h1>Error</h1>
+                    <p>Failed to load required libraries. Please check your internet connection and try again.</p>
+                </div>`;
+        }
+
         const { useState, useEffect, useRef } = React;
 
         // Data
@@ -160,6 +168,7 @@
             const [bubbleQueue, setBubbleQueue] = useState([]);
             const [cannonAngle, setCannonAngle] = useState(0);
             const [currentQuote, setCurrentQuote] = useState(quotes[0]);
+            const [error, setError] = useState('');
             const canvasRef = useRef(null);
             const sceneRef = useRef(null);
             const cameraRef = useRef(null);
@@ -175,32 +184,58 @@
 
             // Initialize Three.js
             useEffect(() => {
-                const canvas = canvasRef.current;
-                const scene = new THREE.Scene();
-                const camera = new THREE.OrthographicCamera(0, canvas.clientWidth, canvas.clientHeight, 0, -1, 1);
-                const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-                renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-                sceneRef.current = scene;
-                cameraRef.current = camera;
-                rendererRef.current = renderer;
-
-                const resize = () => {
+                console.log("Initializing Three.js...");
+                try {
+                    const canvas = canvasRef.current;
+                    if (!canvas) {
+                        setError("Canvas not found.");
+                        return;
+                    }
+                    const scene = new THREE.Scene();
                     const aspect = canvas.clientWidth / canvas.clientHeight;
-                    camera.left = 0;
-                    camera.right = canvas.clientWidth;
-                    camera.top = canvas.clientHeight;
-                    camera.bottom = 0;
-                    camera.updateProjectionMatrix();
+                    const camera = new THREE.OrthographicCamera(0, canvas.clientWidth, canvas.clientHeight, 0, -1, 1);
+                    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+                    if (!renderer.getContext()) {
+                        setError("WebGL not supported. Please try a different browser.");
+                        return;
+                    }
                     renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-                };
-                window.addEventListener('resize', resize);
-                resize();
+                    sceneRef.current = scene;
+                    cameraRef.current = camera;
+                    rendererRef.current = renderer;
 
-                return () => window.removeEventListener('resize', resize);
+                    // Test render
+                    const geometry = new THREE.PlaneGeometry(canvas.clientWidth, canvas.clientHeight);
+                    const material = new THREE.MeshBasicMaterial({ color: 0x333333 });
+                    const plane = new THREE.Mesh(geometry, material);
+                    plane.position.set(canvas.clientWidth / 2, canvas.clientHeight / 2, 0);
+                    scene.add(plane);
+                    renderer.render(scene, camera);
+                    console.log("Three.js initialized successfully.");
+
+                    const resize = () => {
+                        const aspect = canvas.clientWidth / canvas.clientHeight;
+                        camera.left = 0;
+                        camera.right = canvas.clientWidth;
+                        camera.top = canvas.clientHeight;
+                        camera.bottom = 0;
+                        camera.updateProjectionMatrix();
+                        renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+                        console.log("Resized canvas:", canvas.clientWidth, canvas.clientHeight);
+                    };
+                    window.addEventListener('resize', resize);
+                    resize();
+
+                    return () => window.removeEventListener('resize', resize);
+                } catch (err) {
+                    console.error("Three.js initialization error:", err);
+                    setError("Failed to initialize graphics: " + err.message);
+                }
             }, []);
 
             // Initialize Level
             const initLevel = () => {
+                console.log("Initializing level for year", year);
                 setCurrentQuote(quotes[Math.floor(Math.random() * quotes.length)]);
                 setSugar(maxSugar);
                 const period = Object.keys(bubbleColors).find(p => {
@@ -224,11 +259,13 @@
                 }
                 setBubbles(newBubbles);
                 setBubbleQueue([colors[Math.floor(Math.random() * colors.length)], colors[Math.floor(Math.random() * colors.length)]]);
+                console.log("Level initialized with", newBubbles.length, "bubbles");
             };
 
             // Game Loop
             useEffect(() => {
-                if (gameState !== 'playing') return;
+                if (gameState !== 'playing' || !sceneRef.current || !rendererRef.current || !cameraRef.current) return;
+                console.log("Starting game loop...");
                 const scene = sceneRef.current;
                 const renderer = rendererRef.current;
                 const camera = cameraRef.current;
@@ -247,7 +284,10 @@
                 const animate = () => {
                     setSugar(prev => {
                         const newSugar = Math.max(0, prev - 0.05);
-                        if (newSugar <= 0) setGameState('shop');
+                        if (newSugar <= 0) {
+                            console.log("Sugar depleted, switching to shop");
+                            setGameState('shop');
+                        }
                         return newSugar;
                     });
                     renderer.render(scene, camera);
@@ -263,6 +303,7 @@
                 const now = Date.now();
                 if (now - lastTouchTime.current < 200) return;
                 lastTouchTime.current = now;
+                console.log("Handling input...");
 
                 const rect = canvasRef.current.getBoundingClientRect();
                 const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
@@ -287,11 +328,13 @@
                         return year >= start && year <= end;
                     })][Math.floor(Math.random() * bubbleColors[Object.keys(bubbleColors)[0]].length)]]));
                     setSugar(prev => Math.max(0, prev - 10));
+                    console.log("Shot bubble with color", newBubble.color);
                 }
             };
 
             // Start Game
             const startGame = () => {
+                console.log("Starting game...");
                 setGameState('playing');
                 initLevel();
             };
@@ -301,6 +344,7 @@
                 if (coins >= item.price) {
                     setCoins(prev => prev - item.price);
                     item.action();
+                    console.log("Bought item:", item);
                 }
             };
 
@@ -314,6 +358,7 @@
                         ...prev,
                         stocks: { ...prev.stocks, [symbol]: (prev.stocks[symbol] || 0) + 1 }
                     }));
+                    console.log("Bought stock:", symbol);
                 }
             };
 
@@ -321,11 +366,13 @@
                 setYear(prev => {
                     const next = prev + 1;
                     if (next > 2025) {
+                        console.log("Game over, reached 2025");
                         setGameState('game-over');
                         return prev;
                     }
                     setGameState('playing');
                     initLevel();
+                    console.log("Advanced to year", next);
                     return next;
                 });
             };
@@ -333,6 +380,7 @@
             // Save Game
             const saveGame = () => {
                 localStorage.setItem('bubbleBuffett', JSON.stringify({ year, coins, sugar, maxSugar, books, portfolio }));
+                console.log("Game saved:", { year, coins, sugar, maxSugar, books, portfolio });
             };
             useEffect(() => {
                 const saved = localStorage.getItem('bubbleBuffett');
@@ -344,6 +392,7 @@
                     setMaxSugar(data.maxSugar);
                     setBooks(data.books);
                     setPortfolio(data.portfolio);
+                    console.log("Loaded saved game:", data);
                 }
             }, []);
 
@@ -351,14 +400,21 @@
                 <div id="game" className={`theme-${Math.floor(year / 10) * 10}s`}>
                     <canvas ref={canvasRef} onClick={handleInput} onTouchStart={handleInput} />
                     <div className="ui-overlay">
-                        {gameState === 'menu' && (
+                        {error && (
+                            <div className="error">
+                                <h1>Error</h1>
+                                <p>{error}</p>
+                                <button onClick={() => window.location.reload()}>Retry</button>
+                            </div>
+                        )}
+                        {!error && gameState === 'menu' && (
                             <div className="menu">
                                 <h1 className="menu-title">Warren Buffett's Bubble Pop</h1>
                                 <p className="menu-subtitle">Invest from 1951 to 2025</p>
                                 <button onClick={startGame}>Start Game</button>
                             </div>
                         )}
-                        {gameState === 'playing' && (
+                        {!error && gameState === 'playing' && (
                             <>
                                 <div className="resource-bar">
                                     <span>Year: {year}</span>
@@ -377,7 +433,7 @@
                                 <div className="quote-box">{currentQuote}</div>
                             </>
                         )}
-                        {gameState === 'shop' && (
+                        {!error && gameState === 'shop' && (
                             <div className="shop">
                                 <h2>Shop - Year {year}</h2>
                                 <div className="shop-item">
@@ -389,7 +445,7 @@
                                 <button onClick={() => setGameState(year >= 1960 ? 'investment' : 'playing')}>Continue</button>
                             </div>
                         )}
-                        {gameState === 'investment' && (
+                        {!error && gameState === 'investment' && (
                             <div className="investment">
                                 <h2>Investments - Year {year}</h2>
                                 {Object.entries(stockData).map(([symbol, stock]) => (
@@ -404,7 +460,7 @@
                                 <button onClick={nextYear}>Next Year</button>
                             </div>
                         )}
-                        {gameState === 'game-over' && (
+                        {!error && gameState === 'game-over' && (
                             <div className="game-over">
                                 <h1 className="menu-title">Game Over!</h1>
                                 <p>Final Portfolio: ${Object.entries(portfolio.stocks).reduce((sum, [symbol, shares]) => sum + shares * (stockData[symbol].prices[2025] || 0), 0)}</p>
@@ -416,7 +472,19 @@
             );
         }
 
-        ReactDOM.render(<Game />, document.getElementById('game'));
+        try {
+            console.log("Rendering React component...");
+            ReactDOM.render(<Game />, document.getElementById('game'));
+            console.log("React component rendered successfully.");
+        } catch (err) {
+            console.error("React rendering error:", err);
+            document.getElementById('game').innerHTML = `
+                <div class="error">
+                    <h1>Error</h1>
+                    <p>Failed to render game: ${err.message}</p>
+                    <button onclick="window.location.reload()">Retry</button>
+                </div>`;
+        }
     </script>
 </body>
 </html>
