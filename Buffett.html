@@ -422,6 +422,7 @@
             border-radius: 50%;
             border: 2px solid rgba(0,0,0,0.3);
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: left 0.1s, top 0.1s;
         }
         
         .bubble.popping {
@@ -613,6 +614,11 @@
             const animationRef = useRef(null);
             const lastTimeRef = useRef(0);
             
+            // Grid constants for hexagonal layout
+            const GRID_WIDTH = 35;
+            const GRID_HEIGHT = 35 * Math.sqrt(3) / 2;
+            const ROW_OFFSET = GRID_WIDTH / 2;
+            
             // Get decade from year
             const getDecade = (year) => {
                 if (!year || typeof year !== 'number') return '1950s';
@@ -654,9 +660,49 @@
                 return speeds[decade] || 0.5;
             };
             
+            // Snap bubble to hexagonal grid
+            const snapToGrid = (x, y) => {
+                const row = Math.round((y - 20) / GRID_HEIGHT);
+                const isEvenRow = row % 2 === 0;
+                const col = Math.round((x - 20 - (isEvenRow ? 0 : ROW_OFFSET)) / GRID_WIDTH);
+                return {
+                    x: col * GRID_WIDTH + 20 + (isEvenRow ? 0 : ROW_OFFSET),
+                    y: row * GRID_HEIGHT + 20
+                };
+            };
+            
+            // Check collision with bubbles or top wall
+            const checkCollision = (x, y, bubbles) => {
+                if (y <= 20) return true;
+                return bubbles.some(b => !b.popping && !b.moving && 
+                    Math.hypot(x - b.x, y - b.y) < GRID_WIDTH - 2);
+            };
+            
+            // Find connected bubbles for cluster popping
+            const findConnectedBubbles = (startBubble, bubbles, color) => {
+                const connected = [startBubble];
+                const checked = new Set([startBubble.id]);
+                
+                while (connected.length > 0) {
+                    const current = connected.shift();
+                    bubbles.forEach(b => {
+                        if (!checked.has(b.id) && !b.popping && b.color === color) {
+                            const dx = Math.abs(b.x - current.x);
+                            const dy = Math.abs(b.y - current.y);
+                            if (dx <= GRID_WIDTH + 2 && dy <= GRID_HEIGHT + 2 &&
+                                Math.hypot(b.x - current.x, b.y - current.y) < GRID_WIDTH + 2) {
+                                connected.push(b);
+                                checked.add(b.id);
+                            }
+                        }
+                    });
+                }
+                
+                return checked.size >= 3 ? Array.from(checked).map(id => bubbles.find(b => b.id === id)) : [];
+            };
+            
             // Initialize level
             const initLevel = () => {
-                // Ensure arrays exist
                 if (!levelStartQuotes || levelStartQuotes.length === 0) {
                     setCurrentQuote("Time to start investing!");
                 } else {
@@ -666,18 +712,18 @@
                 setScrollSpeed(getScrollSpeed(year));
                 setSugar(maxSugar);
                 
-                // Create initial bubble field
                 const colorCount = getBubbleColorCount(year);
                 const colors = bubbleColors.slice(0, Math.min(colorCount, bubbleColors.length));
                 const newBubbles = [];
                 
-                // Create 5 rows x 20 visible columns (fill the screen)
+                // Create 5 rows x 20 columns with hexagonal grid
                 for (let row = 0; row < 5; row++) {
+                    const isEvenRow = row % 2 === 0;
                     for (let col = 0; col < 20; col++) {
                         newBubbles.push({
                             id: `init-${row}-${col}`,
-                            x: col * 35 + 20,
-                            y: row * 35 + 20,
+                            x: col * GRID_WIDTH + 20 + (isEvenRow ? 0 : ROW_OFFSET),
+                            y: row * GRID_HEIGHT + 20,
                             color: colors[Math.floor(Math.random() * colors.length)],
                             popping: false
                         });
@@ -686,7 +732,6 @@
                 
                 setBubbles(newBubbles);
                 
-                // Create bubble queue
                 const queue = [];
                 for (let i = 0; i < upgrades.startingBubbles; i++) {
                     queue.push(colors[Math.floor(Math.random() * colors.length)]);
@@ -706,17 +751,14 @@
             
             // Pop bubble and create collectables
             const popBubble = (bubble) => {
-                // Add popping animation class
                 setBubbles(prev => prev.map(b => 
                     b.id === bubble.id ? { ...b, popping: true } : b
                 ));
                 
-                // Remove after animation
                 setTimeout(() => {
                     setBubbles(prev => prev.filter(b => b.id !== bubble.id));
                 }, 300);
                 
-                // Drop collectables
                 const drops = [];
                 if (Math.random() < 0.3) {
                     drops.push({
@@ -746,7 +788,6 @@
                 
                 setCollectables(prev => [...prev, ...drops]);
                 
-                // Auto-collect after fall
                 setTimeout(() => {
                     drops.forEach(drop => {
                         if (drop.type === 'coin') setCoins(prev => prev + 10);
@@ -762,11 +803,10 @@
                 if (gameState !== 'playing') return;
                 setGameState('shop');
                 
-                // Calculate dividends
                 let dividends = 0;
                 Object.entries(portfolio).forEach(([stock, data]) => {
                     if (stock === 'SEES') {
-                        dividends += data.shares * 50; // Simplified dividend
+                        dividends += data.shares * 50;
                     }
                 });
                 setCoins(prev => prev + dividends);
@@ -789,47 +829,38 @@
                 setCannonAngle(clamped);
             };
             
-            // Handle shooting - ultra simplified
+            // Handle shooting
             const handleShoot = (e) => {
                 if (gameState !== 'playing' || bubbleQueue.length === 0) return;
                 
                 e.preventDefault();
                 
                 const color = bubbleQueue[0];
-                setBubbleQueue(prev => prev.slice(1));
-                
-                // For now, just find any matching bubble
-                const matchingBubble = bubbles.find(b => b.color === color && !b.popping);
-                
-                if (matchingBubble) {
-                    // Pop the bubble and connected ones
-                    const connected = [matchingBubble];
-                    const checked = new Set();
-                    
-                    while (connected.length > 0) {
-                        const current = connected.pop();
-                        if (checked.has(current.id)) continue;
-                        
-                        popBubble(current);
-                        checked.add(current.id);
-                        
-                        // Find adjacent same color
-                        bubbles.forEach(b => {
-                            if (!checked.has(b.id) && !b.popping && b.color === color) {
-                                const dx = Math.abs(b.x - current.x);
-                                const dy = Math.abs(b.y - current.y);
-                                if (dx <= 36 && dy <= 36) {
-                                    connected.push(b);
-                                }
-                            }
-                        });
+                setBubbleQueue(prev => {
+                    const newQueue = prev.slice(1);
+                    if (newQueue.length < upgrades.startingBubbles) {
+                        const colorCount = getBubbleColorCount(year);
+                        const colors = bubbleColors.slice(0, colorCount);
+                        newQueue.push(colors[Math.floor(Math.random() * colors.length)]);
                     }
-                }
+                    return newQueue;
+                });
                 
-                // Check if level should end
-                if (bubbleQueue.length === 0) {
-                    setTimeout(() => endLevel(), 1500);
-                }
+                const rect = gameRef.current.getBoundingClientRect();
+                const angleRad = (cannonAngle + 90) * Math.PI / 180;
+                const speed = 10;
+                
+                const newBubble = {
+                    id: `shot-${Date.now()}-${Math.random()}`,
+                    x: rect.width / 2,
+                    y: rect.height - 60,
+                    vx: Math.cos(angleRad) * speed,
+                    vy: Math.sin(angleRad) * speed,
+                    color,
+                    moving: true
+                };
+                
+                setBubbles(prev => [...prev, newBubble]);
             };
             
             // Game loop
@@ -840,7 +871,6 @@
                     const deltaTime = timestamp - lastTimeRef.current;
                     lastTimeRef.current = timestamp;
                     
-                    // Update sugar
                     if (deltaTime > 0) {
                         setSugar(prev => {
                             const newSugar = Math.max(0, prev - deltaTime / 1000);
@@ -851,48 +881,75 @@
                         });
                     }
                     
-                    // Scroll bubbles
                     setBubbles(prev => {
                         const colorCount = getBubbleColorCount(year);
                         const colors = bubbleColors.slice(0, colorCount);
+                        const rect = gameRef.current.getBoundingClientRect();
                         
-                        let updated = prev.map(bubble => ({
-                            ...bubble,
-                            x: bubble.x + scrollSpeed
-                        }));
+                        let updated = prev.map(bubble => {
+                            if (bubble.moving) {
+                                let newX = bubble.x + bubble.vx * (deltaTime / 16);
+                                let newY = bubble.y + bubble.vy * (deltaTime / 16);
+                                
+                                if (newX <= 20 || newX >= rect.width - 20) {
+                                    bubble.vx = -bubble.vx;
+                                    newX = Math.max(20, Math.min(rect.width - 20, newX));
+                                }
+                                
+                                if (checkCollision(newX, newY, prev)) {
+                                    const snapped = snapToGrid(newX, newY);
+                                    const connected = findConnectedBubbles(
+                                        { ...bubble, x: snapped.x, y: snapped.y, id: bubble.id },
+                                        prev,
+                                        bubble.color
+                                    );
+                                    if (connected.length >= 3) {
+                                        connected.forEach(b => popBubble(b));
+                                        return null;
+                                    }
+                                    return { ...bubble, x: snapped.x, y: snapped.y, moving: false };
+                                }
+                                
+                                return { ...bubble, x: newX, y: newY };
+                            }
+                            
+                            return { ...bubble, x: bubble.x + scrollSpeed * (deltaTime / 16) };
+                        }).filter(Boolean);
                         
-                        // Remove bubbles that have scrolled off screen
-                        updated = updated.filter(bubble => bubble.x < 800);
+                        updated = updated.filter(bubble => bubble.x < rect.width - 20);
                         
-                        // Check if we need to add new bubbles
                         const rowNeedsBubble = new Array(5).fill(false);
+                        const rowRightmost = new Array(5).fill(-Infinity);
                         
-                        // Find rightmost bubble in each row
                         for (let row = 0; row < 5; row++) {
-                            const rowBubbles = updated.filter(b => Math.round((b.y - 20) / 35) === row);
+                            const rowBubbles = updated.filter(b => Math.round((b.y - 20) / GRID_HEIGHT) === row);
                             if (rowBubbles.length === 0) {
                                 rowNeedsBubble[row] = true;
                             } else {
-                                const rightmost = Math.max(...rowBubbles.map(b => b.x));
-                                // Add new bubble if there's enough gap from the rightmost
-                                if (rightmost < 500) {
+                                rowRightmost[row] = Math.max(...rowBubbles.map(b => b.x));
+                                if (rowRightmost[row] < rect.width - 200) {
                                     rowNeedsBubble[row] = true;
                                 }
                             }
                         }
                         
-                        // Add new bubbles with staggered timing
                         rowNeedsBubble.forEach((needsBubble, row) => {
                             if (needsBubble) {
-                                // Stagger bubble creation by row
-                                const staggerOffset = row * 10;
-                                updated.push({
-                                    id: `${row}-new-${Date.now()}-${Math.random()}`,
-                                    x: -35 - staggerOffset,
-                                    y: row * 35 + 20,
-                                    color: colors[Math.floor(Math.random() * colors.length)],
-                                    popping: false
-                                });
+                                const isEvenRow = row % 2 === 0;
+                                const spawnX = rowRightmost[row] === -Infinity ? -GRID_WIDTH : rowRightmost[row] + GRID_WIDTH;
+                                const canSpawn = !updated.some(b => 
+                                    Math.round((b.y - 20) / GRID_HEIGHT) === row &&
+                                    Math.abs(b.x - spawnX) < GRID_WIDTH - 2
+                                );
+                                if (canSpawn) {
+                                    updated.push({
+                                        id: `${row}-new-${Date.now()}-${Math.random()}`,
+                                        x: spawnX,
+                                        y: row * GRID_HEIGHT + 20,
+                                        color: colors[Math.floor(Math.random() * colors.length)],
+                                        popping: false
+                                    });
+                                }
                             }
                         });
                         
@@ -911,27 +968,14 @@
                 };
             }, [gameState, scrollSpeed, year]);
             
-            // Add keyboard controls for testing
+            // Keyboard controls
             useEffect(() => {
                 const handleKeyPress = (e) => {
                     if (gameState !== 'playing') return;
                     
-                    // Space bar for simple shoot
                     if (e.code === 'Space' && bubbleQueue.length > 0) {
                         e.preventDefault();
-                        
-                        const color = bubbleQueue[0];
-                        setBubbleQueue(prev => prev.slice(1));
-                        
-                        // Find any matching bubble that's not already popping
-                        const matches = bubbles.filter(b => b.color === color && !b.popping);
-                        if (matches.length > 0) {
-                            popBubble(matches[0]);
-                        }
-                        
-                        if (bubbleQueue.length === 0) {
-                            setTimeout(() => endLevel(), 1500);
-                        }
+                        handleShoot(e);
                     }
                 };
                 
@@ -1035,12 +1079,11 @@
             const continueToNextYear = () => {
                 const nextYear = year + 1;
                 if (nextYear > 2025) {
-                    // End game
                     setGameState('gameOver');
                 } else {
                     setYear(nextYear);
                     if (nextYear % 10 === 0) {
-                        setLives(prev => prev + 1); // Bonus life per decade
+                        setLives(prev => prev + 1);
                     }
                     setGameState('playing');
                     initLevel();
@@ -1073,7 +1116,6 @@
                         <div className={`decade-border decade-${getDecade(year)}`}></div>
                         
                         <div id="gameCanvas">
-                            {/* Bubbles */}
                             {bubbles.map(bubble => (
                                 <div
                                     key={bubble.id}
@@ -1086,7 +1128,6 @@
                                 />
                             ))}
                             
-                            {/* Collectables */}
                             {collectables.map(item => (
                                 <div
                                     key={item.id}
@@ -1098,7 +1139,6 @@
                                 />
                             ))}
                             
-                            {/* Trajectory Line */}
                             {gameState === 'playing' && bubbleQueue.length > 0 && (
                                 <div 
                                     className="trajectory-line"
@@ -1112,7 +1152,6 @@
                                 />
                             )}
                             
-                            {/* Cannon */}
                             <div className="cannon">
                                 <div 
                                     className="cannon-barrel" 
@@ -1120,7 +1159,6 @@
                                 />
                             </div>
                             
-                            {/* Bubble queue */}
                             <div className="bubble-queue">
                                 {bubbleQueue.slice(0, 5).map((color, i) => (
                                     <div
