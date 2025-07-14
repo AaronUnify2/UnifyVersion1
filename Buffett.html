@@ -20,6 +20,9 @@
             font-family: 'Courier New', monospace;
             overflow: hidden;
             touch-action: none;
+            position: fixed;
+            width: 100%;
+            height: 100%;
         }
 
         #gameContainer {
@@ -30,13 +33,6 @@
             flex-direction: column;
         }
 
-        #gameCanvas {
-            background: linear-gradient(135deg, #2c3e50, #34495e);
-            display: block;
-            flex: 1;
-            touch-action: none;
-        }
-
         #ui {
             position: absolute;
             top: 0;
@@ -44,25 +40,27 @@
             right: 0;
             background: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 10px;
+            padding: 8px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 14px;
+            font-size: 12px;
+            z-index: 100;
+            height: 50px;
         }
 
         #yearDisplay {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
             color: #f39c12;
         }
 
         #sugarBar {
-            width: 120px;
-            height: 20px;
+            width: 80px;
+            height: 16px;
             background: #34495e;
             border: 2px solid #fff;
-            border-radius: 10px;
+            border-radius: 8px;
             overflow: hidden;
         }
 
@@ -70,59 +68,62 @@
             height: 100%;
             background: linear-gradient(90deg, #e74c3c, #f39c12);
             transition: width 0.3s ease;
+            width: 100%;
         }
 
         #lives {
             display: flex;
-            gap: 5px;
+            gap: 3px;
         }
 
         .life {
-            width: 20px;
-            height: 20px;
+            width: 16px;
+            height: 16px;
             background: #e74c3c;
             border-radius: 50%;
-            border: 2px solid #fff;
+            border: 1px solid #fff;
         }
 
         #stats {
             display: flex;
-            gap: 15px;
-            font-size: 12px;
+            gap: 10px;
+            font-size: 11px;
+        }
+
+        #gameCanvas {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            display: block;
+            position: absolute;
+            top: 50px;
+            left: 0;
+            touch-action: none;
+            cursor: crosshair;
         }
 
         #quoteBox {
             position: absolute;
-            bottom: 80px;
+            bottom: 20px;
             left: 10px;
             right: 10px;
             background: rgba(0, 0, 0, 0.9);
             color: #f39c12;
-            padding: 10px;
-            border-radius: 10px;
-            font-size: 12px;
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 11px;
             text-align: center;
             display: none;
+            z-index: 100;
         }
 
-        #trajectoryLine {
+        #debugInfo {
             position: absolute;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        @media (max-width: 480px) {
-            #ui {
-                font-size: 12px;
-                padding: 5px;
-            }
-            #yearDisplay {
-                font-size: 16px;
-            }
-            #sugarBar {
-                width: 80px;
-                height: 16px;
-            }
+            top: 60px;
+            left: 10px;
+            color: white;
+            font-size: 10px;
+            background: rgba(0,0,0,0.5);
+            padding: 5px;
+            display: none;
         }
     </style>
 </head>
@@ -131,7 +132,7 @@
         <div id="ui">
             <div id="yearDisplay">1951</div>
             <div id="sugarBar">
-                <div id="sugarFill" style="width: 100%"></div>
+                <div id="sugarFill"></div>
             </div>
             <div id="lives">
                 <div class="life"></div>
@@ -145,24 +146,58 @@
         </div>
         <canvas id="gameCanvas"></canvas>
         <div id="quoteBox"></div>
+        <div id="debugInfo"></div>
     </div>
 
     <script>
-        class BubbleBuffettGame {
+        // Debug function
+        function debug(msg) {
+            console.log(msg);
+            const debugEl = document.getElementById('debugInfo');
+            debugEl.style.display = 'block';
+            debugEl.innerHTML += msg + '<br>';
+        }
+
+        class BubbleGame {
             constructor() {
+                debug('Initializing game...');
+                
                 this.canvas = document.getElementById('gameCanvas');
                 this.ctx = this.canvas.getContext('2d');
-                this.setupCanvas();
                 
-                // Game state
+                this.setupCanvas();
+                this.initGameState();
+                this.setupEventListeners();
+                this.generateInitialBubbles();
+                
+                debug('Game initialized, starting loop...');
+                this.lastTime = 0;
+                this.gameLoop();
+            }
+            
+            setupCanvas() {
+                const container = document.getElementById('gameContainer');
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight - 50; // Account for UI
+                
+                debug(`Canvas size: ${this.canvas.width} x ${this.canvas.height}`);
+                
+                window.addEventListener('resize', () => {
+                    this.canvas.width = window.innerWidth;
+                    this.canvas.height = window.innerHeight - 50;
+                    this.cannon.x = this.canvas.width / 2;
+                    this.cannon.y = this.canvas.height - 30;
+                });
+            }
+            
+            initGameState() {
                 this.year = 1951;
                 this.sugar = 60;
                 this.maxSugar = 60;
                 this.lives = 3;
                 this.coins = 0;
                 this.bubblesRemaining = 20;
-                this.gameRunning = false;
-                this.isPaused = false;
+                this.gameRunning = true;
                 
                 // Bubble system
                 this.bubbles = [];
@@ -171,95 +206,65 @@
                 this.collectibles = [];
                 
                 // Physics
-                this.bubbleRadius = 16;
-                this.gridOffsetX = 0;
-                this.scrollSpeed = this.getScrollSpeed();
+                this.bubbleRadius = Math.min(18, this.canvas.width / 25);
+                this.scrollSpeed = 30; // pixels per second
+                this.spawnTimer = 0;
+                this.spawnInterval = 0.8; // seconds between new columns
+                
+                // Cluster system (Buffett's patience mechanic)
+                this.currentClusterSize = 0;
+                this.clusterThreshold = 30; // Much larger clusters before reset
+                this.clusterProbability = 0.25; // Only 25% chance - much rarer!
+                this.isClusterMode = false;
+                this.lastSpawnedColor = null;
+                this.clusterCooldown = 0; // Prevent clusters from happening too frequently
+                this.minClusterInterval = 45; // Minimum 45 seconds between cluster opportunities
                 
                 // Cannon
                 this.cannon = {
-                    x: 0,
-                    y: 0,
+                    x: this.canvas.width / 2,
+                    y: this.canvas.height - 30,
                     angle: -Math.PI / 2,
-                    power: 400
+                    power: 300
                 };
                 
-                // Colors for current decade
-                this.bubbleColors = this.getBubbleColors();
-                this.colorPalette = [
-                    '#e74c3c', '#3498db', '#2ecc71', '#f39c12', 
-                    '#9b59b6', '#1abc9c', '#e67e22', '#34495e',
-                    '#f1c40f', '#e91e63'
-                ];
+                // Colors
+                this.colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6'];
                 
                 // Input
-                this.mousePos = { x: 0, y: 0 };
                 this.isAiming = false;
                 this.trajectory = [];
                 
-                this.setupEventListeners();
-                this.initializeLevel();
-                this.gameLoop();
-            }
-            
-            setupCanvas() {
-                const resize = () => {
-                    this.canvas.width = window.innerWidth;
-                    this.canvas.height = window.innerHeight - 50; // Account for UI
-                    this.cannon.x = this.canvas.width / 2;
-                    this.cannon.y = this.canvas.height - 40;
-                };
-                
-                resize();
-                window.addEventListener('resize', resize);
-            }
-            
-            getScrollSpeed() {
-                const speeds = {
-                    1951: 0.5, 1961: 0.5, 1971: 0.5, 1991: 1.0,
-                    2001: 1.0, 2011: 1.5, 2021: 2.0
-                };
-                
-                for (let year of Object.keys(speeds).reverse()) {
-                    if (this.year >= parseInt(year)) {
-                        return speeds[year];
-                    }
+                // Generate next bubbles
+                for (let i = 0; i < 3; i++) {
+                    this.nextBubbles.push(Math.floor(Math.random() * 3));
                 }
-                return 0.5;
-            }
-            
-            getBubbleColors() {
-                const colorCounts = {
-                    1951: [3, 4, 5], 1961: [4, 5, 6], 1971: [5, 6, 7],
-                    1991: [3, 4, 5], 2001: [5, 6, 7], 2011: [3, 7, 8],
-                    2021: [6, 8, 10]
-                };
                 
-                for (let year of Object.keys(colorCounts).reverse()) {
-                    if (this.year >= parseInt(year)) {
-                        return colorCounts[year];
-                    }
-                }
-                return [3, 4, 5];
+                this.updateUI();
+                this.showQuote("Welcome to 1951! Legendary clusters appear every ~60 seconds. Your sugar lasts 30 seconds. Choose wisely!");
             }
             
             setupEventListeners() {
+                // Prevent context menu
+                this.canvas.addEventListener('contextmenu', e => e.preventDefault());
+                
                 // Mouse events
-                this.canvas.addEventListener('mousedown', (e) => this.handlePointerStart(e));
-                this.canvas.addEventListener('mousemove', (e) => this.handlePointerMove(e));
-                this.canvas.addEventListener('mouseup', (e) => this.handlePointerEnd(e));
+                this.canvas.addEventListener('mousedown', (e) => this.startAiming(e));
+                this.canvas.addEventListener('mousemove', (e) => this.updateAiming(e));
+                this.canvas.addEventListener('mouseup', (e) => this.fire(e));
                 
                 // Touch events
                 this.canvas.addEventListener('touchstart', (e) => {
                     e.preventDefault();
-                    this.handlePointerStart(e.touches[0]);
+                    this.startAiming(e.touches[0]);
                 });
                 this.canvas.addEventListener('touchmove', (e) => {
                     e.preventDefault();
-                    this.handlePointerMove(e.touches[0]);
+                    this.updateAiming(e.touches[0]);
                 });
                 this.canvas.addEventListener('touchend', (e) => {
                     e.preventDefault();
-                    this.handlePointerEnd(e);
+                    this.fire(e);
                 });
             }
             
@@ -271,41 +276,51 @@
                 };
             }
             
-            handlePointerStart(e) {
+            startAiming(e) {
                 if (!this.gameRunning || this.activeBubble) return;
                 
-                this.mousePos = this.getPointerPos(e);
                 this.isAiming = true;
-                this.updateCannon();
+                this.updateAiming(e);
             }
             
-            handlePointerMove(e) {
+            updateAiming(e) {
                 if (!this.isAiming) return;
                 
-                this.mousePos = this.getPointerPos(e);
-                this.updateCannon();
+                const pos = this.getPointerPos(e);
+                const dx = pos.x - this.cannon.x;
+                const dy = pos.y - this.cannon.y;
+                
+                let angle = Math.atan2(dy, dx);
+                
+                // Limit angle (roughly 160 degrees range)
+                const maxAngle = Math.PI * 0.1;
+                const minAngle = -Math.PI + maxAngle;
+                angle = Math.max(minAngle, Math.min(maxAngle, angle));
+                
+                this.cannon.angle = angle;
                 this.calculateTrajectory();
             }
             
-            handlePointerEnd(e) {
-                if (!this.isAiming || this.activeBubble) return;
+            fire(e) {
+                if (!this.isAiming || this.activeBubble || this.bubblesRemaining <= 0) return;
                 
                 this.isAiming = false;
                 this.trajectory = [];
-                this.fireBubble();
-            }
-            
-            updateCannon() {
-                const dx = this.mousePos.x - this.cannon.x;
-                const dy = this.mousePos.y - this.cannon.y;
-                let angle = Math.atan2(dy, dx);
                 
-                // Limit angle to 178 degrees (approximately -π to 0)
-                const maxAngle = Math.PI * 0.1; // 18 degrees from horizontal
-                const minAngle = -Math.PI + maxAngle;
+                this.activeBubble = {
+                    x: this.cannon.x,
+                    y: this.cannon.y,
+                    vx: Math.cos(this.cannon.angle) * this.cannon.power,
+                    vy: Math.sin(this.cannon.angle) * this.cannon.power,
+                    color: this.nextBubbles.shift(),
+                    radius: this.bubbleRadius
+                };
                 
-                angle = Math.max(minAngle, Math.min(maxAngle, angle));
-                this.cannon.angle = angle;
+                this.nextBubbles.push(Math.floor(Math.random() * 3));
+                this.bubblesRemaining--;
+                this.updateUI();
+                
+                debug(`Fired bubble! ${this.bubblesRemaining} remaining`);
             }
             
             calculateTrajectory() {
@@ -317,7 +332,7 @@
                 let vx = Math.cos(this.cannon.angle) * this.cannon.power / 60;
                 let vy = Math.sin(this.cannon.angle) * this.cannon.power / 60;
                 
-                for (let i = 0; i < 60; i++) {
+                for (let i = 0; i < 30; i++) {
                     x += vx;
                     y += vy;
                     
@@ -333,86 +348,162 @@
                 }
             }
             
-            initializeLevel() {
+            generateInitialBubbles() {
                 this.bubbles = [];
-                this.collectibles = [];
-                this.gridOffsetX = 0;
-                this.gameRunning = true;
                 
-                // Generate initial bubble grid
-                this.generateBubbleGrid();
+                const cols = Math.floor(this.canvas.width / (this.bubbleRadius * 2)) + 5; // Extra columns off-screen
+                const rows = 6;
                 
-                // Prepare next bubbles
-                this.nextBubbles = [];
-                for (let i = 0; i < 5; i++) {
-                    this.nextBubbles.push(this.getRandomBubbleColor());
-                }
-                
-                this.showQuote("The stock market is a device for transferring money from the impatient to the patient.");
-            }
-            
-            generateBubbleGrid() {
-                const cols = 20;
-                const rows = 6 + Math.floor((this.year - 1951) / 10); // Add rows as years progress
-                
-                for (let row = 0; row < rows; row++) {
-                    const fillRate = row === 0 ? 1.0 : Math.max(0.4, 1.0 - (row * 0.1));
-                    
-                    for (let col = 0; col < cols; col++) {
-                        if (Math.random() < fillRate) {
-                            const x = col * (this.bubbleRadius * 2) + (row % 2 ? this.bubbleRadius : 0);
-                            const y = row * (this.bubbleRadius * 1.7) + this.bubbleRadius;
+                for (let col = 0; col < cols; col++) {
+                    for (let row = 0; row < rows; row++) {
+                        if (Math.random() < 0.7) { // 70% fill rate
+                            const x = col * (this.bubbleRadius * 2) + this.bubbleRadius + (row % 2 ? this.bubbleRadius : 0);
+                            const y = row * (this.bubbleRadius * 1.5) + this.bubbleRadius + 20;
                             
                             this.bubbles.push({
-                                x: x + this.canvas.width, // Start off-screen right
+                                x: x,
                                 y: y,
+                                color: Math.floor(Math.random() * 3),
+                                radius: this.bubbleRadius,
                                 gridX: col,
-                                gridY: row,
-                                color: this.getRandomBubbleColor(),
-                                radius: this.bubbleRadius
+                                gridY: row
                             });
                         }
                     }
                 }
+                
+                debug(`Generated ${this.bubbles.length} bubbles`);
             }
             
-            getRandomBubbleColor() {
-                const [min, , max] = this.bubbleColors;
-                const range = max - min + 1;
-                return min + Math.floor(Math.random() * range);
+            spawnNewColumn() {
+                const rows = 6;
+                const rightmostX = Math.max(...this.bubbles.map(b => b.x), this.canvas.width);
+                const newCol = Math.floor((rightmostX + this.bubbleRadius * 2) / (this.bubbleRadius * 2));
+                
+                for (let row = 0; row < rows; row++) {
+                    if (Math.random() < 0.7) { // 70% fill rate
+                        const x = newCol * (this.bubbleRadius * 2) + this.bubbleRadius + (row % 2 ? this.bubbleRadius : 0);
+                        const y = row * (this.bubbleRadius * 1.5) + this.bubbleRadius + 20;
+                        
+                        // Smart cluster color selection
+                        const color = this.getClusterAwareColor(newCol, row);
+                        
+                        this.bubbles.push({
+                            x: x,
+                            y: y,
+                            color: color,
+                            radius: this.bubbleRadius,
+                            gridX: newCol,
+                            gridY: row
+                        });
+                    }
+                }
             }
             
-            fireBubble() {
-                if (this.bubblesRemaining <= 0 || this.activeBubble) return;
+            getClusterAwareColor(col, row) {
+                // Skip clustering if in cooldown period
+                if (this.clusterCooldown > 0) {
+                    return Math.floor(Math.random() * 3);
+                }
                 
-                this.activeBubble = {
-                    x: this.cannon.x,
-                    y: this.cannon.y,
-                    vx: Math.cos(this.cannon.angle) * this.cannon.power / 60,
-                    vy: Math.sin(this.cannon.angle) * this.cannon.power / 60,
-                    color: this.nextBubbles.shift() || this.getRandomBubbleColor(),
-                    radius: this.bubbleRadius
-                };
+                // Get neighboring bubbles
+                const neighbors = this.getGridNeighbors(col, row);
+                const neighborColors = neighbors.map(n => n.color);
                 
-                this.nextBubbles.push(this.getRandomBubbleColor());
-                this.bubblesRemaining--;
-                this.updateUI();
+                // Only attempt clustering if we have neighbors and haven't hit threshold
+                if (neighborColors.length > 0 && this.currentClusterSize < this.clusterThreshold) {
+                    // Find most common neighbor color
+                    const colorCounts = {};
+                    neighborColors.forEach(color => {
+                        colorCounts[color] = (colorCounts[color] || 0) + 1;
+                    });
+                    
+                    const mostCommonColor = Object.keys(colorCounts).reduce((a, b) => 
+                        colorCounts[a] > colorCounts[b] ? a : b
+                    );
+                    
+                    // Much lower probability - creates rarity!
+                    if (Math.random() < this.clusterProbability) {
+                        this.currentClusterSize++;
+                        this.isClusterMode = true;
+                        this.lastSpawnedColor = parseInt(mostCommonColor);
+                        
+                        // Only announce significant clusters
+                        if (this.currentClusterSize === 8) {
+                            debug('RARE CLUSTER OPPORTUNITY! This could be BIG - but can you wait?');
+                        } else if (this.currentClusterSize === 15) {
+                            debug('MASSIVE CLUSTER FORMING! Warren would wait... but time is running out!');
+                        }
+                        
+                        return parseInt(mostCommonColor);
+                    }
+                }
+                
+                // Reset cluster if threshold reached + start cooldown
+                if (this.currentClusterSize >= this.clusterThreshold) {
+                    this.currentClusterSize = 0;
+                    this.isClusterMode = false;
+                    this.clusterCooldown = this.minClusterInterval; // Start cooldown period
+                    debug('LEGENDARY CLUSTER COMPLETED! Next opportunity in ~45 seconds...');
+                }
+                
+                // Random color (normal market conditions - most of the time)
+                return Math.floor(Math.random() * 3);
             }
             
-            updateBubbles(deltaTime) {
-                // Scroll existing bubbles
-                this.gridOffsetX += this.scrollSpeed * deltaTime;
+            getGridNeighbors(col, row) {
+                const neighbors = [];
+                const isEvenRow = row % 2 === 0;
                 
+                // Hexagonal grid neighbor offsets
+                const offsets = isEvenRow ? 
+                    [[-1, -1], [0, -1], [-1, 0], [1, 0], [-1, 1], [0, 1]] :
+                    [[0, -1], [1, -1], [-1, 0], [1, 0], [0, 1], [1, 1]];
+                
+                for (let [dx, dy] of offsets) {
+                    const neighborCol = col + dx;
+                    const neighborRow = row + dy;
+                    
+                    const neighbor = this.bubbles.find(b => 
+                        b.gridX === neighborCol && b.gridY === neighborRow
+                    );
+                    
+                    if (neighbor) {
+                        neighbors.push(neighbor);
+                    }
+                }
+                
+                return neighbors;
+            }
+            
+            update(deltaTime) {
+                if (!this.gameRunning) return;
+                
+                // Update sugar
+                this.sugar -= deltaTime;
+                if (this.sugar <= 0) {
+                    this.endLevel(false);
+                    return;
+                }
+                
+                // Update cluster cooldown
+                if (this.clusterCooldown > 0) {
+                    this.clusterCooldown -= deltaTime;
+                }
+                
+                // Scroll bubbles
                 this.bubbles.forEach(bubble => {
                     bubble.x -= this.scrollSpeed * deltaTime;
                 });
                 
-                // Remove bubbles that have scrolled off screen
+                // Remove off-screen bubbles
                 this.bubbles = this.bubbles.filter(bubble => bubble.x > -this.bubbleRadius);
                 
-                // Generate new bubbles on the right side
-                if (Math.random() < 0.01) { // 1% chance per frame
-                    this.generateNewColumn();
+                // Spawn new columns continuously 
+                this.spawnTimer += deltaTime;
+                if (this.spawnTimer >= this.spawnInterval) {
+                    this.spawnNewColumn();
+                    this.spawnTimer = 0;
                 }
                 
                 // Update active bubble
@@ -429,72 +520,67 @@
                     }
                     
                     // Check collisions
-                    this.checkBubbleCollisions();
+                    this.checkCollisions();
                     
-                    // Remove if off screen
-                    if (this.activeBubble.y <= -this.bubbleRadius) {
+                    // Remove if off screen top
+                    if (this.activeBubble && this.activeBubble.y <= -this.bubbleRadius) {
                         this.activeBubble = null;
                     }
                 }
                 
                 // Update collectibles
                 this.collectibles.forEach(collectible => {
-                    collectible.y += 100 * deltaTime; // Fall down
+                    collectible.y += 100 * deltaTime;
                     
                     // Check collection
-                    if (this.distance(collectible, { x: this.cannon.x, y: this.cannon.y }) < 30) {
+                    const dist = Math.sqrt(
+                        Math.pow(collectible.x - this.cannon.x, 2) + 
+                        Math.pow(collectible.y - this.cannon.y, 2)
+                    );
+                    
+                    if (dist < 30) {
                         this.collectItem(collectible);
                         collectible.collected = true;
                     }
                 });
                 
                 this.collectibles = this.collectibles.filter(c => !c.collected && c.y < this.canvas.height);
-            }
-            
-            generateNewColumn() {
-                const rows = 6 + Math.floor((this.year - 1951) / 10);
-                const baseX = this.canvas.width + this.bubbleRadius;
                 
-                for (let row = 0; row < rows; row++) {
-                    const fillRate = row === 0 ? 1.0 : Math.max(0.4, 1.0 - (row * 0.1));
-                    
-                    if (Math.random() < fillRate) {
-                        this.bubbles.push({
-                            x: baseX,
-                            y: row * (this.bubbleRadius * 1.7) + this.bubbleRadius,
-                            gridX: Math.floor(baseX / (this.bubbleRadius * 2)),
-                            gridY: row,
-                            color: this.getRandomBubbleColor(),
-                            radius: this.bubbleRadius
-                        });
-                    }
+                // Check win/lose conditions
+                if (this.bubbles.length === 0) {
+                    this.endLevel(true);
+                } else if (this.bubblesRemaining <= 0 && !this.activeBubble) {
+                    this.endLevel(false);
                 }
+                
+                this.updateUI();
             }
             
-            checkBubbleCollisions() {
+            checkCollisions() {
                 if (!this.activeBubble) return;
                 
                 for (let bubble of this.bubbles) {
-                    if (this.distance(this.activeBubble, bubble) < this.bubbleRadius * 1.8) {
+                    const dist = Math.sqrt(
+                        Math.pow(this.activeBubble.x - bubble.x, 2) + 
+                        Math.pow(this.activeBubble.y - bubble.y, 2)
+                    );
+                    
+                    if (dist < this.bubbleRadius * 1.8) {
                         this.attachBubble(bubble);
                         return;
                     }
                 }
             }
             
-            attachBubble(nearestBubble) {
-                // Find grid position for the active bubble
-                const gridX = Math.round((this.activeBubble.x - (nearestBubble.gridY % 2 ? this.bubbleRadius : 0)) / (this.bubbleRadius * 2));
-                const gridY = Math.round((this.activeBubble.y - this.bubbleRadius) / (this.bubbleRadius * 1.7));
-                
-                // Add the bubble to the grid
+            attachBubble(nearBubble) {
+                // Add active bubble to grid
                 const newBubble = {
-                    x: gridX * (this.bubbleRadius * 2) + (gridY % 2 ? this.bubbleRadius : 0),
-                    y: gridY * (this.bubbleRadius * 1.7) + this.bubbleRadius,
-                    gridX: gridX,
-                    gridY: Math.max(0, gridY),
+                    x: this.activeBubble.x,
+                    y: this.activeBubble.y,
                     color: this.activeBubble.color,
-                    radius: this.bubbleRadius
+                    radius: this.bubbleRadius,
+                    gridX: nearBubble.gridX,
+                    gridY: nearBubble.gridY
                 };
                 
                 this.bubbles.push(newBubble);
@@ -504,6 +590,7 @@
                 const matches = this.findMatches(newBubble);
                 if (matches.length >= 3) {
                     this.popBubbles(matches);
+                    debug(`Popped ${matches.length} bubbles!`);
                 }
             }
             
@@ -514,7 +601,7 @@
                 
                 while (stack.length > 0) {
                     const bubble = stack.pop();
-                    const key = `${bubble.gridX},${bubble.gridY}`;
+                    const key = `${bubble.x},${bubble.y}`;
                     
                     if (visited.has(key)) continue;
                     visited.add(key);
@@ -522,10 +609,18 @@
                     if (bubble.color === startBubble.color) {
                         matches.push(bubble);
                         
-                        // Check neighbors
-                        const neighbors = this.getNeighbors(bubble);
+                        // Find neighbors
+                        const neighbors = this.bubbles.filter(b => {
+                            if (b === bubble) return false;
+                            const dist = Math.sqrt(
+                                Math.pow(b.x - bubble.x, 2) + 
+                                Math.pow(b.y - bubble.y, 2)
+                            );
+                            return dist < this.bubbleRadius * 2.2;
+                        });
+                        
                         for (let neighbor of neighbors) {
-                            const neighborKey = `${neighbor.gridX},${neighbor.gridY}`;
+                            const neighborKey = `${neighbor.x},${neighbor.y}`;
                             if (!visited.has(neighborKey) && neighbor.color === startBubble.color) {
                                 stack.push(neighbor);
                             }
@@ -536,99 +631,47 @@
                 return matches;
             }
             
-            getNeighbors(bubble) {
-                const neighbors = [];
-                const { gridX, gridY } = bubble;
-                const isEvenRow = gridY % 2 === 0;
-                
-                // Define neighbor offsets for hexagonal grid
-                const offsets = isEvenRow ? 
-                    [[-1, -1], [0, -1], [-1, 0], [1, 0], [-1, 1], [0, 1]] :
-                    [[0, -1], [1, -1], [-1, 0], [1, 0], [0, 1], [1, 1]];
-                
-                for (let [dx, dy] of offsets) {
-                    const neighborX = gridX + dx;
-                    const neighborY = gridY + dy;
-                    
-                    const neighbor = this.bubbles.find(b => b.gridX === neighborX && b.gridY === neighborY);
-                    if (neighbor) {
-                        neighbors.push(neighbor);
-                    }
-                }
-                
-                return neighbors;
-            }
-            
-            popBubbles(bubbles) {
-                // Remove bubbles from array
-                for (let bubble of bubbles) {
+            popBubbles(matches) {
+                // Remove matched bubbles
+                for (let bubble of matches) {
                     const index = this.bubbles.indexOf(bubble);
                     if (index !== -1) {
                         this.bubbles.splice(index, 1);
                         
                         // Create collectibles
-                        if (Math.random() < 0.3) { // 30% chance for coin
-                            this.createCollectible(bubble.x, bubble.y, 'coin');
-                        } else if (Math.random() < 0.15) { // 15% chance for sweet
-                            this.createCollectible(bubble.x, bubble.y, 'sweet');
-                        } else if (Math.random() < 0.05) { // 5% chance for book
-                            this.createCollectible(bubble.x, bubble.y, 'book');
+                        if (Math.random() < 0.4) {
+                            this.collectibles.push({
+                                x: bubble.x,
+                                y: bubble.y,
+                                type: Math.random() < 0.7 ? 'coin' : 'sweet',
+                                collected: false
+                            });
                         }
                     }
                 }
                 
-                // Check for floating bubbles and remove them
-                this.removeFloatingBubbles();
-            }
-            
-            removeFloatingBubbles() {
-                const connected = new Set();
-                const stack = [];
-                
-                // Find all bubbles connected to the top row
-                for (let bubble of this.bubbles) {
-                    if (bubble.gridY === 0) {
-                        stack.push(bubble);
-                    }
+                // Dramatic rewards for patience - much higher thresholds
+                if (matches.length >= 20) {
+                    this.showQuote('LEGENDARY PATIENCE! ' + matches.length + ' bubbles! Warren: "Our favorite holding period is forever." +' + (matches.length * 20) + ' coins!');
+                    this.coins += matches.length * 20; // Massive bonus
+                    this.sugar = Math.min(this.maxSugar, this.sugar + 15); // Big sugar bonus
+                } else if (matches.length >= 15) {
+                    this.showQuote('EXCEPTIONAL CLUSTER! ' + matches.length + ' bubbles! Warren: "The stock market rewards patience." +' + (matches.length * 10) + ' coins!');
+                    this.coins += matches.length * 10; // Large bonus
+                    this.sugar = Math.min(this.maxSugar, this.sugar + 10); // Sugar bonus
+                } else if (matches.length >= 8) {
+                    this.showQuote('GREAT PATIENCE! ' + matches.length + ' bubbles! Small clusters sustain you for the big opportunities.');
+                    this.coins += matches.length * 5; // Good bonus
+                    this.sugar = Math.min(this.maxSugar, this.sugar + 5); // Small sugar bonus
+                } else if (matches.length >= 5) {
+                    this.showQuote('Decent cluster! ' + matches.length + ' bubbles. Sometimes you need small wins to survive.');
+                    this.coins += matches.length * 2; // Modest bonus
                 }
                 
-                while (stack.length > 0) {
-                    const bubble = stack.pop();
-                    const key = `${bubble.gridX},${bubble.gridY}`;
-                    
-                    if (connected.has(key)) continue;
-                    connected.add(key);
-                    
-                    const neighbors = this.getNeighbors(bubble);
-                    for (let neighbor of neighbors) {
-                        const neighborKey = `${neighbor.gridX},${neighbor.gridY}`;
-                        if (!connected.has(neighborKey)) {
-                            stack.push(neighbor);
-                        }
-                    }
+                // Reset cluster tracking if we popped a significant cluster
+                if (matches.length >= 8) {
+                    this.currentClusterSize = Math.max(0, this.currentClusterSize - matches.length);
                 }
-                
-                // Remove floating bubbles
-                const floating = this.bubbles.filter(bubble => 
-                    !connected.has(`${bubble.gridX},${bubble.gridY}`)
-                );
-                
-                for (let bubble of floating) {
-                    const index = this.bubbles.indexOf(bubble);
-                    if (index !== -1) {
-                        this.bubbles.splice(index, 1);
-                        this.createCollectible(bubble.x, bubble.y, 'coin');
-                    }
-                }
-            }
-            
-            createCollectible(x, y, type) {
-                this.collectibles.push({
-                    x, y, type,
-                    vx: (Math.random() - 0.5) * 100,
-                    vy: -50,
-                    collected: false
-                });
             }
             
             collectItem(collectible) {
@@ -639,41 +682,7 @@
                     case 'sweet':
                         this.sugar = Math.min(this.maxSugar, this.sugar + 10);
                         break;
-                    case 'book':
-                        this.coins += 50;
-                        this.showQuote("Knowledge compounds faster than money.");
-                        break;
                 }
-                this.updateUI();
-            }
-            
-            distance(a, b) {
-                const dx = a.x - b.x;
-                const dy = a.y - b.y;
-                return Math.sqrt(dx * dx + dy * dy);
-            }
-            
-            updateGameState(deltaTime) {
-                // Deplete sugar
-                this.sugar -= deltaTime;
-                if (this.sugar <= 0) {
-                    this.endLevel(false);
-                    return;
-                }
-                
-                // Check win condition (all bubbles cleared or reached end)
-                if (this.bubbles.length === 0) {
-                    this.endLevel(true);
-                    return;
-                }
-                
-                // Check lose condition (no bubbles remaining)
-                if (this.bubblesRemaining <= 0 && !this.activeBubble) {
-                    this.endLevel(false);
-                    return;
-                }
-                
-                this.updateUI();
             }
             
             endLevel(won) {
@@ -682,42 +691,37 @@
                 if (won) {
                     this.year++;
                     this.showQuote(`Year ${this.year - 1} completed! Moving to ${this.year}.`);
-                    
-                    // Reset for next level
-                    setTimeout(() => {
-                        this.sugar = this.maxSugar;
-                        this.bubblesRemaining = 20 + Math.floor((this.year - 1951) / 5);
-                        this.bubbleColors = this.getBubbleColors();
-                        this.scrollSpeed = this.getScrollSpeed();
-                        this.initializeLevel();
-                    }, 2000);
+                    setTimeout(() => this.nextLevel(), 2000);
                 } else {
                     this.lives--;
                     if (this.lives <= 0) {
-                        this.showQuote("Game Over! Warren says: 'It's only when the tide goes out that you learn who's been swimming naked.'");
-                        setTimeout(() => this.restartGame(), 3000);
+                        this.showQuote("Game Over! Warren says: 'Time is the friend of the wonderful business.'");
+                        setTimeout(() => this.restart(), 3000);
                     } else {
-                        this.showQuote("Life lost! Try again.");
-                        setTimeout(() => {
-                            this.sugar = this.maxSugar;
-                            this.bubblesRemaining = 20;
-                            this.initializeLevel();
-                        }, 2000);
+                        this.showQuote(`Life lost! ${this.lives} remaining.`);
+                        setTimeout(() => this.retryLevel(), 2000);
                     }
                 }
-                
-                this.updateUI();
             }
             
-            restartGame() {
-                this.year = 1951;
-                this.sugar = 60;
-                this.lives = 3;
-                this.coins = 0;
+            nextLevel() {
+                this.sugar = this.maxSugar;
                 this.bubblesRemaining = 20;
-                this.bubbleColors = this.getBubbleColors();
-                this.scrollSpeed = this.getScrollSpeed();
-                this.initializeLevel();
+                this.scrollSpeed += 5; // Increase difficulty
+                this.generateInitialBubbles();
+                this.gameRunning = true;
+            }
+            
+            retryLevel() {
+                this.sugar = this.maxSugar;
+                this.bubblesRemaining = 20;
+                this.generateInitialBubbles();
+                this.gameRunning = true;
+            }
+            
+            restart() {
+                this.initGameState();
+                this.generateInitialBubbles();
             }
             
             showQuote(text) {
@@ -736,7 +740,6 @@
                 document.getElementById('coinCount').textContent = this.coins;
                 document.getElementById('bubbleCount').textContent = this.bubblesRemaining;
                 
-                // Update lives display
                 const livesContainer = document.getElementById('lives');
                 livesContainer.innerHTML = '';
                 for (let i = 0; i < this.lives; i++) {
@@ -748,23 +751,22 @@
             
             render() {
                 // Clear canvas
-                this.ctx.fillStyle = 'rgba(44, 62, 80, 0.1)';
+                this.ctx.fillStyle = '#2c3e50';
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
                 
-                // Draw grid bubbles
+                // Draw bubbles
                 for (let bubble of this.bubbles) {
-                    this.drawBubble(bubble.x, bubble.y, bubble.radius, bubble.color);
+                    this.drawBubble(bubble);
                 }
                 
                 // Draw active bubble
                 if (this.activeBubble) {
-                    this.drawBubble(this.activeBubble.x, this.activeBubble.y, 
-                        this.activeBubble.radius, this.activeBubble.color);
+                    this.drawBubble(this.activeBubble);
                 }
                 
                 // Draw trajectory
                 if (this.isAiming && this.trajectory.length > 0) {
-                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
                     this.ctx.lineWidth = 2;
                     this.ctx.setLineDash([5, 5]);
                     this.ctx.beginPath();
@@ -777,110 +779,193 @@
                 }
                 
                 // Draw cannon
-                this.drawCannon();
-                
-                // Draw next bubbles queue
-                this.drawNextBubbles();
-                
-                // Draw collectibles
-                for (let collectible of this.collectibles) {
-                    this.drawCollectible(collectible);
-                }
-            }
-            
-            drawBubble(x, y, radius, colorIndex) {
-                const color = this.colorPalette[colorIndex % this.colorPalette.length];
-                
-                this.ctx.beginPath();
-                this.ctx.arc(x, y, radius, 0, Math.PI * 2);
-                this.ctx.fillStyle = color;
-                this.ctx.fill();
-                
-                // Add highlight
-                this.ctx.beginPath();
-                this.ctx.arc(x - radius * 0.3, y - radius * 0.3, radius * 0.3, 0, Math.PI * 2);
-                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                this.ctx.fill();
-                
-                this.ctx.strokeStyle = '#2c3e50';
-                this.ctx.lineWidth = 2;
-                this.ctx.stroke();
-            }
-            
-            drawCannon() {
                 this.ctx.save();
                 this.ctx.translate(this.cannon.x, this.cannon.y);
                 this.ctx.rotate(this.cannon.angle);
-                
-                // Cannon body
                 this.ctx.fillStyle = '#34495e';
-                this.ctx.fillRect(-5, -15, 30, 10);
+                this.ctx.fillRect(-5, -8, 25, 6);
+                this.ctx.restore();
                 
-                // Cannon base
+                // Draw cannon base
                 this.ctx.beginPath();
-                this.ctx.arc(0, 0, 20, 0, Math.PI * 2);
+                this.ctx.arc(this.cannon.x, this.cannon.y, 15, 0, Math.PI * 2);
                 this.ctx.fillStyle = '#2c3e50';
                 this.ctx.fill();
                 
-                this.ctx.restore();
-            }
-            
-            drawNextBubbles() {
-                for (let i = 0; i < Math.min(3, this.nextBubbles.length); i++) {
-                    const x = this.canvas.width - 40;
-                    const y = this.canvas.height - 120 + (i * 35);
-                    this.drawBubble(x, y, 12, this.nextBubbles[i]);
-                }
-            }
-            
-            drawCollectible(collectible) {
-                let color, symbol;
-                switch (collectible.type) {
-                    case 'coin':
-                        color = '#f1c40f';
-                        symbol = '$';
-                        break;
-                    case 'sweet':
-                        color = '#e74c3c';
-                        symbol = '♥';
-                        break;
-                    case 'book':
-                        color = '#3498db';
-                        symbol = '📖';
-                        break;
+                // Draw next bubbles
+                for (let i = 0; i < this.nextBubbles.length; i++) {
+                    const x = this.canvas.width - 30;
+                    const y = this.canvas.height - 100 + (i * 35);
+                    this.ctx.beginPath();
+                    this.ctx.arc(x, y, 10, 0, Math.PI * 2);
+                    this.ctx.fillStyle = this.colors[this.nextBubbles[i]];
+                    this.ctx.fill();
+                    this.ctx.strokeStyle = '#fff';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.stroke();
                 }
                 
+                // Draw collectibles
+                for (let collectible of this.collectibles) {
+                    this.ctx.beginPath();
+                    this.ctx.arc(collectible.x, collectible.y, 8, 0, Math.PI * 2);
+                    this.ctx.fillStyle = collectible.type === 'coin' ? '#f1c40f' : '#e74c3c';
+                    this.ctx.fill();
+                    
+                    this.ctx.fillStyle = 'white';
+                    this.ctx.font = '10px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText(collectible.type === 'coin' ? '
+            }
+            
+            drawBubble(bubble) {
+                // Main bubble
                 this.ctx.beginPath();
-                this.ctx.arc(collectible.x, collectible.y, 8, 0, Math.PI * 2);
-                this.ctx.fillStyle = color;
+                this.ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
+                this.ctx.fillStyle = this.colors[bubble.color];
                 this.ctx.fill();
                 
-                this.ctx.fillStyle = 'white';
-                this.ctx.font = '12px Arial';
-                this.ctx.textAlign = 'center';
-                this.ctx.fillText(symbol, collectible.x, collectible.y + 4);
+                // Highlight
+                this.ctx.beginPath();
+                this.ctx.arc(bubble.x - bubble.radius * 0.3, bubble.y - bubble.radius * 0.3, 
+                    bubble.radius * 0.3, 0, Math.PI * 2);
+                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                this.ctx.fill();
+                
+                // Border
+                this.ctx.beginPath();
+                this.ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                this.ctx.lineWidth = 1;
+                this.ctx.stroke();
             }
             
             gameLoop() {
-                const now = Date.now();
+                const now = performance.now();
                 const deltaTime = this.lastTime ? (now - this.lastTime) / 1000 : 0;
                 this.lastTime = now;
                 
-                if (this.gameRunning && !this.isPaused) {
-                    this.updateBubbles(deltaTime);
-                    this.updateGameState(deltaTime);
-                }
-                
+                this.update(Math.min(deltaTime, 0.016)); // Cap at 60fps
                 this.render();
                 
                 requestAnimationFrame(() => this.gameLoop());
             }
         }
         
-        // Start the game when page loads
+        // Initialize game when page loads
         window.addEventListener('load', () => {
-            new BubbleBuffettGame();
+            debug('Page loaded, creating game...');
+            try {
+                new BubbleGame();
+            } catch (error) {
+                debug('Error creating game: ' + error.message);
+                console.error(error);
+            }
+        });
+        
+        // Handle page visibility
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Game paused
+            } else {
+                // Game resumed
+            }
         });
     </script>
 </body>
-</html>
+</html> : '♥', 
+                        collectible.x, collectible.y + 3);
+                }
+                
+                // Draw cluster indicator - only for significant clusters
+                if (this.isClusterMode && this.currentClusterSize >= 8) {
+                    let message, color;
+                    if (this.currentClusterSize >= 20) {
+                        message = 'LEGENDARY CLUSTER (' + this.currentClusterSize + ')';
+                        color = 'rgba(231, 76, 60, 0.9)'; // Red for extreme opportunity
+                    } else if (this.currentClusterSize >= 15) {
+                        message = 'MASSIVE CLUSTER (' + this.currentClusterSize + ')';
+                        color = 'rgba(155, 89, 182, 0.9)'; // Purple for large opportunity  
+                    } else {
+                        message = 'RARE CLUSTER (' + this.currentClusterSize + ')';
+                        color = 'rgba(241, 196, 15, 0.9)'; // Gold for opportunity
+                    }
+                    
+                    this.ctx.fillStyle = color;
+                    this.ctx.font = 'bold 16px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText(message, this.canvas.width / 2, 50);
+                    
+                    // Calculate time pressure
+                    const timeLeft = this.sugar;
+                    const urgency = timeLeft < 10 ? 'TIME CRITICAL!' : timeLeft < 20 ? 'TIME PRESSURE' : 'PATIENCE PAYS';
+                    this.ctx.font = 'bold 12px Arial';
+                    this.ctx.fillText(urgency, this.canvas.width / 2, 70);
+                }
+                
+                // Show cooldown status
+                if (this.clusterCooldown > 0) {
+                    this.ctx.fillStyle = 'rgba(127, 140, 141, 0.7)';
+                    this.ctx.font = '12px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText('Market Analysis: ' + Math.ceil(this.clusterCooldown) + 's until next opportunity', 
+                        this.canvas.width / 2, this.canvas.height - 40);
+                }
+            }
+            
+            drawBubble(bubble) {
+                // Main bubble
+                this.ctx.beginPath();
+                this.ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
+                this.ctx.fillStyle = this.colors[bubble.color];
+                this.ctx.fill();
+                
+                // Highlight
+                this.ctx.beginPath();
+                this.ctx.arc(bubble.x - bubble.radius * 0.3, bubble.y - bubble.radius * 0.3, 
+                    bubble.radius * 0.3, 0, Math.PI * 2);
+                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                this.ctx.fill();
+                
+                // Border
+                this.ctx.beginPath();
+                this.ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                this.ctx.lineWidth = 1;
+                this.ctx.stroke();
+            }
+            
+            gameLoop() {
+                const now = performance.now();
+                const deltaTime = this.lastTime ? (now - this.lastTime) / 1000 : 0;
+                this.lastTime = now;
+                
+                this.update(Math.min(deltaTime, 0.016)); // Cap at 60fps
+                this.render();
+                
+                requestAnimationFrame(() => this.gameLoop());
+            }
+        }
+        
+        // Initialize game when page loads
+        window.addEventListener('load', () => {
+            debug('Page loaded, creating game...');
+            try {
+                new BubbleGame();
+            } catch (error) {
+                debug('Error creating game: ' + error.message);
+                console.error(error);
+            }
+        });
+        
+        // Handle page visibility
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Game paused
+            } else {
+                // Game resumed
+            }
+        });
+    </script>
+</body>
+                    </html>
