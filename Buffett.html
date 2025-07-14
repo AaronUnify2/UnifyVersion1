@@ -11,6 +11,11 @@
             box-sizing: border-box;
         }
         
+        html, body {
+            width: 100%;
+            height: 100%;
+        }
+        
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #1a1a1a;
@@ -25,6 +30,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            background: #000;
         }
         
         .game-container {
@@ -32,6 +38,7 @@
             height: 100%;
             max-width: 800px;
             max-height: 600px;
+            margin: 0 auto;
             position: relative;
             background: #000;
         }
@@ -46,7 +53,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            background: #1a1a1a;
             z-index: 10;
         }
         
@@ -63,18 +70,6 @@
             font-size: 1.2em;
             margin-bottom: 40px;
             color: #ccc;
-        }
-        
-        .debug-info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.8);
-            color: #fff;
-            padding: 10px;
-            font-size: 0.8em;
-            border-radius: 5px;
-            z-index: 100;
         }
         
         .menu-button {
@@ -117,18 +112,13 @@
             left: 0;
             right: 0;
             bottom: 0;
-            border: 20px solid;
+            border: 20px solid #666;
             pointer-events: none;
         }
         
         .decade-1950s {
             border-color: #666;
             background: repeating-linear-gradient(45deg, #333, #333 10px, #444 10px, #444 20px);
-        }
-        
-        /* Apply grayscale to game content in 1950s */
-        .game-screen .decade-1950s + #gameCanvas {
-            filter: grayscale(100%);
         }
         
         .decade-1960s { 
@@ -174,7 +164,7 @@
             bottom: 120px;
             overflow: hidden;
             cursor: crosshair;
-            background: rgba(0,0,0,0.3);
+            background: rgba(0,0,0,0.1);
         }
         
         .game-ui {
@@ -399,21 +389,6 @@
             display: block;
         }
         
-        .trajectory-line {
-            position: absolute;
-            height: 3px;
-            background: repeating-linear-gradient(
-                to right,
-                #ffd700,
-                #ffd700 10px,
-                transparent 10px,
-                transparent 15px
-            );
-            transform-origin: left center;
-            pointer-events: none;
-            opacity: 0.8;
-        }
-        
         .cannon {
             position: absolute;
             bottom: 40px;
@@ -449,6 +424,16 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
         
+        .bubble.popping {
+            animation: pop 0.3s ease-out forwards;
+        }
+        
+        @keyframes pop {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(0); opacity: 0; }
+        }
+        
         .bubble-queue {
             position: absolute;
             bottom: 5px;
@@ -482,36 +467,9 @@
             animation: fall 2s linear;
         }
         
-        .bubble.popping {
-            animation: pop 0.3s ease-out forwards;
-        }
-        
-        @keyframes pop {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(0); opacity: 0; }
-        }
-        
-        .projectile {
-            position: absolute;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.5);
-            animation: shoot 0.5s linear forwards;
-            pointer-events: none;
-            z-index: 10;
-        }
-        
-        @keyframes shoot {
-            from { 
-                transform: scale(1);
-                opacity: 1;
-            }
-            to { 
-                transform: scale(0.8);
-                opacity: 0.8;
-            }
+        @keyframes fall {
+            from { transform: translateY(0); }
+            to { transform: translateY(500px); }
         }
         
         .coin {
@@ -529,15 +487,34 @@
             background: #8b4513;
             border-radius: 3px;
         }
+        
+        .trajectory-line {
+            position: absolute;
+            height: 3px;
+            background: repeating-linear-gradient(
+                to right,
+                #ffd700,
+                #ffd700 10px,
+                transparent 10px,
+                transparent 15px
+            );
+            transform-origin: left center;
+            pointer-events: none;
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <div style="text-align: center; padding: 50px;">
+            <h2>Loading Game...</h2>
+        </div>
+    </div>
     
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     
     <script type="text/babel">
         const { useState, useEffect, useRef, useCallback } = React;
@@ -553,7 +530,9 @@
             "The best investment you can make is in yourself.",
             "It's far better to buy a wonderful company at a fair price than a fair company at a wonderful price.",
             "Time is the friend of the wonderful company, the enemy of the mediocre.",
-            "Only buy something that you'd be perfectly happy to hold if the market shut down for 10 years."
+            "Only buy something that you'd be perfectly happy to hold if the market shut down for 10 years.",
+            "Rule No. 1: Never lose money. Rule No. 2: Never forget rule No. 1.",
+            "In the business world, the rearview mirror is always clearer than the windshield."
         ];
         
         const bookFacts = [
@@ -623,7 +602,7 @@
                 mungerPartner: false,
                 tedTodd: false
             });
-            const [currentQuote, setCurrentQuote] = useState('');
+            const [currentQuote, setCurrentQuote] = useState('Welcome to Warren Buffett\'s Bubble Pop Adventure!');
             const [bubbles, setBubbles] = useState([]);
             const [cannonAngle, setCannonAngle] = useState(0);
             const [bubbleQueue, setBubbleQueue] = useState([]);
@@ -636,6 +615,7 @@
             
             // Get decade from year
             const getDecade = (year) => {
+                if (!year || typeof year !== 'number') return '1950s';
                 if (year <= 1959) return '1950s';
                 if (year <= 1969) return '1960s';
                 if (year <= 1979) return '1970s';
@@ -659,11 +639,9 @@
                     '2010s': [3, 7, 8],
                     '2020s': [6, 8, 10]
                 };
+                const range = counts[decade] || [3, 4, 5];
                 const decadeProgress = (year % 10) / 10;
-                const range = counts[decade];
-                const count = Math.floor(range[0] + (range[2] - range[0]) * decadeProgress);
-                console.log('Bubble color count:', { year, decade, count });
-                return count;
+                return Math.floor(range[0] + (range[2] - range[0]) * decadeProgress);
             };
             
             // Get scroll speed for year
@@ -673,18 +651,24 @@
                     '1950s': 0.5, '1960s': 0.5, '1970s': 0.5, '1980s': 0.5,
                     '1990s': 1.0, '2000s': 1.0, '2010s': 1.5, '2020s': 2.0
                 };
-                return speeds[decade];
+                return speeds[decade] || 0.5;
             };
             
             // Initialize level
             const initLevel = () => {
-                setCurrentQuote(levelStartQuotes[year % levelStartQuotes.length]);
+                // Ensure arrays exist
+                if (!levelStartQuotes || levelStartQuotes.length === 0) {
+                    setCurrentQuote("Time to start investing!");
+                } else {
+                    setCurrentQuote(levelStartQuotes[year % levelStartQuotes.length]);
+                }
+                
                 setScrollSpeed(getScrollSpeed(year));
                 setSugar(maxSugar);
                 
                 // Create initial bubble field
                 const colorCount = getBubbleColorCount(year);
-                const colors = bubbleColors.slice(0, colorCount);
+                const colors = bubbleColors.slice(0, Math.min(colorCount, bubbleColors.length));
                 const newBubbles = [];
                 
                 // Create 5 rows x 20 visible columns (fill the screen)
@@ -708,81 +692,29 @@
                     queue.push(colors[Math.floor(Math.random() * colors.length)]);
                 }
                 setBubbleQueue(queue);
-                
-                console.log('Level initialized:', {
-                    year,
-                    colorCount,
-                    bubbleCount: newBubbles.length,
-                    queueLength: queue.length
-                });
             };
             
             // Start game
             const startGame = () => {
-                console.log('Starting game...');
-                setGameState('playing');
-                setTimeout(() => initLevel(), 100);
+                try {
+                    setGameState('playing');
+                    initLevel();
+                } catch (error) {
+                    alert('Error starting game: ' + error.message);
+                }
             };
             
-            // Initialize event handlers for game
-            useEffect(() => {
-                if (gameState !== 'playing' || !gameRef.current) return;
-                
-                const handleMove = (e) => {
-                    const rect = gameRef.current.getBoundingClientRect();
-                    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-                    const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-                    const cannonX = rect.width / 2;
-                    const cannonY = rect.height - 60;
-                    
-                    const angle = Math.atan2(y - cannonY, x - cannonX);
-                    const degrees = angle * 180 / Math.PI - 90;
-                    const clamped = Math.max(-89, Math.min(89, degrees));
-                    
-                    setCannonAngle(clamped);
-                };
-                
-                const handleClick = (e) => {
-                    e.preventDefault();
-                    handleMove(e);
-                    
-                    if (bubbleQueue.length === 0) return;
-                    
-                    const color = bubbleQueue[0];
-                    setBubbleQueue(queue => queue.slice(1));
-                    
-                    // Simple test - just pop any matching color bubble
-                    setBubbles(prev => {
-                        const matching = prev.find(b => b.color === color);
-                        if (matching) {
-                            // Pop the bubble
-                            setTimeout(() => popBubble(matching), 100);
-                        }
-                        return prev;
-                    });
-                    
-                    if (bubbleQueue.length === 1) {
-                        setTimeout(() => endLevel(), 2000);
-                    }
-                };
-                
-                const gameArea = gameRef.current;
-                gameArea.addEventListener('mousemove', handleMove);
-                gameArea.addEventListener('touchmove', handleMove);
-                gameArea.addEventListener('click', handleClick);
-                gameArea.addEventListener('touchstart', handleClick);
-                
-                return () => {
-                    gameArea.removeEventListener('mousemove', handleMove);
-                    gameArea.removeEventListener('touchmove', handleMove);
-                    gameArea.removeEventListener('click', handleClick);
-                    gameArea.removeEventListener('touchstart', handleClick);
-                };
-            }, [gameState, bubbleQueue, bubbles, popBubble, endLevel]);
-            
             // Pop bubble and create collectables
-            const popBubble = useCallback((bubble) => {
-                setBubbles(prev => prev.filter(b => b.id !== bubble.id));
+            const popBubble = (bubble) => {
+                // Add popping animation class
+                setBubbles(prev => prev.map(b => 
+                    b.id === bubble.id ? { ...b, popping: true } : b
+                ));
+                
+                // Remove after animation
+                setTimeout(() => {
+                    setBubbles(prev => prev.filter(b => b.id !== bubble.id));
+                }, 300);
                 
                 // Drop collectables
                 const drops = [];
@@ -823,7 +755,82 @@
                     });
                     setCollectables(prev => prev.filter(c => !drops.find(d => d.id === c.id)));
                 }, 2000);
-            }, [maxSugar]);
+            };
+            
+            // End level
+            const endLevel = () => {
+                if (gameState !== 'playing') return;
+                setGameState('shop');
+                
+                // Calculate dividends
+                let dividends = 0;
+                Object.entries(portfolio).forEach(([stock, data]) => {
+                    if (stock === 'SEES') {
+                        dividends += data.shares * 50; // Simplified dividend
+                    }
+                });
+                setCoins(prev => prev + dividends);
+            };
+            
+            // Handle mouse/touch movement
+            const handlePointerMove = (e) => {
+                if (gameState !== 'playing' || !gameRef.current) return;
+                
+                const rect = gameRef.current.getBoundingClientRect();
+                const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+                const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+                const cannonX = rect.width / 2;
+                const cannonY = rect.height - 60;
+                
+                const angle = Math.atan2(y - cannonY, x - cannonX);
+                const degrees = angle * 180 / Math.PI - 90;
+                const clamped = Math.max(-89, Math.min(89, degrees));
+                
+                setCannonAngle(clamped);
+            };
+            
+            // Handle shooting - ultra simplified
+            const handleShoot = (e) => {
+                if (gameState !== 'playing' || bubbleQueue.length === 0) return;
+                
+                e.preventDefault();
+                
+                const color = bubbleQueue[0];
+                setBubbleQueue(prev => prev.slice(1));
+                
+                // For now, just find any matching bubble
+                const matchingBubble = bubbles.find(b => b.color === color && !b.popping);
+                
+                if (matchingBubble) {
+                    // Pop the bubble and connected ones
+                    const connected = [matchingBubble];
+                    const checked = new Set();
+                    
+                    while (connected.length > 0) {
+                        const current = connected.pop();
+                        if (checked.has(current.id)) continue;
+                        
+                        popBubble(current);
+                        checked.add(current.id);
+                        
+                        // Find adjacent same color
+                        bubbles.forEach(b => {
+                            if (!checked.has(b.id) && !b.popping && b.color === color) {
+                                const dx = Math.abs(b.x - current.x);
+                                const dy = Math.abs(b.y - current.y);
+                                if (dx <= 36 && dy <= 36) {
+                                    connected.push(b);
+                                }
+                            }
+                        });
+                    }
+                }
+                
+                // Check if level should end
+                if (bubbleQueue.length === 0) {
+                    setTimeout(() => endLevel(), 1500);
+                }
+            };
             
             // Game loop
             useEffect(() => {
@@ -902,6 +909,8 @@
                         cancelAnimationFrame(animationRef.current);
                     }
                 };
+            }, [gameState, scrollSpeed, year]);
+            
             // Add keyboard controls for testing
             useEffect(() => {
                 const handleKeyPress = (e) => {
@@ -929,21 +938,6 @@
                 window.addEventListener('keydown', handleKeyPress);
                 return () => window.removeEventListener('keydown', handleKeyPress);
             }, [gameState, bubbleQueue, bubbles]);
-            
-            // End level
-            const endLevel = useCallback(() => {
-                if (gameState !== 'playing') return;
-                setGameState('shop');
-                
-                // Calculate dividends
-                let dividends = 0;
-                Object.entries(portfolio).forEach(([stock, data]) => {
-                    if (stock === 'SEES') {
-                        dividends += data.shares * 50; // Simplified dividend
-                    }
-                });
-                setCoins(prev => prev + dividends);
-            }, [gameState, portfolio]);
             
             // Shop items
             const shopItems = [
@@ -1039,12 +1033,13 @@
             
             // Continue to next year
             const continueToNextYear = () => {
-                setYear(prev => prev + 1);
-                if (year >= 2025) {
+                const nextYear = year + 1;
+                if (nextYear > 2025) {
                     // End game
                     setGameState('gameOver');
                 } else {
-                    if (year % 10 === 0) {
+                    setYear(nextYear);
+                    if (nextYear % 10 === 0) {
                         setLives(prev => prev + 1); // Bonus life per decade
                     }
                     setGameState('playing');
@@ -1060,6 +1055,9 @@
                             <h1 className="menu-title">Warren Buffett's<br/>Bubble Pop Adventure</h1>
                             <p className="menu-subtitle">An Investment Journey: 1951-2025</p>
                             <button className="menu-button" onClick={startGame}>Start Game</button>
+                            <p style={{ marginTop: '20px', fontSize: '0.9em', opacity: 0.7 }}>
+                                Click Start Game to begin your journey!
+                            </p>
                         </div>
                     )}
                     
@@ -1074,40 +1072,7 @@
                     >
                         <div className={`decade-border decade-${getDecade(year)}`}></div>
                         
-                            {/* Debug Info */}
-                            <div className="debug-info">
-                                Year: {year} ({getDecade(year)})<br/>
-                                Angle: {cannonAngle.toFixed(0)}°<br/>
-                                Bubbles: {bubbles.filter(b => !b.popping).length}<br/>
-                                Total: {bubbles.length}<br/>
-                                Queue: {bubbleQueue.length}<br/>
-                                Speed: {scrollSpeed}<br/>
-                                Next: {bubbleQueue[0] ? (
-                                    <span style={{
-                                        display: 'inline-block',
-                                        width: '12px',
-                                        height: '12px',
-                                        backgroundColor: bubbleQueue[0],
-                                        borderRadius: '50%',
-                                        marginLeft: '5px'
-                                    }}></span>
-                                ) : 'None'}
-                            </div>
-                        
                         <div id="gameCanvas">
-                            {/* Test bubble */}
-                            <div
-                                className="bubble"
-                                style={{
-                                    position: 'absolute',
-                                    left: '100px',
-                                    top: '100px',
-                                    backgroundColor: '#ff6b6b',
-                                    width: '32px',
-                                    height: '32px'
-                                }}
-                            />
-                            
                             {/* Bubbles */}
                             {bubbles.map(bubble => (
                                 <div
@@ -1337,8 +1302,42 @@
             );
         }
         
+        // Simple error boundary
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+            }
+            
+            static getDerivedStateFromError(error) {
+                return { hasError: true, error: error.toString() };
+            }
+            
+            componentDidCatch(error, errorInfo) {
+                console.error('Game error:', error, errorInfo);
+            }
+            
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div style={{ padding: '20px', color: 'red', textAlign: 'center' }}>
+                            <h2>Something went wrong!</h2>
+                            <p>{this.state.error}</p>
+                            <button onClick={() => window.location.reload()}>Reload</button>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
+        }
+        
         // Render the game
-        ReactDOM.render(<Game />, document.getElementById('root'));
+        ReactDOM.render(
+            <ErrorBoundary>
+                <Game />
+            </ErrorBoundary>, 
+            document.getElementById('root')
+        );
     </script>
 </body>
 </html>
