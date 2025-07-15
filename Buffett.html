@@ -752,7 +752,7 @@
             Learn the power of patience and compound growth through bubble-popping gameplay<br>
             Experience 70+ years of market history while building your investment empire
         </div>
-        <button class="menu-button" onclick="window.game && window.game.startNewGame()">New Game</button>
+        <button class="menu-button" onclick="startNewGame()">New Game</button>
     </div>
 
     <!-- Game Screen -->
@@ -885,9 +885,9 @@
 
     <!-- Phase Navigation (shown during store/invest phases) -->
     <div class="phase-navigation" id="phaseNavigation">
-        <button class="nav-button current" id="storeNavBtn" onclick="window.game.switchToStore()">Store</button>
-        <button class="nav-button" id="investNavBtn" onclick="window.game.switchToInvest()">Invest</button>
-        <button class="nav-button" id="continueNavBtn" onclick="window.game.continueToNextYear()">Continue to <span id="nextYearSpan">1956</span></button>
+        <button class="nav-button current" id="storeNavBtn" onclick="switchToStore()">Store</button>
+        <button class="nav-button" id="investNavBtn" onclick="switchToInvest()">Invest</button>
+        <button class="nav-button" id="continueNavBtn" onclick="continueToNextYear()">Continue to <span id="nextYearSpan">1956</span></button>
     </div>
 
     <script>
@@ -1037,8 +1037,12 @@
                 console.log('Starting new game...');
                 this.initGameState();
                 this.generateInitialBubbles();
+                this.updateUI();
+                this.updatePowerupCounts();
                 this.switchScreen('game');
                 this.gamePhase = 'playing';
+                this.gameRunning = true;
+                console.log('Game started, phase:', this.gamePhase, 'running:', this.gameRunning);
             }
             
             setupCanvas() {
@@ -1132,6 +1136,13 @@
                 const targetScreen = document.getElementById(screenName + 'Screen');
                 targetScreen.classList.add('active');
                 targetScreen.style.zIndex = '200';
+                
+                // If switching to game, make sure canvas is properly sized
+                if (screenName === 'game') {
+                    setTimeout(() => {
+                        this.setupCanvas();
+                    }, 50);
+                }
                 
                 if (screenName === 'store') {
                     this.populateStore();
@@ -1319,7 +1330,7 @@
                             </div>
                             <div class="item-price books">📚${data.price}</div>
                             <button class="buy-button" ${owned || !canAfford ? 'disabled' : ''} 
-                                    onclick="window.game.buyBook('${name}')">>
+                                    onclick="buyBook('${name}')">>
                                 ${owned ? 'Owned' : 'Buy'}
                             </button>
                         </div>
@@ -1507,13 +1518,13 @@
                                 </div>
                                 <div class="stock-actions">
                                     <button class="action-button" ${!available || this.cash < currentPrice ? 'disabled' : ''} 
-                                            onclick="window.game.buyStock('${symbol}', 1)">Buy 1</button>
+                                            onclick="buyStock('${symbol}', 1)">Buy 1</button>
                                     <button class="action-button" ${!available || this.cash < currentPrice * 10 ? 'disabled' : ''} 
-                                            onclick="window.game.buyStock('${symbol}', 10)">Buy 10</button>
+                                            onclick="buyStock('${symbol}', 10)">Buy 10</button>
                                     <button class="action-button" ${!available || this.cash < currentPrice * 50 ? 'disabled' : ''} 
-                                            onclick="window.game.buyStock('${symbol}', 50)">Buy 50</button>
+                                            onclick="buyStock('${symbol}', 50)">Buy 50</button>
                                     <button class="action-button sell" ${owned.shares === 0 ? 'disabled' : ''} 
-                                            onclick="window.game.sellStock('${symbol}', 1)">Sell 1</button>
+                                            onclick="sellStock('${symbol}', 1)">Sell 1</button>
                                 </div>
                             </div>
                         `;
@@ -2340,11 +2351,62 @@
         // Global game instance
         let game;
         
+        // Global functions for onclick handlers
+        function startNewGame() {
+            console.log('startNewGame called');
+            if (game) {
+                console.log('Starting game...');
+                game.startNewGame();
+            } else {
+                console.error('Game not initialized yet');
+                // Try again in a moment
+                setTimeout(() => {
+                    if (game) {
+                        game.startNewGame();
+                    }
+                }, 100);
+            }
+        }
+        
+        function switchToStore() {
+            if (game) game.switchToStore();
+        }
+        
+        function switchToInvest() {
+            if (game) game.switchToInvest();
+        }
+        
+        function continueToNextYear() {
+            if (game) game.continueToNextYear();
+        }
+        
+        function buyBook(name) {
+            if (game) game.buyBook(name);
+        }
+        
+        function buySubsidiary(name) {
+            if (game) game.buySubsidiary(name);
+        }
+        
+        function buyPowerup(name) {
+            if (game) game.buyPowerup(name);
+        }
+        
+        function buyStock(symbol, quantity) {
+            if (game) game.buyStock(symbol, quantity);
+        }
+        
+        function sellStock(symbol, quantity) {
+            if (game) game.sellStock(symbol, quantity);
+        }
+        
         window.addEventListener('load', () => {
             setTimeout(() => {
                 console.log('Creating game...');
-                window.game = new BubbleGame();
-            }, 100);
+                game = new BubbleGame();
+                window.game = game; // Make it available globally too
+                console.log('Game created and ready');
+            }, 200);
         });
     </script>
 </body>
