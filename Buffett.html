@@ -752,7 +752,7 @@
             Learn the power of patience and compound growth through bubble-popping gameplay<br>
             Experience 70+ years of market history while building your investment empire
         </div>
-        <button class="menu-button" onclick="startNewGame()">New Game</button>
+        <button class="menu-button" id="newGameBtn">New Game</button>
     </div>
 
     <!-- Game Screen -->
@@ -885,9 +885,9 @@
 
     <!-- Phase Navigation (shown during store/invest phases) -->
     <div class="phase-navigation" id="phaseNavigation">
-        <button class="nav-button current" id="storeNavBtn" onclick="switchToStore()">Store</button>
-        <button class="nav-button" id="investNavBtn" onclick="switchToInvest()">Invest</button>
-        <button class="nav-button" id="continueNavBtn" onclick="continueToNextYear()">Continue to <span id="nextYearSpan">1956</span></button>
+        <button class="nav-button current" id="storeNavBtn">Store</button>
+        <button class="nav-button" id="investNavBtn">Invest</button>
+        <button class="nav-button" id="continueNavBtn">Continue to <span id="nextYearSpan">1956</span></button>
     </div>
 
     <script>
@@ -1023,10 +1023,12 @@
         class BubbleGame {
             constructor() {
                 this.canvas = document.getElementById('gameCanvas');
-                this.ctx = this.canvas.getContext('2d');
+                this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
                 this.gamePhase = 'menu'; // menu, playing, store, invest
                 
-                this.setupCanvas();
+                if (this.canvas && this.ctx) {
+                    this.setupCanvas();
+                }
                 this.setupEventListeners();
                 
                 this.lastTime = 0;
@@ -1035,6 +1037,12 @@
 
             startNewGame() {
                 console.log('Starting new game...');
+                
+                // Make sure canvas is ready
+                if (!this.canvas || !this.ctx) {
+                    this.setupCanvas();
+                }
+                
                 this.initGameState();
                 this.generateInitialBubbles();
                 this.updateUI();
@@ -1046,14 +1054,24 @@
             }
             
             setupCanvas() {
+                if (!this.canvas) {
+                    this.canvas = document.getElementById('gameCanvas');
+                    if (this.canvas) {
+                        this.ctx = this.canvas.getContext('2d');
+                    }
+                }
+                
+                if (!this.canvas) return;
+                
                 const gameArea = document.getElementById('gameArea');
-                this.canvas.width = gameArea.clientWidth || 800;
-                this.canvas.height = gameArea.clientHeight || 600;
+                this.canvas.width = (gameArea ? gameArea.clientWidth : 800) || 800;
+                this.canvas.height = (gameArea ? gameArea.clientHeight : 600) || 600;
                 
                 window.addEventListener('resize', () => {
+                    if (!this.canvas) return;
                     const gameArea = document.getElementById('gameArea');
-                    this.canvas.width = gameArea.clientWidth || 800;
-                    this.canvas.height = gameArea.clientHeight || 600;
+                    this.canvas.width = (gameArea ? gameArea.clientWidth : 800) || 800;
+                    this.canvas.height = (gameArea ? gameArea.clientHeight : 600) || 600;
                     if (this.cannon) {
                         this.cannon.x = this.canvas.width / 2;
                         this.cannon.y = this.canvas.height - 30;
@@ -1270,6 +1288,17 @@
                     this.gamePhase = 'store';
                     this.switchToStore();
                 });
+                
+                // Set up navigation buttons
+                setTimeout(() => {
+                    const storeBtn = document.getElementById('storeNavBtn');
+                    const investBtn = document.getElementById('investNavBtn');
+                    const continueBtn = document.getElementById('continueNavBtn');
+                    
+                    if (storeBtn) storeBtn.addEventListener('click', () => this.switchToStore());
+                    if (investBtn) investBtn.addEventListener('click', () => this.switchToInvest());
+                    if (continueBtn) continueBtn.addEventListener('click', () => this.continueToNextYear());
+                }, 500);
             }
 
             switchToStore() {
@@ -2180,7 +2209,7 @@
             }
             
             render() {
-                if (this.gamePhase !== 'playing') return;
+                if (this.gamePhase !== 'playing' || !this.canvas || !this.ctx) return;
                 
                 this.ctx.fillStyle = '#2c3e50';
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -2351,20 +2380,50 @@
         // Global game instance
         let game;
         
+        // Initialize game immediately
+        function initializeGame() {
+            try {
+                game = new BubbleGame();
+                window.game = game;
+                console.log('Game initialized successfully');
+                
+                // Set up the new game button
+                const newGameBtn = document.getElementById('newGameBtn');
+                if (newGameBtn) {
+                    newGameBtn.addEventListener('click', function() {
+                        console.log('New Game button clicked');
+                        newGameBtn.textContent = 'Starting...';
+                        newGameBtn.style.background = '#e74c3c';
+                        
+                        setTimeout(() => {
+                            if (game) {
+                                console.log('Starting new game...');
+                                game.startNewGame();
+                                newGameBtn.textContent = 'New Game';
+                                newGameBtn.style.background = '';
+                            } else {
+                                newGameBtn.textContent = 'Error - Refresh Page';
+                                newGameBtn.style.background = '#e74c3c';
+                            }
+                        }, 100);
+                    });
+                    
+                    // Also add touch events for mobile
+                    newGameBtn.addEventListener('touchstart', function(e) {
+                        e.preventDefault();
+                        newGameBtn.click();
+                    });
+                }
+                
+            } catch (error) {
+                console.error('Error initializing game:', error);
+            }
+        }
+        
         // Global functions for onclick handlers
         function startNewGame() {
-            console.log('startNewGame called');
             if (game) {
-                console.log('Starting game...');
                 game.startNewGame();
-            } else {
-                console.error('Game not initialized yet');
-                // Try again in a moment
-                setTimeout(() => {
-                    if (game) {
-                        game.startNewGame();
-                    }
-                }, 100);
             }
         }
         
@@ -2400,13 +2459,15 @@
             if (game) game.sellStock(symbol, quantity);
         }
         
-        window.addEventListener('load', () => {
-            setTimeout(() => {
-                console.log('Creating game...');
-                game = new BubbleGame();
-                window.game = game; // Make it available globally too
-                console.log('Game created and ready');
-            }, 200);
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(initializeGame, 200);
+        });
+        
+        window.addEventListener('load', function() {
+            if (!game) {
+                setTimeout(initializeGame, 100);
+            }
         });
     </script>
 </body>
