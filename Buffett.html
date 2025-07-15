@@ -26,16 +26,18 @@
         }
 
         .screen {
-            position: absolute;
+            position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
             display: none;
+            z-index: 100;
         }
 
         .screen.active {
             display: block;
+            z-index: 200;
         }
 
         /* Main Menu Styles */
@@ -47,6 +49,7 @@
             align-items: center;
             color: white;
             text-align: center;
+            z-index: 300;
         }
 
         .menu-title {
@@ -151,20 +154,6 @@
             flex-direction: column;
             align-items: center;
             padding: 10px 5px;
-        }
-
-        #livesContainer {
-            display: flex;
-            gap: 3px;
-            margin-bottom: 10px;
-        }
-
-        .life {
-            width: 12px;
-            height: 12px;
-            background: #e74c3c;
-            border-radius: 50%;
-            border: 1px solid #fff;
         }
 
         .powerup-slot {
@@ -757,13 +746,13 @@
 </head>
 <body>
     <!-- Main Menu Screen -->
-    <div id="mainMenuScreen" class="screen active">
+    <div id="mainMenuScreen" class="screen active" style="z-index: 300;">
         <div class="menu-title">Warren Buffett's<br>Bubble Pop Adventure</div>
         <div class="menu-subtitle">
             Learn the power of patience and compound growth through bubble-popping gameplay<br>
             Experience 70+ years of market history while building your investment empire
         </div>
-        <button class="menu-button" onclick="game.startNewGame()">New Game</button>
+        <button class="menu-button" onclick="window.game && window.game.startNewGame()">New Game</button>
     </div>
 
     <!-- Game Screen -->
@@ -788,12 +777,6 @@
         </div>
 
         <div id="powerUps">
-            <div id="livesContainer">
-                <div class="life"></div>
-                <div class="life"></div>
-                <div class="life"></div>
-            </div>
-
             <div class="powerup-slot" id="lollapalooza">
                 <div class="powerup-icon">💥</div>
                 <div class="powerup-count">1</div>
@@ -902,9 +885,9 @@
 
     <!-- Phase Navigation (shown during store/invest phases) -->
     <div class="phase-navigation" id="phaseNavigation">
-        <button class="nav-button current" id="storeNavBtn" onclick="game.switchToStore()">Store</button>
-        <button class="nav-button" id="investNavBtn" onclick="game.switchToInvest()">Invest</button>
-        <button class="nav-button" id="continueNavBtn" onclick="game.continueToNextYear()">Continue to <span id="nextYearSpan">1956</span></button>
+        <button class="nav-button current" id="storeNavBtn" onclick="window.game.switchToStore()">Store</button>
+        <button class="nav-button" id="investNavBtn" onclick="window.game.switchToInvest()">Invest</button>
+        <button class="nav-button" id="continueNavBtn" onclick="window.game.continueToNextYear()">Continue to <span id="nextYearSpan">1956</span></button>
     </div>
 
     <script>
@@ -1051,6 +1034,7 @@
             }
 
             startNewGame() {
+                console.log('Starting new game...');
                 this.initGameState();
                 this.generateInitialBubbles();
                 this.switchScreen('game');
@@ -1079,7 +1063,6 @@
                 this.ownedBooks = [];
                 this.sugar = 60;
                 this.maxSugar = 60;
-                this.lives = 3;
                 this.cash = 1000; // Starting cash
                 this.bubblesRemaining = 3;
                 this.gameRunning = true;
@@ -1140,8 +1123,15 @@
             }
 
             switchScreen(screenName) {
-                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-                document.getElementById(screenName + 'Screen').classList.add('active');
+                console.log('Switching to screen:', screenName);
+                document.querySelectorAll('.screen').forEach(s => {
+                    s.classList.remove('active');
+                    s.style.zIndex = '100';
+                });
+                
+                const targetScreen = document.getElementById(screenName + 'Screen');
+                targetScreen.classList.add('active');
+                targetScreen.style.zIndex = '200';
                 
                 if (screenName === 'store') {
                     this.populateStore();
@@ -1329,7 +1319,7 @@
                             </div>
                             <div class="item-price books">📚${data.price}</div>
                             <button class="buy-button" ${owned || !canAfford ? 'disabled' : ''} 
-                                    onclick="game.buyBook('${name}')">
+                                    onclick="window.game.buyBook('${name}')">>
                                 ${owned ? 'Owned' : 'Buy'}
                             </button>
                         </div>
@@ -1359,7 +1349,7 @@
                             <div class="item-price books">📚${data.price}</div>
                             <button class="buy-button" 
                                     ${owned || !canAfford || !available || bookRequired ? 'disabled' : ''} 
-                                    onclick="game.buySubsidiary('${name}')">
+                                    onclick="window.game.buySubsidiary('${name}')">>
                                 ${owned ? 'Owned' : bookRequired ? 'Need Book' : !available ? 'Not Yet' : 'Buy'}
                             </button>
                         </div>
@@ -1380,7 +1370,7 @@
                             </div>
                             <div class="item-price">$${data.price.toLocaleString()}</div>
                             <button class="buy-button" ${!canAfford ? 'disabled' : ''} 
-                                    onclick="game.buyPowerup('${name}')">
+                                    onclick="window.game.buyPowerup('${name}')">>
                                 Buy
                             </button>
                         </div>
@@ -1517,13 +1507,13 @@
                                 </div>
                                 <div class="stock-actions">
                                     <button class="action-button" ${!available || this.cash < currentPrice ? 'disabled' : ''} 
-                                            onclick="game.buyStock('${symbol}', 1)">Buy 1</button>
+                                            onclick="window.game.buyStock('${symbol}', 1)">Buy 1</button>
                                     <button class="action-button" ${!available || this.cash < currentPrice * 10 ? 'disabled' : ''} 
-                                            onclick="game.buyStock('${symbol}', 10)">Buy 10</button>
+                                            onclick="window.game.buyStock('${symbol}', 10)">Buy 10</button>
                                     <button class="action-button" ${!available || this.cash < currentPrice * 50 ? 'disabled' : ''} 
-                                            onclick="game.buyStock('${symbol}', 50)">Buy 50</button>
+                                            onclick="window.game.buyStock('${symbol}', 50)">Buy 50</button>
                                     <button class="action-button sell" ${owned.shares === 0 ? 'disabled' : ''} 
-                                            onclick="game.sellStock('${symbol}', 1)">Sell 1</button>
+                                            onclick="window.game.sellStock('${symbol}', 1)">Sell 1</button>
                                 </div>
                             </div>
                         `;
@@ -2041,14 +2031,9 @@
                     document.getElementById('levelCompleteOverlay').style.display = 'flex';
                     
                 } else {
-                    this.lives--;
-                    if (this.lives <= 0) {
-                        this.showQuote('Game Over! Time is the friend of the wonderful business.', 'Warren Buffett', 'WISDOM');
-                        setTimeout(() => this.restart(), 4000);
-                    } else {
-                        this.showQuote('Life lost! ' + this.lives + ' remaining.', 'Warren Buffett', 'WISDOM');
-                        setTimeout(() => this.retryLevel(), 3000);
-                    }
+                    // Just retry the level
+                    this.showQuote('Try again! Patience and persistence are key to success.', 'Warren Buffett', 'WISDOM');
+                    setTimeout(() => this.retryLevel(), 2000);
                 }
             }
             
@@ -2358,7 +2343,7 @@
         window.addEventListener('load', () => {
             setTimeout(() => {
                 console.log('Creating game...');
-                game = new BubbleGame();
+                window.game = new BubbleGame();
             }, 100);
         });
     </script>
