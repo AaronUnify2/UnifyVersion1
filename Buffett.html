@@ -25,7 +25,7 @@
             height: 100%;
         }
 
-        /* Main Menu Styles */
+        /* Main Menu Styles - Hidden by default */
         #mainMenu {
             position: fixed;
             top: 0;
@@ -33,7 +33,7 @@
             width: 100%;
             height: 100%;
             background: linear-gradient(135deg, #2c3e50, #34495e);
-            display: flex;
+            display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
@@ -440,25 +440,6 @@
             margin-right: 20px;
         }
 
-        .end-level-btn {
-            background: linear-gradient(45deg, #f39c12, #e67e22);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 14px;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-left: auto;
-            transition: all 0.3s ease;
-            font-family: 'Courier New', monospace;
-        }
-
-        .end-level-btn:hover {
-            background: linear-gradient(45deg, #e67e22, #d35400);
-            transform: translateY(-1px);
-        }
-
         #quotes {
             grid-area: quotes;
             background: linear-gradient(135deg, rgba(0, 0, 0, 0.95), rgba(44, 62, 80, 0.8));
@@ -602,7 +583,7 @@
     </div>
 
     <!-- Game Container -->
-    <div id="gameContainer" class="hidden">
+    <div id="gameContainer">
         <div id="topBar">
             <div class="stat-section">
                 <div class="stat-title">BOOKS</div>
@@ -658,7 +639,6 @@
             <div class="bubbles-remaining">
                 Shots: <span id="bubblesRemaining">3</span>
             </div>
-            <button class="end-level-btn" onclick="endCurrentLevel()">Store</button>
         </div>
 
         <div id="quotes">
@@ -850,7 +830,7 @@
                 currentGame: null
             };
 
-            document.getElementById('mainMenu').classList.add('hidden');
+            document.getElementById('mainMenu').style.display = 'none';
             document.getElementById('gameContainer').classList.remove('hidden');
             
             // Initialize game
@@ -869,7 +849,7 @@
         function showStore() {
             gameState.gamePhase = 'store';
             document.getElementById('gameContainer').classList.add('hidden');
-            document.getElementById('storeMenu').classList.remove('hidden');
+            document.getElementById('storeMenu').style.display = 'block';
             
             updateStoreDisplay();
             populateStore();
@@ -889,7 +869,7 @@
             gameState.cash += income;
             
             // Return to game
-            document.getElementById('storeMenu').classList.add('hidden');
+            document.getElementById('storeMenu').style.display = 'none';
             document.getElementById('gameContainer').classList.remove('hidden');
             
             if (gameState.currentGame) {
@@ -1264,7 +1244,7 @@
                     gameState.books = this.books;
                     
                     this.showQuote('Year ' + this.year + ' completed! Time for some shopping.', 'Warren Buffett', 'WISDOM');
-                    // Don't auto-advance - let the button do it
+                    setTimeout(() => showStore(), 2000);
                 } else {
                     this.lives--;
                     if (this.lives <= 0) {
@@ -1507,7 +1487,12 @@
                 this.sugar -= deltaTime * depletionRate;
                 
                 if (this.sugar <= 0) {
-                    this.endLevel(false);
+                    // Update game state before going to store
+                    gameState.cash = this.cash;
+                    gameState.books = this.books;
+                    this.showQuote('Sugar depleted! Time to visit the store.', 'Warren Buffett', 'WISDOM');
+                    setTimeout(() => showStore(), 2000);
+                    this.gameRunning = false;
                     return;
                 }
                 
@@ -1778,10 +1763,7 @@
             }
             
             restart() {
-                // Reset to main menu
-                document.getElementById('gameContainer').classList.add('hidden');
-                document.getElementById('mainMenu').classList.remove('hidden');
-                
+                // Reset game state and restart
                 gameState = {
                     year: 1955,
                     books: 5,
@@ -1790,9 +1772,12 @@
                     ownedBooks: [],
                     ownedSubsidiaries: [],
                     ownedUpgrades: {},
-                    gamePhase: 'menu',
+                    gamePhase: 'playing',
                     currentGame: null
                 };
+                
+                this.initGameState();
+                this.generateInitialBubbles();
             }
             
             showQuote(text, author, category) {
@@ -2010,9 +1995,28 @@
             }
         }
         
-        // Wait for DOM to be fully loaded
+        // Wait for DOM to be fully loaded and start game automatically
         document.addEventListener('DOMContentLoaded', () => {
-            console.log('DOM loaded, game ready to start');
+            console.log('DOM loaded, starting game automatically...');
+            
+            // Initialize game state
+            gameState = {
+                year: 1955,
+                books: 5,
+                cash: 0,
+                lives: 3,
+                ownedBooks: [],
+                ownedSubsidiaries: [],
+                ownedUpgrades: {},
+                gamePhase: 'playing',
+                currentGame: null
+            };
+            
+            // Start the game automatically
+            setTimeout(() => {
+                console.log('Creating game...');
+                gameState.currentGame = new BubbleGame();
+            }, 100);
         });
     </script>
 </body>
