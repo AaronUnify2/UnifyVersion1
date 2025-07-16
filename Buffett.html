@@ -864,19 +864,36 @@
         }
 
         function endCurrentLevel() {
-            if (gameState.currentGame) {
-                gameState.currentGame.endLevel(true);
+            try {
+                console.log('Ending current level...');
+                if (gameState.currentGame) {
+                    gameState.currentGame.endLevel(true);
+                }
+                console.log('Level ended, showing store...');
+                showStore();
+            } catch (error) {
+                console.error('Error ending level:', error);
             }
-            showStore();
         }
 
         function showStore() {
-            gameState.gamePhase = 'store';
-            document.getElementById('gameContainer').classList.add('hidden');
-            document.getElementById('storeMenu').classList.remove('hidden');
-            
-            updateStoreDisplay();
-            populateStore();
+            try {
+                gameState.gamePhase = 'store';
+                document.getElementById('gameContainer').classList.add('hidden');
+                document.getElementById('storeMenu').classList.remove('hidden');
+                
+                console.log('Store opened, gameState:', gameState);
+                
+                updateStoreDisplay();
+                populateStore();
+                
+                console.log('Store populated successfully');
+            } catch (error) {
+                console.error('Error showing store:', error);
+                // Fallback - go back to game
+                document.getElementById('storeMenu').classList.add('hidden');
+                document.getElementById('gameContainer').classList.remove('hidden');
+            }
         }
 
         function proceedToInvestments() {
@@ -912,9 +929,21 @@
         }
 
         function populateStore() {
-            populateBooks();
-            populateSubsidiaries();
-            populatePowerups();
+            try {
+                console.log('Populating books...');
+                populateBooks();
+                console.log('Books populated successfully');
+                
+                console.log('Populating subsidiaries...');
+                populateSubsidiaries();
+                console.log('Subsidiaries populated successfully');
+                
+                console.log('Populating powerups...');
+                populatePowerups();
+                console.log('Powerups populated successfully');
+            } catch (error) {
+                console.error('Error in populateStore:', error);
+            }
         }
 
         function populateBooks() {
@@ -994,7 +1023,14 @@
             grid.innerHTML = '';
 
             for (let [name, powerup] of Object.entries(powerupsStore)) {
-                const canAfford = gameState.cash >= powerup.price;
+                // Calculate current price (handle basePrice + multiplier)
+                let currentPrice = powerup.price;
+                if (powerup.basePrice && powerup.priceMultiplier) {
+                    const timesOwned = gameState.ownedUpgrades[name] || 0;
+                    currentPrice = powerup.basePrice * Math.pow(powerup.priceMultiplier, timesOwned);
+                }
+                
+                const canAfford = gameState.cash >= currentPrice;
                 const meetsRequirements = !powerup.requires || powerup.requires.every(req => gameState.ownedBooks.includes(req));
                 const available = canAfford && meetsRequirements;
                 
@@ -1009,7 +1045,7 @@
                 item.innerHTML = `
                     <div class="item-header">
                         <div class="item-name">${powerup.icon} ${name}</div>
-                        <div class="item-price">$${powerup.price}</div>
+                        <div class="item-price">${Math.round(currentPrice).toLocaleString()}</div>
                     </div>
                     <div class="item-description">${powerup.effect}</div>
                     <div class="item-effect">Type: ${powerup.type}</div>
@@ -1066,8 +1102,16 @@
 
         function purchasePowerup(powerupName) {
             const powerup = powerupsStore[powerupName];
-            if (gameState.cash >= powerup.price) {
-                gameState.cash -= powerup.price;
+            
+            // Calculate current price (handle basePrice + multiplier)
+            let currentPrice = powerup.price;
+            if (powerup.basePrice && powerup.priceMultiplier) {
+                const timesOwned = gameState.ownedUpgrades[powerupName] || 0;
+                currentPrice = powerup.basePrice * Math.pow(powerup.priceMultiplier, timesOwned);
+            }
+            
+            if (gameState.cash >= currentPrice) {
+                gameState.cash -= currentPrice;
                 
                 if (powerup.type === 'consumable') {
                     // Add to game inventory
@@ -1268,7 +1312,7 @@
                         break;
                     case "BNSF Railway":
                         this.bubblesRemaining += 3;
-                        this.colors = this.colors.filter(color => color !== '#e67e22'); // Remove orange
+                        this.colors = this.colors.filter(color => color !== '#9b59b6'); // Remove purple
                         break;
                 }
             }
@@ -2048,4 +2092,4 @@
         });
     </script>
 </body>
-    </html>
+</html>
