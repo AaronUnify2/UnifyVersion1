@@ -441,6 +441,22 @@
             position: relative;
         }
 
+        #debugDisplay {
+            position: fixed;
+            top: 70px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #00ff00;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 8px;
+            border-radius: 5px;
+            max-width: 250px;
+            z-index: 1001;
+            white-space: pre-wrap;
+            border: 1px solid #00ff00;
+        }
+
         #quotes::before {
             content: '';
             position: absolute;
@@ -516,6 +532,9 @@
     </style>
 </head>
 <body>
+    <!-- Debug Display -->
+    <div id="debugDisplay">Starting...</div>
+
     <!-- Main Menu -->
     <div id="mainMenu">
         <div class="menu-title">Warren Buffett's<br>Bubble Pop Adventure</div>
@@ -633,6 +652,17 @@
     </div>
 
     <script>
+        // Debug functions
+        let debugMessages = [];
+        function debugLog(message) {
+            console.log(message);
+            debugMessages.push(message);
+            const debugEl = document.getElementById('debugDisplay');
+            if (debugEl) {
+                debugEl.textContent = debugMessages.slice(-10).join('\n');
+            }
+        }
+
         // Store Data
         const books = {
             "The Intelligent Investor": {
@@ -1133,17 +1163,31 @@
         // Original Game Class (Modified)
         class BubbleGame {
             constructor() {
-                console.log('Game starting...');
+                debugLog('BubbleGame constructor started...');
                 this.canvas = document.getElementById('gameCanvas');
-                this.ctx = this.canvas.getContext('2d');
+                debugLog('Canvas found: ' + !!this.canvas);
                 
+                if (!this.canvas) {
+                    debugLog('Canvas not found!');
+                    return;
+                }
+                
+                this.ctx = this.canvas.getContext('2d');
+                debugLog('Context created: ' + !!this.ctx);
+                
+                debugLog('Setting up canvas...');
                 this.setupCanvas();
+                debugLog('Initializing game state...');
                 this.initGameState();
+                debugLog('Setting up event listeners...');
                 this.setupEventListeners();
+                debugLog('Generating initial bubbles...');
                 this.generateInitialBubbles();
                 
                 this.lastTime = 0;
+                debugLog('Starting game loop...');
                 this.gameLoop();
+                debugLog('BubbleGame constructor finished');
             }
             
             setupCanvas() {
@@ -1151,7 +1195,7 @@
                 this.canvas.width = gameArea.clientWidth || 800;
                 this.canvas.height = gameArea.clientHeight || 600;
                 
-                console.log('Canvas size:', this.canvas.width, 'x', this.canvas.height);
+                debugLog('Canvas size: ' + this.canvas.width + 'x' + this.canvas.height);
                 
                 window.addEventListener('resize', () => {
                     const gameArea = document.getElementById('gameArea');
@@ -1163,6 +1207,7 @@
             }
             
             initGameState() {
+                debugLog('Initializing game state...');
                 this.year = gameState.year;
                 this.books = gameState.books;
                 this.sugar = 60;
@@ -1171,6 +1216,8 @@
                 this.bubblesRemaining = 3;
                 this.gameRunning = true;
                 this.gameStartTime = 0; // Track how long game has been running
+                
+                debugLog('Game running: ' + this.gameRunning);
                 
                 // Apply subsidiary perks
                 this.applyOwnedSubsidiaryPerks();
@@ -1212,6 +1259,8 @@
                 
                 this.updateUI();
                 this.showQuote('Welcome to ' + this.year + '! Use your limited shots wisely!', 'Warren Buffett', 'WISDOM');
+                
+                debugLog('Game state initialized');
             }
 
             applyOwnedSubsidiaryPerks() {
@@ -1456,12 +1505,15 @@
             }
             
             generateInitialBubbles() {
+                debugLog('generateInitialBubbles called');
                 this.bubbles = [];
                 
                 const cols = Math.floor(this.canvas.width / (this.bubbleRadius * 2)) + 5;
                 const rows = 6;
                 
-                console.log('Generating bubbles:', cols, 'cols x', rows, 'rows');
+                debugLog('Generating bubbles: ' + cols + ' cols x ' + rows + ' rows');
+                debugLog('Canvas: ' + this.canvas.width + 'x' + this.canvas.height);
+                debugLog('Bubble radius: ' + this.bubbleRadius);
                 
                 for (let col = 0; col < cols; col++) {
                     for (let row = 0; row < rows; row++) {
@@ -1481,7 +1533,10 @@
                     }
                 }
                 
-                console.log('Generated', this.bubbles.length, 'bubbles');
+                debugLog('Generated ' + this.bubbles.length + ' bubbles');
+                if (this.bubbles.length > 0) {
+                    debugLog('First bubble: x=' + this.bubbles[0].x + ' y=' + this.bubbles[0].y);
+                }
             }
             
             spawnNewColumn() {
@@ -1507,12 +1562,20 @@
             }
             
             update(deltaTime) {
-                if (!this.gameRunning) return;
+                if (!this.gameRunning) {
+                    debugLog('Game not running, skipping update');
+                    return;
+                }
                 
                 this.gameStartTime += deltaTime;
                 
                 const depletionRate = this.sugarDepletionRate || 1.0;
                 this.sugar -= deltaTime * depletionRate;
+                
+                // Log sugar depletion every 2 seconds for debugging
+                if (Math.floor(this.gameStartTime * 2) !== Math.floor((this.gameStartTime - deltaTime) * 2)) {
+                    debugLog('Sugar: ' + this.sugar.toFixed(1) + ' Bubbles: ' + this.bubbles.length);
+                }
                 
                 if (this.sugar <= 0) {
                     // Update game state before going to store
@@ -1997,6 +2060,11 @@
                 const deltaTime = this.lastTime ? (now - this.lastTime) / 1000 : 0;
                 this.lastTime = now;
                 
+                // Debug every 2 seconds to show the game loop is running
+                if (Math.floor(now / 2000) !== Math.floor((now - 16) / 2000)) {
+                    debugLog('Game loop running - deltaTime: ' + deltaTime.toFixed(3));
+                }
+                
                 this.update(Math.min(deltaTime, 0.016));
                 this.render();
                 
@@ -2006,7 +2074,7 @@
         
         // Wait for DOM to be fully loaded and start game automatically
         document.addEventListener('DOMContentLoaded', () => {
-            console.log('DOM loaded, starting game automatically...');
+            debugLog('DOM loaded, starting game automatically...');
             
             // Initialize game state
             gameState = {
@@ -2022,8 +2090,13 @@
             
             // Start the game automatically
             setTimeout(() => {
-                console.log('Creating game...');
-                gameState.currentGame = new BubbleGame();
+                debugLog('Creating game...');
+                try {
+                    gameState.currentGame = new BubbleGame();
+                    debugLog('Game created successfully');
+                } catch (error) {
+                    debugLog('Error creating game: ' + error.message);
+                }
             }, 100);
         });
     </script>
