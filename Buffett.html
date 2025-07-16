@@ -394,14 +394,20 @@
             align-items: center;
         }
 
-        .share-input {
-            width: 60px;
-            padding: 5px;
-            border: 1px solid #7f8c8d;
-            border-radius: 3px;
-            background: #2c3e50;
+        .percentage-btn {
+            background: #3498db;
             color: white;
-            text-align: center;
+            border: none;
+            padding: 5px 10px;
+            margin: 2px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .percentage-btn:hover {
+            background: #2980b9;
         }
 
         @keyframes fadeIn {
@@ -480,7 +486,7 @@
                 </div>
             </div>
             <div class="bubbles-remaining">
-                Shots: <span id="bubblesRemaining">10</span>
+                Shots: <span id="bubblesRemaining">3</span>
             </div>
         </div>
 
@@ -680,27 +686,27 @@
 
         const books = {
             "The Intelligent Investor": {
-                price: 50,
+                price: 33,
                 bookValue: 50,
                 unlocks: "Graham's Nets powerup"
             },
             "Common Stocks and Uncommon Profits": {
-                price: 75,
+                price: 50,
                 bookValue: 75,
                 unlocks: "Better bubble distribution"
             },
             "Poor Charlie's Almanack": {
-                price: 100,
+                price: 67,
                 bookValue: 100,
                 unlocks: "See's Candies acquisition"
             },
             "The Little Book of Common Sense Investing": {
-                price: 40,
+                price: 27,
                 bookValue: 40,
                 unlocks: "Portfolio analysis"
             },
             "Essays of Warren Buffett": {
-                price: 100,
+                price: 67,
                 bookValue: 100,
                 unlocks: "Advanced investing wisdom"
             }
@@ -783,7 +789,7 @@
                 this.sugar = 60;
                 this.maxSugar = 60;
                 this.cash = 0;
-                this.bubblesRemaining = 10;
+                this.bubblesRemaining = 3;
                 this.gameRunning = true;
                 
                 this.bubbles = [];
@@ -979,7 +985,10 @@
                 
                 for (let col = 0; col < cols; col++) {
                     for (let row = 0; row < rows; row++) {
-                        if (Math.random() < 0.7) {
+                        // Better spawning pattern - denser at top, sparser at bottom
+                        let spawnChance = 0.9 - (row * 0.1); // 90% at top, decreasing by 10% per row
+                        
+                        if (Math.random() < spawnChance) {
                             const x = col * (this.bubbleRadius * 2) + this.bubbleRadius + (row % 2 ? this.bubbleRadius : 0);
                             const y = row * (this.bubbleRadius * 1.5) + this.bubbleRadius + 20;
                             
@@ -1001,8 +1010,12 @@
                 const rightmostX = Math.max(...this.bubbles.map(b => b.x), this.canvas.width);
                 const newCol = Math.floor((rightmostX + this.bubbleRadius * 2) / (this.bubbleRadius * 2));
                 
+                // Use same spawning logic as initial generation for consistency
                 for (let row = 0; row < rows; row++) {
-                    if (Math.random() < 0.7) {
+                    // Better spawning pattern - denser at top, sparser at bottom
+                    let spawnChance = 0.9 - (row * 0.1); // 90% at top, decreasing by 10% per row
+                    
+                    if (Math.random() < spawnChance) {
                         const x = newCol * (this.bubbleRadius * 2) + this.bubbleRadius + (row % 2 ? this.bubbleRadius : 0);
                         const y = row * (this.bubbleRadius * 1.5) + this.bubbleRadius + 20;
                         
@@ -1307,6 +1320,11 @@
                 powerupsSection.innerHTML = '';
                 
                 Object.entries(powerups).forEach(([name, item]) => {
+                    // Check if item requires a book that we don't have
+                    if (item.requires && !this.ownedBooks.includes(item.requires)) {
+                        return; // Skip this item
+                    }
+                    
                     const div = document.createElement('div');
                     div.className = 'store-item';
                     div.innerHTML = `
@@ -1314,7 +1332,7 @@
                             <h4>${name}</h4>
                             <p>${item.effect}</p>
                         </div>
-                        <div class="item-price">$${item.price || item.basePrice}</div>
+                        <div class="item-price">${item.price || item.basePrice}</div>
                         <button class="buy-btn" onclick="game.buyPowerup('${name}')">Buy</button>
                     `;
                     powerupsSection.appendChild(div);
@@ -1352,9 +1370,9 @@
                     div.innerHTML = `
                         <div class="item-info">
                             <h4>${name}</h4>
-                            <p>${sub.perkDescription} - $${sub.yearlyIncome}/year</p>
+                            <p>${sub.perkDescription} - ${sub.yearlyIncome}/year</p>
                         </div>
-                        <div class="item-price">$${sub.price.toLocaleString()}</div>
+                        <div class="item-price">${sub.price.toLocaleString()}</div>
                         <button class="buy-btn" ${this.cash < sub.price ? 'disabled' : ''} onclick="game.buySubsidiary('${name}')">Buy</button>
                     `;
                     acquisitionsSection.appendChild(div);
@@ -1377,12 +1395,16 @@
                         div.innerHTML = `
                             <div class="item-info">
                                 <h4>${stock.name} (${ticker})</h4>
-                                <p>Price: $${price.toFixed(2)} | Owned: ${owned} shares | Value: $${value.toFixed(2)}</p>
+                                <p>Price: ${price.toFixed(2)} | Owned: ${owned} shares | Value: ${value.toFixed(2)}</p>
                             </div>
                             <div class="portfolio-controls">
-                                <input type="number" class="share-input" id="shares_${ticker}" min="0" value="1">
-                                <button class="buy-btn" onclick="game.buyStock('${ticker}')">Buy</button>
-                                ${owned > 0 ? `<button class="sell-btn" onclick="game.sellStock('${ticker}')">Sell</button>` : ''}
+                                <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 5px;">
+                                    <button class="percentage-btn" onclick="game.buyStockPercent('${ticker}', 10)">10%</button>
+                                    <button class="percentage-btn" onclick="game.buyStockPercent('${ticker}', 25)">25%</button>
+                                    <button class="percentage-btn" onclick="game.buyStockPercent('${ticker}', 50)">50%</button>
+                                    <button class="percentage-btn" onclick="game.buyStockPercent('${ticker}', 90)">90%</button>
+                                </div>
+                                ${owned > 0 ? `<button class="sell-btn" onclick="game.sellAllStock('${ticker}')">Sell All</button>` : ''}
                             </div>
                         `;
                         stocksSection.appendChild(div);
@@ -1400,7 +1422,7 @@
                     div.innerHTML = `
                         <div class="portfolio-info">
                             <h4>${name}</h4>
-                            <p>Income: $${sub.yearlyIncome}/year | Perk: ${sub.gameplayPerk}</p>
+                            <p>Income: ${sub.yearlyIncome}/year | Perk: ${sub.gameplayPerk}</p>
                         </div>
                     `;
                     subsidiariesSection.appendChild(div);
@@ -1461,37 +1483,35 @@
                 }
             }
 
-            buyStock(ticker) {
-                const sharesInput = document.getElementById(`shares_${ticker}`);
-                const shares = parseInt(sharesInput.value) || 0;
-                if (shares <= 0) return;
-                
+            buyStockPercent(ticker, percentage) {
                 const stock = stockData[ticker];
                 const price = stock.prices[this.year];
-                const totalCost = shares * price;
+                const availableFunds = this.cash * (percentage / 100);
+                const shares = Math.floor(availableFunds / price);
                 
-                if (this.cash >= totalCost) {
+                if (shares > 0) {
+                    const totalCost = shares * price;
                     this.cash -= totalCost;
                     this.portfolio[ticker] = (this.portfolio[ticker] || 0) + shares;
                     this.populateInvestments();
                     this.updateUI();
+                    this.showQuote(`Bought ${shares} shares of ${stock.name} for ${totalCost.toFixed(2)}`, 'Warren Buffett', 'BUSINESS');
                 }
             }
 
-            sellStock(ticker) {
-                const sharesInput = document.getElementById(`shares_${ticker}`);
-                const shares = parseInt(sharesInput.value) || 0;
-                if (shares <= 0 || shares > (this.portfolio[ticker] || 0)) return;
+            sellAllStock(ticker) {
+                const shares = this.portfolio[ticker] || 0;
+                if (shares <= 0) return;
                 
                 const stock = stockData[ticker];
                 const price = stock.prices[this.year];
                 const totalValue = shares * price;
                 
                 this.cash += totalValue;
-                this.portfolio[ticker] -= shares;
-                if (this.portfolio[ticker] === 0) delete this.portfolio[ticker];
+                delete this.portfolio[ticker];
                 this.populateInvestments();
                 this.updateUI();
+                this.showQuote(`Sold all ${shares} shares of ${stock.name} for ${totalValue.toFixed(2)}`, 'Warren Buffett', 'BUSINESS');
             }
 
             nextYear() {
@@ -1508,7 +1528,7 @@
                 
                 // Reset for new year
                 this.sugar = this.maxSugar;
-                this.bubblesRemaining = 10;
+                this.bubblesRemaining = 3;
                 this.activeBubble = null;
                 this.bubbles = [];
                 this.collectibles = [];
