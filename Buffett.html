@@ -442,7 +442,7 @@
             </div>
             <div class="stat-section">
                 <div class="stat-title">YEAR</div>
-                <div class="stat-value" id="yearValue">1960</div>
+                <div class="stat-value" id="yearValue">1955</div>
             </div>
             <div class="stat-section">
                 <div class="stat-title">$CASH</div>
@@ -493,7 +493,7 @@
         <div id="quotes">
             <div class="quote-category" id="quoteCategory">WISDOM</div>
             <div id="quoteText">
-                Welcome to 1960! Start building your capital for the journey ahead. The stock market opens in 1963!
+                Welcome to 1955! Start building your capital for the journey ahead.
             </div>
             <div id="quoteAuthor">- Warren Buffett</div>
         </div>
@@ -827,14 +827,13 @@
                 
                 this.specialAmmo = [];
                 this.currentBubbleType = 'normal';
-                this.levelEndTimer = null;
                 
                 for (let i = 0; i < 3; i++) {
                     this.nextBubbles.push(Math.floor(Math.random() * 3));
                 }
                 
                 this.updateUI();
-                this.showQuote('Welcome to 1960! Start building your capital for the journey ahead. The stock market opens in 1963!', 'Warren Buffett', 'WISDOM');
+                this.showQuote('Welcome to 1955! Start building your capital for the journey ahead.', 'Warren Buffett', 'WISDOM');
             }
             
             setupEventListeners() {
@@ -987,7 +986,7 @@
                 for (let col = 0; col < cols; col++) {
                     for (let row = 0; row < rows; row++) {
                         // Better spawning pattern - denser at top, sparser at bottom
-                        let spawnChance = 1.0 - (row * 0.05); // 100% at top, decreasing by 5% each row
+                        let spawnChance = 0.9 - (row * 0.1); // 90% at top, decreasing by 10% per row
                         
                         if (Math.random() < spawnChance) {
                             const x = col * (this.bubbleRadius * 2) + this.bubbleRadius + (row % 2 ? this.bubbleRadius : 0);
@@ -1014,7 +1013,7 @@
                 // Use same spawning logic as initial generation for consistency
                 for (let row = 0; row < rows; row++) {
                     // Better spawning pattern - denser at top, sparser at bottom
-                    let spawnChance = 1.0 - (row * 0.05); // 100% at top, decreasing by 5% each row
+                    let spawnChance = 0.9 - (row * 0.1); // 90% at top, decreasing by 10% per row
                     
                     if (Math.random() < spawnChance) {
                         const x = newCol * (this.bubbleRadius * 2) + this.bubbleRadius + (row % 2 ? this.bubbleRadius : 0);
@@ -1087,17 +1086,8 @@
                 
                 this.collectibles = this.collectibles.filter(c => !c.collected && c.y < this.canvas.height);
                 
-                if (this.bubbles.length === 0) {
+                if ((this.bubbles.length === 0 || this.bubblesRemaining <= 0) && !this.activeBubble && this.collectibles.length === 0) {
                     this.endLevel();
-                } else if (this.bubblesRemaining <= 0 && !this.activeBubble) {
-                    // Wait a moment for collectibles to be collected, then end level
-                    if (!this.levelEndTimer) {
-                        this.levelEndTimer = 2.0; // 2 second grace period
-                    }
-                    this.levelEndTimer -= deltaTime;
-                    if (this.levelEndTimer <= 0) {
-                        this.endLevel();
-                    }
                 }
                 
                 this.updateUI();
@@ -1299,23 +1289,19 @@
                         break;
                     case 'book':
                         this.books += 1;
-                        this.showQuote('Knowledge is the best investment. Books: ' + this.books, 'Business Education', 'BUSINESS');
+                        this.showQuote('Knowledge is the best investment.', 'Business Education', 'BUSINESS');
                         break;
                 }
-                this.updateUI(); // Force UI update when collecting items
             }
             
             endLevel() {
                 this.gameRunning = false;
-                this.levelEndTimer = null;
                 this.showQuote('Year ' + this.year + ' completed! Visit the store to prepare for next year.', 'Warren Buffett', 'WISDOM');
                 setTimeout(() => this.showStoreMenu(), 2000);
             }
 
             showStoreMenu() {
                 document.getElementById('storeYear').textContent = this.year;
-                document.getElementById('storeCash').textContent = this.cash.toLocaleString();
-                document.getElementById('storeBooks').textContent = this.books;
                 this.populateStore();
                 document.getElementById('storeMenu').style.display = 'block';
             }
@@ -1324,18 +1310,6 @@
                 document.getElementById('storeMenu').style.display = 'none';
                 document.getElementById('investmentYear').textContent = this.year;
                 document.getElementById('investmentToNext').textContent = this.year + 1;
-                document.getElementById('investmentCash').textContent = this.cash.toLocaleString();
-                
-                // Calculate portfolio value
-                let portfolioValue = 0;
-                Object.entries(this.portfolio).forEach(([ticker, shares]) => {
-                    const stock = stockData[ticker];
-                    if (stock.prices[this.year]) {
-                        portfolioValue += shares * stock.prices[this.year];
-                    }
-                });
-                document.getElementById('investmentPortfolio').textContent = portfolioValue.toLocaleString();
-                
                 this.populateInvestments();
                 document.getElementById('investmentMenu').style.display = 'block';
             }
@@ -1484,8 +1458,6 @@
                     }
                     this.populateStore();
                     this.updateUI();
-                    // Update store display
-                    document.getElementById('storeCash').textContent = this.cash.toLocaleString();
                 }
             }
 
@@ -1497,8 +1469,6 @@
                     this.populateStore();
                     this.updateUI();
                     this.showQuote(`Acquired: ${name}. ${book.unlocks} now available!`, 'Warren Buffett', 'WISDOM');
-                    // Update store display
-                    document.getElementById('storeBooks').textContent = this.books;
                 }
             }
 
@@ -1510,8 +1480,6 @@
                     this.populateStore();
                     this.updateUI();
                     this.showQuote(`Acquired ${name}! ${sub.gameplayPerk}`, 'Warren Buffett', 'BUSINESS');
-                    // Update store display
-                    document.getElementById('storeCash').textContent = this.cash.toLocaleString();
                 }
             }
 
@@ -1564,7 +1532,6 @@
                 this.activeBubble = null;
                 this.bubbles = [];
                 this.collectibles = [];
-                this.levelEndTimer = null;
                 this.generateInitialBubbles();
                 this.gameRunning = true;
                 
