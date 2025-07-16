@@ -790,6 +790,8 @@
                 this.activeBubble = null;
                 this.nextBubbles = [];
                 this.collectibles = [];
+                this.grid = [];
+                this.gridOffsetX = 0;
                 
                 this.portfolio = {};
                 this.ownedSubsidiaries = [];
@@ -973,132 +975,122 @@
             
             generateInitialBubbles() {
                 this.bubbles = [];
+                this.grid = [];
                 
-                const bubbleWidth = this.bubbleRadius * 2;
-                const bubbleHeight = this.bubbleRadius * 1.75; // Slightly tighter vertical spacing
-                const cols = Math.floor(this.canvas.width / bubbleWidth) + 3;
-                const rows = 8;
+                // Calculate rows based on decade
+                const decade = Math.floor((this.year - 1950) / 10);
+                this.gridRows = 4 + decade;
                 
-                for (let row = 0; row < rows; row++) {
-                    for (let col = 0; col < cols; col++) {
-                        // Hexagonal grid: odd rows are offset by half bubble width
-                        const offsetX = (row % 2) * this.bubbleRadius;
-                        const x = col * bubbleWidth + this.bubbleRadius + offsetX;
-                        const y = row * bubbleHeight + this.bubbleRadius + 20;
-                        
-                        // Fill most positions but leave some gaps for strategy
-                        if (Math.random() < 0.85) {
-                            this.bubbles.push({
-                                x: x,
-                                y: y,
-                                color: Math.floor(Math.random() * 3),
-                                radius: this.bubbleRadius,
-                                gridX: col,
-                                gridY: row,
-                                isGold: false
-                            });
-                        }
+                // Create hex grid
+                const hexWidth = this.bubbleRadius * 2;
+                const hexHeight = this.bubbleRadius * Math.sqrt(3);
+                this.gridCols = Math.floor(this.canvas.width / hexWidth) + 10;
+                
+                // Initialize grid array
+                for (let col = 0; col < this.gridCols; col++) {
+                    this.grid[col] = [];
+                    for (let row = 0; row < this.gridRows; row++) {
+                        this.grid[col][row] = null;
                     }
                 }
                 
-                // Check for initial gold clusters
-                this.updateGoldClusters();
+                // Fill initial screen with bubbles
+                const visibleCols = Math.floor(this.canvas.width / hexWidth) + 2;
+                for (let col = 0; col < visibleCols; col++) {
+                    for (let row = 0; row < this.gridRows; row++) {
+                        this.createBubbleAtGrid(col, row);
+                    }
+                }
+                
+                this.gridOffsetX = 0;
+                this.hexWidth = hexWidth;
+                this.hexHeight = hexHeight;
             }
             
-            spawnNewColumn() {
-                const bubbleWidth = this.bubbleRadius * 2;
-                const bubbleHeight = this.bubbleRadius * 1.75;
-                const rows = 8;
-                
-                // Find the rightmost bubble position
-                const rightmostX = Math.max(...this.bubbles.map(b => b.x), this.canvas.width);
-                const newCol = Math.floor((rightmostX + bubbleWidth) / bubbleWidth);
-                
-                for (let row = 0; row < rows; row++) {
-                    if (Math.random() < 0.85) {
-                        const offsetX = (row % 2) * this.bubbleRadius;
-                        const x = newCol * bubbleWidth + this.bubbleRadius + offsetX;
-                        const y = row * bubbleHeight + this.bubbleRadius + 20;
-                        
-                        this.bubbles.push({
-                            x: x,
-                            y: y,
-                            color: Math.floor(Math.random() * 3),
-                            radius: this.bubbleRadius,
-                            gridX: newCol,
-                            gridY: row,
-                            isGold: false
-                        });
-                    }
+            createBubbleAtGrid(gridCol, gridRow) {
+                if (this.grid[gridCol] && this.grid[gridCol][gridRow] === null) {
+                    const pos = this.getGridPosition(gridCol, gridRow);
+                    const bubble = {
+                        x: pos.x,
+                        y: pos.y,
+                        color: Math.floor(Math.random() * 3),
+                        radius: this.bubbleRadius,
+                        gridCol: gridCol,
+                        gridRow: gridRow,
+                        isGold: false
+                    };
+                    
+                    this.bubbles.push(bubble);
+                    this.grid[gridCol][gridRow] = bubble;
+                    return bubble;
                 }
-                
-                // Check for new gold clusters after spawning
-                this.updateGoldClusters();
+                return null;
             }
-
-            updateGoldClusters() {
-                // Reset all gold status
-                this.bubbles.forEach(bubble => bubble.isGold = false);
+            
+            getGridPosition(gridCol, gridRow) {
+                const hexWidth = this.hexWidth;
+                const hexHeight = this.hexHeight;
+                const offsetX = (gridRow % 2) * (hexWidth / 2);
                 
-                const visited = new Set();
-                
-                for (let bubble of this.bubbles) {
-                    const key = bubble.x + ',' + bubble.y;
-                    if (visited.has(key)) continue;
-                    
-                    // Find cluster of same color
-                    const cluster = this.findColorCluster(bubble, visited);
-                    
-                    // If cluster has 8+ bubbles, turn them gold
-                    if (cluster.length >= 8) {
-                        cluster.forEach(b => b.isGold = true);
-                        
-                        // Show message for large clusters
-                        if (cluster.length >= 12) {
-                            this.showQuote(`MASSIVE CLUSTER! ${cluster.length} bubbles turned to gold!`, 'Warren Buffett', 'WISDOM');
-                        } else {
-                            this.showQuote(`Gold cluster formed! ${cluster.length} bubbles ready to pop!`, '', 'GAME');
-                        }
-                    }
-                }
+                return {
+                    x: gridCol * hexWidth + offsetX + this.bubbleRadius - this.gridOffsetX,
+                    y: gridRow * (hexHeight * 0.75) + this.bubbleRadius + 20
+                };
             }
-
-            findColorCluster(startBubble, globalVisited) {
-                const visited = new Set();
-                const cluster = [];
-                const stack = [startBubble];
+            
+            updateGridPositions() {
+                this.bubbles.forEach(bubble => {
+                    const pos = this.getGridPosition(bubble.gridCol, bubble.gridRow);
+                    bubble.x = pos.x;
+                    bubble.y = pos.y;
+                });
+            }
+            
+            findNearestGridPosition(x, y) {
+                let minDist = Infinity;
+                let bestCol = 0;
+                let bestRow = 0;
                 
-                while (stack.length > 0) {
-                    const bubble = stack.pop();
-                    const key = bubble.x + ',' + bubble.y;
-                    
-                    if (visited.has(key) || globalVisited.has(key)) continue;
-                    visited.add(key);
-                    globalVisited.add(key);
-                    
-                    if (bubble.color === startBubble.color) {
-                        cluster.push(bubble);
-                        
-                        // Find adjacent bubbles in hexagonal grid
-                        const neighbors = this.bubbles.filter(b => {
-                            if (b === bubble) return false;
-                            const dist = Math.sqrt(
-                                Math.pow(b.x - bubble.x, 2) + 
-                                Math.pow(b.y - bubble.y, 2)
-                            );
-                            return dist < this.bubbleRadius * 2.2; // Slightly larger than 2x radius for hex grid
-                        });
-                        
-                        for (let neighbor of neighbors) {
-                            const neighborKey = neighbor.x + ',' + neighbor.y;
-                            if (!visited.has(neighborKey) && !globalVisited.has(neighborKey) && neighbor.color === startBubble.color) {
-                                stack.push(neighbor);
+                // Check a reasonable range of grid positions
+                const startCol = Math.max(0, Math.floor((x + this.gridOffsetX) / this.hexWidth) - 2);
+                const endCol = Math.min(this.gridCols - 1, startCol + 5);
+                
+                for (let col = startCol; col <= endCol; col++) {
+                    for (let row = 0; row < this.gridRows; row++) {
+                        if (this.grid[col] && this.grid[col][row] === null) {
+                            const pos = this.getGridPosition(col, row);
+                            const dist = Math.sqrt(Math.pow(x - pos.x, 2) + Math.pow(y - pos.y, 2));
+                            
+                            if (dist < minDist) {
+                                minDist = dist;
+                                bestCol = col;
+                                bestRow = row;
                             }
                         }
                     }
                 }
                 
-                return cluster;
+                return { col: bestCol, row: bestRow };
+            }
+            
+            spawnNewColumn() {
+                // Move grid offset for scrolling
+                this.gridOffsetX += this.scrollSpeed / 60;
+                
+                // Check if we need to spawn a new column
+                const rightmostCol = Math.floor(this.gridOffsetX / this.hexWidth) + Math.floor(this.canvas.width / this.hexWidth) + 2;
+                
+                if (rightmostCol < this.gridCols && this.grid[rightmostCol]) {
+                    // Fill the entire column (100% packed)
+                    for (let row = 0; row < this.gridRows; row++) {
+                        if (this.grid[rightmostCol][row] === null) {
+                            this.createBubbleAtGrid(rightmostCol, row);
+                        }
+                    }
+                }
+                
+                this.updateGridPositions();
+                this.checkGoldClusters();
             }
             
             update(deltaTime) {
@@ -1110,17 +1102,24 @@
                     return;
                 }
                 
-                this.bubbles.forEach(bubble => {
-                    bubble.x -= this.scrollSpeed * deltaTime;
-                });
-                
-                this.bubbles = this.bubbles.filter(bubble => bubble.x > -this.bubbleRadius);
-                
+                // Update spawn timer and spawn new columns
                 this.spawnTimer += deltaTime;
                 if (this.spawnTimer >= this.spawnInterval) {
                     this.spawnNewColumn();
                     this.spawnTimer = 0;
                 }
+                
+                // Filter out bubbles that have scrolled off screen
+                this.bubbles = this.bubbles.filter(bubble => {
+                    if (bubble.x < -this.bubbleRadius) {
+                        // Clear from grid when removing
+                        if (this.grid[bubble.gridCol] && this.grid[bubble.gridCol][bubble.gridRow] === bubble) {
+                            this.grid[bubble.gridCol][bubble.gridRow] = null;
+                        }
+                        return false;
+                    }
+                    return true;
+                });
                 
                 if (this.activeBubble) {
                     this.activeBubble.x += this.activeBubble.vx * deltaTime;
@@ -1166,6 +1165,7 @@
             checkCollisions() {
                 if (!this.activeBubble) return;
                 
+                // Check collision with existing bubbles
                 for (let bubble of this.bubbles) {
                     const dist = Math.sqrt(
                         Math.pow(this.activeBubble.x - bubble.x, 2) + 
@@ -1173,59 +1173,135 @@
                     );
                     
                     if (dist < this.bubbleRadius * 1.8) {
-                        this.attachBubble(bubble);
+                        this.snapBubbleToGrid();
                         return;
+                    }
+                }
+                
+                // Check if bubble reached the top
+                if (this.activeBubble.y <= this.bubbleRadius) {
+                    this.snapBubbleToGrid();
+                }
+            }
+            
+            snapBubbleToGrid() {
+                if (!this.activeBubble) return;
+                
+                const gridPos = this.findNearestGridPosition(this.activeBubble.x, this.activeBubble.y);
+                
+                if (this.grid[gridPos.col] && this.grid[gridPos.col][gridPos.row] === null) {
+                    const newBubble = {
+                        x: 0, // Will be set by getGridPosition
+                        y: 0,
+                        color: this.activeBubble.color,
+                        radius: this.bubbleRadius,
+                        gridCol: gridPos.col,
+                        gridRow: gridPos.row,
+                        isGold: false,
+                        type: this.activeBubble.type
+                    };
+                    
+                    const pos = this.getGridPosition(gridPos.col, gridPos.row);
+                    newBubble.x = pos.x;
+                    newBubble.y = pos.y;
+                    
+                    // Handle special bubble types
+                    if (this.activeBubble.type === 'explosive') {
+                        this.explodeBubbles(newBubble.x, newBubble.y);
+                        this.activeBubble = null;
+                        return;
+                    } else if (this.activeBubble.type === 'converter') {
+                        this.convertBubblesToGrey(newBubble.x, newBubble.y);
+                    }
+                    
+                    this.bubbles.push(newBubble);
+                    this.grid[gridPos.col][gridPos.row] = newBubble;
+                    this.activeBubble = null;
+                    
+                    // Check for matches and gold clusters
+                    this.checkGoldClusters();
+                    const matches = this.findMatches(newBubble);
+                    if (matches.length >= 3) {
+                        this.popBubbles(matches);
                     }
                 }
             }
             
-            attachBubble(nearBubble) {
-                // Find the best attachment position in the hexagonal grid
-                const newBubble = this.findBestAttachmentPosition(nearBubble);
+            checkGoldClusters() {
+                // Reset all gold status first
+                this.bubbles.forEach(bubble => bubble.wasGold = bubble.isGold);
+                this.bubbles.forEach(bubble => bubble.isGold = false);
                 
-                if (this.activeBubble.type === 'explosive') {
-                    this.explodeBubbles(newBubble.x, newBubble.y);
-                    this.activeBubble = null;
-                    return;
-                } else if (this.activeBubble.type === 'converter') {
-                    this.convertBubblesToGrey(newBubble.x, newBubble.y);
-                }
+                // Find all clusters of 8+ same color bubbles
+                const visited = new Set();
                 
-                this.bubbles.push(newBubble);
-                this.activeBubble = null;
-                
-                // Update gold clusters first
-                this.updateGoldClusters();
-                
-                // Then check for matches
-                const matches = this.findMatches(newBubble);
-                if (matches.length >= 3) {
-                    this.popBubbles(matches);
-                }
+                this.bubbles.forEach(bubble => {
+                    const key = `${bubble.gridCol},${bubble.gridRow}`;
+                    if (!visited.has(key)) {
+                        const cluster = this.getConnectedBubbles(bubble, visited);
+                        if (cluster.length >= 8) {
+                            // Turn cluster gold
+                            cluster.forEach(b => b.isGold = true);
+                        }
+                    }
+                });
             }
-
-            findBestAttachmentPosition(nearBubble) {
-                const bubbleWidth = this.bubbleRadius * 2;
-                const bubbleHeight = this.bubbleRadius * 1.75;
+            
+            getConnectedBubbles(startBubble, globalVisited = new Set()) {
+                const visited = new Set();
+                const cluster = [];
+                const stack = [startBubble];
                 
-                // Calculate grid position based on the near bubble
-                const gridX = Math.round((this.activeBubble.x - this.bubbleRadius) / bubbleWidth);
-                const gridY = Math.round((this.activeBubble.y - this.bubbleRadius - 20) / bubbleHeight);
+                while (stack.length > 0) {
+                    const bubble = stack.pop();
+                    const key = `${bubble.gridCol},${bubble.gridRow}`;
+                    
+                    if (visited.has(key) || globalVisited.has(key)) continue;
+                    visited.add(key);
+                    globalVisited.add(key);
+                    
+                    if (bubble.color === startBubble.color) {
+                        cluster.push(bubble);
+                        
+                        // Get hex neighbors
+                        const neighbors = this.getHexNeighbors(bubble.gridCol, bubble.gridRow);
+                        neighbors.forEach(neighbor => {
+                            if (neighbor && neighbor.color === startBubble.color) {
+                                const neighborKey = `${neighbor.gridCol},${neighbor.gridRow}`;
+                                if (!visited.has(neighborKey)) {
+                                    stack.push(neighbor);
+                                }
+                            }
+                        });
+                    }
+                }
                 
-                // Calculate exact position in hexagonal grid
-                const offsetX = (gridY % 2) * this.bubbleRadius;
-                const x = gridX * bubbleWidth + this.bubbleRadius + offsetX;
-                const y = gridY * bubbleHeight + this.bubbleRadius + 20;
+                return cluster;
+            }
+            
+            getHexNeighbors(col, row) {
+                const neighbors = [];
+                const isEvenRow = row % 2 === 0;
                 
-                return {
-                    x: x,
-                    y: y,
-                    color: this.activeBubble.color,
-                    radius: this.bubbleRadius,
-                    gridX: gridX,
-                    gridY: gridY,
-                    isGold: false
-                };
+                // Hex grid neighbor offsets
+                const offsets = isEvenRow ? [
+                    [-1, -1], [0, -1], [-1, 0], [1, 0], [-1, 1], [0, 1]
+                ] : [
+                    [0, -1], [1, -1], [-1, 0], [1, 0], [0, 1], [1, 1]
+                ];
+                
+                offsets.forEach(([dCol, dRow]) => {
+                    const newCol = col + dCol;
+                    const newRow = row + dRow;
+                    
+                    if (newCol >= 0 && newCol < this.gridCols && 
+                        newRow >= 0 && newRow < this.gridRows &&
+                        this.grid[newCol] && this.grid[newCol][newRow]) {
+                        neighbors.push(this.grid[newCol][newRow]);
+                    }
+                });
+                
+                return neighbors;
             }
             
             explodeBubbles(centerX, centerY) {
@@ -1248,21 +1324,10 @@
                     if (index !== -1) {
                         this.bubbles.splice(index, 1);
                         
-                        if (Math.random() < 0.6) {
-                            this.collectibles.push({
-                                x: bubble.x,
-                                y: bubble.y,
-                                type: 'cash',
-                                collected: false
-                            });
+                        // Clear from grid
+                        if (this.grid[bubble.gridCol] && this.grid[bubble.gridCol][bubble.gridRow] === bubble) {
+                            this.grid[bubble.gridCol][bubble.gridRow] = null;
                         }
-                    }
-                }
-                
-                for (let bubble of bubblesInRange) {
-                    const index = this.bubbles.indexOf(bubble);
-                    if (index !== -1) {
-                        this.bubbles.splice(index, 1);
                         
                         if (Math.random() < 0.6) {
                             this.collectibles.push({
@@ -1278,9 +1343,7 @@
                 if (bubblesInRange.length > 0) {
                     this.cash += bubblesInRange.length * 150;
                     this.showQuote('LOLLAPALOOZA EXPLOSION! ' + bubblesInRange.length + ' bubbles destroyed!', 'Charlie Munger', 'POWERUP');
-                    
-                    // Check for new gold clusters after explosion
-                    this.updateGoldClusters();
+                    this.checkGoldClusters();
                 }
             }
             
@@ -1302,6 +1365,7 @@
                 
                 if (bubblesInRange.length > 0) {
                     this.showQuote('GRAHAM NETS! ' + bubblesInRange.length + ' bubbles converted for chain reactions!', 'Benjamin Graham', 'POWERUP');
+                    this.checkGoldClusters();
                 }
             }
             
@@ -1312,39 +1376,31 @@
                 
                 while (stack.length > 0) {
                     const bubble = stack.pop();
-                    const key = bubble.x + ',' + bubble.y;
+                    const key = `${bubble.gridCol},${bubble.gridRow}`;
                     
                     if (visited.has(key)) continue;
                     visited.add(key);
                     
-                    // Gold bubbles can be matched by any color, or if colors match, or if neighbor is grey
-                    const canMatch = bubble.isGold || startBubble.isGold || 
-                                   bubble.isGrey || startBubble.isGrey || 
-                                   bubble.color === startBubble.color;
-                    
-                    if (canMatch) {
+                    // Gold bubbles match with any color
+                    if (bubble.isGold || startBubble.isGold || 
+                        bubble.isGrey || startBubble.isGrey || 
+                        bubble.color === startBubble.color) {
+                        
                         matches.push(bubble);
                         
-                        const neighbors = this.bubbles.filter(b => {
-                            if (b === bubble) return false;
-                            const dist = Math.sqrt(
-                                Math.pow(b.x - bubble.x, 2) + 
-                                Math.pow(b.y - bubble.y, 2)
-                            );
-                            return dist < this.bubbleRadius * 2.2;
-                        });
-                        
-                        for (let neighbor of neighbors) {
-                            const neighborKey = neighbor.x + ',' + neighbor.y;
+                        // Get hex neighbors
+                        const neighbors = this.getHexNeighbors(bubble.gridCol, bubble.gridRow);
+                        neighbors.forEach(neighbor => {
+                            const neighborKey = `${neighbor.gridCol},${neighbor.gridRow}`;
                             if (!visited.has(neighborKey)) {
-                                const neighborCanMatch = neighbor.isGold || startBubble.isGold ||
-                                                       neighbor.isGrey || bubble.isGrey || 
-                                                       neighbor.color === startBubble.color;
-                                if (neighborCanMatch) {
+                                // Gold bubbles connect to any touching bubble
+                                if (bubble.isGold || neighbor.isGold ||
+                                    bubble.isGrey || neighbor.isGrey ||
+                                    neighbor.color === startBubble.color) {
                                     stack.push(neighbor);
                                 }
                             }
-                        }
+                        });
                     }
                 }
                 
@@ -1352,14 +1408,15 @@
             }
             
             popBubbles(matches) {
-                let goldBubbles = 0;
-                
                 for (let bubble of matches) {
-                    if (bubble.isGold) goldBubbles++;
-                    
                     const index = this.bubbles.indexOf(bubble);
                     if (index !== -1) {
                         this.bubbles.splice(index, 1);
+                        
+                        // Clear from grid
+                        if (this.grid[bubble.gridCol] && this.grid[bubble.gridCol][bubble.gridRow] === bubble) {
+                            this.grid[bubble.gridCol][bubble.gridRow] = null;
+                        }
                         
                         const rand = Math.random();
                         if (rand < 0.05) {
@@ -1387,31 +1444,26 @@
                     }
                 }
                 
-                // Calculate rewards based on cluster size and gold bubbles
-                let cashBonus = matches.length * 100;
-                if (goldBubbles > 0) {
-                    cashBonus *= (1 + goldBubbles * 0.5); // 50% bonus per gold bubble
-                }
+                // Check for gold clusters after popping
+                this.checkGoldClusters();
                 
                 if (matches.length >= 15) {
-                    this.showQuote('EXCEPTIONAL CLUSTER! ' + matches.length + ' bubbles!' + (goldBubbles > 0 ? ` (${goldBubbles} gold!)` : ''), 'Warren Buffett', 'WISDOM');
-                    this.cash += cashBonus;
+                    this.showQuote('EXCEPTIONAL CLUSTER! ' + matches.length + ' bubbles!', 'Warren Buffett', 'WISDOM');
+                    this.cash += matches.length * 500;
                     this.sugar = Math.min(this.maxSugar, this.sugar + 10);
                     this.books += 1;
                 } else if (matches.length >= 8) {
-                    this.showQuote('GREAT PATIENCE! ' + matches.length + ' bubbles!' + (goldBubbles > 0 ? ` (${goldBubbles} gold!)` : ''), '', 'GAME');
-                    this.cash += cashBonus;
+                    if (matches.some(b => b.isGold)) {
+                        this.showQuote('GOLD CLUSTER CLEARED! ' + matches.length + ' bubbles!', 'Warren Buffett', 'WISDOM');
+                    } else {
+                        this.showQuote('GREAT PATIENCE! ' + matches.length + ' bubbles!', '', 'GAME');
+                    }
+                    this.cash += matches.length * 200;
                     this.sugar = Math.min(this.maxSugar, this.sugar + 5);
                 } else if (matches.length >= 5) {
-                    this.showQuote('Good cluster! ' + matches.length + ' bubbles.' + (goldBubbles > 0 ? ` (${goldBubbles} gold!)` : ''), '', 'GAME');
-                    this.cash += cashBonus;
-                } else if (goldBubbles > 0) {
-                    this.showQuote('Gold bubbles cleared! Excellent strategy!', 'Warren Buffett', 'WISDOM');
-                    this.cash += cashBonus;
+                    this.showQuote('Good cluster! ' + matches.length + ' bubbles.', '', 'GAME');
+                    this.cash += matches.length * 100;
                 }
-                
-                // Check for new gold clusters after popping
-                this.updateGoldClusters();
             }
             
             collectItem(collectible) {
@@ -1660,13 +1712,15 @@
                 this.activeBubble = null;
                 this.bubbles = [];
                 this.collectibles = [];
+                this.grid = [];
+                this.gridOffsetX = 0;
                 this.generateInitialBubbles();
                 this.gameRunning = true;
                 
                 this.updateUI();
                 
                 if (portfolioIncome > 0) {
-                    this.showQuote(`Welcome to ${this.year}! Portfolio generated $${portfolioIncome.toLocaleString()} income.`, 'Warren Buffett', 'BUSINESS');
+                    this.showQuote(`Welcome to ${this.year}! Portfolio generated ${portfolioIncome.toLocaleString()} income.`, 'Warren Buffett', 'BUSINESS');
                 } else {
                     this.showQuote(`Welcome to ${this.year}! Time to grow your investments.`, 'Warren Buffett', 'WISDOM');
                 }
@@ -1805,9 +1859,9 @@
                 this.ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
                 
                 if (bubble.isGold) {
-                    // Gold bubbles have a special gradient
+                    // Gold gradient
                     const gradient = this.ctx.createRadialGradient(
-                        bubble.x, bubble.y, 0,
+                        bubble.x - bubble.radius * 0.3, bubble.y - bubble.radius * 0.3, 0,
                         bubble.x, bubble.y, bubble.radius
                     );
                     gradient.addColorStop(0, '#FFD700');
@@ -1837,11 +1891,11 @@
                     this.ctx.lineWidth = 3;
                     this.ctx.stroke();
                     
-                    // Add sparkle effect for gold bubbles
+                    // Add sparkle effect
                     this.ctx.fillStyle = 'white';
                     this.ctx.font = '12px Arial';
                     this.ctx.textAlign = 'center';
-                    this.ctx.fillText('✨', bubble.x + bubble.radius * 0.5, bubble.y - bubble.radius * 0.3);
+                    this.ctx.fillText('✨', bubble.x, bubble.y + 3);
                 } else if (bubble.isGrey) {
                     this.ctx.strokeStyle = '#f1c40f';
                     this.ctx.lineWidth = 2;
