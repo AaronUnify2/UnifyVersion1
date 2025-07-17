@@ -535,6 +535,22 @@
     </div>
 
     <script>
+        // Historical Bull/Bear Market Data
+        const marketConditions = {
+            1955: 'bull', 1956: 'bull', 1957: 'bear', 1958: 'bull', 1959: 'bull', 1960: 'bull',
+            1961: 'bull', 1962: 'bear', 1963: 'bull', 1964: 'bull', 1965: 'bull', 1966: 'bear',
+            1967: 'bull', 1968: 'bull', 1969: 'bear', 1970: 'bear', 1971: 'bull', 1972: 'bull',
+            1973: 'bear', 1974: 'bear', 1975: 'bull', 1976: 'bull', 1977: 'bear', 1978: 'bull',
+            1979: 'bear', 1980: 'bull', 1981: 'bear', 1982: 'bull', 1983: 'bull', 1984: 'bull',
+            1985: 'bull', 1986: 'bull', 1987: 'bear', 1988: 'bull', 1989: 'bull', 1990: 'bear',
+            1991: 'bull', 1992: 'bull', 1993: 'bull', 1994: 'bear', 1995: 'bull', 1996: 'bull',
+            1997: 'bull', 1998: 'bull', 1999: 'bull', 2000: 'bear', 2001: 'bear', 2002: 'bear',
+            2003: 'bull', 2004: 'bull', 2005: 'bull', 2006: 'bull', 2007: 'bear', 2008: 'bear',
+            2009: 'bull', 2010: 'bull', 2011: 'bear', 2012: 'bull', 2013: 'bull', 2014: 'bull',
+            2015: 'bear', 2016: 'bull', 2017: 'bull', 2018: 'bear', 2019: 'bull', 2020: 'bear',
+            2021: 'bull', 2022: 'bear', 2023: 'bull', 2024: 'bull', 2025: 'bull'
+        };
+
         // Historical stock data
         const stockData = {
             'KO': {
@@ -757,7 +773,6 @@
                 this.setupCanvas();
                 this.initGameState();
                 this.setupEventListeners();
-                this.generateInitialBubbles();
                 
                 this.lastTime = 0;
                 this.gameLoop();
@@ -787,6 +802,7 @@
                 this.gameRunning = true;
                 
                 this.bubbles = [];
+                this.columns = []; // New column-based system
                 this.activeBubble = null;
                 this.nextBubbles = [];
                 this.collectibles = [];
@@ -798,8 +814,18 @@
                 
                 this.bubbleRadius = Math.max(12, Math.min(18, this.canvas.width / 25));
                 this.scrollSpeed = 30;
-                this.spawnTimer = 0;
-                this.spawnInterval = 0.8;
+                this.columnSpawnTimer = 0;
+                this.columnSpawnInterval = 1.2; // Time between columns
+                
+                // Mr Market building
+                this.mrMarket = {
+                    x: this.canvas.width - 80,
+                    y: this.canvas.height / 2,
+                    width: 60,
+                    height: 120,
+                    shooting: false,
+                    shootTimer: 0
+                };
                 
                 this.cannon = {
                     x: this.canvas.width / 2,
@@ -809,6 +835,7 @@
                 };
                 
                 this.colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6'];
+                this.goldColor = '#FFD700';
                 
                 this.isAiming = false;
                 this.trajectory = [];
@@ -825,6 +852,8 @@
                 for (let i = 0; i < 3; i++) {
                     this.nextBubbles.push(Math.floor(Math.random() * 3));
                 }
+                
+                this.currentMarketCondition = marketConditions[this.year] || 'bull';
                 
                 this.updateUI();
                 this.showQuote('Welcome to 1955! Start building your capital for the journey ahead.', 'Warren Buffett', 'WISDOM');
@@ -971,124 +1000,101 @@
                 }
             }
             
-            generateInitialBubbles() {
-                // Calculate rows based on decade
-                const decade = Math.floor((this.year - 1950) / 10);
-                this.gridRows = Math.min(4 + decade, 10); // Start at 4 rows, +1 per decade, max 10
+            generateNewColumn() {
+                const marketCondition = marketConditions[this.year] || 'bull';
+                let columnHeight;
                 
-                const cols = Math.floor(this.canvas.width / (this.bubbleRadius * 2)) + 8;
-                this.hexGrid = [];
-                this.bubbles = [];
-                
-                // Initialize hex grid structure
-                for (let col = 0; col < cols; col++) {
-                    this.hexGrid[col] = [];
-                    for (let row = 0; row < this.gridRows; row++) {
-                        this.hexGrid[col][row] = null;
-                    }
+                if (marketCondition === 'bull') {
+                    columnHeight = Math.floor(Math.random() * 4) + 5; // 5-8 bubbles
+                } else {
+                    columnHeight = Math.floor(Math.random() * 3) + 2; // 2-4 bubbles
                 }
                 
-                // Fill initial grid 100% packed
-                for (let col = 0; col < cols - 3; col++) { // Leave space for spawning
-                    for (let row = 0; row < this.gridRows; row++) {
-                        const bubble = this.createBubbleAtGrid(col, row);
-                        this.hexGrid[col][row] = bubble;
-                        this.bubbles.push(bubble);
-                    }
-                }
-                
-                // Initialize column cannon position
-                this.columnCannon = {
-                    x: this.canvas.width + this.bubbleRadius * 2,
-                    nextColumn: cols - 3
+                const column = {
+                    x: this.mrMarket.x,
+                    bubbles: [],
+                    height: columnHeight
                 };
-            }
-            
-            createBubbleAtGrid(gridX, gridY) {
-                const hexOffset = (gridY % 2) * this.bubbleRadius;
-                const x = gridX * (this.bubbleRadius * 2) + this.bubbleRadius + hexOffset;
-                const y = gridY * (this.bubbleRadius * Math.sqrt(3)) + this.bubbleRadius + 40;
                 
-                return {
-                    x: x,
-                    y: y,
-                    color: Math.floor(Math.random() * 3),
-                    radius: this.bubbleRadius,
-                    gridX: gridX,
-                    gridY: gridY,
-                    isGold: false
-                };
-            }
-            
-            getGridPosition(x, y) {
-                // Convert world coordinates to grid coordinates
-                const adjustedY = y - 40;
-                const gridY = Math.round(adjustedY / (this.bubbleRadius * Math.sqrt(3)));
-                
-                if (gridY < 0 || gridY >= this.gridRows) return null;
-                
-                const hexOffset = (gridY % 2) * this.bubbleRadius;
-                const adjustedX = x - hexOffset;
-                const gridX = Math.round((adjustedX - this.bubbleRadius) / (this.bubbleRadius * 2));
-                
-                if (gridX < 0 || gridX >= this.hexGrid.length) return null;
-                
-                return { gridX, gridY };
-            }
-            
-            findNearestEmptyGridPos(x, y) {
-                const center = this.getGridPosition(x, y);
-                if (!center) return null;
-                
-                // Check if center position is empty
-                if (!this.hexGrid[center.gridX] || !this.hexGrid[center.gridX][center.gridY]) {
-                    return center;
+                // Generate bubbles for this column
+                for (let row = 0; row < columnHeight; row++) {
+                    const bubble = {
+                        x: this.mrMarket.x,
+                        y: 50 + row * (this.bubbleRadius * 1.7),
+                        color: Math.floor(Math.random() * 3),
+                        radius: this.bubbleRadius,
+                        row: row,
+                        column: this.columns.length,
+                        isGold: false
+                    };
+                    
+                    column.bubbles.push(bubble);
+                    this.bubbles.push(bubble);
                 }
                 
-                // Search outward in spiral pattern for empty position
-                for (let radius = 1; radius <= 5; radius++) {
-                    for (let dx = -radius; dx <= radius; dx++) {
-                        for (let dy = -radius; dy <= radius; dy++) {
-                            if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
-                                const checkX = center.gridX + dx;
-                                const checkY = center.gridY + dy;
-                                
-                                if (checkX >= 0 && checkX < this.hexGrid.length && 
-                                    checkY >= 0 && checkY < this.gridRows &&
-                                    this.hexGrid[checkX] && !this.hexGrid[checkX][checkY]) {
-                                    return { gridX: checkX, gridY: checkY };
-                                }
-                            }
+                this.columns.push(column);
+                this.mrMarket.shooting = true;
+                this.mrMarket.shootTimer = 0.3;
+            }
+            
+            checkForGoldClusters() {
+                // Reset all gold states
+                this.bubbles.forEach(bubble => bubble.isGold = false);
+                
+                // Find clusters of 8+ connected bubbles
+                const visited = new Set();
+                
+                this.bubbles.forEach(startBubble => {
+                    const key = `${startBubble.x},${startBubble.y}`;
+                    if (visited.has(key)) return;
+                    
+                    const cluster = this.findConnectedBubbles(startBubble, visited);
+                    
+                    if (cluster.length >= 8) {
+                        // Turn entire cluster gold
+                        cluster.forEach(bubble => {
+                            bubble.isGold = true;
+                        });
+                    }
+                });
+            }
+            
+            findConnectedBubbles(startBubble, globalVisited) {
+                const visited = new Set();
+                const cluster = [];
+                const stack = [startBubble];
+                const startColor = startBubble.color;
+                
+                while (stack.length > 0) {
+                    const bubble = stack.pop();
+                    const key = `${bubble.x},${bubble.y}`;
+                    
+                    if (visited.has(key) || globalVisited.has(key)) continue;
+                    if (bubble.color !== startColor) continue;
+                    
+                    visited.add(key);
+                    globalVisited.add(key);
+                    cluster.push(bubble);
+                    
+                    // Find neighbors
+                    const neighbors = this.bubbles.filter(other => {
+                        if (other === bubble) return false;
+                        const dist = Math.sqrt(
+                            Math.pow(other.x - bubble.x, 2) + 
+                            Math.pow(other.y - bubble.y, 2)
+                        );
+                        return dist < this.bubbleRadius * 2.2;
+                    });
+                    
+                    neighbors.forEach(neighbor => {
+                        const neighborKey = `${neighbor.x},${neighbor.y}`;
+                        if (!visited.has(neighborKey) && !globalVisited.has(neighborKey)) {
+                            stack.push(neighbor);
                         }
-                    }
+                    });
                 }
                 
-                return null;
-            }
-            
-            spawnNewColumn() {
-                // Column cannon fires when grid has scrolled enough
-                if (this.columnCannon.x - this.scrollSpeed * 0.016 <= this.canvas.width - this.bubbleRadius * 4) {
-                    const col = this.columnCannon.nextColumn;
-                    
-                    // Expand hex grid if needed
-                    if (!this.hexGrid[col]) {
-                        this.hexGrid[col] = [];
-                    }
-                    
-                    // Fire complete column - 100% packed
-                    for (let row = 0; row < this.gridRows; row++) {
-                        if (!this.hexGrid[col][row]) {
-                            const bubble = this.createBubbleAtGrid(col, row);
-                            this.hexGrid[col][row] = bubble;
-                            this.bubbles.push(bubble);
-                        }
-                    }
-                    
-                    // Move column cannon for next column
-                    this.columnCannon.nextColumn++;
-                    this.columnCannon.x += this.bubbleRadius * 2;
-                }
+                return cluster;
             }
             
             update(deltaTime) {
@@ -1100,25 +1106,11 @@
                     return;
                 }
                 
-                // Update grid positions as they scroll
                 this.bubbles.forEach(bubble => {
                     bubble.x -= this.scrollSpeed * deltaTime;
                 });
                 
-                // Update column cannon position
-                this.columnCannon.x -= this.scrollSpeed * deltaTime;
-                
-                // Remove bubbles that have scrolled off screen and update grid
-                this.bubbles = this.bubbles.filter(bubble => {
-                    if (bubble.x < -this.bubbleRadius) {
-                        // Remove from hex grid
-                        if (this.hexGrid[bubble.gridX] && this.hexGrid[bubble.gridX][bubble.gridY]) {
-                            this.hexGrid[bubble.gridX][bubble.gridY] = null;
-                        }
-                        return false;
-                    }
-                    return true;
-                });
+                this.bubbles = this.bubbles.filter(bubble => bubble.x > -this.bubbleRadius);
                 
                 this.spawnTimer += deltaTime;
                 if (this.spawnTimer >= this.spawnInterval) {
@@ -1170,61 +1162,37 @@
             checkCollisions() {
                 if (!this.activeBubble) return;
                 
-                // Check if bubble should snap to grid
-                const snapPos = this.findNearestEmptyGridPos(this.activeBubble.x, this.activeBubble.y);
-                if (snapPos) {
-                    // Check if there are neighboring bubbles (attachment requirement)
-                    const hasNeighbor = this.hasNeighboringBubbles(snapPos.gridX, snapPos.gridY);
-                    
-                    if (hasNeighbor || snapPos.gridY === 0) { // Can attach to top row or neighbors
-                        this.attachBubbleToGrid(snapPos);
-                        return;
-                    }
-                }
-                
-                // Check collision with existing bubbles for early attachment
                 for (let bubble of this.bubbles) {
                     const dist = Math.sqrt(
                         Math.pow(this.activeBubble.x - bubble.x, 2) + 
                         Math.pow(this.activeBubble.y - bubble.y, 2)
                     );
                     
-                    if (dist < this.bubbleRadius * 1.6) {
-                        const nearPos = this.findNearestEmptyGridPos(this.activeBubble.x, this.activeBubble.y);
-                        if (nearPos) {
-                            this.attachBubbleToGrid(nearPos);
-                            return;
-                        }
+                    if (dist < this.bubbleRadius * 1.8) {
+                        this.attachBubble(bubble);
+                        return;
                     }
                 }
             }
             
-            hasNeighboringBubbles(gridX, gridY) {
-                const neighbors = this.getHexNeighbors(gridX, gridY);
-                return neighbors.some(([nx, ny]) => 
-                    this.hexGrid[nx] && this.hexGrid[nx][ny]
-                );
-            }
-            
-            getHexNeighbors(gridX, gridY) {
-                // Hexagonal grid neighbors (6 directions)
-                const isEvenRow = gridY % 2 === 0;
-                const offsets = isEvenRow ? [
-                    [-1, -1], [0, -1], [-1, 0], [1, 0], [-1, 1], [0, 1]
-                ] : [
-                    [0, -1], [1, -1], [-1, 0], [1, 0], [0, 1], [1, 1]
-                ];
+            attachBubble(nearBubble) {
+                // Check if hitting a gold cluster
+                if (nearBubble.isGold) {
+                    this.destroyGoldCluster(nearBubble);
+                    this.activeBubble = null;
+                    return;
+                }
                 
-                return offsets.map(([dx, dy]) => [gridX + dx, gridY + dy])
-                    .filter(([x, y]) => x >= 0 && x < this.hexGrid.length && y >= 0 && y < this.gridRows);
-            }
-            
-            attachBubbleToGrid(gridPos) {
-                const newBubble = this.createBubbleAtGrid(gridPos.gridX, gridPos.gridY);
-                newBubble.color = this.activeBubble.color;
-                newBubble.type = this.activeBubble.type;
+                const newBubble = {
+                    x: this.activeBubble.x,
+                    y: this.activeBubble.y,
+                    color: this.activeBubble.color,
+                    radius: this.bubbleRadius,
+                    row: nearBubble.row,
+                    column: nearBubble.column,
+                    isGold: false
+                };
                 
-                // Handle special bubble types
                 if (this.activeBubble.type === 'explosive') {
                     this.explodeBubbles(newBubble.x, newBubble.y);
                     this.activeBubble = null;
@@ -1233,19 +1201,86 @@
                     this.convertBubblesToGrey(newBubble.x, newBubble.y);
                 }
                 
-                // Add to grid and bubble list
-                this.hexGrid[gridPos.gridX][gridPos.gridY] = newBubble;
                 this.bubbles.push(newBubble);
                 this.activeBubble = null;
                 
-                // Check for gold clusters first
+                // Check for gold clusters after adding new bubble
                 this.checkForGoldClusters();
                 
-                // Then check for matches
                 const matches = this.findMatches(newBubble);
                 if (matches.length >= 3) {
                     this.popBubbles(matches);
                 }
+            }
+            
+            destroyGoldCluster(goldBubble) {
+                // Find all bubbles in the same gold cluster
+                const goldCluster = this.findGoldCluster(goldBubble);
+                
+                // Remove all bubbles in the gold cluster
+                for (let bubble of goldCluster) {
+                    const index = this.bubbles.indexOf(bubble);
+                    if (index !== -1) {
+                        this.bubbles.splice(index, 1);
+                        
+                        // Extra collectibles for gold clusters
+                        if (Math.random() < 0.8) {
+                            this.collectibles.push({
+                                x: bubble.x,
+                                y: bubble.y,
+                                type: Math.random() < 0.4 ? 'cash' : 'sweet',
+                                collected: false
+                            });
+                        }
+                        if (Math.random() < 0.2) {
+                            this.collectibles.push({
+                                x: bubble.x,
+                                y: bubble.y,
+                                type: 'book',
+                                collected: false
+                            });
+                        }
+                    }
+                }
+                
+                this.cash += goldCluster.length * 300;
+                this.sugar = Math.min(this.maxSugar, this.sugar + 15);
+                this.showQuote(`GOLDEN OPPORTUNITY! ${goldCluster.length} bubbles destroyed for massive gains!`, 'Warren Buffett', 'WISDOM');
+            }
+            
+            findGoldCluster(startBubble) {
+                const visited = new Set();
+                const cluster = [];
+                const stack = [startBubble];
+                
+                while (stack.length > 0) {
+                    const bubble = stack.pop();
+                    const key = `${bubble.x},${bubble.y}`;
+                    
+                    if (visited.has(key) || !bubble.isGold) continue;
+                    
+                    visited.add(key);
+                    cluster.push(bubble);
+                    
+                    // Find gold neighbors
+                    const neighbors = this.bubbles.filter(other => {
+                        if (other === bubble || !other.isGold) return false;
+                        const dist = Math.sqrt(
+                            Math.pow(other.x - bubble.x, 2) + 
+                            Math.pow(other.y - bubble.y, 2)
+                        );
+                        return dist < this.bubbleRadius * 2.2;
+                    });
+                    
+                    neighbors.forEach(neighbor => {
+                        const neighborKey = `${neighbor.x},${neighbor.y}`;
+                        if (!visited.has(neighborKey)) {
+                            stack.push(neighbor);
+                        }
+                    });
+                }
+                
+                return cluster;
             }
             
             explodeBubbles(centerX, centerY) {
@@ -1306,55 +1341,6 @@
                 }
             }
             
-            checkForGoldClusters() {
-                // Reset all gold status
-                this.bubbles.forEach(bubble => bubble.isGold = false);
-                
-                // Find all clusters of 8+ same color
-                const visited = new Set();
-                
-                for (let bubble of this.bubbles) {
-                    const key = `${bubble.gridX},${bubble.gridY}`;
-                    if (visited.has(key)) continue;
-                    
-                    const cluster = this.findClusterFromBubble(bubble, visited);
-                    if (cluster.length >= 8) {
-                        // Turn entire cluster gold
-                        cluster.forEach(b => b.isGold = true);
-                    }
-                }
-            }
-            
-            findClusterFromBubble(startBubble, globalVisited) {
-                const cluster = [];
-                const stack = [startBubble];
-                const localVisited = new Set();
-                
-                while (stack.length > 0) {
-                    const bubble = stack.pop();
-                    const key = `${bubble.gridX},${bubble.gridY}`;
-                    
-                    if (localVisited.has(key) || globalVisited.has(key)) continue;
-                    localVisited.add(key);
-                    globalVisited.add(key);
-                    
-                    if (bubble.color === startBubble.color) {
-                        cluster.push(bubble);
-                        
-                        // Add neighbors of same color
-                        const neighbors = this.getHexNeighbors(bubble.gridX, bubble.gridY);
-                        for (let [nx, ny] of neighbors) {
-                            const neighborBubble = this.hexGrid[nx] && this.hexGrid[nx][ny];
-                            if (neighborBubble && neighborBubble.color === startBubble.color) {
-                                const neighborKey = `${nx},${ny}`;
-                                if (!localVisited.has(neighborKey)) {
-                                    stack.push(neighborBubble);
-                                }
-                            }
-                        }
-                    }
-                }
-                
             findMatches(startBubble) {
                 const visited = new Set();
                 const matches = [];
@@ -1362,32 +1348,28 @@
                 
                 while (stack.length > 0) {
                     const bubble = stack.pop();
-                    const key = `${bubble.gridX},${bubble.gridY}`;
+                    const key = bubble.x + ',' + bubble.y;
                     
                     if (visited.has(key)) continue;
                     visited.add(key);
                     
-                    // Gold clusters can be popped by any color
-                    const canMatch = bubble.isGold || startBubble.isGold || 
-                                   bubble.isGrey || startBubble.isGrey || 
-                                   bubble.color === startBubble.color;
-                    
-                    if (canMatch) {
+                    if (bubble.isGrey || startBubble.isGrey || bubble.color === startBubble.color) {
                         matches.push(bubble);
                         
-                        // Check hex neighbors
-                        const neighbors = this.getHexNeighbors(bubble.gridX, bubble.gridY);
-                        for (let [nx, ny] of neighbors) {
-                            const neighbor = this.hexGrid[nx] && this.hexGrid[nx][ny];
-                            if (neighbor) {
-                                const neighborKey = `${nx},${ny}`;
-                                if (!visited.has(neighborKey)) {
-                                    const neighborCanMatch = neighbor.isGold || bubble.isGold ||
-                                                           neighbor.isGrey || bubble.isGrey ||
-                                                           neighbor.color === startBubble.color;
-                                    if (neighborCanMatch) {
-                                        stack.push(neighbor);
-                                    }
+                        const neighbors = this.bubbles.filter(b => {
+                            if (b === bubble) return false;
+                            const dist = Math.sqrt(
+                                Math.pow(b.x - bubble.x, 2) + 
+                                Math.pow(b.y - bubble.y, 2)
+                            );
+                            return dist < this.bubbleRadius * 2.2;
+                        });
+                        
+                        for (let neighbor of neighbors) {
+                            const neighborKey = neighbor.x + ',' + neighbor.y;
+                            if (!visited.has(neighborKey)) {
+                                if (bubble.isGrey || neighbor.isGrey || neighbor.color === startBubble.color) {
+                                    stack.push(neighbor);
                                 }
                             }
                         }
@@ -1399,12 +1381,6 @@
             
             popBubbles(matches) {
                 for (let bubble of matches) {
-                    // Remove from grid
-                    if (this.hexGrid[bubble.gridX] && this.hexGrid[bubble.gridX][bubble.gridY]) {
-                        this.hexGrid[bubble.gridX][bubble.gridY] = null;
-                    }
-                    
-                    // Remove from bubbles array
                     const index = this.bubbles.indexOf(bubble);
                     if (index !== -1) {
                         this.bubbles.splice(index, 1);
@@ -1435,14 +1411,7 @@
                     }
                 }
                 
-                // Special bonuses for gold clusters
-                const goldBubbles = matches.filter(b => b.isGold);
-                if (goldBubbles.length > 0) {
-                    this.showQuote(`GOLD CLUSTER! ${matches.length} bubbles destroyed!`, 'Warren Buffett', 'WISDOM');
-                    this.cash += matches.length * 750; // Higher bonus for gold
-                    this.sugar = Math.min(this.maxSugar, this.sugar + 15);
-                    this.books += 2;
-                } else if (matches.length >= 15) {
+                if (matches.length >= 15) {
                     this.showQuote('EXCEPTIONAL CLUSTER! ' + matches.length + ' bubbles!', 'Warren Buffett', 'WISDOM');
                     this.cash += matches.length * 500;
                     this.sugar = Math.min(this.maxSugar, this.sugar + 10);
@@ -1455,9 +1424,6 @@
                     this.showQuote('Good cluster! ' + matches.length + ' bubbles.', '', 'GAME');
                     this.cash += matches.length * 100;
                 }
-                
-                // Recheck for gold clusters after bubbles are removed
-                this.checkForGoldClusters();
             }
             
             collectItem(collectible) {
@@ -1700,21 +1666,26 @@
                 this.cash += portfolioIncome;
                 this.year++;
                 
+                // Update market condition for new year
+                this.currentMarketCondition = marketConditions[this.year] || 'bull';
+                
                 // Reset for new year
                 this.sugar = this.maxSugar;
                 this.bubblesRemaining = 10;
                 this.activeBubble = null;
                 this.bubbles = [];
+                this.columns = [];
                 this.collectibles = [];
-                this.generateInitialBubbles();
+                this.columnSpawnTimer = 0;
                 this.gameRunning = true;
                 
                 this.updateUI();
                 
+                const marketText = this.currentMarketCondition === 'bull' ? 'BULL MARKET' : 'BEAR MARKET';
                 if (portfolioIncome > 0) {
-                    this.showQuote(`Welcome to ${this.year}! Portfolio generated $${portfolioIncome.toLocaleString()} income.`, 'Warren Buffett', 'BUSINESS');
+                    this.showQuote(`Welcome to ${this.year}! ${marketText} ahead. Portfolio generated ${portfolioIncome.toLocaleString()} income.`, 'Warren Buffett', 'BUSINESS');
                 } else {
-                    this.showQuote(`Welcome to ${this.year}! Time to grow your investments.`, 'Warren Buffett', 'WISDOM');
+                    this.showQuote(`Welcome to ${this.year}! ${marketText} conditions. Time to find opportunities.`, 'Warren Buffett', 'WISDOM');
                 }
             }
             
@@ -1773,6 +1744,9 @@
             render() {
                 this.ctx.fillStyle = '#2c3e50';
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Draw Mr Market building
+                this.drawMrMarket();
                 
                 for (let bubble of this.bubbles) {
                     this.drawBubble(bubble);
@@ -1837,29 +1811,14 @@
                     this.ctx.textAlign = 'center';
                     
                     if (collectible.type === 'cash') {
-                        this.ctx.fillText('$', collectible.x, collectible.y + 3);
-                    } else if (collectible.type === 'sweet') {
-                        this.ctx.fillText('♥', collectible.x, collectible.y + 3);
-                    } else if (collectible.type === 'book') {
-                        this.ctx.fillText('📚', collectible.x, collectible.y + 3);
-                    }
-                }
-            }
+                        this.ctx.fillText('
             
             drawBubble(bubble) {
                 this.ctx.beginPath();
                 this.ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
                 
                 if (bubble.isGold) {
-                    // Gold gradient for gold clusters
-                    const gradient = this.ctx.createRadialGradient(
-                        bubble.x, bubble.y, 0,
-                        bubble.x, bubble.y, bubble.radius
-                    );
-                    gradient.addColorStop(0, '#FFD700');
-                    gradient.addColorStop(0.7, '#FFA500');
-                    gradient.addColorStop(1, '#FF8C00');
-                    this.ctx.fillStyle = gradient;
+                    this.ctx.fillStyle = this.goldColor;
                 } else if (bubble.isGrey) {
                     this.ctx.fillStyle = '#7f8c8d';
                 } else {
@@ -1879,7 +1838,7 @@
                 this.ctx.beginPath();
                 this.ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
                 if (bubble.isGold) {
-                    this.ctx.strokeStyle = '#FFD700';
+                    this.ctx.strokeStyle = '#FFE55C';
                     this.ctx.lineWidth = 3;
                 } else if (bubble.isGrey) {
                     this.ctx.strokeStyle = '#f1c40f';
@@ -1893,9 +1852,9 @@
                 // Gold sparkle effect
                 if (bubble.isGold) {
                     this.ctx.fillStyle = 'white';
-                    this.ctx.font = '12px Arial';
+                    this.ctx.font = '8px Arial';
                     this.ctx.textAlign = 'center';
-                    this.ctx.fillText('✨', bubble.x, bubble.y + 3);
+                    this.ctx.fillText('✨', bubble.x, bubble.y + 2);
                 }
             }
             
@@ -1955,4 +1914,140 @@
         });
     </script>
 </body>
-</html>
+</html>, collectible.x, collectible.y + 3);
+                    } else if (collectible.type === 'sweet') {
+                        this.ctx.fillText('♥', collectible.x, collectible.y + 3);
+                    } else if (collectible.type === 'book') {
+                        this.ctx.fillText('📚', collectible.x, collectible.y + 3);
+                    }
+                }
+            }
+            
+            drawMrMarket() {
+                const market = this.mrMarket;
+                
+                // Building base
+                this.ctx.fillStyle = '#34495e';
+                this.ctx.fillRect(market.x - market.width/2, market.y - market.height/2, market.width, market.height);
+                
+                // Building details
+                this.ctx.fillStyle = '#2c3e50';
+                for (let i = 0; i < 3; i++) {
+                    for (let j = 0; j < 6; j++) {
+                        this.ctx.fillRect(
+                            market.x - market.width/2 + 5 + i * 16,
+                            market.y - market.height/2 + 10 + j * 18,
+                            12, 12
+                        );
+                    }
+                }
+                
+                // Shooting animation
+                if (market.shooting) {
+                    this.ctx.fillStyle = '#f39c12';
+                    this.ctx.beginPath();
+                    this.ctx.arc(market.x - market.width/2, market.y, 8, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+                
+                // Mr Market sign
+                this.ctx.fillStyle = '#f39c12';
+                this.ctx.font = 'bold 10px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('MR', market.x, market.y - market.height/2 - 15);
+                this.ctx.fillText('MARKET', market.x, market.y - market.height/2 - 5);
+                
+                // Market condition indicator
+                const condition = marketConditions[this.year] || 'bull';
+                this.ctx.fillStyle = condition === 'bull' ? '#2ecc71' : '#e74c3c';
+                this.ctx.font = 'bold 12px Arial';
+                this.ctx.fillText(condition.toUpperCase(), market.x, market.y + market.height/2 + 15);
+            }
+            
+            drawBubble(bubble) {
+                this.ctx.beginPath();
+                this.ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
+                
+                if (bubble.isGrey) {
+                    this.ctx.fillStyle = '#7f8c8d';
+                } else {
+                    this.ctx.fillStyle = this.colors[bubble.color];
+                }
+                
+                this.ctx.fill();
+                
+                this.ctx.beginPath();
+                this.ctx.arc(bubble.x - bubble.radius * 0.3, bubble.y - bubble.radius * 0.3, 
+                    bubble.radius * 0.3, 0, Math.PI * 2);
+                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                this.ctx.fill();
+                
+                this.ctx.beginPath();
+                this.ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
+                if (bubble.isGrey) {
+                    this.ctx.strokeStyle = '#f1c40f';
+                    this.ctx.lineWidth = 2;
+                } else {
+                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                    this.ctx.lineWidth = 1;
+                }
+                this.ctx.stroke();
+            }
+            
+            drawCannonBubble(bubble) {
+                this.ctx.beginPath();
+                this.ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
+                this.ctx.fillStyle = this.colors[bubble.color];
+                this.ctx.fill();
+                
+                if (bubble.type === 'explosive') {
+                    this.ctx.beginPath();
+                    this.ctx.arc(bubble.x, bubble.y, bubble.radius + 3, 0, Math.PI * 2);
+                    this.ctx.strokeStyle = '#e74c3c';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.stroke();
+                    
+                    this.ctx.fillStyle = 'white';
+                    this.ctx.font = '12px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText('💥', bubble.x, bubble.y + 3);
+                } else if (bubble.type === 'converter') {
+                    this.ctx.beginPath();
+                    this.ctx.arc(bubble.x, bubble.y, bubble.radius + 3, 0, Math.PI * 2);
+                    this.ctx.strokeStyle = '#f1c40f';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.stroke();
+                    
+                    this.ctx.fillStyle = 'white';
+                    this.ctx.font = '12px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText('🕸️', bubble.x, bubble.y + 3);
+                } else {
+                    this.ctx.beginPath();
+                    this.ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
+                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.stroke();
+                }
+            }
+            
+            gameLoop() {
+                const now = performance.now();
+                const deltaTime = this.lastTime ? (now - this.lastTime) / 1000 : 0;
+                this.lastTime = now;
+                
+                this.update(Math.min(deltaTime, 0.016));
+                this.render();
+                
+                requestAnimationFrame(() => this.gameLoop());
+            }
+        }
+        
+        let game;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            game = new BubbleGame();
+        });
+    </script>
+</body>
+                    </html>
