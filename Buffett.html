@@ -535,22 +535,6 @@
     </div>
 
     <script>
-        // Historical market conditions (bull/bear markets)
-        const marketConditions = {
-            1955: 'bull', 1956: 'bull', 1957: 'bear', 1958: 'bull', 1959: 'bull', 1960: 'bull',
-            1961: 'bull', 1962: 'bear', 1963: 'bull', 1964: 'bull', 1965: 'bull', 1966: 'bear',
-            1967: 'bear', 1968: 'bear', 1969: 'bear', 1970: 'bear', 1971: 'bull', 1972: 'bull',
-            1973: 'bear', 1974: 'bear', 1975: 'bull', 1976: 'bull', 1977: 'bear', 1978: 'bear',
-            1979: 'bear', 1980: 'bear', 1981: 'bear', 1982: 'bull', 1983: 'bull', 1984: 'bull',
-            1985: 'bull', 1986: 'bull', 1987: 'bear', 1988: 'bull', 1989: 'bull', 1990: 'bear',
-            1991: 'bull', 1992: 'bull', 1993: 'bull', 1994: 'bull', 1995: 'bull', 1996: 'bull',
-            1997: 'bull', 1998: 'bull', 1999: 'bull', 2000: 'bear', 2001: 'bear', 2002: 'bear',
-            2003: 'bull', 2004: 'bull', 2005: 'bull', 2006: 'bull', 2007: 'bear', 2008: 'bear',
-            2009: 'bull', 2010: 'bull', 2011: 'bear', 2012: 'bull', 2013: 'bull', 2014: 'bull',
-            2015: 'bear', 2016: 'bull', 2017: 'bull', 2018: 'bear', 2019: 'bull', 2020: 'bear',
-            2021: 'bull', 2022: 'bear', 2023: 'bull', 2024: 'bull', 2025: 'bull'
-        };
-
         // Historical stock data
         const stockData = {
             'KO': {
@@ -773,6 +757,7 @@
                 this.setupCanvas();
                 this.initGameState();
                 this.setupEventListeners();
+                this.generateInitialBubbles();
                 
                 this.lastTime = 0;
                 this.gameLoop();
@@ -812,20 +797,6 @@
                 this.purchasedUpgrades = [];
                 
                 this.bubbleRadius = Math.max(12, Math.min(18, this.canvas.width / 25));
-                this.scrollSpeed = 30;
-                
-                // Mr Market system
-                this.mrMarketBuilding = {
-                    x: this.canvas.width - 80,
-                    y: this.canvas.height / 2,
-                    width: 60,
-                    height: 100
-                };
-                
-                this.currentMarketCondition = marketConditions[this.year] || 'bull';
-                this.columnSpawnTimer = 0;
-                this.columnSpawnInterval = 2.0; // 2 seconds between columns
-                this.nextColumnX = this.canvas.width - 40;
                 
                 this.cannon = {
                     x: this.canvas.width / 2,
@@ -851,9 +822,6 @@
                 for (let i = 0; i < 3; i++) {
                     this.nextBubbles.push(Math.floor(Math.random() * 3));
                 }
-                
-                // Initialize empty bubble field - Mr Market will populate it
-                this.initializeMrMarketSystem();
                 
                 this.updateUI();
                 this.showQuote('Welcome to 1955! Start building your capital for the journey ahead.', 'Warren Buffett', 'WISDOM');
@@ -1000,114 +968,96 @@
                 }
             }
             
-            initializeMrMarketSystem() {
-                // Clear any existing bubbles
+            generateInitialBubbles() {
                 this.bubbles = [];
+                this.marketState = 'normal'; // normal, bull, bear
+                this.marketTimer = 0;
+                this.marketDuration = 0;
+                this.bubbleColumns = [];
+                this.nextColumnTimer = 0;
+                this.columnInterval = 3; // seconds between columns
                 
-                // Mr Market will start generating columns after a brief delay
-                setTimeout(() => {
-                    console.log('Mr Market system initialized for year:', this.year, 'Market condition:', this.currentMarketCondition);
-                    this.generateInitialColumns();
-                }, 500);
+                // Mr. Market building position
+                this.mrMarket = {
+                    x: this.canvas.width - 80,
+                    y: this.canvas.height / 2,
+                    width: 60,
+                    height: 100
+                };
             }
             
-            generateInitialColumns() {
-                // Generate a few initial columns to start the game
-                for (let i = 0; i < 3; i++) {
-                    this.generateMarketColumn(this.nextColumnX - (i * this.bubbleRadius * 2.5));
+            updateMarketConditions(deltaTime) {
+                this.marketTimer += deltaTime;
+                
+                // Check if current market period should end
+                if (this.marketTimer >= this.marketDuration) {
+                    this.changeMarketState();
+                }
+                
+                // Spawn new columns based on market state
+                this.nextColumnTimer += deltaTime;
+                if (this.nextColumnTimer >= this.columnInterval) {
+                    this.spawnBubbleColumn();
+                    this.nextColumnTimer = 0;
+                    
+                    // Adjust interval based on market state
+                    if (this.marketState === 'bull') {
+                        this.columnInterval = 1; // Fast columns in bull market
+                    } else if (this.marketState === 'bear') {
+                        this.columnInterval = 5; // Slow columns in bear market
+                    } else {
+                        this.columnInterval = 3; // Normal pace
+                    }
                 }
             }
             
-            generateMarketColumn(x) {
-                const condition = this.currentMarketCondition;
-                let bubbleCount;
-                
-                // Determine column height based on market condition
-                if (condition === 'bull') {
-                    bubbleCount = Math.floor(Math.random() * 4) + 5; // 5-8 bubbles
+            changeMarketState() {
+                const rand = Math.random();
+                if (rand < 0.2) {
+                    this.marketState = 'bull';
+                    this.marketDuration = 8 + Math.random() * 7; // 8-15 seconds
+                    this.showQuote('BULL MARKET! Mr. Market is optimistic!', 'Market Update', 'BUSINESS');
+                } else if (rand < 0.4) {
+                    this.marketState = 'bear';
+                    this.marketDuration = 6 + Math.random() * 9; // 6-15 seconds
+                    this.showQuote('BEAR MARKET! Mr. Market is pessimistic!', 'Market Update', 'BUSINESS');
                 } else {
-                    bubbleCount = Math.floor(Math.random() * 3) + 2; // 2-4 bubbles
+                    this.marketState = 'normal';
+                    this.marketDuration = 10 + Math.random() * 10; // 10-20 seconds
                 }
-                
-                // Generate column with hexagonal offset
-                for (let row = 0; row < bubbleCount; row++) {
-                    const isOddRow = row % 2 === 1;
-                    const offsetX = isOddRow ? this.bubbleRadius : 0;
-                    const bubbleX = x + offsetX;
-                    const bubbleY = row * (this.bubbleRadius * 1.5) + this.bubbleRadius + 20;
-                    
-                    // Don't place bubbles too close to bottom (leave room for cannon)
-                    if (bubbleY < this.canvas.height - 80) {
-                        this.bubbles.push({
-                            x: bubbleX,
-                            y: bubbleY,
-                            color: Math.floor(Math.random() * 3),
-                            radius: this.bubbleRadius,
-                            gridX: Math.floor(x / (this.bubbleRadius * 2)),
-                            gridY: row,
-                            isGold: false
-                        });
-                    }
-                }
-                
-                console.log(`Generated ${condition} market column with ${bubbleCount} bubbles at x=${x}`);
+                this.marketTimer = 0;
             }
             
-            checkForGoldClusters() {
-                // Reset all gold status
-                this.bubbles.forEach(bubble => bubble.isGold = false);
-                
-                // Find clusters of 8+ connected bubbles
-                const visited = new Set();
-                
-                for (let bubble of this.bubbles) {
-                    const key = bubble.x + ',' + bubble.y;
-                    if (visited.has(key)) continue;
-                    
-                    const cluster = this.findCluster(bubble, visited);
-                    if (cluster.length >= 8) {
-                        // Mark entire cluster as gold
-                        cluster.forEach(b => b.isGold = true);
-                        console.log(`Found gold cluster of ${cluster.length} bubbles`);
-                    }
-                }
-            }
-            
-            findCluster(startBubble, visited) {
-                const cluster = [];
-                const stack = [startBubble];
-                const startColor = startBubble.color;
-                
-                while (stack.length > 0) {
-                    const bubble = stack.pop();
-                    const key = bubble.x + ',' + bubble.y;
-                    
-                    if (visited.has(key)) continue;
-                    visited.add(key);
-                    
-                    if (bubble.color === startColor) {
-                        cluster.push(bubble);
-                        
-                        // Find neighbors
-                        const neighbors = this.bubbles.filter(b => {
-                            if (b === bubble) return false;
-                            const dist = Math.sqrt(
-                                Math.pow(b.x - bubble.x, 2) + 
-                                Math.pow(b.y - bubble.y, 2)
-                            );
-                            return dist < this.bubbleRadius * 2.2;
-                        });
-                        
-                        for (let neighbor of neighbors) {
-                            const neighborKey = neighbor.x + ',' + neighbor.y;
-                            if (!visited.has(neighborKey) && neighbor.color === startColor) {
-                                stack.push(neighbor);
-                            }
-                        }
-                    }
+            spawnBubbleColumn() {
+                let rowCount;
+                if (this.marketState === 'bull') {
+                    rowCount = 5 + Math.floor(Math.random() * 4); // 5-8 rows
+                } else if (this.marketState === 'bear') {
+                    rowCount = 2 + Math.floor(Math.random() * 3); // 2-4 rows
+                } else {
+                    rowCount = 3 + Math.floor(Math.random() * 3); // 3-5 rows
                 }
                 
-                return cluster;
+                const column = {
+                    x: this.mrMarket.x,
+                    bubbles: [],
+                    speed: 40 + (this.marketState === 'bull' ? 20 : this.marketState === 'bear' ? -10 : 0)
+                };
+                
+                for (let i = 0; i < rowCount; i++) {
+                    const bubble = {
+                        x: this.mrMarket.x,
+                        y: 20 + i * (this.bubbleRadius * 2),
+                        vx: -(40 + (this.marketState === 'bull' ? 20 : this.marketState === 'bear' ? -10 : 0)),
+                        vy: 0,
+                        color: Math.floor(Math.random() * 3),
+                        radius: this.bubbleRadius,
+                        fromMrMarket: true
+                    };
+                    column.bubbles.push(bubble);
+                }
+                
+                this.bubbleColumns.push(column);
             }
             
             update(deltaTime) {
@@ -1119,25 +1069,33 @@
                     return;
                 }
                 
-                // Scroll existing bubbles left
-                this.bubbles.forEach(bubble => {
-                    bubble.x -= this.scrollSpeed * deltaTime;
+                // Update market conditions and spawn new columns
+                this.updateMarketConditions(deltaTime);
+                
+                // Move bubble columns from Mr. Market
+                this.bubbleColumns.forEach(column => {
+                    column.bubbles.forEach(bubble => {
+                        bubble.x += bubble.vx * deltaTime;
+                    });
                 });
                 
-                // Remove bubbles that have scrolled off screen
+                // Move individual bubbles from columns to main bubble array when they're far enough from Mr. Market
+                this.bubbleColumns.forEach((column, columnIndex) => {
+                    column.bubbles.forEach((bubble, bubbleIndex) => {
+                        if (bubble.x < this.canvas.width - 120) {
+                            this.bubbles.push(bubble);
+                            column.bubbles.splice(bubbleIndex, 1);
+                        }
+                    });
+                    
+                    // Remove empty columns
+                    if (column.bubbles.length === 0) {
+                        this.bubbleColumns.splice(columnIndex, 1);
+                    }
+                });
+                
+                // Remove bubbles that have gone off screen
                 this.bubbles = this.bubbles.filter(bubble => bubble.x > -this.bubbleRadius);
-                
-                // Mr Market column generation
-                this.columnSpawnTimer += deltaTime;
-                if (this.columnSpawnTimer >= this.columnSpawnInterval) {
-                    this.generateMarketColumn(this.nextColumnX);
-                    this.columnSpawnTimer = 0;
-                }
-                
-                // Check for gold clusters periodically
-                if (Math.random() < 0.1) { // 10% chance each frame
-                    this.checkForGoldClusters();
-                }
                 
                 if (this.activeBubble) {
                     this.activeBubble.x += this.activeBubble.vx * deltaTime;
@@ -1173,7 +1131,7 @@
                 
                 this.collectibles = this.collectibles.filter(c => !c.collected && c.y < this.canvas.height);
                 
-                if ((this.bubbles.length === 0 || this.bubblesRemaining <= 0) && !this.activeBubble && this.collectibles.length === 0) {
+                if ((this.bubbles.length === 0 && this.bubbleColumns.length === 0) || (this.bubblesRemaining <= 0 && !this.activeBubble && this.collectibles.length === 0)) {
                     this.endLevel();
                 }
                 
@@ -1197,21 +1155,13 @@
             }
             
             attachBubble(nearBubble) {
-                // Check if we hit a gold cluster
-                if (nearBubble.isGold) {
-                    this.destroyGoldCluster(nearBubble);
-                    this.activeBubble = null;
-                    return;
-                }
-                
                 const newBubble = {
                     x: this.activeBubble.x,
                     y: this.activeBubble.y,
                     color: this.activeBubble.color,
                     radius: this.bubbleRadius,
                     gridX: nearBubble.gridX,
-                    gridY: nearBubble.gridY,
-                    isGold: false
+                    gridY: nearBubble.gridY
                 };
                 
                 if (this.activeBubble.type === 'explosive') {
@@ -1228,68 +1178,6 @@
                 const matches = this.findMatches(newBubble);
                 if (matches.length >= 3) {
                     this.popBubbles(matches);
-                }
-                
-                // Check for new gold clusters after bubble placement
-                this.checkForGoldClusters();
-            }
-            
-            destroyGoldCluster(goldBubble) {
-                // Find all connected gold bubbles
-                const goldCluster = [];
-                const visited = new Set();
-                const stack = [goldBubble];
-                
-                while (stack.length > 0) {
-                    const bubble = stack.pop();
-                    const key = bubble.x + ',' + bubble.y;
-                    
-                    if (visited.has(key)) continue;
-                    visited.add(key);
-                    
-                    if (bubble.isGold) {
-                        goldCluster.push(bubble);
-                        
-                        // Find gold neighbors
-                        const neighbors = this.bubbles.filter(b => {
-                            if (b === bubble) return false;
-                            const dist = Math.sqrt(
-                                Math.pow(b.x - bubble.x, 2) + 
-                                Math.pow(b.y - bubble.y, 2)
-                            );
-                            return dist < this.bubbleRadius * 2.2 && b.isGold;
-                        });
-                        
-                        for (let neighbor of neighbors) {
-                            const neighborKey = neighbor.x + ',' + neighbor.y;
-                            if (!visited.has(neighborKey)) {
-                                stack.push(neighbor);
-                            }
-                        }
-                    }
-                }
-                
-                // Remove all gold bubbles in cluster
-                for (let bubble of goldCluster) {
-                    const index = this.bubbles.indexOf(bubble);
-                    if (index !== -1) {
-                        this.bubbles.splice(index, 1);
-                        
-                        // Extra collectibles for gold clusters
-                        if (Math.random() < 0.8) { // 80% chance for extra collectibles
-                            this.collectibles.push({
-                                x: bubble.x,
-                                y: bubble.y,
-                                type: Math.random() < 0.4 ? 'cash' : (Math.random() < 0.7 ? 'sweet' : 'book'),
-                                collected: false
-                            });
-                        }
-                    }
-                }
-                
-                if (goldCluster.length > 0) {
-                    this.cash += goldCluster.length * 300; // Extra cash for gold clusters
-                    this.showQuote(`GOLD CLUSTER DESTROYED! ${goldCluster.length} bubbles worth ${goldCluster.length * 300}!`, 'Mr Market', 'BUSINESS');
                 }
             }
             
@@ -1676,31 +1564,22 @@
                 this.cash += portfolioIncome;
                 this.year++;
                 
-                // Update market condition for new year
-                this.currentMarketCondition = marketConditions[this.year] || 'bull';
-                
                 // Reset for new year
                 this.sugar = this.maxSugar;
                 this.bubblesRemaining = 10;
                 this.activeBubble = null;
                 this.bubbles = [];
                 this.collectibles = [];
-                this.columnSpawnTimer = 0;
-                
-                // Reinitialize Mr Market system for new year
-                this.initializeMrMarketSystem();
+                this.bubbleColumns = [];
+                this.generateInitialBubbles();
                 this.gameRunning = true;
                 
                 this.updateUI();
                 
-                const marketMessage = this.currentMarketCondition === 'bull' ? 
-                    'Bull market ahead - expect tall columns!' : 
-                    'Bear market conditions - shorter columns but opportunities remain.';
-                
                 if (portfolioIncome > 0) {
-                    this.showQuote(`Welcome to ${this.year}! ${marketMessage} Portfolio generated ${portfolioIncome.toLocaleString()} income.`, 'Warren Buffett', 'BUSINESS');
+                    this.showQuote(`Welcome to ${this.year}! Portfolio generated ${portfolioIncome.toLocaleString()} income.`, 'Warren Buffett', 'BUSINESS');
                 } else {
-                    this.showQuote(`Welcome to ${this.year}! ${marketMessage}`, 'Warren Buffett', 'WISDOM');
+                    this.showQuote(`Welcome to ${this.year}! Time to grow your investments.`, 'Warren Buffett', 'WISDOM');
                 }
             }
             
@@ -1760,9 +1639,17 @@
                 this.ctx.fillStyle = '#2c3e50';
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
                 
-                // Draw Mr Market building
-                this.drawMrMarketBuilding();
+                // Draw Mr. Market building
+                this.drawMrMarket();
                 
+                // Draw bubble columns from Mr. Market
+                this.bubbleColumns.forEach(column => {
+                    column.bubbles.forEach(bubble => {
+                        this.drawBubble(bubble);
+                    });
+                });
+                
+                // Draw main bubbles
                 for (let bubble of this.bubbles) {
                     this.drawBubble(bubble);
                 }
@@ -1832,10 +1719,7 @@
                 this.ctx.beginPath();
                 this.ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
                 
-                if (bubble.isGold) {
-                    // Gold bubbles have a special golden appearance
-                    this.ctx.fillStyle = '#f1c40f';
-                } else if (bubble.isGrey) {
+                if (bubble.isGrey) {
                     this.ctx.fillStyle = '#7f8c8d';
                 } else {
                     this.ctx.fillStyle = this.colors[bubble.color];
@@ -1843,20 +1727,15 @@
                 
                 this.ctx.fill();
                 
-                // Highlight
                 this.ctx.beginPath();
                 this.ctx.arc(bubble.x - bubble.radius * 0.3, bubble.y - bubble.radius * 0.3, 
                     bubble.radius * 0.3, 0, Math.PI * 2);
                 this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
                 this.ctx.fill();
                 
-                // Border
                 this.ctx.beginPath();
                 this.ctx.arc(bubble.x, bubble.y, bubble.radius, 0, Math.PI * 2);
-                if (bubble.isGold) {
-                    this.ctx.strokeStyle = '#e67e22';
-                    this.ctx.lineWidth = 3;
-                } else if (bubble.isGrey) {
+                if (bubble.isGrey) {
                     this.ctx.strokeStyle = '#f1c40f';
                     this.ctx.lineWidth = 2;
                 } else {
@@ -1864,14 +1743,6 @@
                     this.ctx.lineWidth = 1;
                 }
                 this.ctx.stroke();
-                
-                // Gold sparkle effect
-                if (bubble.isGold) {
-                    this.ctx.fillStyle = 'white';
-                    this.ctx.font = '12px Arial';
-                    this.ctx.textAlign = 'center';
-                    this.ctx.fillText('✨', bubble.x, bubble.y + 3);
-                }
             }
             
             drawCannonBubble(bubble) {
@@ -1939,51 +1810,41 @@
                 }
             }
             
-            drawMrMarketBuilding() {
-                const building = this.mrMarketBuilding;
+            drawMrMarket() {
+                const market = this.mrMarket;
                 
                 // Building base
                 this.ctx.fillStyle = '#34495e';
-                this.ctx.fillRect(building.x, building.y, building.width, building.height);
+                this.ctx.fillRect(market.x - market.width/2, market.y - market.height/2, market.width, market.height);
                 
-                // Building details
-                this.ctx.fillStyle = '#2c3e50';
-                this.ctx.fillRect(building.x + 5, building.y + 10, building.width - 10, building.height - 20);
-                
-                // Windows
-                this.ctx.fillStyle = this.currentMarketCondition === 'bull' ? '#27ae60' : '#e74c3c';
-                for (let row = 0; row < 4; row++) {
-                    for (let col = 0; col < 3; col++) {
+                // Building windows
+                this.ctx.fillStyle = '#f39c12';
+                for (let i = 0; i < 3; i++) {
+                    for (let j = 0; j < 4; j++) {
                         this.ctx.fillRect(
-                            building.x + 10 + col * 15,
-                            building.y + 20 + row * 20,
-                            8, 8
+                            market.x - market.width/2 + 8 + i * 15,
+                            market.y - market.height/2 + 10 + j * 20,
+                            8, 12
                         );
                     }
                 }
                 
-                // Sign
-                this.ctx.fillStyle = '#f39c12';
-                this.ctx.fillRect(building.x + 5, building.y - 20, building.width - 10, 15);
+                // Market state indicator
+                this.ctx.fillStyle = this.marketState === 'bull' ? '#2ecc71' : 
+                                   this.marketState === 'bear' ? '#e74c3c' : '#3498db';
+                this.ctx.fillRect(market.x - market.width/2, market.y - market.height/2 - 10, market.width, 8);
                 
-                // Text
+                // Mr. Market label
                 this.ctx.fillStyle = 'white';
-                this.ctx.font = 'bold 8px Arial';
+                this.ctx.font = '10px Arial';
                 this.ctx.textAlign = 'center';
-                this.ctx.fillText('MR MARKET', building.x + building.width/2, building.y - 10);
+                this.ctx.fillText('MR. MARKET', market.x, market.y + market.height/2 + 15);
                 
-                // Market condition indicator
-                this.ctx.fillStyle = this.currentMarketCondition === 'bull' ? '#27ae60' : '#e74c3c';
-                this.ctx.font = 'bold 6px Arial';
-                this.ctx.fillText(this.currentMarketCondition.toUpperCase(), building.x + building.width/2, building.y - 2);
-                
-                // Shooting animation (simple)
-                if (Math.random() < 0.3) {
-                    this.ctx.fillStyle = '#f39c12';
-                    this.ctx.beginPath();
-                    this.ctx.arc(building.x - 10, building.y + building.height/2, 3, 0, Math.PI * 2);
-                    this.ctx.fill();
-                }
+                // Market state text
+                this.ctx.fillStyle = this.marketState === 'bull' ? '#2ecc71' : 
+                                   this.marketState === 'bear' ? '#e74c3c' : '#3498db';
+                this.ctx.font = 'bold 8px Arial';
+                this.ctx.fillText(this.marketState.toUpperCase(), market.x, market.y + market.height/2 + 25);
             }
             
             drawBubble(bubble) {
@@ -2072,4 +1933,4 @@
         });
     </script>
 </body>
-                </html>
+                    </html>
