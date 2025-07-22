@@ -413,9 +413,32 @@
         let currentQuestionIndex = 0;
         let score = 0;
         let selectedAnswer = null;
+        let shuffledAnswers = [];
+        let correctAnswerIndex = 0;
+        let funnyAnswerIndex = 0;
+
+        function shuffleAnswers(question) {
+            // Create array of answer objects with their original indices
+            const answerObjects = question.answers.map((answer, index) => ({
+                text: answer,
+                originalIndex: index
+            }));
+            
+            // Shuffle the array
+            for (let i = answerObjects.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [answerObjects[i], answerObjects[j]] = [answerObjects[j], answerObjects[i]];
+            }
+            
+            // Update the shuffled answers and find new positions of correct/funny answers
+            shuffledAnswers = answerObjects.map(obj => obj.text);
+            correctAnswerIndex = answerObjects.findIndex(obj => obj.originalIndex === question.correct);
+            funnyAnswerIndex = answerObjects.findIndex(obj => obj.originalIndex === question.funny);
+        }
 
         function displayQuestion() {
             const question = questions[currentQuestionIndex];
+            shuffleAnswers(question);
             const container = document.getElementById('question-container');
             
             container.innerHTML = `
@@ -424,7 +447,7 @@
                     <div class="scenario">${question.scenario}</div>
                     <div class="question">${question.question}</div>
                     <div class="answers">
-                        ${question.answers.map((answer, index) => 
+                        ${shuffledAnswers.map((answer, index) => 
                             `<button class="answer-btn" onclick="selectAnswer(${index})">${answer}</button>`
                         ).join('')}
                     </div>
@@ -439,21 +462,20 @@
             if (selectedAnswer !== null) return;
             
             selectedAnswer = answerIndex;
-            const question = questions[currentQuestionIndex];
             const answerButtons = document.querySelectorAll('.answer-btn');
             
             answerButtons.forEach((btn, index) => {
                 btn.disabled = true;
-                if (index === question.correct) {
+                if (index === correctAnswerIndex) {
                     btn.classList.add('correct');
-                } else if (index === question.funny) {
+                } else if (index === funnyAnswerIndex) {
                     btn.classList.add('funny');
                 } else {
                     btn.classList.add('incorrect');
                 }
             });
             
-            if (answerIndex === question.correct) {
+            if (answerIndex === correctAnswerIndex) {
                 score++;
                 document.getElementById('score').textContent = score;
             }
