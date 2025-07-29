@@ -705,7 +705,7 @@
                     powerups: [
                         { name: "Coke", effect: "Restore 30 sugar", price: 50, currency: "cash" },
                         { name: "Lollapalooza", effect: "Destroys 3x3 area", price: 200, currency: "cash" },
-                        { name: "Grahams Nets", effect: "Turns bubbles silver", price: 300, currency: "cash" }
+                        { name: "Grahams Nets", effect: "Makes next shot match any color", price: 300, currency: "cash" }
                     ],
                     books: [
                         { name: "The Intelligent Investor", price: 5, currency: "books", unlocks: "+1 starting bubble", owned: false },
@@ -1089,8 +1089,6 @@
                     if (cannonBubble.powerup === 'lollapalooza') {
                         this.explodeBubbles(collisionX, collisionY);
                         return true;
-                    } else if (cannonBubble.powerup === 'grahamNets') {
-                        this.convertBubbles(collisionX, collisionY);
                     }
                 }
                 
@@ -1123,7 +1121,7 @@
                 
                 if (bestRow !== -1 && bestCol !== -1) {
                     this.bubbleGrid[bestRow][bestCol] = {
-                        color: cannonBubble.powerup === 'grahamNets' ? '#c0c0c0' : cannonBubble.color,
+                        color: cannonBubble.powerup === 'grahamNets' ? '#rainbow' : cannonBubble.color,
                         x: this.getBubbleX(bestRow, bestCol),
                         y: this.getBubbleY(bestRow)
                     };
@@ -1140,8 +1138,6 @@
                     if (cannonBubble.powerup === 'lollapalooza') {
                         this.explodeBubbles(cannonBubble.x, this.getBubbleY(0));
                         return true;
-                    } else if (cannonBubble.powerup === 'grahamNets') {
-                        this.convertBubbles(cannonBubble.x, this.getBubbleY(0));
                     }
                 }
                 
@@ -1152,7 +1148,7 @@
                     if (!this.bubbleGrid[row]) this.bubbleGrid[row] = [];
                     if (!this.bubbleGrid[row][bestCol]) {
                         this.bubbleGrid[row][bestCol] = {
-                            color: cannonBubble.powerup === 'grahamNets' ? '#c0c0c0' : cannonBubble.color,
+                            color: cannonBubble.powerup === 'grahamNets' ? '#rainbow' : cannonBubble.color,
                             x: this.getBubbleX(row, bestCol),
                             y: this.getBubbleY(row)
                         };
@@ -1190,32 +1186,14 @@
                 }
             }
             
-            convertBubbles(x, y) {
-                const convertRadius = this.bubbleRadius * 2;
-                
-                for (let row = 0; row < this.bubbleGrid.length; row++) {
-                    for (let col = 0; col < this.bubbleGrid[row].length; col++) {
-                        if (this.bubbleGrid[row][col]) {
-                            const bubble = this.bubbleGrid[row][col];
-                            const dx = bubble.x - x;
-                            const dy = bubble.y - y;
-                            const distance = Math.sqrt(dx * dx + dy * dy);
-                            
-                            if (distance <= convertRadius) {
-                                bubble.color = '#c0c0c0';
-                            }
-                        }
-                    }
-                }
-            }
-            
             processMatches(row, col) {
                 const placedBubble = this.bubbleGrid[row][col];
                 if (!placedBubble) return;
                 
                 let matchingBubbles = [];
-                if (placedBubble.color === '#c0c0c0') {
-                    matchingBubbles = this.findAdjacentBubbles(row, col);
+                if (placedBubble.color === '#rainbow') {
+                    // Rainbow bubble can match with any adjacent color
+                    matchingBubbles = this.findRainbowMatches(row, col);
                 } else {
                     matchingBubbles = this.findConnectedBubbles(row, col, placedBubble.color, new Set());
                 }
@@ -1229,6 +1207,78 @@
                     this.removeBubbles(bubblesToRemove);
                     this.dropFloatingBubbles();
                 }
+            }
+            
+            findRainbowMatches(startRow, startCol) {
+                const visited = new Set();
+                const allMatches = new Set();
+                
+                // Get all adjacent colors to the rainbow bubble
+                const neighbors = this.getNeighbors(startRow, startCol);
+                const adjacentColors = new Set();
+                
+                for (const [nRow, nCol] of neighbors) {
+                    if (this.bubbleGrid[nRow] && this.bubbleGrid[nRow][nCol]) {
+                        const bubble = this.bubbleGrid[nRow][nCol];
+                        if (bubble.color !== '#rainbow') {
+                            adjacentColors.add(bubble.color);
+                        }
+                    }
+                }
+                
+                // For each adjacent color, find all connected bubbles of that color
+                for (const color of adjacentColors) {
+                    const colorMatches = this.findConnectedBubblesWithRainbow(startRow, startCol, color, new Set());
+                    if (colorMatches.length >= 3) {
+                        colorMatches.forEach(match => allMatches.add(match));
+                    }
+                }
+                
+                return Array.from(allMatches);
+            }
+            
+            findConnectedBubblesWithRainbow(rainbowRow, rainbowCol, targetColor, visited) {
+                const stack = [];
+                const cluster = [];
+                
+                // Start with the rainbow bubble
+                stack.push(rainbowRow + ',' + rainbowCol);
+                
+                // Add all adjacent bubbles of the target color
+                const neighbors = this.getNeighbors(rainbowRow, rainbowCol);
+                for (const [nRow, nCol] of neighbors) {
+                    if (this.bubbleGrid[nRow] && this.bubbleGrid[nRow][nCol] && 
+                        this.bubbleGrid[nRow][nCol].color === targetColor) {
+                        stack.push(nRow + ',' + nCol);
+                    }
+                }
+                
+                while (stack.length > 0) {
+                    const current = stack.pop();
+                    if (visited.has(current)) continue;
+                    
+                    visited.add(current);
+                    const [row, col] = current.split(',').map(Number);
+                    const currentBubble = this.bubbleGrid[row] && this.bubbleGrid[row][col];
+                    
+                    if (currentBubble && (currentBubble.color === targetColor || currentBubble.color === '#rainbow')) {
+                        cluster.push(current);
+                        
+                        const bubbleNeighbors = this.getNeighbors(row, col);
+                        for (const [nRow, nCol] of bubbleNeighbors) {
+                            const key = nRow + ',' + nCol;
+                            if (!visited.has(key) && 
+                                this.bubbleGrid[nRow] && 
+                                this.bubbleGrid[nRow][nCol] && 
+                                (this.bubbleGrid[nRow][nCol].color === targetColor || 
+                                 this.bubbleGrid[nRow][nCol].color === '#rainbow')) {
+                                stack.push(key);
+                            }
+                        }
+                    }
+                }
+                
+                return cluster;
             }
             
             findConnectedBubbles(startRow, startCol, color, visited = new Set()) {
@@ -1254,34 +1304,6 @@
                                 this.bubbleGrid[nRow] && 
                                 this.bubbleGrid[nRow][nCol] && 
                                 this.bubbleGrid[nRow][nCol].color === color) {
-                                stack.push(key);
-                            }
-                        }
-                    }
-                }
-                
-                return cluster;
-            }
-            
-            findAdjacentBubbles(startRow, startCol) {
-                const visited = new Set();
-                const stack = [startRow + ',' + startCol];
-                const cluster = [];
-                
-                while (stack.length > 0) {
-                    const current = stack.pop();
-                    if (visited.has(current)) continue;
-                    
-                    visited.add(current);
-                    const [row, col] = current.split(',').map(Number);
-                    
-                    if (this.bubbleGrid[row] && this.bubbleGrid[row][col]) {
-                        cluster.push(current);
-                        
-                        const neighbors = this.getNeighbors(row, col);
-                        for (const [nRow, nCol] of neighbors) {
-                            const key = nRow + ',' + nCol;
-                            if (!visited.has(key) && this.bubbleGrid[nRow] && this.bubbleGrid[nRow][nCol]) {
                                 stack.push(key);
                             }
                         }
@@ -1808,15 +1830,47 @@
             
             drawBubble(bubble) {
                 this.ctx.save();
-                this.ctx.fillStyle = bubble.color;
-                this.ctx.beginPath();
-                this.ctx.arc(bubble.x, bubble.y, this.bubbleRadius, 0, Math.PI * 2);
-                this.ctx.fill();
                 
-                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                this.ctx.beginPath();
-                this.ctx.arc(bubble.x - 3, bubble.y - 3, this.bubbleRadius * 0.4, 0, Math.PI * 2);
-                this.ctx.fill();
+                if (bubble.color === '#rainbow') {
+                    // Draw rainbow bubble with gradient
+                    const gradient = this.ctx.createRadialGradient(
+                        bubble.x, bubble.y, 0,
+                        bubble.x, bubble.y, this.bubbleRadius
+                    );
+                    gradient.addColorStop(0, '#ffffff');
+                    gradient.addColorStop(0.2, '#ff0000');
+                    gradient.addColorStop(0.4, '#ffff00');
+                    gradient.addColorStop(0.6, '#00ff00');
+                    gradient.addColorStop(0.8, '#0000ff');
+                    gradient.addColorStop(1, '#ff00ff');
+                    
+                    this.ctx.fillStyle = gradient;
+                    this.ctx.beginPath();
+                    this.ctx.arc(bubble.x, bubble.y, this.bubbleRadius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    
+                    // Add a white border to make it stand out
+                    this.ctx.strokeStyle = '#ffffff';
+                    this.ctx.lineWidth = 2;
+                    this.ctx.stroke();
+                    
+                    // Add sparkle effect
+                    this.ctx.fillStyle = '#ffffff';
+                    this.ctx.font = '10px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    this.ctx.fillText('★', bubble.x, bubble.y);
+                } else {
+                    this.ctx.fillStyle = bubble.color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(bubble.x, bubble.y, this.bubbleRadius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    
+                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    this.ctx.beginPath();
+                    this.ctx.arc(bubble.x - 3, bubble.y - 3, this.bubbleRadius * 0.4, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
                 
                 this.ctx.restore();
             }
