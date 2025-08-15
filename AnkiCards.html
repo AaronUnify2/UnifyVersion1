@@ -298,6 +298,74 @@
             display: none;
         }
 
+        .piano-container {
+            margin: 20px 0;
+            text-align: center;
+            background: linear-gradient(135deg, #8B4513, #A0522D);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        }
+
+        .piano {
+            display: inline-flex;
+            gap: 2px;
+            perspective: 1000px;
+            transform-style: preserve-3d;
+        }
+
+        .piano-key {
+            cursor: pointer;
+            transition: all 0.1s ease;
+            border: 2px solid #333;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+            padding-bottom: 8px;
+            position: relative;
+            transform-style: preserve-3d;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            border-radius: 8px;
+        }
+
+        .piano-key:hover {
+            transform: translateY(-3px) rotateX(10deg);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.4);
+        }
+
+        .piano-key:active {
+            transform: translateY(2px) rotateX(-5deg);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .piano-key.white {
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #8B4513;
+            text-shadow: 1px 1px 2px rgba(255,255,255,0.5);
+            width: 28px;
+            height: 120px;
+        }
+
+        .piano-key.black {
+            background: linear-gradient(135deg, #4A4A4A, #2F2F2F);
+            color: white;
+            height: 80px;
+            width: 18px;
+            margin: 0 -9px;
+            z-index: 2;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+
+        .piano-title {
+            color: white;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
         .math-equation {
             display: flex;
             align-items: center;
@@ -423,6 +491,30 @@
                 font-size: 3em;
                 gap: 10px;
             }
+            
+            .piano-container {
+                margin: 15px 0;
+                padding: 15px;
+            }
+            
+            .piano-key.white {
+                width: 20px;
+                height: 80px;
+                font-size: 9px;
+                padding-bottom: 5px;
+            }
+            
+            .piano-key.black {
+                height: 55px;
+                width: 13px;
+                margin: 0 -6.5px;
+                font-size: 7px;
+            }
+            
+            .piano-title {
+                font-size: 1em;
+                margin-bottom: 10px;
+            }
         }
     </style>
 </head>
@@ -468,6 +560,31 @@
                     <div class="card-face card-back" id="cardBack">
                         <!-- Card content will be populated by JavaScript -->
                     </div>
+                </div>
+            </div>
+            
+            <!-- Piano for nursery rhymes -->
+            <div id="piano" class="piano-container hidden">
+                <div class="piano-title">🎹 Play the Notes! 🎹</div>
+                <div class="piano">
+                    <div class="piano-key white" data-note="G4" data-freq="391.995">G</div>
+                    <div class="piano-key black" data-note="G#4" data-freq="415.305">G#</div>
+                    <div class="piano-key white" data-note="A4" data-freq="440.00">A</div>
+                    <div class="piano-key black" data-note="A#4" data-freq="466.16">A#</div>
+                    <div class="piano-key white" data-note="B4" data-freq="493.88">B</div>
+                    <div class="piano-key white" data-note="C5" data-freq="523.25">C</div>
+                    <div class="piano-key black" data-note="C#5" data-freq="554.37">C#</div>
+                    <div class="piano-key white" data-note="D5" data-freq="587.33">D</div>
+                    <div class="piano-key black" data-note="D#5" data-freq="622.25">D#</div>
+                    <div class="piano-key white" data-note="E5" data-freq="659.25">E</div>
+                    <div class="piano-key white" data-note="F5" data-freq="698.46">F</div>
+                    <div class="piano-key black" data-note="F#5" data-freq="739.99">F#</div>
+                    <div class="piano-key white" data-note="G5" data-freq="783.99">G</div>
+                    <div class="piano-key black" data-note="G#5" data-freq="830.61">G#</div>
+                    <div class="piano-key white" data-note="A5" data-freq="880.00">A</div>
+                    <div class="piano-key black" data-note="A#5" data-freq="932.33">A#</div>
+                    <div class="piano-key white" data-note="B5" data-freq="987.77">B</div>
+                    <div class="piano-key white" data-note="C6" data-freq="1046.50">C</div>
                 </div>
             </div>
             
@@ -1294,6 +1411,37 @@
         const shuffleCardsBtn = document.getElementById('shuffleCards');
         const progressBar = document.getElementById('progressBar');
         const progressText = document.getElementById('progressText');
+        const piano = document.getElementById('piano');
+
+        // Audio Context for piano
+        let audioContext = null;
+        
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+        
+        function playNote(frequency, duration = 0.5) {
+            if (!audioContext) {
+                initAudioContext();
+            }
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
 
         // Initialize App
         function init() {
@@ -1508,6 +1656,21 @@
 
             // Card click to flip
             flashcard.addEventListener('click', flipCard);
+            
+            // Piano key clicks
+            piano.addEventListener('click', (e) => {
+                const key = e.target.closest('.piano-key');
+                if (key) {
+                    const frequency = parseFloat(key.dataset.freq);
+                    playNote(frequency);
+                    
+                    // Visual feedback
+                    key.style.transform = 'translateY(2px) rotateX(-5deg)';
+                    setTimeout(() => {
+                        key.style.transform = '';
+                    }, 150);
+                }
+            });
         }
 
         function goBack() {
@@ -1592,6 +1755,16 @@
             const progress = ((currentCardIndex + 1) / currentCards.length) * 100;
             progressBar.style.width = `${progress}%`;
             progressText.textContent = `Card ${currentCardIndex + 1} of ${currentCards.length}`;
+
+            // Show/hide piano based on card type
+            if (card.notes && card.emojis) {
+                // This is a nursery rhyme card - show piano
+                piano.classList.remove('hidden');
+                initAudioContext(); // Initialize audio context when piano becomes visible
+            } else {
+                // Not a nursery rhyme card - hide piano
+                piano.classList.add('hidden');
+            }
 
             // Show front of card
             showCardFront(card);
@@ -1844,6 +2017,9 @@
             
             // Reset card display
             flashcard.classList.remove('flipped');
+            
+            // Hide piano
+            piano.classList.add('hidden');
             
             // Show menu, hide card screen
             cardScreen.classList.add('hidden');
