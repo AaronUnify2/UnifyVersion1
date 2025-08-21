@@ -177,8 +177,7 @@
             z-index: 1000;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
         }
-        
-        
+
         .storage-card {
             position: absolute;
             background: rgba(255, 248, 220, 0.95);
@@ -186,14 +185,14 @@
             border: 2px solid #FF9500;
             border-radius: 12px;
             padding: 1rem;
-            cursor: move;
+            cursor: default;
             box-shadow: 0 4px 20px rgba(255, 149, 0, 0.15);
             transition: all 0.2s ease;
             z-index: 100;
             resize: both;
-            overflow: visible; /* Changed from auto to visible */
-            min-width: 200px;
-            min-height: 120px;
+            overflow: visible;
+            min-width: 250px;
+            min-height: 150px;
         }
 
         .storage-card::after {
@@ -264,6 +263,7 @@
         .storage-card .card-number {
             background: #FF9500;
             box-shadow: 0 2px 8px rgba(255, 149, 0, 0.3);
+            cursor: move !important;
         }
 
         .card-title {
@@ -996,8 +996,8 @@
                 requirements: '',
                 x: 150 + (cardCounter * 60) % 800,
                 y: 200 + Math.floor(cardCounter / 14) * 150,
-                width: 200,
-                height: 120,
+                width: 250,
+                height: 150,
                 number: ''
             };
             storageCards.push(storage);
@@ -1059,8 +1059,8 @@
             storageEl.style.top = storage.y + 'px';
             
             // Ensure minimum size but allow larger if specified
-            const width = Math.max(storage.width || 200, 200);
-            const height = Math.max(storage.height || 120, 120);
+            const width = Math.max(storage.width || 250, 250);
+            const height = Math.max(storage.height || 150, 150);
             
             storageEl.style.width = width + 'px';
             storageEl.style.height = height + 'px';
@@ -1070,7 +1070,7 @@
             storage.height = height;
             
             storageEl.innerHTML = `
-                <div class="card-number">${storage.number || 'S'}</div>
+                <div class="card-number" title="Drag to move storage">${storage.number || 'S'}</div>
                 <div class="card-controls">
                     <button class="card-btn connect-btn" onclick="startConnection('${storage.id}')" title="Connect">→</button>
                     <button class="card-btn delete-btn" onclick="deleteCard('${storage.id}')" title="Delete">×</button>
@@ -1106,14 +1106,33 @@
         function addDragFunctionality(cardEl, cardData) {
             let isDragging = false;
             
-            cardEl.addEventListener('mousedown', startDrag);
-            cardEl.addEventListener('touchstart', startDrag, { passive: false });
+            // For storage cards, only allow dragging from the number badge
+            if (cardData.type === 'storage') {
+                const numberBadge = cardEl.querySelector('.card-number');
+                if (numberBadge) {
+                    numberBadge.addEventListener('mousedown', startDrag);
+                    numberBadge.addEventListener('touchstart', startDrag, { passive: false });
+                    // Make the number badge more obviously draggable
+                    numberBadge.style.cursor = 'move';
+                    numberBadge.title = 'Drag to move storage';
+                }
+            } else {
+                // For production cards, keep the existing behavior
+                cardEl.addEventListener('mousedown', startDrag);
+                cardEl.addEventListener('touchstart', startDrag, { passive: false });
+            }
 
             function startDrag(e) {
                 if (isDrawingMode) return;
                 if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
                 
+                // For storage cards, only allow drag from number badge
+                if (cardData.type === 'storage' && !e.target.classList.contains('card-number')) {
+                    return;
+                }
+                
                 e.preventDefault();
+                e.stopPropagation(); // Prevent event bubbling
                 isDragging = true;
                 draggedCard = cardData;
                 cardEl.classList.add('dragging');
