@@ -217,8 +217,90 @@
             setupFullscreen() {
                 const fullscreenBubble = document.getElementById('fullscreenBubble');
                 
-                fullscreenBubble.addEventListener('click', () => {
+                let holdTimer = null;
+                let holdProgress = null;
+                let isHolding = false;
+                
+                const startHold = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    if (isHolding) return;
+                    isHolding = true;
+                    
+                    fullscreenBubble.classList.add('holding');
+                    fullscreenBubble.style.transform = 'scale(0.95)';
+                    
+                    let progress = 0;
+                    const startTime = Date.now();
+                    const holdDuration = 1000; // 1 second
+                    
+                    holdProgress = setInterval(() => {
+                        const elapsed = Date.now() - startTime;
+                        progress = Math.min(elapsed / holdDuration, 1);
+                        const progressPercent = progress * 100;
+                        
+                        fullscreenBubble.style.setProperty('--progress', `${progressPercent}%`);
+                        
+                        if (progress >= 1) {
+                            this.completeHold();
+                        }
+                    }, 16); // ~60fps updates
+                    
+                    holdTimer = setTimeout(() => {
+                        this.completeHold();
+                    }, holdDuration);
+                };
+                
+                const endHold = (e) => {
+                    if (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                    
+                    if (!isHolding) return;
+                    
+                    // Cancel timers
+                    if (holdTimer) {
+                        clearTimeout(holdTimer);
+                        holdTimer = null;
+                    }
+                    if (holdProgress) {
+                        clearInterval(holdProgress);
+                        holdProgress = null;
+                    }
+                    
+                    // Reset visual state
+                    isHolding = false;
+                    fullscreenBubble.classList.remove('holding');
+                    fullscreenBubble.style.transform = '';
+                    fullscreenBubble.style.setProperty('--progress', '0%');
+                };
+                
+                this.completeHold = () => {
+                    endHold();
                     this.toggleFullscreen();
+                    
+                    // Add a little success feedback
+                    fullscreenBubble.style.transform = 'scale(1.2)';
+                    setTimeout(() => {
+                        fullscreenBubble.style.transform = '';
+                    }, 200);
+                };
+                
+                // Touch events
+                fullscreenBubble.addEventListener('touchstart', startHold, { passive: false });
+                fullscreenBubble.addEventListener('touchend', endHold, { passive: false });
+                fullscreenBubble.addEventListener('touchcancel', endHold, { passive: false });
+                
+                // Mouse events
+                fullscreenBubble.addEventListener('mousedown', startHold);
+                fullscreenBubble.addEventListener('mouseup', endHold);
+                fullscreenBubble.addEventListener('mouseleave', endHold);
+                
+                // Prevent context menu on long press
+                fullscreenBubble.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
                 });
                 
                 // Listen for fullscreen changes to update the button
