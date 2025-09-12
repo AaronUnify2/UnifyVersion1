@@ -33,6 +33,46 @@
             cursor: pointer;
         }
 
+        .fullscreen-bubble {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+            z-index: 10;
+            font-size: 24px;
+            user-select: none;
+            touch-action: manipulation;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .fullscreen-bubble:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(255, 215, 0, 0.6);
+        }
+
+        .fullscreen-bubble:active {
+            transform: scale(0.95);
+        }
+
+        .fullscreen-bubble::before {
+            content: '';
+            position: absolute;
+            top: 10%;
+            left: 10%;
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.8), transparent 50%);
+        }
+
         .celebration {
             position: absolute;
             pointer-events: none;
@@ -80,11 +120,24 @@
                 opacity: 0;
             }
         }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .fullscreen-bubble.pulse {
+            animation: pulse 2s infinite;
+        }
     </style>
 </head>
 <body>
     <div class="game-container">
         <canvas id="gameCanvas"></canvas>
+        <div class="fullscreen-bubble pulse" id="fullscreenBubble" title="Full Screen">
+            🔳
+        </div>
     </div>
 
     <script>
@@ -114,6 +167,7 @@
                 this.generateBubbles();
                 
                 this.setupEventListeners();
+                this.setupFullscreen();
                 this.gameLoop();
             }
             
@@ -157,6 +211,68 @@
                             });
                         }
                     }
+                }
+            }
+            
+            setupFullscreen() {
+                const fullscreenBubble = document.getElementById('fullscreenBubble');
+                
+                fullscreenBubble.addEventListener('click', () => {
+                    this.toggleFullscreen();
+                });
+                
+                // Listen for fullscreen changes to update the button
+                document.addEventListener('fullscreenchange', () => this.updateFullscreenButton());
+                document.addEventListener('webkitfullscreenchange', () => this.updateFullscreenButton());
+                document.addEventListener('mozfullscreenchange', () => this.updateFullscreenButton());
+                document.addEventListener('MSFullscreenChange', () => this.updateFullscreenButton());
+            }
+            
+            toggleFullscreen() {
+                const elem = document.documentElement;
+                
+                if (!this.isFullscreen()) {
+                    // Enter fullscreen
+                    if (elem.requestFullscreen) {
+                        elem.requestFullscreen();
+                    } else if (elem.webkitRequestFullscreen) {
+                        elem.webkitRequestFullscreen();
+                    } else if (elem.mozRequestFullScreen) {
+                        elem.mozRequestFullScreen();
+                    } else if (elem.msRequestFullscreen) {
+                        elem.msRequestFullscreen();
+                    }
+                } else {
+                    // Exit fullscreen
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    } else if (document.mozCancelFullScreen) {
+                        document.mozCancelFullScreen();
+                    } else if (document.msExitFullscreen) {
+                        document.msExitFullscreen();
+                    }
+                }
+            }
+            
+            isFullscreen() {
+                return !!(document.fullscreenElement || 
+                         document.webkitFullscreenElement || 
+                         document.mozFullScreenElement || 
+                         document.msFullscreenElement);
+            }
+            
+            updateFullscreenButton() {
+                const fullscreenBubble = document.getElementById('fullscreenBubble');
+                if (this.isFullscreen()) {
+                    fullscreenBubble.innerHTML = '🔲'; // Exit fullscreen icon
+                    fullscreenBubble.title = 'Exit Full Screen';
+                    fullscreenBubble.classList.remove('pulse');
+                } else {
+                    fullscreenBubble.innerHTML = '🔳'; // Enter fullscreen icon
+                    fullscreenBubble.title = 'Full Screen';
+                    fullscreenBubble.classList.add('pulse');
                 }
             }
             
