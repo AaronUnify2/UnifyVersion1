@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Foxy Jump</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(180deg, #87CEEB, #98FB98);
+            height: 100vh;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+
+        .game-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            cursor: pointer;
+        }
+
+        .fullscreen-bubble {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+            z-index: 10;
+            font-size: 24px;
+            user-select: none;
+            touch-action: manipulation;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .fullscreen-bubble:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(255, 215, 0, 0.6);
+        }
+
+        .fullscreen-bubble:active {
+            transform: scale(0.95);
+        }
+
+        .celebration {
+            position: absolute;
+            pointer-events: none;
+            font-size: 30px;
+            animation: celebrate 1s ease-out forwards;
+            z-index: 100;
+        }
+
+        @keyframes celebrate {
+            0% { 
+                transform: scale(0) rotate(0deg);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.2) rotate(180deg);
+                opacity: 1;
+            }
+            100% { 
+                transform: scale(0.8) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .fullscreen-bubble.pulse {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div class="fullscreen-bubble pulse" id="fullscreenBubble" title="Full Screen">🔳</div>
+    </div>
+
+    <script>
+        class FoxyJumpGame {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.resizeCanvas();
+                
+                this.fox = {
+                    x: this.canvas.width / 2,
+                    y: this.canvas.height / 2,
+                    width: Math.min(this.canvas.width, this.canvas.height) * 0.12,
+                    height: Math.min(this.canvas.width, this.canvas.height) * 0.12,
+                    vy: 0,
+                    gravity: 0.6,
+                    jumpPower: -15,
+                    isJumping: false,
+                    rotation: 0
+                };
+                
+                this.platforms = [];
+                this.platformColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#FF7F50'];
+                this.particles = [];
+                this.scrollSpeed = 1;
+                
+                this.generatePlatforms();
+                this.setupEventListeners();
+                this.setupFullscreen();
+                this.gameLoop();
+            }
+            
+            resizeCanvas() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                if (this.fox) {
+                    this.fox.width = Math.min(this.canvas.width, this.canvas.height) * 0.12;
+                    this.fox.height = Math.min(this.canvas.width, this.canvas.height) * 0.12;
+                }
+            }
+            
+            generatePlatforms() {
+                this.platforms = this.platforms.filter(p => p.y < this.canvas.height + 100);
+                
+                while (this.platforms.length < 8) {
+                    const minY = this.platforms.length > 0 ? 
+                        Math.min(...this.platforms.map(p => p.y)) - 150 : 
+                        this.canvas.height - 100;
+                    
+                    const width = 80 + Math.random() * 120;
+                    const platform = {
+                        x: Math.random() * (this.canvas.width - width),
+                        y: minY,
+                        width: width,
+                        height: 15,
+                        speed: (Math.random() - 0.5) * 3,
+                        color: this.platformColors[Math.floor(Math.random() * this.platformColors.length)],
+                        bounceOffset: Math.random() * Math.PI * 2
+                    };
+                    this.platforms.push(platform);
+                }
+            }
+            
+            setupFullscreen() {
+                const fullscreenBubble = document.getElementById('fullscreenBubble');
+                let holdTimer = null;
+                let isHolding = false;
+                
+                const startHold = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (isHolding) return;
+                    isHolding = true;
+                    fullscreenBubble.style.transform = 'scale(0.95)';
+                    holdTimer = setTimeout(() => this.completeHold(), 1000);
+                };
+                
+                const endHold = (e) => {
+                    if (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                    if (!isHolding) return;
+                    if (holdTimer) {
+                        clearTimeout(holdTimer);
+                        holdTimer = null;
+                    }
+                    isHolding = false;
+                    fullscreenBubble.style.transform = '';
+                };
+                
+                this.completeHold = () => {
+                    endHold();
+                    this.toggleFullscreen();
+                    fullscreenBubble.style.transform = 'scale(1.2)';
+                    setTimeout(() => fullscreenBubble.style.transform = '', 200);
+                };
+                
+                fullscreenBubble.addEventListener('touchstart', startHold, { passive: false });
+                fullscreenBubble.addEventListener('touchend', endHold, { passive: false });
+                fullscreenBubble.addEventListener('touchcancel', endHold, { passive: false });
+                fullscreenBubble.addEventListener('mousedown', startHold);
+                fullscreenBubble.addEventListener('mouseup', endHold);
+                fullscreenBubble.addEventListener('mouseleave', endHold);
+                fullscreenBubble.addEventListener('contextmenu', (e) => e.preventDefault());
+                
+                document.addEventListener('fullscreenchange', () => this.updateFullscreenButton());
+                document.addEventListener('webkitfullscreenchange', () => this.updateFullscreenButton());
+            }
+            
+            toggleFullscreen() {
+                const elem = document.documentElement;
+                if (!this.isFullscreen()) {
+                    if (elem.requestFullscreen) elem.requestFullscreen();
+                    else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+                    else if (elem.mozRequestFullScreen) elem.mozRequestFullScreen();
+                } else {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                }
+            }
+            
+            isFullscreen() {
+                return !!(document.fullscreenElement || document.webkitFullscreenElement);
+            }
+            
+            updateFullscreenButton() {
+                const fb = document.getElementById('fullscreenBubble');
+                if (this.isFullscreen()) {
+                    fb.innerHTML = '🔲';
+                    fb.title = 'Exit Full Screen';
+                    fb.classList.remove('pulse');
+                } else {
+                    fb.innerHTML = '🔳';
+                    fb.title = 'Full Screen';
+                    fb.classList.add('pulse');
+                }
+            }
+            
+            setupEventListeners() {
+                this.canvas.addEventListener('touchstart', (e) => this.handleJump(e), { passive: false });
+                this.canvas.addEventListener('mousedown', (e) => this.handleJump(e));
+                window.addEventListener('resize', () => {
+                    this.resizeCanvas();
+                    this.generatePlatforms();
+                });
+            }
+            
+            handleJump(e) {
+                e.preventDefault();
+                if (!this.fox.isJumping) {
+                    let x = e.touches ? e.touches[0].clientX : e.clientX;
+                    const leftBoundary = this.canvas.width * 0.3;
+                    const rightBoundary = this.canvas.width * 0.7;
+                    
+                    this.fox.vy = this.fox.jumpPower;
+                    this.fox.isJumping = true;
+                    
+                    if (x < leftBoundary) {
+                        this.fox.x -= this.canvas.width * 0.15;
+                    } else if (x > rightBoundary) {
+                        this.fox.x += this.canvas.width * 0.15;
+                    }
+                }
+            }
+            
+            update() {
+                this.fox.vy += this.fox.gravity;
+                this.fox.y += this.fox.vy;
+                this.fox.rotation = this.fox.vy * 0.05;
+                
+                if (this.fox.x < 0) this.fox.x = 0;
+                if (this.fox.x > this.canvas.width - this.fox.width) {
+                    this.fox.x = this.canvas.width - this.fox.width;
+                }
+                
+                if (this.fox.y < this.canvas.height * 0.15) {
+                    this.scrollSpeed = 3;
+                } else if (this.fox.y > this.canvas.height * 0.7) {
+                    this.scrollSpeed = 1;
+                }
+                
+                for (const platform of this.platforms) {
+                    if (this.fox.vy > 0 && 
+                        this.fox.x + this.fox.width > platform.x &&
+                        this.fox.x < platform.x + platform.width &&
+                        this.fox.y + this.fox.height > platform.y &&
+                        this.fox.y + this.fox.height < platform.y + platform.height + 10) {
+                        
+                        this.fox.vy = this.fox.jumpPower * 0.8;
+                        this.fox.y = platform.y - this.fox.height;
+                        this.fox.isJumping = false;
+                        this.createCelebration(this.fox.x + this.fox.width / 2, this.fox.y + this.fox.height);
+                    }
+                }
+                
+                for (const platform of this.platforms) {
+                    platform.x += platform.speed;
+                    if (platform.x <= 0 || platform.x + platform.width >= this.canvas.width) {
+                        platform.speed = -platform.speed;
+                        platform.x = Math.max(0, Math.min(this.canvas.width - platform.width, platform.x));
+                    }
+                    platform.y += this.scrollSpeed;
+                    platform.bounceOffset += 0.05;
+                }
+                
+                this.fox.y += this.scrollSpeed;
+                
+                if (this.fox.y > this.canvas.height) {
+                    this.fox.y = this.canvas.height / 2;
+                    this.fox.vy = 0;
+                    this.fox.isJumping = false;
+                    this.scrollSpeed = 1;
+                }
+                
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.2;
+                    p.life--;
+                    if (p.life <= 0) this.particles.splice(i, 1);
+                }
+                
+                this.generatePlatforms();
+            }
+            
+            createCelebration(x, y) {
+                const container = document.querySelector('.game-container');
+                const cel = document.createElement('div');
+                cel.className = 'celebration';
+                cel.textContent = ['⭐', '✨', '🌟', '💫', '🎉'][Math.floor(Math.random() * 5)];
+                cel.style.left = (x - 15) + 'px';
+                cel.style.top = (y - 15) + 'px';
+                container.appendChild(cel);
+                setTimeout(() => { if (cel.parentNode) cel.parentNode.removeChild(cel); }, 1000);
+                
+                for (let i = 0; i < 6; i++) {
+                    this.particles.push({
+                        x: x, y: y,
+                        vx: (Math.random() - 0.5) * 4,
+                        vy: (Math.random() - 0.5) * 4 - 2,
+                        color: this.platformColors[Math.floor(Math.random() * this.platformColors.length)],
+                        life: 30
+                    });
+                }
+            }
+            
+            render() {
+                const grad = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+                grad.addColorStop(0, '#87CEEB');
+                grad.addColorStop(1, '#98FB98');
+                this.ctx.fillStyle = grad;
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                for (const p of this.platforms) {
+                    const b = Math.sin(p.bounceOffset) * 2;
+                    this.ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                    this.ctx.fillRect(p.x + 2, p.y + b + 2, p.width, p.height);
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.fillRect(p.x, p.y + b, p.width, p.height);
+                    const g = this.ctx.createLinearGradient(0, p.y, 0, p.y + p.height);
+                    g.addColorStop(0, 'rgba(255,255,255,0.4)');
+                    g.addColorStop(1, 'rgba(255,255,255,0)');
+                    this.ctx.fillStyle = g;
+                    this.ctx.fillRect(p.x, p.y + b, p.width, p.height / 2);
+                }
+                
+                for (const p of this.particles) {
+                    this.ctx.save();
+                    this.ctx.globalAlpha = p.life / 30;
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.restore();
+                }
+                
+                this.drawFox();
+            }
+            
+            drawFox() {
+                this.ctx.save();
+                this.ctx.translate(this.fox.x + this.fox.width / 2, this.fox.y + this.fox.height / 2);
+                this.ctx.rotate(this.fox.rotation);
+                this.ctx.translate(-this.fox.width / 2, -this.fox.height / 2);
+                
+                const w = this.fox.width;
+                const h = this.fox.height;
+                
+                this.ctx.fillStyle = '#FF6B5C';
+                this.ctx.beginPath();
+                this.ctx.ellipse(w/2, h*0.6, w*0.35, h*0.4, 0, 0, Math.PI*2);
+                this.ctx.fill();
+                
+                this.ctx.beginPath();
+                this.ctx.ellipse(w/2, h*0.3, w*0.4, h*0.35, 0, 0, Math.PI*2);
+                this.ctx.fill();
+                
+                this.ctx.beginPath();
+                this.ctx.moveTo(w*0.25, h*0.15);
+                this.ctx.lineTo(w*0.15, h*0.05);
+                this.ctx.lineTo(w*0.35, h*0.2);
+                this.ctx.closePath();
+                this.ctx.fill();
+                
+                this.ctx.beginPath();
+                this.ctx.moveTo(w*0.75, h*0.15);
+                this.ctx.lineTo(w*0.85, h*0.05);
+                this.ctx.lineTo(w*0.65, h*0.2);
+                this.ctx.closePath();
+                this.ctx.fill();
+                
+                this.ctx.fillStyle = '#9CCC65';
+                this.ctx.beginPath();
+                this.ctx.moveTo(w*0.25, h*0.15);
+                this.ctx.lineTo(w*0.2, h*0.1);
+                this.ctx.lineTo(w*0.3, h*0.18);
+                this.ctx.closePath();
+                this.ctx.fill();
+                
+                this.ctx.beginPath();
+                this.ctx.moveTo(w*0.75, h*0.15);
+                this.ctx.lineTo(w*0.8, h*0.1);
+                this.ctx.lineTo(w*0.7, h*0.18);
+                this.ctx.closePath();
+                this.ctx.fill();
+                
+                this.ctx.fillStyle = '#F4D4A8';
+                this.ctx.beginPath();
+                this.ctx.ellipse(w*0.35, h*0.32, w*0.15, h*0.2, 0, 0, Math.PI*2);
+                this.ctx.fill();
+                this.ctx.beginPath();
+                this.ctx.ellipse(w*0.65, h*0.32, w*0.15, h*0.2, 0, 0, Math.PI*2);
+                this.ctx.fill();
+                
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.beginPath();
+                this.ctx.ellipse(w/2, h*0.42, w*0.2, h*0.15, 0, 0, Math.PI*2);
+                this.ctx.fill();
+                
+                this.ctx.fillStyle = '#8B4513';
+                this.ctx.beginPath();
+                this.ctx.ellipse(w/2, h*0.4, w*0.08, h*0.08, 0, 0, Math.PI*2);
+                this.ctx.fill();
+                
+                this.ctx.fillStyle = '#000000';
+                this.ctx.beginPath();
+                this.ctx.arc(w*0.38, h*0.28, w*0.08, 0, Math.PI*2);
+                this.ctx.fill();
+                this.ctx.beginPath();
+                this.ctx.arc(w*0.62, h*0.28, w*0.08, 0, Math.PI*2);
+                this.ctx.fill();
+                
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.beginPath();
+                this.ctx.arc(w*0.4, h*0.26, w*0.03, 0, Math.PI*2);
+                this.ctx.fill();
+                this.ctx.beginPath();
+                this.ctx.arc(w*0.64, h*0.26, w*0.03, 0, Math.PI*2);
+                this.ctx.fill();
+                
+                this.ctx.strokeStyle = '#5D4037';
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.arc(w/2, h*0.42, w*0.12, 0.2, Math.PI-0.2);
+                this.ctx.stroke();
+                
+                this.ctx.fillStyle = '#FF6B5C';
+                this.ctx.beginPath();
+                this.ctx.ellipse(w*0.8, h*0.75, w*0.25, h*0.2, Math.PI/4, 0, Math.PI*2);
+                this.ctx.fill();
+                
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.beginPath();
+                this.ctx.ellipse(w*0.9, h*0.85, w*0.12, h*0.12, 0, 0, Math.PI*2);
+                this.ctx.fill();
+                
+                this.ctx.restore();
+            }
+            
+            gameLoop() {
+                this.update();
+                this.render();
+                requestAnimationFrame(() => this.gameLoop());
+            }
+        }
+        
+        window.addEventListener('load', () => new FoxyJumpGame());
+    </script>
+</body>
+</html>
