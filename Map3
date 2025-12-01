@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Building Plan Map</title>
+    
+    <!-- OpenLayers CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .toolbar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toolbar h2 {
+            font-size: 16px;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .tool-btn {
+            background: white;
+            border: 2px solid #ddd;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .tool-btn:hover {
+            background: #f0f0f0;
+            border-color: #999;
+        }
+
+        .tool-btn.active {
+            background: #2196F3;
+            color: white;
+            border-color: #2196F3;
+        }
+
+        .tool-btn:active {
+            transform: scale(0.95);
+        }
+
+        .tool-icon {
+            font-size: 18px;
+        }
+
+        .action-buttons {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .action-btn {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            background: #d32f2f;
+        }
+
+        .action-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Custom styles for drawn features */
+        .ol-overlay-container {
+            pointer-events: none;
+        }
+
+        .measure-label {
+            background: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #333;
+            font-size: 12px;
+            font-weight: bold;
+            pointer-events: auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .sqm-label {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 2px solid #4CAF50;
+            font-size: 13px;
+            font-weight: bold;
+            color: #2E7D32;
+            pointer-events: auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .text-label {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            pointer-events: auto;
+            border: 1px solid #666;
+        }
+
+        .text-input-dialog {
+            position: absolute;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 2000;
+            display: none;
+        }
+
+        .text-input-dialog input {
+            padding: 8px 12px;
+            font-size: 14px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            width: 250px;
+            margin-bottom: 10px;
+        }
+
+        .text-input-dialog button {
+            padding: 8px 16px;
+            margin-right: 8px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .text-input-dialog .ok-btn {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .text-input-dialog .cancel-btn {
+            background: #ddd;
+        }
+
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 13px;
+            z-index: 1000;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="toolbar">
+        <h2>🏗️ Drawing Tools</h2>
+        <button class="tool-btn" onclick="selectTool('none')">
+            <span class="tool-icon">👆</span>
+            <span>Select/Move</span>
+        </button>
+        <button class="tool-btn" onclick="selectTool('measure')">
+            <span class="tool-icon">📏</span>
+            <span>Measure Line</span>
+        </button>
+        <button class="tool-btn" onclick="selectTool('square')">
+            <span class="tool-icon">⬜</span>
+            <span>Draw Square</span>
+        </button>
+        <button class="tool-btn" onclick="selectTool('text')">
+            <span class="tool-icon">📝</span>
+            <span>Add Text</span>
+        </button>
+        <button class="tool-btn" onclick="selectTool('tree')">
+            <span class="tool-icon">🌳</span>
+            <span>Place Tree</span>
+        </button>
+        <button class="tool-btn" onclick="selectTool('pond')">
+            <span class="tool-icon">💧</span>
+            <span>Draw Pond</span>
+        </button>
+    </div>
+
+    <div class="action-buttons">
+        <button class="action-btn" onclick="clearAll()">🗑️ Clear All</button>
+        <button class="action-btn" style="background: #FF9800;" onclick="deleteSelected()">❌ Delete Selected</button>
+    </div>
+
+    <div class="instructions" id="instructions"></div>
+
+    <div class="text-input-dialog" id="textDialog">
+        <input type="text" id="textInput" placeholder="Enter label text..." />
+        <div>
+            <button class="ok-btn" onclick="confirmText()">OK</button>
+            <button class="cancel-btn" onclick="cancelText()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- OpenLayers JS -->
+    <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
+    
+    <script>
+        // Global variables
+        var map;
+        var drawSource;
+        var drawLayer;
+        var currentTool = 'none';
+        var currentDraw = null;
+        var currentModify = null;
+        var currentSelect = null;
+        var labelOverlays = [];
+        var pendingTextPosition = null;
+
+        // Initialize the map
+        function initMap() {
+            // Create source for drawn features
+            drawSource = new ol.source.Vector();
+
+            // Create layer for drawn features
+            drawLayer = new ol.layer.Vector({
+                source: drawSource
+            });
+
+            // Create the map
+            map = new ol.Map({
+                target: 'map',
+                layers: [
+                    new ol.layer.Tile({
+                        source: new ol.source.OSM()
+                    }),
+                    drawLayer
+                ],
+                view: new ol.View({
+                    center: ol.proj.fromLonLat([153.0251, -27.4698]), // Brisbane
+                    zoom: 18
+                })
+            });
+
+            // Add select interaction for moving/deleting features
+            setupSelectInteraction();
+        }
+
+        function setupSelectInteraction() {
+            // Remove existing select if any
+            if (currentSelect) {
+                map.removeInteraction(currentSelect);
+            }
+
+            // Create select interaction
+            currentSelect = new ol.interaction.Select({
+                layers: [drawLayer],
+                style: new ol.style.Style({
+                    fill: new ol.style.Fill({
+                        color: 'rgba(255, 255, 0, 0.4)'
+                    }),
+                    stroke: new ol.style.Stroke({
+                        color: '#FFD700',
+                        width: 3
+                    }),
+                    image: new ol.style.Circle({
+                        radius: 8,
+                        fill: new ol.style.Fill({
+                            color: 'rgba(255, 255, 0, 0.8)'
+                        }),
+                        stroke: new ol.style.Stroke({
+                            color: '#FFD700',
+                            width: 2
+                        })
+                    })
+                })
+            });
+
+            map.addInteraction(currentSelect);
+            currentSelect.setActive(currentTool === 'none');
+        }
+
+        function selectTool(tool) {
+            currentTool = tool;
+            
+            // Update button states
+            document.querySelectorAll('.tool-btn').forEach(function(btn) {
+                btn.classList.remove('active');
+            });
+            event.target.closest('.tool-btn').classList.add('active');
+
+            // Remove existing draw interaction
+            if (currentDraw) {
+                map.removeInteraction(currentDraw);
+                currentDraw = null;
+            }
+
+            // Update select interaction state
+            if (currentSelect) {
+                currentSelect.setActive(tool === 'none');
+            }
+
+            // Hide instructions
+            document.getElementById('instructions').style.display = 'none';
+
+            // Setup new interaction based on tool
+            switch(tool) {
+                case 'measure':
+                    setupMeasureTool();
+                    showInstructions('Click to start measuring, double-click to finish');
+                    break;
+                case 'square':
+                    setupSquareTool();
+                    showInstructions('Click and drag to draw a rectangle');
+                    break;
+                case 'text':
+                    setupTextTool();
+                    showInstructions('Click on the map to place a text label');
+                    break;
+                case 'tree':
+                    setupTreeTool();
+                    showInstructions('Click to place a tree');
+                    break;
+                case 'pond':
+                    setupPondTool();
+                    showInstructions('Click to draw pond outline, double-click to finish');
+                    break;
+                case 'none':
+                    showInstructions('Click features to select and move them');
+                    break;
+            }
+        }
+
+        function showInstructions(text) {
+            var instructions = document.getElementById('instructions');
+            instructions.textContent = text;
+            instructions.style.display = 'block';
+        }
+
+        function setupMeasureTool() {
+            currentDraw = new ol.interaction.Draw({
+                source: drawSource,
+                type: 'LineString',
+                style: new ol.style.Style({
+                    stroke: new ol.style.Stroke({
+                        color: '#FF0000',
+                        width: 3,
+                        lineDash: [10, 10]
+                    }),
+                    image: new ol.style.Circle({
+                        radius: 5,
+                        fill: new ol.style.Fill({
+                            color: '#FF0000'
+                        })
+                    })
+                })
+            });
+
+            currentDraw.on('drawend', function(event) {
+                var feature = event.feature;
+                var geometry = feature.getGeometry();
+                var length = ol.sphere.getLength(geometry, {projection: 'EPSG:3857'});
+                var lengthText = length > 1000 ? 
+                    (length / 1000).toFixed(2) + ' km' : 
+                    length.toFixed(2) + ' m';
+
+                // Style the line
+                feature.setStyle(new ol.style.Style({
+                    stroke: new ol.style.Stroke({
+                        color: '#FF0000',
+                        width: 2
+                    }),
+                    image: new ol.style.Circle({
+                        radius: 4,
+                        fill: new ol.style.Fill({
+                            color: '#FF0000'
+                        })
+                    })
+                }));
+
+                // Add label at midpoint
+                var coordinates = geometry.getCoordinates();
+                var midpoint = coordinates[Math.floor(coordinates.length / 2)];
+                
+                addLabel(midpoint, lengthText, 'measure-label');
+
+                // Store feature type
+                feature.set('featureType', 'measure');
+            });
+
+            map.addInteraction(currentDraw);
+        }
+
+        function setupSquareTool() {
+            currentDraw = new ol.interaction.Draw({
+                source: drawSource,
+                type: 'Circle',
+                geometryFunction: ol.interaction.Draw.createBox(),
+                style: new ol.style.Style({
+                    fill: new ol.style.Fill({
+                        color: 'rgba(76, 175, 80, 0.3)'
+                    }),
+                    stroke: new ol.style.Stroke({
+                        color: '#4CAF50',
+                        width: 2
+                    })
+                })
+            });
+
+            currentDraw.on('drawend', function(event) {
+                var feature = event.feature;
+                var geometry = feature.getGeometry();
+                var area = ol.sphere.getArea(geometry, {projection: 'EPSG:3857'});
+                var areaText = area.toFixed(2) + ' m²';
+
+                // Style the square
+                feature.setStyle(new ol.style.Style({
+                    fill: new ol.style.Fill({
+                        color: 'rgba(76, 175, 80, 0.3)'
+                    }),
+                    stroke: new ol.style.Stroke({
+                        color: '#4CAF50',
+                        width: 2
+                    })
+                }));
+
+                // Add label at center
+                var center = ol.extent.getCenter(geometry.getExtent());
+                addLabel(center, areaText, 'sqm-label');
+
+                // Store feature type
+                feature.set('featureType', 'square');
+            });
+
+            map.addInteraction(currentDraw);
+        }
+
+        function setupTextTool() {
+            // Use click event for text placement
+            map.once('click', function(event) {
+                pendingTextPosition = event.coordinate;
+                showTextDialog(event.pixel);
+            });
+        }
+
+        function showTextDialog(pixel) {
+            var dialog = document.getElementById('textDialog');
+            var input = document.getElementById('textInput');
+            
+            dialog.style.display = 'block';
+            dialog.style.left = (pixel[0] + 20) + 'px';
+            dialog.style.top = (pixel[1] + 20) + 'px';
+            
+            input.value = '';
+            input.focus();
+
+            // Allow Enter key to confirm
+            input.onkeypress = function(e) {
+                if (e.key === 'Enter') {
+                    confirmText();
+                }
+            };
+        }
+
+        function confirmText() {
+            var input = document.getElementById('textInput');
+            var text = input.value.trim();
+            
+            if (text && pendingTextPosition) {
+                addLabel(pendingTextPosition, text, 'text-label');
+                
+                // Create an invisible point feature to track the text
+                var feature = new ol.Feature({
+                    geometry: new ol.geom.Point(pendingTextPosition),
+                    featureType: 'text',
+                    labelText: text
+                });
+                feature.setStyle(new ol.style.Style({})); // Invisible
+                drawSource.addFeature(feature);
+            }
+            
+            cancelText();
+        }
+
+        function cancelText() {
+            document.getElementById('textDialog').style.display = 'none';
+            pendingTextPosition = null;
+            
+            // Re-enable text tool if still selected
+            if (currentTool === 'text') {
+                setupTextTool();
+            }
+        }
+
+        function setupTreeTool() {
+            map.on('click', handleTreeClick);
+        }
+
+        function handleTreeClick(event) {
+            if (currentTool !== 'tree') {
+                map.un('click', handleTreeClick);
+                return;
+            }
+
+            var coordinate = event.coordinate;
+            
+            // Create tree feature
+            var feature = new ol.Feature({
+                geometry: new ol.geom.Point(coordinate),
+                featureType: 'tree'
+            });
+
+            // Style as green star
+            feature.setStyle(new ol.style.Style({
+                text: new ol.style.Text({
+                    text: '★',
+                    font: '30px sans-serif',
+                    fill: new ol.style.Fill({
+                        color: '#2E7D32'
+                    }),
+                    stroke: new ol.style.Stroke({
+                        color: '#1B5E20',
+                        width: 2
+                    })
+                })
+            }));
+
+            drawSource.addFeature(feature);
+        }
+
+        function setupPondTool() {
+            currentDraw = new ol.interaction.Draw({
+                source: drawSource,
+                type: 'Polygon',
+                style: new ol.style.Style({
+                    fill: new ol.style.Fill({
+                        color: 'rgba(33, 150, 243, 0.4)'
+                    }),
+                    stroke: new ol.style.Stroke({
+                        color: '#2196F3',
+                        width: 2,
+                        lineDash: [5, 5]
+                    })
+                })
+            });
+
+            currentDraw.on('drawend', function(event) {
+                var feature = event.feature;
+
+                // Style the pond
+                feature.setStyle(new ol.style.Style({
+                    fill: new ol.style.Fill({
+                        color: 'rgba(33, 150, 243, 0.5)'
+                    }),
+                    stroke: new ol.style.Stroke({
+                        color: '#1976D2',
+                        width: 2
+                    })
+                }));
+
+                // Store feature type
+                feature.set('featureType', 'pond');
+            });
+
+            map.addInteraction(currentDraw);
+        }
+
+        function addLabel(coordinate, text, className) {
+            var element = document.createElement('div');
+            element.className = className;
+            element.textContent = text;
+
+            var overlay = new ol.Overlay({
+                element: element,
+                position: coordinate,
+                positioning: 'center-center',
+                stopEvent: false
+            });
+
+            map.addOverlay(overlay);
+            labelOverlays.push(overlay);
+        }
+
+        function clearAll() {
+            if (confirm('Are you sure you want to clear all drawings?')) {
+                drawSource.clear();
+                
+                // Remove all labels
+                labelOverlays.forEach(function(overlay) {
+                    map.removeOverlay(overlay);
+                });
+                labelOverlays = [];
+            }
+        }
+
+        function deleteSelected() {
+            if (currentSelect) {
+                var selected = currentSelect.getFeatures();
+                if (selected.getLength() > 0) {
+                    selected.forEach(function(feature) {
+                        drawSource.removeFeature(feature);
+                        
+                        // Remove associated labels (simple approach - clear and recreate)
+                        // In a production app, you'd want to track label-feature relationships
+                    });
+                    selected.clear();
+                } else {
+                    alert('No feature selected. Click on a feature first, then click Delete Selected.');
+                }
+            }
+        }
+
+        // Initialize map on load
+        window.onload = function() {
+            initMap();
+            // Set default tool
+            document.querySelector('.tool-btn').click();
+        };
+
+        // Cleanup on unload
+        window.onbeforeunload = function() {
+            if (currentTool === 'tree') {
+                map.un('click', handleTreeClick);
+            }
+        };
+    </script>
+</body>
+</html>
