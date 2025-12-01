@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fishing Tracker</title>
+    
+    <!-- OpenLayers CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            max-width: 320px;
+        }
+
+        .info-panel h2 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #0066cc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-panel .stats {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .info-panel .stat-item {
+            margin: 5px 0;
+            padding: 4px 0;
+        }
+
+        .info-panel .stat-label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .tide-info {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+        }
+
+        .tide-info h3 {
+            font-size: 13px;
+            margin-bottom: 6px;
+            color: #0066cc;
+        }
+
+        .tide-item {
+            margin: 4px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .weather-info {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+        }
+
+        .weather-info h3 {
+            font-size: 13px;
+            margin-bottom: 6px;
+            color: #0066cc;
+        }
+
+        .weather-item {
+            margin: 4px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .wind-arrow {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin-left: 5px;
+            font-size: 16px;
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-btn {
+            background: white;
+            border: 2px solid #ddd;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .control-btn:hover {
+            background: #f0f0f0;
+            border-color: #999;
+        }
+
+        .control-btn.active {
+            background: #0066cc;
+            color: white;
+            border-color: #0066cc;
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            max-width: 200px;
+        }
+
+        .legend h3 {
+            font-size: 13px;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 4px 0;
+            font-size: 11px;
+        }
+
+        .legend-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 6px;
+            border: 2px solid rgba(0,0,0,0.3);
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 2000;
+            font-size: 14px;
+            text-align: center;
+            max-width: 400px;
+            display: none;
+        }
+
+        .error {
+            background: #fee;
+            color: #c00;
+        }
+
+        .ol-popup {
+            position: absolute;
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #cccccc;
+            bottom: 12px;
+            left: -50px;
+            min-width: 280px;
+            max-width: 350px;
+        }
+
+        .ol-popup:after, .ol-popup:before {
+            top: 100%;
+            border: solid transparent;
+            content: " ";
+            height: 0;
+            width: 0;
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .ol-popup:after {
+            border-top-color: white;
+            border-width: 10px;
+            left: 48px;
+            margin-left: -10px;
+        }
+
+        .ol-popup:before {
+            border-top-color: #cccccc;
+            border-width: 11px;
+            left: 48px;
+            margin-left: -11px;
+        }
+
+        .ol-popup-closer {
+            text-decoration: none;
+            position: absolute;
+            top: 6px;
+            right: 10px;
+            font-size: 18px;
+            color: #999;
+            cursor: pointer;
+        }
+
+        .ol-popup-closer:after {
+            content: "✖";
+        }
+
+        .popup-content h3 {
+            margin-bottom: 10px;
+            color: #0066cc;
+            font-size: 15px;
+        }
+
+        .popup-detail {
+            margin: 6px 0;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .popup-detail strong {
+            color: #333;
+        }
+
+        .marker-form {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 3000;
+            display: none;
+            min-width: 300px;
+        }
+
+        .marker-form h3 {
+            margin-bottom: 15px;
+            color: #0066cc;
+        }
+
+        .marker-form input, .marker-form textarea, .marker-form select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 13px;
+        }
+
+        .marker-form textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .marker-form-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .marker-form-buttons button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .marker-form-buttons .save-btn {
+            background: #0066cc;
+            color: white;
+        }
+
+        .marker-form-buttons .cancel-btn {
+            background: #ddd;
+            color: #333;
+        }
+
+        .fishing-quality {
+            margin-top: 12px;
+            padding: 10px;
+            background: #f0f8ff;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .fishing-quality .quality-rating {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .quality-excellent { color: #22c55e; }
+        .quality-good { color: #3b82f6; }
+        .quality-fair { color: #eab308; }
+        .quality-poor { color: #ef4444; }
+
+        .current-indicator {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: rgba(33, 150, 243, 0.8);
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            z-index: 999;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.2);
+                opacity: 0.8;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="info-panel">
+        <h2>🎣 Fishing Tracker</h2>
+        <div class="stats">
+            <div class="stat-item">
+                <span class="stat-label">Fishing Spots:</span>
+                <span id="marker-count">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Location:</span>
+                <span id="location-info">Unknown</span>
+            </div>
+        </div>
+        
+        <div class="tide-info">
+            <h3>🌊 Tide Information</h3>
+            <div id="tide-data">
+                <div class="tide-item">Loading tide data...</div>
+            </div>
+        </div>
+
+        <div class="weather-info">
+            <h3>🌤️ Weather Conditions</h3>
+            <div id="weather-data">
+                <div class="weather-item">Loading weather...</div>
+            </div>
+        </div>
+
+        <div class="fishing-quality" id="fishing-quality" style="display: none;">
+            <div class="quality-rating"></div>
+            <div class="quality-details"></div>
+        </div>
+    </div>
+
+    <div class="control-panel">
+        <button class="control-btn" id="location-btn" title="Show My Location">
+            📍 My Location
+        </button>
+        <button class="control-btn" id="add-marker-btn" title="Add Fishing Spot">
+            ➕ Add Spot
+        </button>
+        <button class="control-btn" id="toggle-satellite-btn" title="Toggle Satellite View">
+            🛰️ Satellite
+        </button>
+        <button class="control-btn" id="refresh-btn" title="Refresh Data">
+            🔄 Refresh
+        </button>
+    </div>
+
+    <div class="legend">
+        <h3>Legend</h3>
+        <div class="legend-item">
+            <div class="legend-icon" style="background: #2196F3;"></div>
+            <span>Your Location</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-icon" style="background: #4CAF50;"></div>
+            <span>Fishing Spot</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-icon" style="background: #FF9800;"></div>
+            <span>Hot Spot</span>
+        </div>
+    </div>
+
+    <div class="loading" id="loading">Loading...</div>
+
+    <div class="marker-form" id="marker-form">
+        <h3>Add Fishing Spot</h3>
+        <input type="text" id="marker-name" placeholder="Spot Name" required>
+        <select id="marker-type">
+            <option value="regular">Regular Spot</option>
+            <option value="hotspot">Hot Spot</option>
+        </select>
+        <textarea id="marker-notes" placeholder="Notes (species, bait, conditions, etc.)"></textarea>
+        <div class="marker-form-buttons">
+            <button class="save-btn" id="save-marker">Save</button>
+            <button class="cancel-btn" id="cancel-marker">Cancel</button>
+        </div>
+    </div>
+
+    <div id="popup" class="ol-popup">
+        <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+        <div id="popup-content" class="popup-content"></div>
+    </div>
+
+    <!-- OpenLayers JS -->
+    <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
+    
+    <script>
+        var map;
+        var vectorSource;
+        var vectorLayer;
+        var userLocation = null;
+        var userLocationMarker = null;
+        var pendingMarkerCoords = null;
+        var isSatelliteView = false;
+        var tileLayer;
+        var satelliteLayer;
+        var fishingSpots = JSON.parse(localStorage.getItem('fishingSpots') || '[]');
+
+        // Initialize map
+        function initMap() {
+            // Create base map layer
+            tileLayer = new ol.layer.Tile({
+                source: new ol.source.OSM()
+            });
+
+            // Create satellite layer (initially hidden)
+            satelliteLayer = new ol.layer.Tile({
+                source: new ol.source.XYZ({
+                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                    maxZoom: 19
+                }),
+                visible: false
+            });
+
+            // Vector source for markers
+            vectorSource = new ol.source.Vector();
+            vectorLayer = new ol.layer.Vector({
+                source: vectorSource,
+                style: function(feature) {
+                    var type = feature.get('markerType') || 'regular';
+                    var color = type === 'hotspot' ? '#FF9800' : '#4CAF50';
+                    
+                    return new ol.style.Style({
+                        image: new ol.style.Circle({
+                            radius: 10,
+                            fill: new ol.style.Fill({ color: color }),
+                            stroke: new ol.style.Stroke({
+                                color: 'white',
+                                width: 3
+                            })
+                        })
+                    });
+                }
+            });
+
+            // Create map
+            map = new ol.Map({
+                target: 'map',
+                layers: [tileLayer, satelliteLayer, vectorLayer],
+                view: new ol.View({
+                    center: ol.proj.fromLonLat([153.0251, -27.4698]), // Brisbane, Australia
+                    zoom: 10
+                })
+            });
+
+            // Popup overlay
+            var popup = new ol.Overlay({
+                element: document.getElementById('popup'),
+                autoPan: true,
+                autoPanAnimation: {
+                    duration: 250
+                }
+            });
+            map.addOverlay(popup);
+
+            // Popup closer
+            document.getElementById('popup-closer').onclick = function() {
+                popup.setPosition(undefined);
+                this.blur();
+                return false;
+            };
+
+            // Click handler for features
+            map.on('click', function(evt) {
+                var feature = map.forEachFeatureAtPixel(evt.pixel, function(feature) {
+                    return feature;
+                });
+
+                if (feature && feature.get('name')) {
+                    var coords = feature.getGeometry().getCoordinates();
+                    var props = feature.getProperties();
+                    
+                    var content = '<h3>' + props.name + '</h3>';
+                    if (props.markerType === 'hotspot') {
+                        content += '<div class="popup-detail"><strong>Type:</strong> 🔥 Hot Spot</div>';
+                    }
+                    if (props.notes) {
+                        content += '<div class="popup-detail"><strong>Notes:</strong> ' + props.notes + '</div>';
+                    }
+                    if (props.dateAdded) {
+                        content += '<div class="popup-detail"><strong>Added:</strong> ' + new Date(props.dateAdded).toLocaleDateString() + '</div>';
+                    }
+                    content += '<div class="popup-detail" style="margin-top: 10px;"><button onclick="deleteMarker(\'' + props.id + '\')" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Delete Spot</button></div>';
+                    
+                    document.getElementById('popup-content').innerHTML = content;
+                    popup.setPosition(coords);
+                } else {
+                    popup.setPosition(undefined);
+                }
+            });
+
+            // Load saved fishing spots
+            loadFishingSpots();
+        }
+
+        // Get user location
+        function getUserLocation() {
+            var loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            loading.textContent = 'Getting your location...';
+
+            if (!navigator.geolocation) {
+                loading.classList.add('error');
+                loading.textContent = 'Geolocation is not supported by your browser';
+                setTimeout(function() { loading.style.display = 'none'; }, 3000);
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    userLocation = {
+                        lat: position.coords.latitude,
+                        lon: position.coords.longitude
+                    };
+
+                    var coords = ol.proj.fromLonLat([userLocation.lon, userLocation.lat]);
+
+                    // Remove old user location marker
+                    if (userLocationMarker) {
+                        vectorSource.removeFeature(userLocationMarker);
+                    }
+
+                    // Add new user location marker
+                    userLocationMarker = new ol.Feature({
+                        geometry: new ol.geom.Point(coords),
+                        type: 'user-location'
+                    });
+
+                    userLocationMarker.setStyle(new ol.style.Style({
+                        image: new ol.style.Circle({
+                            radius: 12,
+                            fill: new ol.style.Fill({ color: 'rgba(33, 150, 243, 0.8)' }),
+                            stroke: new ol.style.Stroke({
+                                color: 'white',
+                                width: 3
+                            })
+                        })
+                    }));
+
+                    vectorSource.addFeature(userLocationMarker);
+
+                    // Center map on user location
+                    map.getView().animate({
+                        center: coords,
+                        zoom: 13,
+                        duration: 1000
+                    });
+
+                    // Update location info
+                    document.getElementById('location-info').textContent = 
+                        userLocation.lat.toFixed(4) + ', ' + userLocation.lon.toFixed(4);
+
+                    // Fetch weather and tide data
+                    fetchWeatherData(userLocation.lat, userLocation.lon);
+                    fetchTideData(userLocation.lat, userLocation.lon);
+
+                    loading.style.display = 'none';
+                },
+                function(error) {
+                    loading.classList.add('error');
+                    loading.textContent = 'Unable to get your location: ' + error.message;
+                    setTimeout(function() { loading.style.display = 'none'; }, 3000);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        // Fetch weather data
+        function fetchWeatherData(lat, lon) {
+            var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + 
+                      '&longitude=' + lon + 
+                      '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,weather_code' +
+                      '&hourly=wave_height,wave_direction' +
+                      '&timezone=auto';
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    var current = data.current;
+                    var html = '';
+                    
+                    html += '<div class="weather-item">';
+                    html += '<span>🌡️ Temp: ' + current.temperature_2m + '°C</span>';
+                    html += '</div>';
+                    
+                    html += '<div class="weather-item">';
+                    html += '<span>💨 Wind: ' + current.wind_speed_10m + ' km/h</span>';
+                    html += '<span class="wind-arrow" style="transform: rotate(' + current.wind_direction_10m + 'deg);">↑</span>';
+                    html += '</div>';
+                    
+                    html += '<div class="weather-item">';
+                    html += '<span>💧 Humidity: ' + current.relative_humidity_2m + '%</span>';
+                    html += '</div>';
+
+                    if (data.hourly && data.hourly.wave_height && data.hourly.wave_height[0]) {
+                        html += '<div class="weather-item">';
+                        html += '<span>🌊 Wave Height: ' + data.hourly.wave_height[0] + 'm</span>';
+                        html += '</div>';
+                    }
+
+                    document.getElementById('weather-data').innerHTML = html;
+
+                    // Calculate fishing quality
+                    calculateFishingQuality(current);
+                })
+                .catch(error => {
+                    console.error('Weather fetch error:', error);
+                    document.getElementById('weather-data').innerHTML = 
+                        '<div class="weather-item">Unable to load weather data</div>';
+                });
+        }
+
+        // Calculate fishing quality based on conditions
+        function calculateFishingQuality(weather) {
+            var score = 0;
+            var factors = [];
+
+            // Temperature (ideal: 15-25°C)
+            var temp = weather.temperature_2m;
+            if (temp >= 15 && temp <= 25) {
+                score += 30;
+                factors.push('Good temperature');
+            } else if (temp < 10 || temp > 30) {
+                factors.push('Extreme temperature');
+            } else {
+                score += 15;
+            }
+
+            // Wind speed (ideal: 5-20 km/h)
+            var wind = weather.wind_speed_10m;
+            if (wind >= 5 && wind <= 20) {
+                score += 30;
+                factors.push('Ideal wind');
+            } else if (wind > 30) {
+                factors.push('Strong winds');
+            } else {
+                score += 15;
+            }
+
+            // Humidity (ideal: 40-70%)
+            var humidity = weather.relative_humidity_2m;
+            if (humidity >= 40 && humidity <= 70) {
+                score += 20;
+            }
+
+            // General conditions bonus
+            score += 20;
+
+            var quality, qualityClass, emoji;
+            if (score >= 80) {
+                quality = 'Excellent';
+                qualityClass = 'quality-excellent';
+                emoji = '🎣✨';
+            } else if (score >= 60) {
+                quality = 'Good';
+                qualityClass = 'quality-good';
+                emoji = '🎣';
+            } else if (score >= 40) {
+                quality = 'Fair';
+                qualityClass = 'quality-fair';
+                emoji = '🎣';
+            } else {
+                quality = 'Poor';
+                qualityClass = 'quality-poor';
+                emoji = '⚠️';
+            }
+
+            var qualityDiv = document.getElementById('fishing-quality');
+            qualityDiv.style.display = 'block';
+            qualityDiv.querySelector('.quality-rating').innerHTML = 
+                '<span class="' + qualityClass + '">' + emoji + ' Fishing Conditions: ' + quality + '</span>';
+            qualityDiv.querySelector('.quality-details').textContent = 
+                factors.join(' • ') || 'Conditions evaluated';
+        }
+
+        // Fetch tide data (using approximate calculation)
+        function fetchTideData(lat, lon) {
+            // Note: Real tide data requires specialized APIs (like NOAA, Stormglass, etc.)
+            // This is a simplified version showing the concept
+            
+            var now = new Date();
+            var hours = now.getHours();
+            var minutes = now.getMinutes();
+            
+            // Simplified tide calculation (real tides are much more complex)
+            var tidePhase = (hours + minutes/60) / 6.21; // Approximate 12.42 hour cycle
+            var currentHeight = Math.sin(tidePhase * Math.PI) * 2 + 2; // 0-4 meter range
+            
+            var isRising = Math.cos(tidePhase * Math.PI) > 0;
+            var tideState = isRising ? 'Rising' : 'Falling';
+            
+            var nextChange = isRising ? 'High' : 'Low';
+            var hoursToChange = (6.21 - (tidePhase % 1) * 6.21).toFixed(1);
+            
+            var html = '';
+            html += '<div class="tide-item">';
+            html += '<span>Current: ' + currentHeight.toFixed(1) + 'm (' + tideState + ')</span>';
+            html += '</div>';
+            html += '<div class="tide-item">';
+            html += '<span>Next ' + nextChange + ' Tide: ~' + hoursToChange + 'h</span>';
+            html += '</div>';
+            html += '<div class="tide-item" style="font-size: 10px; color: #999; margin-top: 6px;">';
+            html += '<span>Note: Approximate data. Check local tide charts for accuracy.</span>';
+            html += '</div>';
+            
+            document.getElementById('tide-data').innerHTML = html;
+        }
+
+        // Add marker mode
+        function addMarkerMode() {
+            var btn = document.getElementById('add-marker-btn');
+            
+            if (btn.classList.contains('active')) {
+                btn.classList.remove('active');
+                map.un('click', onMapClick);
+            } else {
+                btn.classList.add('active');
+                alert('Click on the map to place a fishing spot marker');
+                map.on('click', onMapClick);
+            }
+        }
+
+        function onMapClick(evt) {
+            var btn = document.getElementById('add-marker-btn');
+            btn.classList.remove('active');
+            map.un('click', onMapClick);
+            
+            pendingMarkerCoords = evt.coordinate;
+            document.getElementById('marker-form').style.display = 'block';
+        }
+
+        // Save marker
+        function saveMarker() {
+            var name = document.getElementById('marker-name').value.trim();
+            var type = document.getElementById('marker-type').value;
+            var notes = document.getElementById('marker-notes').value.trim();
+            
+            if (!name) {
+                alert('Please enter a spot name');
+                return;
+            }
+            
+            var lonLat = ol.proj.toLonLat(pendingMarkerCoords);
+            var marker = {
+                id: Date.now().toString(),
+                name: name,
+                type: type,
+                notes: notes,
+                lon: lonLat[0],
+                lat: lonLat[1],
+                dateAdded: new Date().toISOString()
+            };
+            
+            fishingSpots.push(marker);
+            localStorage.setItem('fishingSpots', JSON.stringify(fishingSpots));
+            
+            addMarkerToMap(marker);
+            closeMarkerForm();
+            updateMarkerCount();
+        }
+
+        function closeMarkerForm() {
+            document.getElementById('marker-form').style.display = 'none';
+            document.getElementById('marker-name').value = '';
+            document.getElementById('marker-type').value = 'regular';
+            document.getElementById('marker-notes').value = '';
+            pendingMarkerCoords = null;
+        }
+
+        function addMarkerToMap(marker) {
+            var coords = ol.proj.fromLonLat([marker.lon, marker.lat]);
+            
+            var feature = new ol.Feature({
+                geometry: new ol.geom.Point(coords),
+                id: marker.id,
+                name: marker.name,
+                markerType: marker.type,
+                notes: marker.notes,
+                dateAdded: marker.dateAdded
+            });
+            
+            vectorSource.addFeature(feature);
+        }
+
+        function loadFishingSpots() {
+            fishingSpots.forEach(function(marker) {
+                addMarkerToMap(marker);
+            });
+            updateMarkerCount();
+        }
+
+        function deleteMarker(id) {
+            if (!confirm('Delete this fishing spot?')) return;
+            
+            fishingSpots = fishingSpots.filter(m => m.id !== id);
+            localStorage.setItem('fishingSpots', JSON.stringify(fishingSpots));
+            
+            var features = vectorSource.getFeatures();
+            var featureToRemove = features.find(f => f.get('id') === id);
+            if (featureToRemove) {
+                vectorSource.removeFeature(featureToRemove);
+            }
+            
+            document.getElementById('popup-closer').click();
+            updateMarkerCount();
+        }
+
+        function updateMarkerCount() {
+            document.getElementById('marker-count').textContent = fishingSpots.length;
+        }
+
+        function toggleSatellite() {
+            isSatelliteView = !isSatelliteView;
+            tileLayer.setVisible(!isSatelliteView);
+            satelliteLayer.setVisible(isSatelliteView);
+            
+            var btn = document.getElementById('toggle-satellite-btn');
+            if (isSatelliteView) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        }
+
+        function refreshData() {
+            if (userLocation) {
+                fetchWeatherData(userLocation.lat, userLocation.lon);
+                fetchTideData(userLocation.lat, userLocation.lon);
+            } else {
+                alert('Get your location first to refresh weather and tide data');
+            }
+        }
+
+        // Event listeners
+        document.getElementById('location-btn').addEventListener('click', getUserLocation);
+        document.getElementById('add-marker-btn').addEventListener('click', addMarkerMode);
+        document.getElementById('toggle-satellite-btn').addEventListener('click', toggleSatellite);
+        document.getElementById('refresh-btn').addEventListener('click', refreshData);
+        document.getElementById('save-marker').addEventListener('click', saveMarker);
+        document.getElementById('cancel-marker').addEventListener('click', closeMarkerForm);
+
+        // Initialize
+        initMap();
+        
+        // Auto-get location on load
+        setTimeout(getUserLocation, 500);
+    </script>
+</body>
+</html>
