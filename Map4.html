@@ -3,405 +3,450 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QLD Property Viewer</title>
+    <title>QLD Property Viewer - Shapefile Support</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
     <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            font-family: Arial, sans-serif;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; overflow: hidden; }
+        #map { width: 100vw; height: 100vh; }
         
-        #map {
+        .panel {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-        
-        .control-panel {
-            position: absolute;
-            top: 10px;
-            right: 10px;
             background: white;
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
             z-index: 1000;
-            width: 200px;
         }
         
-        .control-panel h3 {
-            margin: 0 0 10px 0;
-            font-size: 16px;
-        }
+        .info { top: 10px; left: 10px; max-width: 320px; }
+        .info h2 { font-size: 16px; margin-bottom: 8px; color: #333; }
+        .info p { font-size: 13px; color: #666; margin: 5px 0; line-height: 1.4; }
+        .info .note { background: #e7f3ff; padding: 8px; border-radius: 4px; margin-top: 8px; font-size: 12px; color: #004085; }
         
-        .control-panel button {
+        .controls { top: 10px; right: 10px; }
+        .controls label {
+            display: block;
+            font-size: 13px;
+            margin: 8px 0 4px 0;
+            color: #333;
+        }
+        .controls input[type="range"] {
             width: 100%;
-            padding: 12px;
-            margin: 5px 0;
+        }
+        .controls .value {
+            font-size: 11px;
+            color: #666;
+        }
+        .controls button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0 5px 0;
             background: #2196F3;
             color: white;
             border: none;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
+            font-size: 13px;
         }
+        .controls button:hover { background: #1976D2; }
         
-        .control-panel button:active {
-            background: #1976D2;
-        }
-        
-        .control-panel button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        
-        .search-panel {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            z-index: 1000;
-            width: 300px;
-        }
-        
-        .search-panel input {
+        .search { top: 160px; left: 10px; width: 300px; }
+        .search input {
             width: 100%;
-            padding: 10px;
+            padding: 8px;
             border: 2px solid #ddd;
             border-radius: 6px;
-            font-size: 14px;
-            margin-bottom: 10px;
-            box-sizing: border-box;
+            font-size: 13px;
         }
-        
-        .search-panel button {
+        .search button {
             width: 100%;
-            padding: 10px;
-            background: #4CAF50;
+            margin-top: 8px;
+            padding: 8px;
+            background: #2196F3;
             color: white;
             border: none;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
         }
         
-        .status {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            background: white;
-            padding: 12px 15px;
+        .file-upload { top: 260px; left: 10px; width: 300px; }
+        .file-upload input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border: 2px dashed #2196F3;
             border-radius: 6px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            z-index: 1000;
-            font-size: 13px;
-            max-width: 300px;
-        }
-        
-        .status.loading { background: #fff9c4; }
-        .status.success { background: #c8e6c9; }
-        .status.error { background: #ffcdd2; }
-        
-        .info {
-            position: absolute;
-            top: 200px;
-            left: 10px;
-            background: #e3f2fd;
-            padding: 12px;
-            border-radius: 6px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            z-index: 1000;
             font-size: 12px;
-            max-width: 280px;
+            cursor: pointer;
+            background: white;
+        }
+        .file-upload .hint {
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+            line-height: 1.4;
         }
         
-        .ol-popup {
+        .status { bottom: 10px; left: 10px; padding: 8px 12px; font-size: 12px; max-width: 300px; }
+        
+        .popup {
             position: absolute;
-            background-color: white;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            background: white;
             padding: 15px;
-            border-radius: 10px;
-            border: 1px solid #cccccc;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            min-width: 300px;
+            max-width: 400px;
             bottom: 12px;
             left: -50px;
-            min-width: 280px;
+            z-index: 1001;
+            max-height: 400px;
+            overflow-y: auto;
         }
-        
-        .ol-popup:after {
-            top: 100%;
-            border: solid transparent;
-            content: " ";
-            height: 0;
-            width: 0;
+        .popup-closer {
             position: absolute;
-            pointer-events: none;
-            border-top-color: white;
-            border-width: 10px;
-            left: 48px;
-            margin-left: -10px;
-        }
-        
-        .ol-popup-closer {
-            text-decoration: none;
-            position: absolute;
-            top: 2px;
+            top: 5px;
             right: 8px;
+            cursor: pointer;
             font-size: 20px;
             color: #999;
         }
-        
-        .ol-popup-closer:hover {
-            color: #333;
-        }
-        
-        .popup-content h4 {
-            margin: 0 0 10px 0;
-            font-size: 14px;
-        }
-        
-        .popup-content .detail {
-            margin: 5px 0;
-            font-size: 13px;
-        }
-        
-        .popup-content .detail strong {
-            font-weight: 600;
-        }
+        .popup-closer:hover { color: #333; }
+        .popup h3 { font-size: 15px; margin-bottom: 10px; color: #333; }
+        .popup .detail { font-size: 13px; margin: 6px 0; color: #555; line-height: 1.4; }
+        .popup .detail strong { color: #333; }
     </style>
 </head>
 <body>
     <div id="map"></div>
     
-    <div class="search-panel">
-        <h3 style="margin: 0 0 10px 0; font-size: 16px;">🔍 Search Address</h3>
-        <input type="text" id="searchInput" placeholder="e.g., Brisbane CBD">
-        <button onclick="searchAndLoad()">Search & Load</button>
+    <div class="panel info">
+        <h2>🗺️ QLD Property Viewer</h2>
+        <p>Load cadastral data from Shapefile or GeoJSON</p>
+        <div class="note">
+            <strong>Supported formats:</strong><br>
+            • Shapefile (.zip containing .shp, .dbf, .shx)<br>
+            • GeoJSON (.geojson, .json)<br>
+            <br>
+            <strong>Download from QLD:</strong><br>
+            Choose "Shapefile - SHP" format and upload the .zip file below
+        </div>
     </div>
     
-    <div class="control-panel">
-        <h3>🗺️ Controls</h3>
-        <button onclick="loadBrisbane()">🎯 Load Brisbane</button>
-        <button id="loadBtn" onclick="loadProperties()" disabled>📥 Load Properties</button>
-        <button onclick="clearMap()">🗑️ Clear Map</button>
+    <div class="panel controls">
+        <label>Boundary Opacity: <span id="opacityValue" class="value">80%</span></label>
+        <input type="range" id="opacitySlider" min="10" max="100" value="80">
+        
+        <label>Boundary Color:</label>
+        <select id="colorSelect" style="width:100%; padding:8px; border-radius:4px; margin-bottom:10px;">
+            <option value="#e74c3c">Red</option>
+            <option value="#3498db">Blue</option>
+            <option value="#2ecc71">Green</option>
+            <option value="#f39c12">Orange</option>
+            <option value="#9b59b6">Purple</option>
+            <option value="#000000" selected>Black</option>
+        </select>
+        
+        <button id="locateBtn">📍 Find My Location</button>
+        <button id="fitBtn">🔍 Zoom to Data</button>
     </div>
     
-    <div class="info">
-        <strong>💡 How to use:</strong><br>
-        1. Click "Load Brisbane" to test<br>
-        2. Or search for your address<br>
-        3. Pink lines = property boundaries<br>
-        4. Click any boundary for details
+    <div class="panel search">
+        <input type="text" id="search" placeholder="Search address..." />
+        <button id="searchBtn">Search</button>
     </div>
     
-    <div id="status" class="status">Ready</div>
+    <div class="panel file-upload">
+        <input type="file" id="fileInput" accept=".zip,.geojson,.json,.shp" />
+        <div class="hint">
+            <strong>Upload:</strong> Shapefile (.zip) or GeoJSON (.geojson)<br>
+            The .zip should contain .shp, .dbf, and .shx files
+        </div>
+    </div>
     
-    <div id="popup" class="ol-popup" style="display:none;">
-        <a href="#" id="popup-closer" class="ol-popup-closer">×</a>
-        <div id="popup-content" class="popup-content"></div>
+    <div class="panel status" id="status">Ready - Upload cadastral data</div>
+    
+    <div id="popup" class="popup" style="display:none;">
+        <span class="popup-closer" id="closer">✖</span>
+        <div id="popup-content"></div>
     </div>
 
+    <!-- OpenLayers -->
     <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
+    
+    <!-- Shapefile.js for parsing shapefiles -->
+    <script src="https://unpkg.com/shapefile@0.6.6/dist/shapefile.js"></script>
+    
+    <!-- JSZip for handling zip files -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    
     <script>
-        console.log('Initializing map...');
-        
-        var map, vectorSource, vectorLayer, markerSource;
+        var map, cadastralLayer, vectorSource;
+        var popup = document.getElementById('popup');
+        var popupContent = document.getElementById('popup-content');
         var statusEl = document.getElementById('status');
-        var loadBtn = document.getElementById('loadBtn');
-        
-        // Setup popup
-        var container = document.getElementById('popup');
-        var content = document.getElementById('popup-content');
-        var closer = document.getElementById('popup-closer');
         
         var overlay = new ol.Overlay({
-            element: container,
+            element: popup,
             autoPan: { animation: { duration: 250 } }
         });
         
-        closer.onclick = function() {
-            container.style.display = 'none';
-            return false;
+        document.getElementById('closer').onclick = function() {
+            popup.style.display = 'none';
         };
         
-        try {
-            // Vector source for properties
-            vectorSource = new ol.source.Vector();
-            
-            // Vector layer with pink styling
-            vectorLayer = new ol.layer.Vector({
-                source: vectorSource,
-                style: new ol.style.Style({
+        // Base map
+        var baseLayer = new ol.layer.Tile({
+            source: new ol.source.OSM()
+        });
+        
+        // Vector source for cadastral data
+        vectorSource = new ol.source.Vector();
+        
+        // Cadastral layer
+        cadastralLayer = new ol.layer.Vector({
+            source: vectorSource,
+            style: function(feature) {
+                return new ol.style.Style({
                     stroke: new ol.style.Stroke({
-                        color: '#e91e63',
+                        color: document.getElementById('colorSelect').value,
                         width: 2
                     }),
                     fill: new ol.style.Fill({
-                        color: 'rgba(233, 30, 99, 0.1)'
+                        color: 'rgba(0, 0, 0, 0.05)'
                     })
-                })
-            });
-            
-            // Marker source
-            markerSource = new ol.source.Vector();
-            var markerLayer = new ol.layer.Vector({
-                source: markerSource,
-                style: new ol.style.Style({
-                    image: new ol.style.Circle({
-                        radius: 8,
-                        fill: new ol.style.Fill({ color: '#2196F3' }),
-                        stroke: new ol.style.Stroke({ color: 'white', width: 3 })
-                    })
-                })
-            });
-            
-            // Create map
-            map = new ol.Map({
-                target: 'map',
-                layers: [
-                    new ol.layer.Tile({
-                        source: new ol.source.OSM()
-                    }),
-                    vectorLayer,
-                    markerLayer
-                ],
-                overlays: [overlay],
-                view: new ol.View({
-                    center: ol.proj.fromLonLat([153.025, -27.470]),
-                    zoom: 12
-                })
-            });
-            
-            console.log('Map created successfully');
-            
-            // Enable load button when zoomed in
-            map.getView().on('change:resolution', function() {
-                var zoom = map.getView().getZoom();
-                if (zoom >= 14) {
-                    loadBtn.disabled = false;
-                } else {
-                    loadBtn.disabled = true;
-                }
-            });
-            
-            // Click handler
-            map.on('singleclick', function(evt) {
-                var features = map.getFeaturesAtPixel(evt.pixel);
-                
-                if (features && features.length > 0) {
-                    var feature = features[0];
-                    var props = feature.getProperties();
-                    
-                    var html = '<h4>📋 Property Details</h4>';
-                    
-                    if (props.LOT) html += '<div class="detail"><strong>Lot:</strong> ' + props.LOT + '</div>';
-                    if (props.PLAN) html += '<div class="detail"><strong>Plan:</strong> ' + props.PLAN + '</div>';
-                    if (props.AREA_SQMS) {
-                        var ha = (props.AREA_SQMS / 10000).toFixed(2);
-                        html += '<div class="detail"><strong>Area:</strong> ' + props.AREA_SQMS.toLocaleString() + ' m² (' + ha + ' ha)</div>';
-                    }
-                    if (props.LOCALITY) html += '<div class="detail"><strong>Locality:</strong> ' + props.LOCALITY + '</div>';
-                    if (props.LOCAL_GOVERNMENT_AREA) html += '<div class="detail"><strong>LGA:</strong> ' + props.LOCAL_GOVERNMENT_AREA + '</div>';
-                    
-                    content.innerHTML = html;
-                    container.style.display = 'block';
-                    overlay.setPosition(evt.coordinate);
-                }
-            });
-            
-            // Cursor change on hover
-            map.on('pointermove', function(evt) {
-                var hit = map.hasFeatureAtPixel(evt.pixel);
-                map.getTarget().style.cursor = hit ? 'pointer' : '';
-            });
-            
-        } catch (error) {
-            console.error('Error initializing map:', error);
-            statusEl.textContent = 'Error: ' + error.message;
-            statusEl.className = 'status error';
-        }
-        
-        function setStatus(message, type) {
-            statusEl.textContent = message;
-            statusEl.className = 'status ' + (type || '');
-        }
-        
-        function loadProperties() {
-            var zoom = map.getView().getZoom();
-            if (zoom < 14) {
-                setStatus('Zoom to 14+ first', 'error');
-                return;
-            }
-            
-            setStatus('Loading properties...', 'loading');
-            loadBtn.disabled = true;
-            
-            var extent = map.getView().calculateExtent(map.getSize());
-            var bottomLeft = ol.proj.toLonLat([extent[0], extent[1]]);
-            var topRight = ol.proj.toLonLat([extent[2], extent[3]]);
-            var bbox = bottomLeft[0] + ',' + bottomLeft[1] + ',' + topRight[0] + ',' + topRight[1];
-            
-            var url = 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/LandParcelPropertyFramework/MapServer/4/query?' +
-                     'geometry=' + encodeURIComponent(bbox) + '&' +
-                     'geometryType=esriGeometryEnvelope&' +
-                     'spatialRel=esriSpatialRelIntersects&' +
-                     'outFields=*&' +
-                     'returnGeometry=true&' +
-                     'f=geojson';
-            
-            fetch(url)
-                .then(r => r.json())
-                .then(data => {
-                    if (!data.features || data.features.length === 0) {
-                        setStatus('No properties found', 'error');
-                        loadBtn.disabled = false;
-                        return;
-                    }
-                    
-                    var features = new ol.format.GeoJSON().readFeatures(data, {
-                        dataProjection: 'EPSG:4326',
-                        featureProjection: 'EPSG:3857'
-                    });
-                    
-                    vectorSource.addFeatures(features);
-                    setStatus('✓ Loaded ' + features.length + ' properties', 'success');
-                    loadBtn.disabled = false;
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    setStatus('Error loading data', 'error');
-                    loadBtn.disabled = false;
                 });
+            },
+            opacity: 0.8
+        });
+        
+        // User location marker
+        var markerSource = new ol.source.Vector();
+        var markerLayer = new ol.layer.Vector({
+            source: markerSource,
+            style: new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 8,
+                    fill: new ol.style.Fill({ color: '#2196F3' }),
+                    stroke: new ol.style.Stroke({ color: 'white', width: 3 })
+                })
+            })
+        });
+        
+        // Create map
+        map = new ol.Map({
+            target: 'map',
+            layers: [baseLayer, cadastralLayer, markerLayer],
+            overlays: [overlay],
+            view: new ol.View({
+                center: ol.proj.fromLonLat([153.025, -27.470]),
+                zoom: 12
+            })
+        });
+        
+        // Function to process GeoJSON
+        function processGeoJSON(geojsonData) {
+            try {
+                statusEl.textContent = 'Processing GeoJSON data...';
+                statusEl.style.background = '#fff3cd';
+                
+                var features = new ol.format.GeoJSON().readFeatures(geojsonData, {
+                    featureProjection: 'EPSG:3857'
+                });
+                
+                if (features.length === 0) {
+                    statusEl.textContent = '⚠️ No features found in GeoJSON';
+                    statusEl.style.background = '#fff3cd';
+                    return;
+                }
+                
+                vectorSource.clear();
+                vectorSource.addFeatures(features);
+                
+                statusEl.textContent = '✓ Loaded ' + features.length.toLocaleString() + ' properties';
+                statusEl.style.background = '#d4edda';
+                
+                // Zoom to data extent
+                var extent = vectorSource.getExtent();
+                map.getView().fit(extent, {
+                    padding: [50, 50, 50, 50],
+                    maxZoom: 16,
+                    duration: 1000
+                });
+                
+                console.log('Loaded', features.length, 'GeoJSON features');
+            } catch (error) {
+                console.error('Error processing GeoJSON:', error);
+                statusEl.textContent = '❌ Error processing GeoJSON: ' + error.message;
+                statusEl.style.background = '#f8d7da';
+            }
         }
         
-        function loadBrisbane() {
-            setStatus('Moving to Brisbane...', 'loading');
-            map.getView().animate({
-                center: ol.proj.fromLonLat([153.0251, -27.4698]),
-                zoom: 17,
-                duration: 1000
-            });
+        // Function to process Shapefile from zip
+        async function processShapefileZip(zipFile) {
+            try {
+                statusEl.textContent = 'Extracting Shapefile from zip...';
+                statusEl.style.background = '#fff3cd';
+                
+                var zip = await JSZip.loadAsync(zipFile);
+                
+                // Find the required shapefile components
+                var shpFile = null, dbfFile = null;
+                
+                zip.forEach(function(relativePath, file) {
+                    var lowerPath = relativePath.toLowerCase();
+                    if (lowerPath.endsWith('.shp') && !lowerPath.includes('__macosx')) {
+                        shpFile = file;
+                    } else if (lowerPath.endsWith('.dbf') && !lowerPath.includes('__macosx')) {
+                        dbfFile = file;
+                    }
+                });
+                
+                if (!shpFile) {
+                    throw new Error('No .shp file found in zip');
+                }
+                if (!dbfFile) {
+                    throw new Error('No .dbf file found in zip');
+                }
+                
+                statusEl.textContent = 'Reading Shapefile data...';
+                
+                // Get the file contents as ArrayBuffers
+                var shpBuffer = await shpFile.async('arraybuffer');
+                var dbfBuffer = await dbfFile.async('arraybuffer');
+                
+                // Parse the shapefile using shapefile.js
+                statusEl.textContent = 'Parsing Shapefile...';
+                
+                var geojsonFeatures = [];
+                var featureCount = 0;
+                
+                await shapefile.open(shpBuffer, dbfBuffer)
+                    .then(source => source.read()
+                        .then(function log(result) {
+                            if (result.done) return;
+                            geojsonFeatures.push(result.value);
+                            featureCount++;
+                            if (featureCount % 100 === 0) {
+                                statusEl.textContent = 'Loaded ' + featureCount + ' features...';
+                            }
+                            return source.read().then(log);
+                        })
+                    );
+                
+                if (geojsonFeatures.length === 0) {
+                    throw new Error('No features found in Shapefile');
+                }
+                
+                // Convert to OpenLayers features
+                statusEl.textContent = 'Converting to map features...';
+                
+                var geojson = {
+                    type: 'FeatureCollection',
+                    features: geojsonFeatures
+                };
+                
+                processGeoJSON(geojson);
+                
+            } catch (error) {
+                console.error('Error processing Shapefile:', error);
+                statusEl.textContent = '❌ Error: ' + error.message;
+                statusEl.style.background = '#f8d7da';
+            }
+        }
+        
+        // File upload handler
+        document.getElementById('fileInput').addEventListener('change', async function(e) {
+            var file = e.target.files[0];
+            if (!file) return;
             
-            setTimeout(function() {
-                loadProperties();
-            }, 1200);
-        }
+            var fileName = file.name.toLowerCase();
+            
+            if (fileName.endsWith('.zip')) {
+                // Handle Shapefile zip
+                statusEl.textContent = 'Loading Shapefile zip...';
+                statusEl.style.background = '#fff3cd';
+                await processShapefileZip(file);
+                
+            } else if (fileName.endsWith('.geojson') || fileName.endsWith('.json')) {
+                // Handle GeoJSON
+                statusEl.textContent = 'Loading GeoJSON...';
+                statusEl.style.background = '#fff3cd';
+                
+                var reader = new FileReader();
+                reader.onload = function(event) {
+                    try {
+                        var geojsonData = JSON.parse(event.target.result);
+                        processGeoJSON(geojsonData);
+                    } catch (error) {
+                        statusEl.textContent = '❌ Invalid GeoJSON file';
+                        statusEl.style.background = '#f8d7da';
+                    }
+                };
+                reader.readAsText(file);
+                
+            } else if (fileName.endsWith('.shp')) {
+                statusEl.textContent = '❌ Please upload the Shapefile as a .zip file containing all components (.shp, .dbf, .shx)';
+                statusEl.style.background = '#f8d7da';
+            } else {
+                statusEl.textContent = '❌ Unsupported file format. Use .zip (Shapefile) or .geojson';
+                statusEl.style.background = '#f8d7da';
+            }
+        });
         
-        function searchAndLoad() {
-            var query = document.getElementById('searchInput').value.trim();
+        // Opacity control
+        document.getElementById('opacitySlider').addEventListener('input', function(e) {
+            var opacity = e.target.value / 100;
+            cadastralLayer.setOpacity(opacity);
+            document.getElementById('opacityValue').textContent = e.target.value + '%';
+        });
+        
+        // Color control
+        document.getElementById('colorSelect').addEventListener('change', function() {
+            cadastralLayer.changed();
+        });
+        
+        // Location button
+        document.getElementById('locateBtn').onclick = function() {
+            if (navigator.geolocation) {
+                statusEl.textContent = 'Getting location...';
+                navigator.geolocation.getCurrentPosition(function(pos) {
+                    var coords = ol.proj.fromLonLat([pos.coords.longitude, pos.coords.latitude]);
+                    map.getView().animate({ center: coords, zoom: 17, duration: 1000 });
+                    
+                    markerSource.clear();
+                    markerSource.addFeature(new ol.Feature({
+                        geometry: new ol.geom.Point(coords)
+                    }));
+                    
+                    statusEl.textContent = 'Location found';
+                    statusEl.style.background = '#d4edda';
+                }, function() {
+                    statusEl.textContent = 'Could not get location';
+                    statusEl.style.background = '#f8d7da';
+                });
+            }
+        };
+        
+        // Fit to data button
+        document.getElementById('fitBtn').onclick = function() {
+            if (vectorSource.getFeatures().length > 0) {
+                var extent = vectorSource.getExtent();
+                map.getView().fit(extent, {
+                    padding: [50, 50, 50, 50],
+                    maxZoom: 16,
+                    duration: 1000
+                });
+            }
+        };
+        
+        // Search
+        document.getElementById('searchBtn').onclick = function() {
+            var query = document.getElementById('search').value.trim();
             if (!query) return;
             
-            setStatus('Searching...', 'loading');
+            statusEl.textContent = 'Searching...';
             
             fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + 
                   encodeURIComponent(query + ', Queensland, Australia') + '&limit=1')
@@ -409,43 +454,118 @@
                 .then(data => {
                     if (data && data.length > 0) {
                         var coords = ol.proj.fromLonLat([parseFloat(data[0].lon), parseFloat(data[0].lat)]);
-                        
-                        map.getView().animate({
-                            center: coords,
-                            zoom: 17,
-                            duration: 1000
-                        });
+                        map.getView().animate({ center: coords, zoom: 17, duration: 1000 });
                         
                         markerSource.clear();
-                        markerSource.addFeature(new ol.Feature({
-                            geometry: new ol.geom.Point(coords)
+                        markerSource.addFeature(new ol.Feature({ 
+                            geometry: new ol.geom.Point(coords) 
                         }));
                         
-                        setTimeout(function() {
-                            loadProperties();
-                        }, 1200);
+                        statusEl.textContent = 'Location found';
+                        statusEl.style.background = '#d4edda';
                     } else {
-                        setStatus('Not found', 'error');
+                        statusEl.textContent = 'Location not found';
+                        statusEl.style.background = '#fff3cd';
                     }
                 })
-                .catch(() => {
-                    setStatus('Search error', 'error');
+                .catch(error => {
+                    statusEl.textContent = 'Search error';
+                    statusEl.style.background = '#f8d7da';
                 });
-        }
+        };
         
-        function clearMap() {
-            vectorSource.clear();
-            markerSource.clear();
-            container.style.display = 'none';
-            setStatus('Map cleared', '');
-        }
+        document.getElementById('search').onkeypress = function(e) {
+            if (e.key === 'Enter') document.getElementById('searchBtn').click();
+        };
         
-        // Search on Enter key
-        document.getElementById('searchInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') searchAndLoad();
+        // Click to get property info
+        map.on('singleclick', function(evt) {
+            var feature = map.forEachFeatureAtPixel(evt.pixel, function(feature) {
+                return feature;
+            }, {
+                layerFilter: function(layer) {
+                    return layer === cadastralLayer;
+                }
+            });
+            
+            if (feature) {
+                var props = feature.getProperties();
+                var html = '<h3>📋 Property Information</h3>';
+                
+                // Common property field names (handle both uppercase and lowercase)
+                var fieldMappings = {
+                    'LOT': ['LOT', 'lot', 'Lot'],
+                    'PLAN': ['PLAN', 'plan', 'Plan'],
+                    'LOTPLAN': ['LOTPLAN', 'lotplan', 'LotPlan', 'LOT_PLAN'],
+                    'AREA_SQMS': ['AREA_SQMS', 'area_sqms', 'AREA', 'area', 'Area'],
+                    'LOCALITY': ['LOCALITY', 'locality', 'Locality'],
+                    'LGA': ['LOCAL_GOVERNMENT_AREA', 'LGA', 'lga', 'Lga'],
+                    'TENURE': ['TENURE', 'tenure', 'Tenure'],
+                    'PARCEL_TYPE': ['PARCEL_TYPE', 'parcel_type', 'ParcelType'],
+                    'LAND_TYPE': ['LAND_TYPE', 'land_type', 'LandType']
+                };
+                
+                var displayFields = {
+                    'LOT': 'Lot',
+                    'PLAN': 'Plan',
+                    'LOTPLAN': 'Lot/Plan',
+                    'AREA_SQMS': 'Area',
+                    'LOCALITY': 'Locality',
+                    'LGA': 'LGA',
+                    'TENURE': 'Tenure',
+                    'PARCEL_TYPE': 'Parcel Type',
+                    'LAND_TYPE': 'Land Type'
+                };
+                
+                var hasData = false;
+                
+                Object.keys(fieldMappings).forEach(function(key) {
+                    var value = null;
+                    fieldMappings[key].forEach(function(fieldName) {
+                        if (props[fieldName] !== undefined && props[fieldName] !== null) {
+                            value = props[fieldName];
+                        }
+                    });
+                    
+                    if (value !== null) {
+                        if (key === 'AREA_SQMS') {
+                            var hectares = (parseFloat(value) / 10000).toFixed(2);
+                            value = parseFloat(value).toLocaleString() + ' m² (' + hectares + ' ha)';
+                        }
+                        html += '<div class="detail"><strong>' + displayFields[key] + ':</strong> ' + value + '</div>';
+                        hasData = true;
+                    }
+                });
+                
+                if (!hasData) {
+                    html += '<div class="detail"><em>Available fields:</em></div>';
+                    for (var key in props) {
+                        if (key !== 'geometry' && props[key] !== null && props[key] !== undefined) {
+                            html += '<div class="detail"><strong>' + key + ':</strong> ' + props[key] + '</div>';
+                        }
+                    }
+                }
+                
+                popupContent.innerHTML = html;
+                popup.style.display = 'block';
+                overlay.setPosition(evt.coordinate);
+            } else {
+                popup.style.display = 'none';
+            }
         });
         
-        console.log('Setup complete. Click "Load Brisbane" to test!');
+        // Change cursor on hover
+        map.on('pointermove', function(evt) {
+            var hit = map.hasFeatureAtPixel(evt.pixel, {
+                layerFilter: function(layer) {
+                    return layer === cadastralLayer;
+                }
+            });
+            map.getTarget().style.cursor = hit ? 'pointer' : '';
+        });
+        
+        console.log('QLD Property Viewer - Shapefile & GeoJSON Support');
+        console.log('Upload a Shapefile (.zip) or GeoJSON (.geojson) file to load cadastral data');
     </script>
 </body>
 </html>
