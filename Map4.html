@@ -49,6 +49,15 @@
             line-height: 1.5;
         }
 
+        .info-panel .zoom-hint {
+            margin-top: 8px;
+            padding: 8px;
+            background: #fff3cd;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #856404;
+        }
+
         .control-panel {
             position: absolute;
             top: 10px;
@@ -230,7 +239,7 @@
 
         .search-panel {
             position: absolute;
-            top: 80px;
+            top: 90px;
             left: 10px;
             background: white;
             padding: 12px;
@@ -276,6 +285,19 @@
         .search-panel button:hover {
             background: #1976D2;
         }
+
+        .zoom-level {
+            position: absolute;
+            bottom: 30px;
+            left: 10px;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            font-size: 12px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -284,15 +306,17 @@
     <div class="info-panel">
         <h2>🗺️ QLD Property Viewer</h2>
         <div class="description">
-            Click on the map to view property details including lot number, plan number, and area.
-            Zoom in for better detail.
+            Click on the map to view property details.
+        </div>
+        <div class="zoom-hint">
+            ⚠️ <strong>Important:</strong> Zoom in to level 13+ to see property boundaries clearly!
         </div>
     </div>
 
     <div class="search-panel">
         <input type="text" id="addressSearch" placeholder="Search for an address..." autocomplete="off">
         <button id="searchBtn">Search</button>
-        <div class="search-hint">Enter suburb or address in Queensland</div>
+        <div class="search-hint">Try: "Brisbane CBD", "Toowoomba", or a street address</div>
     </div>
 
     <div class="control-panel">
@@ -304,15 +328,17 @@
             </div>
             <div class="layer-control-item">
                 <input type="checkbox" id="localitiesCheck">
-                <label for="localitiesCheck">Locality Boundaries</label>
+                <label for="localitiesCheck">Locality Labels</label>
             </div>
             <div class="opacity-control">
-                <label for="opacitySlider">Layer Opacity: <span id="opacityValue">80%</span></label>
-                <input type="range" id="opacitySlider" min="0" max="100" value="80">
+                <label for="opacitySlider">Boundary Opacity: <span id="opacityValue">90%</span></label>
+                <input type="range" id="opacitySlider" min="0" max="100" value="90">
             </div>
         </div>
         <button class="control-btn" id="locateBtn">📍 Find My Location</button>
     </div>
+
+    <div class="zoom-level" id="zoomLevel">Zoom: 7</div>
 
     <div id="popup" class="ol-popup">
         <a href="#" id="popup-closer" class="ol-popup-closer"></a>
@@ -358,36 +384,38 @@
             source: new ol.source.OSM()
         });
 
-        // Queensland Cadastral Layer (Property Boundaries)
-        // Using the correct layer group name from WMS GetCapabilities
-        cadastralLayer = new ol.layer.Image({
-            source: new ol.source.ImageWMS({
+        // Queensland Cadastral Layer - using numeric layer IDs
+        // Layers 4-10 are the various parcel layers at different scales
+        cadastralLayer = new ol.layer.Tile({
+            source: new ol.source.TileWMS({
                 url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/PlanningCadastre/LandParcelPropertyFramework/MapServer/WMSServer',
                 params: {
-                    'LAYERS': 'Land Parcels',  // Main land parcels layer group
+                    'LAYERS': '4,5,6,7,8,9,10',  // Multiple parcel layers for different zoom levels
+                    'TILED': true,
                     'FORMAT': 'image/png',
-                    'TRANSPARENT': true
+                    'TRANSPARENT': true,
+                    'VERSION': '1.3.0'
                 },
-                serverType: 'mapserver',
-                ratio: 1
+                serverType: 'mapserver'
             }),
-            opacity: 0.8,
+            opacity: 0.9,
             visible: true
         });
 
         // Locality Boundaries Layer
-        localitiesLayer = new ol.layer.Image({
-            source: new ol.source.ImageWMS({
+        localitiesLayer = new ol.layer.Tile({
+            source: new ol.source.TileWMS({
                 url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/PlanningCadastre/LandParcelPropertyFramework/MapServer/WMSServer',
                 params: {
-                    'LAYERS': 'Locality_Boundaries37890',
+                    'LAYERS': '1',  // Locality boundaries
+                    'TILED': true,
                     'FORMAT': 'image/png',
-                    'TRANSPARENT': true
+                    'TRANSPARENT': true,
+                    'VERSION': '1.3.0'
                 },
-                serverType: 'mapserver',
-                ratio: 1
+                serverType: 'mapserver'
             }),
-            opacity: 0.8,
+            opacity: 0.9,
             visible: false
         });
 
@@ -420,6 +448,15 @@
             })
         });
 
+        // Update zoom level display
+        function updateZoomLevel() {
+            var zoom = Math.round(map.getView().getZoom());
+            document.getElementById('zoomLevel').textContent = 'Zoom: ' + zoom;
+        }
+
+        map.getView().on('change:resolution', updateZoomLevel);
+        updateZoomLevel();
+
         // Layer control event handlers
         document.getElementById('parcelsCheck').addEventListener('change', function(e) {
             cadastralLayer.setVisible(e.target.checked);
@@ -436,7 +473,6 @@
         opacitySlider.addEventListener('input', function(e) {
             var opacity = e.target.value / 100;
             cadastralLayer.setOpacity(opacity);
-            localitiesLayer.setOpacity(opacity);
             opacityValue.textContent = e.target.value + '%';
         });
 
@@ -464,10 +500,10 @@
                         
                         vectorSource.addFeature(userMarker);
                         
-                        // Zoom to location
+                        // Zoom to location at a level where boundaries are visible
                         map.getView().animate({
                             center: coords,
-                            zoom: 16,
+                            zoom: 17,
                             duration: 1000
                         });
                         
@@ -482,7 +518,7 @@
                     }
                 );
             } else {
-                loading.textContent = 'Geolocation not supported by your browser';
+                loading.textContent = 'Geolocation not supported';
                 setTimeout(function() {
                     loading.style.display = 'none';
                 }, 3000);
@@ -492,6 +528,15 @@
         // Map click handler for property info
         map.on('singleclick', function(evt) {
             var viewResolution = map.getView().getResolution();
+            var zoom = map.getView().getZoom();
+            
+            // Check if zoomed in enough
+            if (zoom < 13) {
+                content.innerHTML = '<h3>⚠️ Zoom In Required</h3><div class="detail">Please zoom in to at least level 13 to query property information. Current zoom: ' + Math.round(zoom) + '</div>';
+                overlay.setPosition(evt.coordinate);
+                return;
+            }
+            
             var wmsSource = cadastralLayer.getSource();
             
             var url = wmsSource.getFeatureInfoUrl(
@@ -500,7 +545,8 @@
                 'EPSG:3857',
                 {
                     'INFO_FORMAT': 'application/json',
-                    'FEATURE_COUNT': 10
+                    'FEATURE_COUNT': 10,
+                    'QUERY_LAYERS': '4,5,6,7,8,9,10'
                 }
             );
             
@@ -516,53 +562,47 @@
                     .then(function(data) {
                         loading.style.display = 'none';
                         
+                        console.log('Feature info response:', data);
+                        
                         if (data.features && data.features.length > 0) {
                             var feature = data.features[0];
                             var props = feature.properties;
                             
                             var html = '<h3>📋 Property Information</h3>';
                             
-                            if (props.LOT || props.Lot) {
-                                html += '<div class="detail"><strong>Lot:</strong> ' + (props.LOT || props.Lot) + '</div>';
-                            }
-                            if (props.PLAN || props.Plan) {
-                                html += '<div class="detail"><strong>Plan:</strong> ' + (props.PLAN || props.Plan) + '</div>';
-                            }
-                            if (props.LOTPLAN || props.LotPlan) {
-                                html += '<div class="detail"><strong>Lot/Plan:</strong> ' + (props.LOTPLAN || props.LotPlan) + '</div>';
-                            }
-                            if (props.AREA_SQMS || props.AreaSqm) {
-                                var area = props.AREA_SQMS || props.AreaSqm;
-                                var hectares = (area / 10000).toFixed(2);
+                            // Try various property name formats
+                            var lot = props.LOT || props.Lot || props.lot || props.LOT_NUMBER;
+                            var plan = props.PLAN || props.Plan || props.plan || props.PLAN_NUMBER;
+                            var lotplan = props.LOTPLAN || props.LotPlan || props.LOT_PLAN;
+                            var area = props.AREA_SQMS || props.AreaSqm || props.AREA || props.Area;
+                            var lga = props.LOCAL_GOVERNMENT_AREA || props.LGA || props.Lga;
+                            var locality = props.LOCALITY || props.Locality;
+                            var tenure = props.TENURE || props.Tenure;
+                            
+                            if (lot) html += '<div class="detail"><strong>Lot:</strong> ' + lot + '</div>';
+                            if (plan) html += '<div class="detail"><strong>Plan:</strong> ' + plan + '</div>';
+                            if (lotplan) html += '<div class="detail"><strong>Lot/Plan:</strong> ' + lotplan + '</div>';
+                            if (area) {
+                                var hectares = (parseFloat(area) / 10000).toFixed(2);
                                 html += '<div class="detail"><strong>Area:</strong> ' + parseFloat(area).toLocaleString() + ' m² (' + hectares + ' ha)</div>';
                             }
-                            if (props.LOCAL_GOVERNMENT_AREA || props.LGA) {
-                                html += '<div class="detail"><strong>LGA:</strong> ' + (props.LOCAL_GOVERNMENT_AREA || props.LGA) + '</div>';
-                            }
-                            if (props.LOCALITY || props.Locality) {
-                                html += '<div class="detail"><strong>Locality:</strong> ' + (props.LOCALITY || props.Locality) + '</div>';
-                            }
-                            if (props.LAND_TYPE || props.LandType) {
-                                html += '<div class="detail"><strong>Land Type:</strong> ' + (props.LAND_TYPE || props.LandType) + '</div>';
-                            }
-                            if (props.PARCEL_TYPE || props.ParcelType) {
-                                html += '<div class="detail"><strong>Parcel Type:</strong> ' + (props.PARCEL_TYPE || props.ParcelType) + '</div>';
-                            }
-                            if (props.TENURE || props.Tenure) {
-                                html += '<div class="detail"><strong>Tenure:</strong> ' + (props.TENURE || props.Tenure) + '</div>';
-                            }
+                            if (lga) html += '<div class="detail"><strong>LGA:</strong> ' + lga + '</div>';
+                            if (locality) html += '<div class="detail"><strong>Locality:</strong> ' + locality + '</div>';
+                            if (tenure) html += '<div class="detail"><strong>Tenure:</strong> ' + tenure + '</div>';
                             
-                            // Check if we got any useful data
-                            var hasData = props.LOT || props.Lot || props.PLAN || props.Plan || props.LOTPLAN || props.LotPlan;
-                            
-                            if (!hasData) {
-                                html += '<div class="detail">No detailed property information available at this location. Try zooming in further or clicking directly on a property boundary.</div>';
+                            // If no recognized fields found, show all properties
+                            if (!lot && !plan && !lotplan && !area) {
+                                html += '<div class="detail"><strong>Available fields:</strong><br>';
+                                for (var key in props) {
+                                    html += key + ': ' + props[key] + '<br>';
+                                }
+                                html += '</div>';
                             }
                             
                             content.innerHTML = html;
                             overlay.setPosition(evt.coordinate);
                         } else {
-                            content.innerHTML = '<h3>📋 Property Information</h3><div class="detail">No property information found. Make sure you are zoomed in and clicking on a visible property boundary.</div>';
+                            content.innerHTML = '<h3>📋 No Data</h3><div class="detail">No property information found at this location. Make sure you\'re zoomed in (level 13+) and clicking on a property boundary line.</div>';
                             overlay.setPosition(evt.coordinate);
                         }
                     })
@@ -575,7 +615,7 @@
             }
         });
 
-        // Address search using Nominatim with proper attribution
+        // Address search
         var searchInput = document.getElementById('addressSearch');
         var searchBtn = document.getElementById('searchBtn');
         
@@ -594,10 +634,9 @@
             loading.style.display = 'block';
             loading.textContent = 'Searching for location...';
             
-            // Use Nominatim for geocoding with Queensland bias
             var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + 
                       encodeURIComponent(query + ', Queensland, Australia') + 
-                      '&limit=5&addressdetails=1';
+                      '&limit=5';
             
             fetch(url, {
                 headers: {
@@ -617,10 +656,10 @@
                         
                         var coords = ol.proj.fromLonLat([lon, lat]);
                         
-                        // Zoom to location
+                        // Zoom to location at level where boundaries are visible
                         map.getView().animate({
                             center: coords,
-                            zoom: 16,
+                            zoom: 17,
                             duration: 1000
                         });
                         
@@ -635,26 +674,19 @@
                         
                         vectorSource.addFeature(userMarker);
                     } else {
-                        alert('Location not found. Please try:\n- A suburb name (e.g., "Brisbane")\n- A street address (e.g., "123 Queen St, Brisbane")\n- A Queensland place name');
+                        alert('Location not found. Try:\n- "Brisbane CBD"\n- "Gold Coast"\n- "123 Queen St, Brisbane"');
                     }
                 })
                 .catch(function(error) {
                     console.error('Search error:', error);
                     loading.style.display = 'none';
-                    alert('Error searching for location. Please check your internet connection and try again.');
+                    alert('Error searching. Please check your connection.');
                 });
         }
 
-        // Change mouse cursor when hovering over map
-        map.on('pointermove', function(evt) {
-            if (evt.dragging) {
-                return;
-            }
-            map.getTarget().style.cursor = 'pointer';
-        });
-
-        console.log('QLD Property Viewer initialized successfully');
-        console.log('WMS Service: Queensland Land Parcel Property Framework');
+        console.log('QLD Property Viewer initialized');
+        console.log('Using layers: 4,5,6,7,8,9,10 (Land Parcels at multiple scales)');
+        console.log('Zoom in to level 13+ to see property boundaries');
     </script>
 </body>
 </html>
