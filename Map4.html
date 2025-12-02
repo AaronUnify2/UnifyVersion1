@@ -49,15 +49,6 @@
             line-height: 1.5;
         }
 
-        .info-panel .zoom-hint {
-            margin-top: 8px;
-            padding: 8px;
-            background: #fff3cd;
-            border-radius: 4px;
-            font-size: 12px;
-            color: #856404;
-        }
-
         .control-panel {
             position: absolute;
             top: 10px;
@@ -96,10 +87,6 @@
             background: #2196F3;
             color: white;
             border-color: #2196F3;
-        }
-
-        .control-btn:active {
-            transform: scale(0.95);
         }
 
         .layer-controls {
@@ -239,7 +226,7 @@
 
         .search-panel {
             position: absolute;
-            top: 90px;
+            top: 80px;
             left: 10px;
             background: white;
             padding: 12px;
@@ -261,12 +248,6 @@
         .search-panel input:focus {
             outline: none;
             border-color: #2196F3;
-        }
-
-        .search-panel .search-hint {
-            font-size: 11px;
-            color: #999;
-            margin-top: 6px;
         }
 
         .search-panel button {
@@ -298,6 +279,20 @@
             font-size: 12px;
             color: #666;
         }
+
+        .status {
+            position: absolute;
+            bottom: 60px;
+            left: 10px;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            font-size: 11px;
+            color: #666;
+            max-width: 250px;
+        }
     </style>
 </head>
 <body>
@@ -306,17 +301,13 @@
     <div class="info-panel">
         <h2>🗺️ QLD Property Viewer</h2>
         <div class="description">
-            Click on the map to view property details.
-        </div>
-        <div class="zoom-hint">
-            ⚠️ <strong>Important:</strong> Zoom in to level 13+ to see property boundaries clearly!
+            Property boundaries show as red/pink lines when zoomed in. Click on them to see property details.
         </div>
     </div>
 
     <div class="search-panel">
         <input type="text" id="addressSearch" placeholder="Search for an address..." autocomplete="off">
         <button id="searchBtn">Search</button>
-        <div class="search-hint">Try: "Brisbane CBD", "Toowoomba", or a street address</div>
     </div>
 
     <div class="control-panel">
@@ -326,19 +317,16 @@
                 <input type="checkbox" id="parcelsCheck" checked>
                 <label for="parcelsCheck">Property Boundaries</label>
             </div>
-            <div class="layer-control-item">
-                <input type="checkbox" id="localitiesCheck">
-                <label for="localitiesCheck">Locality Labels</label>
-            </div>
             <div class="opacity-control">
-                <label for="opacitySlider">Boundary Opacity: <span id="opacityValue">90%</span></label>
-                <input type="range" id="opacitySlider" min="0" max="100" value="90">
+                <label for="opacitySlider">Opacity: <span id="opacityValue">70%</span></label>
+                <input type="range" id="opacitySlider" min="10" max="100" value="70">
             </div>
         </div>
         <button class="control-btn" id="locateBtn">📍 Find My Location</button>
     </div>
 
     <div class="zoom-level" id="zoomLevel">Zoom: 7</div>
+    <div class="status" id="status">Loading map layers...</div>
 
     <div id="popup" class="ol-popup">
         <a href="#" id="popup-closer" class="ol-popup-closer"></a>
@@ -354,10 +342,8 @@
     
     <script>
         // Initialize the map
-        var userLocation = null;
         var userMarker = null;
         var cadastralLayer = null;
-        var localitiesLayer = null;
 
         // Create popup overlay
         var container = document.getElementById('popup');
@@ -384,39 +370,52 @@
             source: new ol.source.OSM()
         });
 
-        // Queensland Cadastral Layer - using numeric layer IDs
-        // Layers 4-10 are the various parcel layers at different scales
+        // Queensland Cadastral Layer using REST API XYZ tiles
+        // This approach is more reliable than WMS
         cadastralLayer = new ol.layer.Tile({
-            source: new ol.source.TileWMS({
-                url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/PlanningCadastre/LandParcelPropertyFramework/MapServer/WMSServer',
-                params: {
-                    'LAYERS': '4,5,6,7,8,9,10',  // Multiple parcel layers for different zoom levels
-                    'TILED': true,
-                    'FORMAT': 'image/png',
-                    'TRANSPARENT': true,
-                    'VERSION': '1.3.0'
-                },
-                serverType: 'mapserver'
+            source: new ol.source.XYZ({
+                url: 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/LandParcelPropertyFramework/MapServer/export?' +
+                     'bbox={bbox-epsg-3857}&' +
+                     'bboxSR=3857&' +
+                     'imageSR=3857&' +
+                     'size=256,256&' +
+                     'dpi=96&' +
+                     'format=png32&' +
+                     'transparent=true&' +
+                     'layers=show:4,5,6,7,8,9,10&' +
+                     'f=image',
+                crossOrigin: 'anonymous'
             }),
-            opacity: 0.9,
+            opacity: 0.7,
             visible: true
         });
 
-        // Locality Boundaries Layer
-        localitiesLayer = new ol.layer.Tile({
-            source: new ol.source.TileWMS({
-                url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/PlanningCadastre/LandParcelPropertyFramework/MapServer/WMSServer',
-                params: {
-                    'LAYERS': '1',  // Locality boundaries
-                    'TILED': true,
-                    'FORMAT': 'image/png',
-                    'TRANSPARENT': true,
-                    'VERSION': '1.3.0'
-                },
-                serverType: 'mapserver'
-            }),
-            opacity: 0.9,
-            visible: false
+        // Listen for tile load events
+        var statusEl = document.getElementById('status');
+        var tilesLoading = 0;
+        var tilesLoaded = 0;
+
+        cadastralLayer.getSource().on('tileloadstart', function() {
+            tilesLoading++;
+            statusEl.textContent = 'Loading tiles... (' + tilesLoading + ')';
+            statusEl.style.background = '#fff3cd';
+        });
+
+        cadastralLayer.getSource().on('tileloadend', function() {
+            tilesLoaded++;
+            if (tilesLoaded >= tilesLoading) {
+                statusEl.textContent = 'Property boundaries loaded ✓';
+                statusEl.style.background = '#d4edda';
+                setTimeout(function() {
+                    statusEl.style.display = 'none';
+                }, 3000);
+            }
+        });
+
+        cadastralLayer.getSource().on('tileloaderror', function(e) {
+            console.error('Tile load error:', e);
+            statusEl.textContent = 'Error loading boundaries';
+            statusEl.style.background = '#f8d7da';
         });
 
         // Create vector layer for user location marker
@@ -435,10 +434,10 @@
             })
         });
 
-        // Initialize map centered on Queensland
+        // Initialize map
         var map = new ol.Map({
             target: 'map',
-            layers: [baseLayer, cadastralLayer, localitiesLayer, vectorLayer],
+            layers: [baseLayer, cadastralLayer, vectorLayer],
             overlays: [overlay],
             view: new ol.View({
                 center: ol.proj.fromLonLat([145.0, -23.0]),
@@ -457,13 +456,9 @@
         map.getView().on('change:resolution', updateZoomLevel);
         updateZoomLevel();
 
-        // Layer control event handlers
+        // Layer control
         document.getElementById('parcelsCheck').addEventListener('change', function(e) {
             cadastralLayer.setVisible(e.target.checked);
-        });
-
-        document.getElementById('localitiesCheck').addEventListener('change', function(e) {
-            localitiesLayer.setVisible(e.target.checked);
         });
 
         // Opacity slider
@@ -485,145 +480,113 @@
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     function(position) {
-                        userLocation = [position.coords.longitude, position.coords.latitude];
+                        var coords = ol.proj.fromLonLat([position.coords.longitude, position.coords.latitude]);
                         
-                        // Remove old marker if exists
                         if (userMarker) {
                             vectorSource.removeFeature(userMarker);
                         }
                         
-                        // Add new marker
-                        var coords = ol.proj.fromLonLat(userLocation);
                         userMarker = new ol.Feature({
                             geometry: new ol.geom.Point(coords)
                         });
                         
                         vectorSource.addFeature(userMarker);
                         
-                        // Zoom to location at a level where boundaries are visible
                         map.getView().animate({
                             center: coords,
-                            zoom: 17,
+                            zoom: 18,
                             duration: 1000
                         });
                         
                         loading.style.display = 'none';
                     },
                     function(error) {
-                        console.error('Geolocation error:', error);
-                        loading.textContent = 'Could not get your location';
+                        loading.textContent = 'Could not get location';
                         setTimeout(function() {
                             loading.style.display = 'none';
                         }, 3000);
                     }
                 );
-            } else {
-                loading.textContent = 'Geolocation not supported';
-                setTimeout(function() {
-                    loading.style.display = 'none';
-                }, 3000);
             }
         });
 
-        // Map click handler for property info
+        // Map click for property info
         map.on('singleclick', function(evt) {
             var viewResolution = map.getView().getResolution();
             var zoom = map.getView().getZoom();
             
-            // Check if zoomed in enough
-            if (zoom < 13) {
-                content.innerHTML = '<h3>⚠️ Zoom In Required</h3><div class="detail">Please zoom in to at least level 13 to query property information. Current zoom: ' + Math.round(zoom) + '</div>';
+            if (zoom < 14) {
+                content.innerHTML = '<h3>⚠️ Zoom In</h3><div class="detail">Zoom to level 14+ to query properties. Current: ' + Math.round(zoom) + '</div>';
                 overlay.setPosition(evt.coordinate);
                 return;
             }
             
-            var wmsSource = cadastralLayer.getSource();
+            // Use identify task with REST API
+            var mapCoord = evt.coordinate;
+            var viewSize = map.getSize();
+            var bbox = map.getView().calculateExtent(viewSize);
             
-            var url = wmsSource.getFeatureInfoUrl(
-                evt.coordinate,
-                viewResolution,
-                'EPSG:3857',
-                {
-                    'INFO_FORMAT': 'application/json',
-                    'FEATURE_COUNT': 10,
-                    'QUERY_LAYERS': '4,5,6,7,8,9,10'
-                }
-            );
+            var url = 'https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/LandParcelPropertyFramework/MapServer/identify?' +
+                      'geometry=' + mapCoord[0] + ',' + mapCoord[1] + '&' +
+                      'geometryType=esriGeometryPoint&' +
+                      'sr=3857&' +
+                      'layers=all:4,5,6,7,8,9,10&' +
+                      'tolerance=5&' +
+                      'mapExtent=' + bbox.join(',') + '&' +
+                      'imageDisplay=' + viewSize[0] + ',' + viewSize[1] + ',96&' +
+                      'returnGeometry=false&' +
+                      'f=json';
             
-            if (url) {
-                var loading = document.getElementById('loading');
-                loading.style.display = 'block';
-                loading.textContent = 'Loading property information...';
-                
-                fetch(url)
-                    .then(function(response) {
-                        return response.json();
-                    })
-                    .then(function(data) {
-                        loading.style.display = 'none';
+            var loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            loading.textContent = 'Loading property info...';
+            
+            fetch(url)
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(data) {
+                    loading.style.display = 'none';
+                    console.log('Identify response:', data);
+                    
+                    if (data.results && data.results.length > 0) {
+                        var result = data.results[0];
+                        var attrs = result.attributes;
                         
-                        console.log('Feature info response:', data);
+                        var html = '<h3>📋 Property Info</h3>';
                         
-                        if (data.features && data.features.length > 0) {
-                            var feature = data.features[0];
-                            var props = feature.properties;
-                            
-                            var html = '<h3>📋 Property Information</h3>';
-                            
-                            // Try various property name formats
-                            var lot = props.LOT || props.Lot || props.lot || props.LOT_NUMBER;
-                            var plan = props.PLAN || props.Plan || props.plan || props.PLAN_NUMBER;
-                            var lotplan = props.LOTPLAN || props.LotPlan || props.LOT_PLAN;
-                            var area = props.AREA_SQMS || props.AreaSqm || props.AREA || props.Area;
-                            var lga = props.LOCAL_GOVERNMENT_AREA || props.LGA || props.Lga;
-                            var locality = props.LOCALITY || props.Locality;
-                            var tenure = props.TENURE || props.Tenure;
-                            
-                            if (lot) html += '<div class="detail"><strong>Lot:</strong> ' + lot + '</div>';
-                            if (plan) html += '<div class="detail"><strong>Plan:</strong> ' + plan + '</div>';
-                            if (lotplan) html += '<div class="detail"><strong>Lot/Plan:</strong> ' + lotplan + '</div>';
-                            if (area) {
-                                var hectares = (parseFloat(area) / 10000).toFixed(2);
-                                html += '<div class="detail"><strong>Area:</strong> ' + parseFloat(area).toLocaleString() + ' m² (' + hectares + ' ha)</div>';
-                            }
-                            if (lga) html += '<div class="detail"><strong>LGA:</strong> ' + lga + '</div>';
-                            if (locality) html += '<div class="detail"><strong>Locality:</strong> ' + locality + '</div>';
-                            if (tenure) html += '<div class="detail"><strong>Tenure:</strong> ' + tenure + '</div>';
-                            
-                            // If no recognized fields found, show all properties
-                            if (!lot && !plan && !lotplan && !area) {
-                                html += '<div class="detail"><strong>Available fields:</strong><br>';
-                                for (var key in props) {
-                                    html += key + ': ' + props[key] + '<br>';
-                                }
-                                html += '</div>';
-                            }
-                            
-                            content.innerHTML = html;
-                            overlay.setPosition(evt.coordinate);
-                        } else {
-                            content.innerHTML = '<h3>📋 No Data</h3><div class="detail">No property information found at this location. Make sure you\'re zoomed in (level 13+) and clicking on a property boundary line.</div>';
-                            overlay.setPosition(evt.coordinate);
+                        if (attrs.LOT) html += '<div class="detail"><strong>Lot:</strong> ' + attrs.LOT + '</div>';
+                        if (attrs.PLAN) html += '<div class="detail"><strong>Plan:</strong> ' + attrs.PLAN + '</div>';
+                        if (attrs.AREA_SQMS) {
+                            var ha = (attrs.AREA_SQMS / 10000).toFixed(2);
+                            html += '<div class="detail"><strong>Area:</strong> ' + attrs.AREA_SQMS.toLocaleString() + ' m² (' + ha + ' ha)</div>';
                         }
-                    })
-                    .catch(function(error) {
-                        console.error('Error:', error);
-                        loading.style.display = 'none';
-                        content.innerHTML = '<h3>❌ Error</h3><div class="detail">Could not load property information. Please try again.</div>';
+                        if (attrs.LOCALITY) html += '<div class="detail"><strong>Locality:</strong> ' + attrs.LOCALITY + '</div>';
+                        if (attrs.LOCAL_GOVERNMENT_AREA) html += '<div class="detail"><strong>LGA:</strong> ' + attrs.LOCAL_GOVERNMENT_AREA + '</div>';
+                        if (attrs.TENURE) html += '<div class="detail"><strong>Tenure:</strong> ' + attrs.TENURE + '</div>';
+                        
+                        content.innerHTML = html;
                         overlay.setPosition(evt.coordinate);
-                    });
-            }
+                    } else {
+                        content.innerHTML = '<h3>No Data</h3><div class="detail">No property found. Try clicking on a visible boundary line.</div>';
+                        overlay.setPosition(evt.coordinate);
+                    }
+                })
+                .catch(function(error) {
+                    console.error('Error:', error);
+                    loading.style.display = 'none';
+                    content.innerHTML = '<h3>Error</h3><div class="detail">Could not load property info.</div>';
+                    overlay.setPosition(evt.coordinate);
+                });
         });
 
-        // Address search
-        var searchInput = document.getElementById('addressSearch');
+        // Search
         var searchBtn = document.getElementById('searchBtn');
+        var searchInput = document.getElementById('addressSearch');
         
         searchBtn.addEventListener('click', performSearch);
         searchInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                performSearch();
-            }
+            if (e.key === 'Enter') performSearch();
         });
 
         function performSearch() {
@@ -632,61 +595,32 @@
             
             var loading = document.getElementById('loading');
             loading.style.display = 'block';
-            loading.textContent = 'Searching for location...';
+            loading.textContent = 'Searching...';
             
-            var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + 
-                      encodeURIComponent(query + ', Queensland, Australia') + 
-                      '&limit=5';
-            
-            fetch(url, {
-                headers: {
-                    'User-Agent': 'QLD Property Viewer'
-                }
-            })
-                .then(function(response) {
-                    return response.json();
-                })
+            fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + 
+                  encodeURIComponent(query + ', Queensland, Australia') + '&limit=3')
+                .then(function(r) { return r.json(); })
                 .then(function(data) {
                     loading.style.display = 'none';
-                    
                     if (data && data.length > 0) {
-                        var result = data[0];
-                        var lon = parseFloat(result.lon);
-                        var lat = parseFloat(result.lat);
+                        var coords = ol.proj.fromLonLat([parseFloat(data[0].lon), parseFloat(data[0].lat)]);
+                        map.getView().animate({ center: coords, zoom: 18, duration: 1000 });
                         
-                        var coords = ol.proj.fromLonLat([lon, lat]);
-                        
-                        // Zoom to location at level where boundaries are visible
-                        map.getView().animate({
-                            center: coords,
-                            zoom: 17,
-                            duration: 1000
-                        });
-                        
-                        // Add marker
-                        if (userMarker) {
-                            vectorSource.removeFeature(userMarker);
-                        }
-                        
-                        userMarker = new ol.Feature({
-                            geometry: new ol.geom.Point(coords)
-                        });
-                        
+                        if (userMarker) vectorSource.removeFeature(userMarker);
+                        userMarker = new ol.Feature({ geometry: new ol.geom.Point(coords) });
                         vectorSource.addFeature(userMarker);
                     } else {
-                        alert('Location not found. Try:\n- "Brisbane CBD"\n- "Gold Coast"\n- "123 Queen St, Brisbane"');
+                        alert('Location not found');
                     }
                 })
-                .catch(function(error) {
-                    console.error('Search error:', error);
+                .catch(function(e) {
                     loading.style.display = 'none';
-                    alert('Error searching. Please check your connection.');
+                    alert('Search error');
                 });
         }
 
-        console.log('QLD Property Viewer initialized');
-        console.log('Using layers: 4,5,6,7,8,9,10 (Land Parcels at multiple scales)');
-        console.log('Zoom in to level 13+ to see property boundaries');
+        console.log('Using ArcGIS REST API with XYZ tiles');
+        console.log('Boundaries should appear as red/pink lines when zoomed in');
     </script>
 </body>
 </html>
