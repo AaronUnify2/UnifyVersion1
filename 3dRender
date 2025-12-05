@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map with 3D Terrain Generator</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
+    <script src="https://cdn.jsdelivr.net/npm/ol@v10.2.1/dist/ol.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 15px;
+            z-index: 1000;
+        }
+
+        .control-btn {
+            display: block;
+            width: 100%;
+            padding: 12px 20px;
+            margin-bottom: 10px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            color: #333;
+        }
+
+        .control-btn:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-btn:hover {
+            background: #f5f5f5;
+            border-color: #2196F3;
+        }
+
+        .control-btn.active {
+            background: #2196F3;
+            color: white;
+            border-color: #2196F3;
+        }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 2000;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+
+        /* Legend */
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            padding: 12px 15px;
+            font-size: 12px;
+            z-index: 1000;
+            max-width: 200px;
+        }
+
+        .legend-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            color: #666;
+        }
+
+        .legend-line {
+            width: 30px;
+            height: 2px;
+            margin-right: 8px;
+            background: #8B4513;
+        }
+
+        /* 3D Viewer Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            width: 90%;
+            height: 90%;
+            background: #1a1a1a;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            background: #2a2a2a;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .modal-close:hover {
+            background: #ff6666;
+        }
+
+        #viewer3d {
+            flex: 1;
+            width: 100%;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            z-index: 10001;
+            display: none;
+            text-align: center;
+        }
+
+        .loading-overlay.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2196F3;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .viewer-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 10002;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="control-panel">
+        <button id="locationBtn" class="control-btn">📍 My Location</button>
+        <button id="contoursBtn" class="control-btn">🗻 Contours</button>
+        <button id="selectAreaBtn" class="control-btn">📐 Select Area</button>
+    </div>
+
+    <div id="legend" class="legend" style="display: none;">
+        <div class="legend-title">Contour Lines</div>
+        <div class="legend-item">
+            <div class="legend-line"></div>
+            <span>10m intervals</span>
+        </div>
+        <div style="font-size: 11px; color: #999; margin-top: 5px;">
+            Zoom in for higher detail
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <!-- 3D Viewer Modal -->
+    <div id="modal3d" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">3D Terrain View</div>
+                <button id="closeModal" class="modal-close">✕ Close</button>
+            </div>
+            <div id="viewer3d"></div>
+            <div class="viewer-controls">
+                🖱️ Left Click + Drag: Rotate | Right Click + Drag: Pan | Scroll: Zoom
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div>Fetching elevation data...</div>
+    </div>
+
+    <script>
+        // Create contours layer
+        const contoursLayer = new ol.layer.Tile({
+            source: new ol.source.TileWMS({
+                url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer',
+                params: {
+                    'LAYERS': 'Contour_SRTM_10m28055',
+                    'FORMAT': 'image/png',
+                    'TRANSPARENT': true,
+                    'VERSION': '1.3.0'
+                },
+                serverType: 'geoserver'
+            }),
+            visible: false,
+            opacity: 0.8
+        });
+
+        // Initialize the map
+        const map = new ol.Map({
+            target: 'map',
+            layers: [
+                new ol.layer.Tile({
+                    source: new ol.source.OSM()
+                }),
+                contoursLayer
+            ],
+            view: new ol.View({
+                center: ol.proj.fromLonLat([145.7781, -16.9186]),
+                zoom: 8
+            })
+        });
+
+        // Layer for user location
+        const locationLayer = new ol.layer.Vector({
+            source: new ol.source.Vector(),
+            style: new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 8,
+                    fill: new ol.style.Fill({
+                        color: '#2196F3'
+                    }),
+                    stroke: new ol.style.Stroke({
+                        color: 'white',
+                        width: 3
+                    })
+                })
+            }),
+            zIndex: 1000
+        });
+        map.addLayer(locationLayer);
+
+        // Layer for selection box
+        const selectionLayer = new ol.layer.Vector({
+            source: new ol.source.Vector(),
+            style: new ol.style.Style({
+                stroke: new ol.style.Stroke({
+                    color: '#FF4444',
+                    width: 3,
+                    lineDash: [10, 10]
+                }),
+                fill: new ol.style.Fill({
+                    color: 'rgba(255, 68, 68, 0.1)'
+                })
+            }),
+            zIndex: 999
+        });
+        map.addLayer(selectionLayer);
+
+        // Drawing interaction
+        let drawInteraction = null;
+        let isSelecting = false;
+
+        // Store current location
+        let currentLocation = null;
+
+        // Toast notification function
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+
+        // Get user location
+        function getUserLocation() {
+            const locationBtn = document.getElementById('locationBtn');
+            
+            if (!navigator.geolocation) {
+                showToast('Geolocation is not supported by your browser');
+                return;
+            }
+
+            locationBtn.disabled = true;
+            locationBtn.textContent = '📍 Getting location...';
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const coords = [position.coords.longitude, position.coords.latitude];
+                    currentLocation = coords;
+
+                    locationLayer.getSource().clear();
+
+                    const locationFeature = new ol.Feature({
+                        geometry: new ol.geom.Point(ol.proj.fromLonLat(coords)),
+                        name: 'Your Location'
+                    });
+                    locationLayer.getSource().addFeature(locationFeature);
+
+                    if (position.coords.accuracy) {
+                        const accuracyFeature = new ol.Feature({
+                            geometry: new ol.geom.Circle(
+                                ol.proj.fromLonLat(coords),
+                                position.coords.accuracy
+                            )
+                        });
+                        accuracyFeature.setStyle(new ol.style.Style({
+                            fill: new ol.style.Fill({
+                                color: 'rgba(33, 150, 243, 0.1)'
+                            }),
+                            stroke: new ol.style.Stroke({
+                                color: '#2196F3',
+                                width: 2,
+                                lineDash: [5, 5]
+                            })
+                        }));
+                        locationLayer.getSource().addFeature(accuracyFeature);
+                    }
+
+                    map.getView().animate({
+                        center: ol.proj.fromLonLat(coords),
+                        zoom: 15,
+                        duration: 1000
+                    });
+
+                    locationBtn.disabled = false;
+                    locationBtn.textContent = '📍 My Location';
+                    locationBtn.classList.add('active');
+                    
+                    showToast(`Location found: ${coords[1].toFixed(6)}, ${coords[0].toFixed(6)}`);
+                },
+                (error) => {
+                    let errorMessage = 'Unable to get location';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage = 'Location access denied. Please enable location permissions.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = 'Location information unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = 'Location request timed out';
+                            break;
+                    }
+                    showToast(errorMessage);
+                    locationBtn.disabled = false;
+                    locationBtn.textContent = '📍 My Location';
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 30000,
+                    maximumAge: 60000
+                }
+            );
+        }
+
+        // Toggle contours
+        function toggleContours() {
+            const contoursBtn = document.getElementById('contoursBtn');
+            const legend = document.getElementById('legend');
+            const isVisible = contoursLayer.getVisible();
+            
+            contoursLayer.setVisible(!isVisible);
+            
+            if (!isVisible) {
+                contoursBtn.classList.add('active');
+                legend.style.display = 'block';
+                showToast('Contours enabled');
+            } else {
+                contoursBtn.classList.remove('active');
+                legend.style.display = 'none';
+                showToast('Contours disabled');
+            }
+        }
+
+        // Toggle area selection
+        function toggleAreaSelection() {
+            const selectBtn = document.getElementById('selectAreaBtn');
+            
+            if (isSelecting) {
+                // Turn off selection
+                map.removeInteraction(drawInteraction);
+                drawInteraction = null;
+                isSelecting = false;
+                selectBtn.classList.remove('active');
+                showToast('Selection mode disabled');
+            } else {
+                // Turn on selection
+                selectionLayer.getSource().clear();
+                
+                drawInteraction = new ol.interaction.Draw({
+                    source: selectionLayer.getSource(),
+                    type: 'Circle',
+                    geometryFunction: ol.interaction.Draw.createBox()
+                });
+
+                drawInteraction.on('drawend', function(event) {
+                    const geometry = event.feature.getGeometry();
+                    const extent = geometry.getExtent();
+                    
+                    // Convert extent to lat/lon
+                    const bottomLeft = ol.proj.toLonLat([extent[0], extent[1]]);
+                    const topRight = ol.proj.toLonLat([extent[2], extent[3]]);
+                    
+                    // Fetch elevation data and show 3D
+                    fetchElevationData(bottomLeft, topRight, extent);
+                    
+                    // Turn off selection mode
+                    map.removeInteraction(drawInteraction);
+                    isSelecting = false;
+                    selectBtn.classList.remove('active');
+                });
+
+                map.addInteraction(drawInteraction);
+                isSelecting = true;
+                selectBtn.classList.add('active');
+                showToast('Draw a box on the map to select an area');
+            }
+        }
+
+        // Fetch elevation data from Queensland DEM ImageServer
+        async function fetchElevationData(bottomLeft, topRight, extent) {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            loadingOverlay.classList.add('show');
+
+            try {
+                const width = 100;  // Sample grid resolution
+                const height = 100;
+                
+                // Build the ImageServer export request
+                const params = new URLSearchParams({
+                    bbox: `${bottomLeft[0]},${bottomLeft[1]},${topRight[0]},${topRight[1]}`,
+                    bboxSR: '4326',
+                    size: `${width},${height}`,
+                    imageSR: '4326',
+                    format: 'json',
+                    pixelType: 'F32',
+                    noData: '',
+                    interpolation: 'RSP_BilinearInterpolation',
+                    f: 'json'
+                });
+
+                const url = `https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/QldDem/ImageServer/exportImage?${params}`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.href) {
+                    // Download the actual elevation data
+                    const imageResponse = await fetch(data.href);
+                    const imageData = await imageResponse.arrayBuffer();
+                    
+                    // Parse the elevation values
+                    const elevationData = new Float32Array(imageData);
+                    
+                    // Create 3D visualization
+                    create3DTerrain(elevationData, width, height, bottomLeft, topRight);
+                } else {
+                    showToast('Could not fetch elevation data for this area');
+                }
+            } catch (error) {
+                console.error('Error fetching elevation:', error);
+                showToast('Error fetching elevation data');
+            } finally {
+                loadingOverlay.classList.remove('show');
+            }
+        }
+
+        // Create 3D terrain visualization
+        function create3DTerrain(elevationData, width, height, bottomLeft, topRight) {
+            const modal = document.getElementById('modal3d');
+            const container = document.getElementById('viewer3d');
+            
+            // Clear previous content
+            container.innerHTML = '';
+            
+            // Setup Three.js scene
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            
+            const camera = new THREE.PerspectiveCamera(
+                75,
+                container.clientWidth / container.clientHeight,
+                0.1,
+                10000
+            );
+            
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+            
+            // Find elevation range for scaling
+            let minElev = Infinity;
+            let maxElev = -Infinity;
+            for (let i = 0; i < elevationData.length; i++) {
+                if (elevationData[i] > -9999) {  // Filter out no-data values
+                    minElev = Math.min(minElev, elevationData[i]);
+                    maxElev = Math.max(maxElev, elevationData[i]);
+                }
+            }
+            
+            const elevRange = maxElev - minElev;
+            const scale = Math.max(width, height) / 100;
+            const verticalExaggeration = 2;
+            
+            // Create geometry
+            const geometry = new THREE.PlaneGeometry(
+                width * scale,
+                height * scale,
+                width - 1,
+                height - 1
+            );
+            
+            const vertices = geometry.attributes.position.array;
+            
+            // Apply elevation data
+            for (let i = 0; i < height; i++) {
+                for (let j = 0; j < width; j++) {
+                    const idx = i * width + j;
+                    const vertIdx = (i * width + j) * 3;
+                    
+                    let elevation = elevationData[idx];
+                    if (elevation < -9999) elevation = minElev;  // Handle no-data
+                    
+                    const normalizedHeight = ((elevation - minElev) / elevRange) * verticalExaggeration * scale * 50;
+                    vertices[vertIdx + 2] = normalizedHeight;
+                }
+            }
+            
+            geometry.computeVertexNormals();
+            
+            // Create material with vertex colors based on elevation
+            const colors = new Float32Array(vertices.length);
+            for (let i = 0; i < vertices.length; i += 3) {
+                const height = vertices[i + 2];
+                const normalized = height / (verticalExaggeration * scale * 50);
+                
+                // Color gradient: blue (low) -> green -> yellow -> brown (high)
+                let r, g, b;
+                if (normalized < 0.25) {
+                    r = 0.2;
+                    g = 0.5 + normalized * 2;
+                    b = 0.3;
+                } else if (normalized < 0.5) {
+                    r = 0.3 + (normalized - 0.25) * 2;
+                    g = 0.7;
+                    b = 0.2;
+                } else if (normalized < 0.75) {
+                    r = 0.7 + (normalized - 0.5) * 0.8;
+                    g = 0.7 - (normalized - 0.5) * 1.2;
+                    b = 0.2;
+                } else {
+                    r = 0.5 + (normalized - 0.75) * 0.8;
+                    g = 0.4 - (normalized - 0.75) * 0.8;
+                    b = 0.2;
+                }
+                
+                colors[i] = r;
+                colors[i + 1] = g;
+                colors[i + 2] = b;
+            }
+            
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            const material = new THREE.MeshPhongMaterial({
+                vertexColors: true,
+                flatShading: false,
+                shininess: 10
+            });
+            
+            const terrain = new THREE.Mesh(geometry, material);
+            terrain.rotation.x = -Math.PI / 2;
+            scene.add(terrain);
+            
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+            
+            // Position camera
+            camera.position.set(0, scale * 100, scale * 100);
+            camera.lookAt(0, 0, 0);
+            
+            // Simple mouse controls
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+            let cameraRotation = { x: 0, y: 0 };
+            let cameraDistance = scale * 150;
+            
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+            
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const deltaX = e.clientX - previousMousePosition.x;
+                    const deltaY = e.clientY - previousMousePosition.y;
+                    
+                    cameraRotation.y += deltaX * 0.005;
+                    cameraRotation.x += deltaY * 0.005;
+                    cameraRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraRotation.x));
+                    
+                    previousMousePosition = { x: e.clientX, y: e.clientY };
+                }
+            });
+            
+            renderer.domElement.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+            
+            renderer.domElement.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                cameraDistance += e.deltaY * 0.5;
+                cameraDistance = Math.max(scale * 50, Math.min(scale * 500, cameraDistance));
+            });
+            
+            // Animation loop
+            function animate() {
+                requestAnimationFrame(animate);
+                
+                camera.position.x = Math.cos(cameraRotation.y) * Math.cos(cameraRotation.x) * cameraDistance;
+                camera.position.y = Math.sin(cameraRotation.x) * cameraDistance;
+                camera.position.z = Math.sin(cameraRotation.y) * Math.cos(cameraRotation.x) * cameraDistance;
+                camera.lookAt(0, 0, 0);
+                
+                renderer.render(scene, camera);
+            }
+            
+            animate();
+            
+            // Show modal
+            modal.classList.add('show');
+            
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            });
+        }
+
+        // Add click events
+        document.getElementById('locationBtn').addEventListener('click', getUserLocation);
+        document.getElementById('contoursBtn').addEventListener('click', toggleContours);
+        document.getElementById('selectAreaBtn').addEventListener('click', toggleAreaSelection);
+        document.getElementById('closeModal').addEventListener('click', () => {
+            document.getElementById('modal3d').classList.remove('show');
+        });
+
+        // Add popup on click for location marker
+        const popup = new ol.Overlay({
+            element: document.createElement('div'),
+            positioning: 'bottom-center',
+            stopEvent: false,
+            offset: [0, -10]
+        });
+        map.addOverlay(popup);
+
+        map.on('click', (evt) => {
+            if (isSelecting) return;  // Don't show popup during selection
+            
+            const feature = map.forEachFeatureAtPixel(evt.pixel, (feature) => feature);
+            
+            if (feature && feature.get('name') === 'Your Location') {
+                const coordinates = feature.getGeometry().getCoordinates();
+                const lonLat = ol.proj.toLonLat(coordinates);
+                
+                const popupElement = popup.getElement();
+                popupElement.innerHTML = `
+                    <div style="background: white; padding: 10px 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-size: 13px;">
+                        <strong>Your Location</strong><br>
+                        <span style="color: #666;">
+                            Lat: ${lonLat[1].toFixed(6)}<br>
+                            Lon: ${lonLat[0].toFixed(6)}
+                        </span>
+                    </div>
+                `;
+                popup.setPosition(coordinates);
+            } else {
+                popup.setPosition(undefined);
+            }
+        });
+
+        // Change cursor on hover
+        map.on('pointermove', (evt) => {
+            if (isSelecting) {
+                map.getTarget().style.cursor = 'crosshair';
+                return;
+            }
+            
+            const pixel = map.getEventPixel(evt.originalEvent);
+            const hit = map.hasFeatureAtPixel(pixel);
+            map.getTarget().style.cursor = hit ? 'pointer' : '';
+        });
+    </script>
+</body>
+</html>
