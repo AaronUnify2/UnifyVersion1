@@ -546,88 +546,72 @@
             loadingOverlay.classList.add('show');
 
             try {
-                const width = 50;  // Grid resolution (50x50 = 2500 samples)
-                const height = 50;
+                const width = 40;  // Grid resolution (40x40 = 1600 samples)
+                const height = 40;
                 
                 const lonStep = (topRight[0] - bottomLeft[0]) / (width - 1);
                 const latStep = (topRight[1] - bottomLeft[1]) / (height - 1);
                 
-                // Build array of sample points
-                const locations = [];
+                debug('Fetching elevation for ' + (width * height) + ' points');
+                
+                const elevationData = new Float32Array(width * height);
+                let successCount = 0;
+                
+                // Fetch elevation points one at a time (slower but more reliable)
                 for (let i = 0; i < height; i++) {
                     for (let j = 0; j < width; j++) {
+                        const idx = i * width + j;
                         const lon = bottomLeft[0] + j * lonStep;
                         const lat = bottomLeft[1] + i * latStep;
-                        locations.push({
-                            x: lon,
-                            y: lat
-                        });
-                    }
-                }
-                
-                debug('Fetching elevation for ' + locations.length + ' points');
-                
-                // Split into chunks to avoid URL length limits
-                const chunkSize = 100;
-                const elevationData = new Float32Array(width * height);
-                let samplesReceived = 0;
-                
-                for (let chunk = 0; chunk < locations.length; chunk += chunkSize) {
-                    const chunkLocations = locations.slice(chunk, chunk + chunkSize);
-                    
-                    // Build geometry JSON
-                    const geometries = chunkLocations.map(loc => ({
-                        x: loc.x,
-                        y: loc.y,
-                        spatialReference: { wkid: 4326 }
-                    }));
-                    
-                    const params = new URLSearchParams({
-                        geometryType: 'esriGeometryPoint',
-                        geometry: JSON.stringify(geometries),
-                        returnFirstValueOnly: false,
-                        f: 'json'
-                    });
-                    
-                    const url = 'https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/QldDem/ImageServer/getSamples?' + params.toString();
-                    
-                    const response = await fetch(url);
-                    const data = await response.json();
-                    
-                    debug('Chunk ' + Math.floor(chunk/chunkSize) + ' response: ' + (data.samples ? data.samples.length + ' samples' : 'ERROR'));
-                    
-                    if (data.samples) {
-                        // Extract elevation values
-                        for (let i = 0; i < data.samples.length; i++) {
-                            const sample = data.samples[i];
-                            let elevation = 0;
+                        
+                        try {
+                            // Use identify endpoint to get elevation at this point
+                            const params = new URLSearchParams({
+                                geometryType: 'esriGeometryPoint',
+                                geometry: JSON.stringify({ x: lon, y: lat, spatialReference: { wkid: 4326 } }),
+                                returnGeometry: false,
+                                returnCatalogItems: false,
+                                f: 'json'
+                            });
                             
-                            // Try different possible response formats
-                            if (typeof sample.value === 'number') {
-                                elevation = sample.value;
-                            } else if (sample.values && Array.isArray(sample.values) && sample.values.length > 0) {
-                                elevation = sample.values[0];
-                            } else if (typeof sample === 'number') {
-                                elevation = sample;
+                            const url = 'https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/QldDem/ImageServer/identify?' + params.toString();
+                            
+                            const response = await fetch(url);
+                            const data = await response.json();
+                            
+                            if (data.value !== undefined && data.value !== null) {
+                                elevationData[idx] = data.value;
+                                successCount++;
+                            } else if (data.pixel && data.pixel.length > 0) {
+                                elevationData[idx] = data.pixel[0];
+                                successCount++;
+                            } else {
+                                elevationData[idx] = 0;
                             }
-                            
-                            elevationData[chunk + i] = elevation;
-                            samplesReceived++;
+                        } catch (err) {
+                            elevationData[idx] = 0;
                         }
-                    } else if (data.error) {
-                        debug('API Error: ' + JSON.stringify(data.error));
-                        showToast('API Error: ' + data.error.message);
-                        loadingOverlay.classList.remove('show');
-                        return;
+                        
+                        // Update progress every 10%
+                        if (idx % Math.floor((width * height) / 10) === 0) {
+                            const progress = Math.round((idx / (width * height)) * 100);
+                            document.querySelector('#loadingOverlay div:last-child').textContent = 
+                                `Fetching elevation... ${progress}% (${successCount} points)`;
+                            debug('Progress: ' + progress + '%');
+                        }
                     }
-                    
-                    // Update loading message
-                    document.querySelector('#loadingOverlay div:last-child').textContent = 
-                        `Fetching elevation data... ${Math.round((chunk / locations.length) * 100)}%`;
                 }
                 
-                debug('Total samples: ' + samplesReceived);
+                debug('Total successful samples: ' + successCount);
                 debug('Elevation range: ' + Math.min(...elevationData) + ' to ' + Math.max(...elevationData) + 'm');
+                
+                if (successCount === 0) {
+                    showToast('No elevation data received - using test terrain');
+                    // Create test terrain
+                    for (let i = 0; i < elevationData.length; i++) {
+                        elevationData[i] = Math.sin(i / 10) * 50 + 50;
+                    }
+                }
                 
                 // Create 3D visualization
                 create3DTerrain(elevationData, width, height, bottomLeft, topRight);
@@ -910,3 +894,4 @@
     </script>
 </body>
 </html>
+
