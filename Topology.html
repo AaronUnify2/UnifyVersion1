@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warwick QLD - 3D Terrain (Real Data)</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 200;
+        }
+        #loading h2 {
+            margin: 0 0 15px 0;
+        }
+        #loadingBar {
+            width: 300px;
+            height: 20px;
+            background: #333;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #loadingProgress {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            max-width: 300px;
+            z-index: 100;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 100;
+        }
+        .control-item {
+            margin: 5px 0;
+        }
+        label {
+            display: inline-block;
+            width: 120px;
+        }
+        input[type="range"] {
+            width: 150px;
+        }
+        button {
+            margin: 5px 5px 5px 0;
+            padding: 5px 10px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #touchControls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: none;
+            z-index: 100;
+        }
+        #dpad {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+        }
+        .dpad-btn {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 2px solid rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            transition: all 0.1s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .dpad-btn:active {
+            background: rgba(76, 175, 80, 0.9);
+            transform: scale(0.95);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        #dpad-up { top: 5px; left: 52.5px; }
+        #dpad-down { bottom: 5px; left: 52.5px; }
+        #dpad-left { left: 5px; top: 52.5px; }
+        #dpad-right { right: 5px; top: 52.5px; }
+        #dpad-center { left: 52.5px; top: 52.5px; background: rgba(100, 150, 255, 0.8); font-size: 16px; }
+        #dpad-center:active { background: rgba(100, 150, 255, 1); }
+        #zoomControls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+        }
+        .zoom-btn {
+            width: 55px;
+            height: 55px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 2px solid rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            transition: all 0.1s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            backdrop-filter: blur(5px);
+        }
+        .zoom-btn:active {
+            background: rgba(76, 175, 80, 0.9);
+            transform: scale(0.95);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        @media (max-width: 768px) {
+            #info {
+                font-size: 11px;
+                padding: 8px;
+                max-width: 160px;
+                top: 5px;
+                left: 5px;
+            }
+            #info h3 {
+                font-size: 13px;
+                margin-bottom: 5px;
+            }
+            #info p {
+                margin: 3px 0;
+                line-height: 1.3;
+            }
+            #controls {
+                font-size: 10px;
+                padding: 8px;
+                top: 5px;
+                right: 5px;
+            }
+            #controls h4 {
+                font-size: 12px;
+            }
+            input[type="range"] {
+                width: 100px;
+            }
+        }
+        @media (hover: none) and (pointer: coarse) {
+            #touchControls, #zoomControls {
+                display: block;
+            }
+            #zoomControls {
+                display: flex;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <h2>Loading Real Terrain Data</h2>
+        <p id="loadingText">Fetching elevation data for Warwick region...</p>
+        <div id="loadingBar">
+            <div id="loadingProgress"></div>
+        </div>
+    </div>
+
+    <div id="info" style="display: none;">
+        <h3 style="margin-top: 0;">Warwick QLD Terrain</h3>
+        <p><strong>Real Elevation Data</strong><br>
+        <small style="color: #9acd32;">Copernicus DEM (90m resolution)</small></p>
+        <p><strong>Controls:</strong><br>
+        <strong>Desktop:</strong><br>
+        • Left Mouse: Rotate<br>
+        • Right Mouse: Pan<br>
+        • Scroll: Zoom<br>
+        • Arrow Keys: Fly<br>
+        • Space: Reset<br>
+        <strong>Touch:</strong><br>
+        • Swipe: Rotate<br>
+        • Two fingers: Pan & Zoom<br>
+        • D-pad: Move<br>
+        • +/- buttons: Zoom</p>
+    </div>
+
+    <div id="controls" style="display: none;">
+        <h4 style="margin-top: 0;">View Settings</h4>
+        <div class="control-item">
+            <label>Vertical Scale:</label>
+            <input type="range" id="heightScale" min="0.5" max="10" step="0.5" value="3">
+            <span id="heightValue">3.0</span>
+        </div>
+        <div class="control-item" style="font-size: 10px; color: #ccc; margin: 5px 0;">
+            Real terrain is very flat. Increase scale to see detail.
+        </div>
+        <div class="control-item">
+            <label>Wireframe:</label>
+            <input type="checkbox" id="wireframe">
+        </div>
+        <div class="control-item">
+            <button onclick="resetCamera()">Reset View</button>
+            <button onclick="topView()">Top View</button>
+        </div>
+        <div class="control-item">
+            <button onclick="setRealisticScale()">Realistic (1x)</button>
+            <button onclick="toggleAnimation()">Auto Rotate</button>
+        </div>
+        <div class="control-item">
+            <button onclick="toggleTouchControls()">Toggle Touch UI</button>
+        </div>
+    </div>
+
+    <div id="touchControls">
+        <div id="dpad">
+            <div class="dpad-btn" id="dpad-up">↑</div>
+            <div class="dpad-btn" id="dpad-down">↓</div>
+            <div class="dpad-btn" id="dpad-left">←</div>
+            <div class="dpad-btn" id="dpad-right">→</div>
+            <div class="dpad-btn" id="dpad-center">●</div>
+        </div>
+    </div>
+
+    <div id="zoomControls">
+        <div class="zoom-btn" id="zoom-in">+</div>
+        <div class="zoom-btn" id="zoom-out">−</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene setup
+        let scene, camera, renderer, terrain, controls;
+        let animating = false;
+        let originalHeightData = [];
+        
+        // Warwick QLD coordinates
+        const CENTER_LAT = -28.2200;
+        const CENTER_LON = 152.0300;
+        const GRID_SIZE = 50; // 50x50 grid of elevation points
+        const REAL_WORLD_SIZE = 20; // kilometers in real world
+        
+        // Camera movement
+        const movement = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            up: false,
+            down: false
+        };
+
+        // Camera state for touch controls
+        let cameraRotationState = { theta: 0, phi: Math.PI / 4 };
+        let cameraDistanceState = 120;
+        let cameraTargetState = new THREE.Vector3(0, 50, 0);
+
+        async function fetchElevationData() {
+            const step = REAL_WORLD_SIZE / GRID_SIZE;
+            const latStep = step / 111; // Approximate km per degree latitude
+            const lonStep = step / (111 * Math.cos(CENTER_LAT * Math.PI / 180)); // Adjust for latitude
+            
+            const elevationData = [];
+            let minElevation = Infinity;
+            let maxElevation = -Infinity;
+            
+            // Build locations string for batch request
+            let locations = [];
+            for (let row = 0; row <= GRID_SIZE; row++) {
+                for (let col = 0; col <= GRID_SIZE; col++) {
+                    const lat = CENTER_LAT - (GRID_SIZE / 2 - row) * latStep;
+                    const lon = CENTER_LON + (col - GRID_SIZE / 2) * lonStep;
+                    locations.push(`${lat.toFixed(6)},${lon.toFixed(6)}`);
+                }
+            }
+            
+            // Split into batches (API can handle large requests, but we'll be conservative)
+            const batchSize = 500;
+            const batches = [];
+            for (let i = 0; i < locations.length; i += batchSize) {
+                batches.push(locations.slice(i, i + batchSize));
+            }
+            
+            updateLoadingProgress(5, `Fetching elevation data (0/${batches.length} batches)...`);
+            
+            let allResults = [];
+            for (let i = 0; i < batches.length; i++) {
+                const batch = batches[i];
+                const url = `https://api.open-meteo.com/v1/elevation?latitude=${batch.map(l => l.split(',')[0]).join(',')}&longitude=${batch.map(l => l.split(',')[1]).join(',')}`;
+                
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    
+                    if (data.elevation) {
+                        allResults = allResults.concat(data.elevation);
+                    }
+                    
+                    updateLoadingProgress(5 + (i + 1) / batches.length * 80, `Fetching elevation data (${i + 1}/${batches.length} batches)...`);
+                    
+                    // Small delay to be respectful to the API
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                } catch (error) {
+                    console.error('Error fetching elevation data:', error);
+                }
+            }
+            
+            // Organize into grid
+            let idx = 0;
+            for (let row = 0; row <= GRID_SIZE; row++) {
+                elevationData[row] = [];
+                for (let col = 0; col <= GRID_SIZE; col++) {
+                    const elevation = allResults[idx] || 450; // Default to 450m if no data
+                    elevationData[row][col] = elevation;
+                    minElevation = Math.min(minElevation, elevation);
+                    maxElevation = Math.max(maxElevation, elevation);
+                    idx++;
+                }
+            }
+            
+            console.log('Elevation range:', minElevation, '-', maxElevation, 'm');
+            
+            return { elevationData, minElevation, maxElevation };
+        }
+
+        function updateLoadingProgress(percent, text) {
+            document.getElementById('loadingProgress').style.width = percent + '%';
+            document.getElementById('loadingText').textContent = text;
+        }
+
+        async function init() {
+            updateLoadingProgress(0, 'Starting...');
+            
+            // Fetch real elevation data
+            const { elevationData, minElevation, maxElevation } = await fetchElevationData();
+            
+            updateLoadingProgress(85, 'Creating terrain geometry...');
+            
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 50, 500);
+
+            // Create camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 80, 100);
+            camera.lookAt(0, 50, 0);
+            
+            // Initialize camera state
+            cameraRotationState = { theta: 0, phi: Math.PI / 4 };
+            cameraDistanceState = 120;
+            cameraTargetState = new THREE.Vector3(0, 50, 0);
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            // Add lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(50, 100, 50);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            // Create terrain from real data
+            createTerrainFromData(elevationData, minElevation, maxElevation);
+
+            // Add grid helper
+            const gridHelper = new THREE.GridHelper(200, 50, 0x888888, 0x444444);
+            gridHelper.position.y = -2;
+            scene.add(gridHelper);
+
+            // Setup controls
+            setupControls();
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+
+            // Add keyboard controls
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+
+            // Add UI controls
+            document.getElementById('heightScale').addEventListener('input', updateHeightScale);
+            document.getElementById('wireframe').addEventListener('change', toggleWireframe);
+
+            // Setup touch controls
+            setupTouchControls();
+
+            updateLoadingProgress(95, 'Finalizing...');
+            
+            // Hide loading, show UI
+            setTimeout(() => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('info').style.display = 'block';
+                document.getElementById('controls').style.display = 'block';
+                animate();
+            }, 500);
+        }
+
+        function createTerrainFromData(elevationData, minElevation, maxElevation) {
+            const width = 120;
+            const height = 120;
+            const widthSegments = GRID_SIZE;
+            const heightSegments = GRID_SIZE;
+
+            const geometry = new THREE.PlaneGeometry(width, height, widthSegments, heightSegments);
+            geometry.rotateX(-Math.PI / 2);
+
+            const vertices = geometry.attributes.position.array;
+            const baseElevation = minElevation;
+            const elevationRange = maxElevation - minElevation;
+            
+            let idx = 0;
+            for (let row = 0; row <= GRID_SIZE; row++) {
+                for (let col = 0; col <= GRID_SIZE; col++) {
+                    const realElevation = elevationData[row][col];
+                    const normalizedElevation = realElevation - baseElevation;
+                    
+                    // Apply 3x vertical exaggeration by default
+                    const scaledElevation = normalizedElevation * 3.0;
+                    
+                    vertices[idx * 3 + 1] = scaledElevation;
+                    originalHeightData.push(normalizedElevation);
+                    idx++;
+                }
+            }
+
+            geometry.computeVertexNormals();
+
+            // Create material with color gradient
+            const material = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                flatShading: false,
+                side: THREE.DoubleSide
+            });
+
+            // Add vertex colors based on elevation
+            const colors = [];
+            const color = new THREE.Color();
+            
+            for (let i = 0; i < vertices.length; i += 3) {
+                const height = vertices[i + 1];
+                const baseHeight = originalHeightData[i / 3];
+                
+                // Color gradient based on elevation
+                const normalizedHeight = baseHeight / elevationRange;
+                
+                if (normalizedHeight < 0.2) {
+                    color.setHex(0x4a7c59); // Dark green
+                } else if (normalizedHeight < 0.4) {
+                    color.setHex(0x6b8e23); // Green
+                } else if (normalizedHeight < 0.6) {
+                    color.setHex(0x9acd32); // Yellow-green
+                } else if (normalizedHeight < 0.8) {
+                    color.setHex(0xdaa520); // Golden
+                } else {
+                    color.setHex(0xd2b48c); // Tan
+                }
+                
+                colors.push(color.r, color.g, color.b);
+            }
+            
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+            terrain = new THREE.Mesh(geometry, material);
+            terrain.castShadow = true;
+            terrain.receiveShadow = true;
+            scene.add(terrain);
+        }
+
+        function setupControls() {
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const deltaX = e.clientX - previousMousePosition.x;
+                    const deltaY = e.clientY - previousMousePosition.y;
+
+                    if (e.button === 0 || e.buttons === 1) {
+                        cameraRotationState.theta -= deltaX * 0.01;
+                        cameraRotationState.phi -= deltaY * 0.01;
+                        cameraRotationState.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraRotationState.phi));
+                    } else if (e.button === 2 || e.buttons === 2) {
+                        const right = new THREE.Vector3();
+                        const up = new THREE.Vector3(0, 1, 0);
+                        camera.getWorldDirection(right);
+                        right.cross(up).normalize();
+                        
+                        cameraTargetState.add(right.multiplyScalar(-deltaX * 0.1));
+                        cameraTargetState.y += deltaY * 0.1;
+                    }
+
+                    previousMousePosition = { x: e.clientX, y: e.clientY };
+                    updateCameraFromState();
+                }
+            });
+
+            renderer.domElement.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+
+            renderer.domElement.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                cameraDistanceState += e.deltaY * 0.05;
+                cameraDistanceState = Math.max(10, Math.min(200, cameraDistanceState));
+                updateCameraFromState();
+            });
+
+            renderer.domElement.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+            });
+        }
+
+        function rotateCameraBy(thetaDelta, phiDelta) {
+            cameraRotationState.theta += thetaDelta;
+            cameraRotationState.phi += phiDelta;
+            cameraRotationState.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraRotationState.phi));
+            updateCameraFromState();
+        }
+
+        function zoomCamera(delta) {
+            cameraDistanceState += delta;
+            cameraDistanceState = Math.max(10, Math.min(300, cameraDistanceState));
+            updateCameraFromState();
+        }
+
+        function panCameraBy(deltaX, deltaY) {
+            const right = new THREE.Vector3();
+            const up = new THREE.Vector3(0, 1, 0);
+            camera.getWorldDirection(right);
+            right.cross(up).normalize();
+            
+            cameraTargetState.add(right.multiplyScalar(-deltaX * 0.2));
+            cameraTargetState.y += deltaY * 0.2;
+            updateCameraFromState();
+        }
+
+        function updateCameraFromState() {
+            camera.position.x = cameraTargetState.x + cameraDistanceState * Math.sin(cameraRotationState.phi) * Math.cos(cameraRotationState.theta);
+            camera.position.y = cameraTargetState.y + cameraDistanceState * Math.cos(cameraRotationState.phi);
+            camera.position.z = cameraTargetState.z + cameraDistanceState * Math.sin(cameraRotationState.phi) * Math.sin(cameraRotationState.theta);
+            camera.lookAt(cameraTargetState);
+        }
+
+        function setupTouchControls() {
+            const dpadButtons = {
+                'dpad-up': 'forward',
+                'dpad-down': 'backward',
+                'dpad-left': 'left',
+                'dpad-right': 'right',
+                'dpad-center': 'up'
+            };
+
+            for (const [id, direction] of Object.entries(dpadButtons)) {
+                const btn = document.getElementById(id);
+                
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    movement[direction] = true;
+                });
+                btn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    movement[direction] = false;
+                });
+                btn.addEventListener('touchcancel', (e) => {
+                    e.preventDefault();
+                    movement[direction] = false;
+                });
+                
+                btn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    movement[direction] = true;
+                });
+                btn.addEventListener('mouseup', (e) => {
+                    e.preventDefault();
+                    movement[direction] = false;
+                });
+                btn.addEventListener('mouseleave', (e) => {
+                    e.preventDefault();
+                    movement[direction] = false;
+                });
+            }
+
+            let zoomInterval = null;
+            
+            const startZoomIn = () => {
+                zoomCamera(-5);
+                if (zoomInterval) clearInterval(zoomInterval);
+                zoomInterval = setInterval(() => zoomCamera(-5), 100);
+            };
+            
+            const startZoomOut = () => {
+                zoomCamera(5);
+                if (zoomInterval) clearInterval(zoomInterval);
+                zoomInterval = setInterval(() => zoomCamera(5), 100);
+            };
+            
+            const stopZoom = () => {
+                if (zoomInterval) {
+                    clearInterval(zoomInterval);
+                    zoomInterval = null;
+                }
+            };
+
+            document.getElementById('zoom-in').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                startZoomIn();
+            });
+            document.getElementById('zoom-in').addEventListener('touchend', (e) => {
+                e.preventDefault();
+                stopZoom();
+            });
+            document.getElementById('zoom-in').addEventListener('touchcancel', stopZoom);
+            
+            document.getElementById('zoom-out').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                startZoomOut();
+            });
+            document.getElementById('zoom-out').addEventListener('touchend', (e) => {
+                e.preventDefault();
+                stopZoom();
+            });
+            document.getElementById('zoom-out').addEventListener('touchcancel', stopZoom);
+            
+            document.getElementById('zoom-in').addEventListener('mousedown', startZoomIn);
+            document.getElementById('zoom-in').addEventListener('mouseup', stopZoom);
+            document.getElementById('zoom-in').addEventListener('mouseleave', stopZoom);
+            
+            document.getElementById('zoom-out').addEventListener('mousedown', startZoomOut);
+            document.getElementById('zoom-out').addEventListener('mouseup', stopZoom);
+            document.getElementById('zoom-out').addEventListener('mouseleave', stopZoom);
+
+            // Touch gestures
+            let touches = {};
+            let lastTouchDistance = 0;
+            let lastTouchMidpoint = { x: 0, y: 0 };
+            let isRotating = false;
+
+            renderer.domElement.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                
+                touches = {};
+                for (let i = 0; i < e.touches.length; i++) {
+                    touches[e.touches[i].identifier] = {
+                        x: e.touches[i].clientX,
+                        y: e.touches[i].clientY
+                    };
+                }
+
+                if (e.touches.length === 1) {
+                    isRotating = true;
+                    lastTouchMidpoint = {
+                        x: e.touches[0].clientX,
+                        y: e.touches[0].clientY
+                    };
+                } else if (e.touches.length === 2) {
+                    isRotating = false;
+                    
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    lastTouchMidpoint = {
+                        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                        y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+                    };
+                }
+            });
+
+            renderer.domElement.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+
+                if (e.touches.length === 1 && isRotating) {
+                    const deltaX = e.touches[0].clientX - lastTouchMidpoint.x;
+                    const deltaY = e.touches[0].clientY - lastTouchMidpoint.y;
+
+                    rotateCameraBy(-deltaX * 0.01, -deltaY * 0.01);
+
+                    lastTouchMidpoint = {
+                        x: e.touches[0].clientX,
+                        y: e.touches[0].clientY
+                    };
+                } else if (e.touches.length === 2) {
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (lastTouchDistance > 0) {
+                        const delta = lastTouchDistance - distance;
+                        zoomCamera(delta * 0.5);
+                    }
+                    
+                    lastTouchDistance = distance;
+
+                    const midpoint = {
+                        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                        y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+                    };
+
+                    const panDeltaX = midpoint.x - lastTouchMidpoint.x;
+                    const panDeltaY = midpoint.y - lastTouchMidpoint.y;
+                    
+                    panCameraBy(panDeltaX, panDeltaY);
+
+                    lastTouchMidpoint = midpoint;
+                }
+            });
+
+            renderer.domElement.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                
+                if (e.touches.length === 0) {
+                    isRotating = false;
+                    touches = {};
+                } else if (e.touches.length === 1) {
+                    isRotating = true;
+                    lastTouchMidpoint = {
+                        x: e.touches[0].clientX,
+                        y: e.touches[0].clientY
+                    };
+                }
+            });
+
+            renderer.domElement.addEventListener('touchcancel', (e) => {
+                e.preventDefault();
+                isRotating = false;
+                touches = {};
+            });
+        }
+
+        function onKeyDown(e) {
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    movement.forward = true;
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    movement.backward = true;
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    movement.left = true;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    movement.right = true;
+                    break;
+                case 'q':
+                case 'Q':
+                    movement.up = true;
+                    break;
+                case 'e':
+                case 'E':
+                    movement.down = true;
+                    break;
+                case ' ':
+                    resetCamera();
+                    break;
+            }
+        }
+
+        function onKeyUp(e) {
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    movement.forward = false;
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    movement.backward = false;
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    movement.left = false;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    movement.right = false;
+                    break;
+                case 'q':
+                case 'Q':
+                    movement.up = false;
+                    break;
+                case 'e':
+                case 'E':
+                    movement.down = false;
+                    break;
+            }
+        }
+
+        function updateMovement() {
+            const moveSpeed = 0.5;
+            const direction = new THREE.Vector3();
+            const right = new THREE.Vector3();
+
+            camera.getWorldDirection(direction);
+            right.crossVectors(direction, new THREE.Vector3(0, 1, 0)).normalize();
+
+            if (movement.forward) {
+                camera.position.add(direction.multiplyScalar(moveSpeed));
+            }
+            if (movement.backward) {
+                camera.position.sub(direction.multiplyScalar(moveSpeed));
+            }
+            if (movement.left) {
+                camera.position.sub(right.multiplyScalar(moveSpeed));
+            }
+            if (movement.right) {
+                camera.position.add(right.multiplyScalar(moveSpeed));
+            }
+            if (movement.up) {
+                camera.position.y += moveSpeed;
+            }
+            if (movement.down) {
+                camera.position.y -= moveSpeed;
+            }
+        }
+
+        function updateHeightScale(e) {
+            const scale = parseFloat(e.target.value);
+            document.getElementById('heightValue').textContent = scale.toFixed(1);
+            
+            const vertices = terrain.geometry.attributes.position.array;
+            const colors = terrain.geometry.attributes.color.array;
+            const color = new THREE.Color();
+            
+            const elevationRange = Math.max(...originalHeightData) - Math.min(...originalHeightData);
+            
+            for (let i = 0; i < vertices.length; i += 3) {
+                vertices[i + 1] = originalHeightData[i / 3] * scale;
+                
+                const normalizedHeight = originalHeightData[i / 3] / elevationRange;
+                
+                if (normalizedHeight < 0.2) {
+                    color.setHex(0x4a7c59);
+                } else if (normalizedHeight < 0.4) {
+                    color.setHex(0x6b8e23);
+                } else if (normalizedHeight < 0.6) {
+                    color.setHex(0x9acd32);
+                } else if (normalizedHeight < 0.8) {
+                    color.setHex(0xdaa520);
+                } else {
+                    color.setHex(0xd2b48c);
+                }
+                
+                colors[i] = color.r;
+                colors[i + 1] = color.g;
+                colors[i + 2] = color.b;
+            }
+            
+            terrain.geometry.attributes.position.needsUpdate = true;
+            terrain.geometry.attributes.color.needsUpdate = true;
+            terrain.geometry.computeVertexNormals();
+        }
+
+        function toggleWireframe(e) {
+            terrain.material.wireframe = e.target.checked;
+        }
+
+        function resetCamera() {
+            camera.position.set(0, 80, 100);
+            camera.lookAt(0, 50, 0);
+            cameraRotationState = { theta: 0, phi: Math.PI / 4 };
+            cameraDistanceState = 120;
+            cameraTargetState = new THREE.Vector3(0, 50, 0);
+        }
+
+        function topView() {
+            camera.position.set(0, 200, 0);
+            camera.lookAt(0, 50, 0);
+            cameraRotationState = { theta: 0, phi: 0.01 };
+            cameraDistanceState = 200;
+            cameraTargetState = new THREE.Vector3(0, 50, 0);
+        }
+
+        function toggleAnimation() {
+            animating = !animating;
+        }
+
+        function setRealisticScale() {
+            document.getElementById('heightScale').value = 1.0;
+            const event = new Event('input');
+            document.getElementById('heightScale').dispatchEvent(event);
+        }
+
+        function toggleTouchControls() {
+            const touchControls = document.getElementById('touchControls');
+            const zoomControls = document.getElementById('zoomControls');
+            
+            if (touchControls.style.display === 'none' || touchControls.style.display === '') {
+                touchControls.style.display = 'block';
+                zoomControls.style.display = 'flex';
+            } else {
+                touchControls.style.display = 'none';
+                zoomControls.style.display = 'none';
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updateMovement();
+            
+            const hasMovement = Object.values(movement).some(v => v);
+            if (animating && !hasMovement) {
+                camera.position.x = Math.sin(Date.now() * 0.0002) * 100;
+                camera.position.z = Math.cos(Date.now() * 0.0002) * 100;
+                camera.lookAt(0, 50, 0);
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Initialize the scene
+        init();
+    </script>
+</body>
+  </html>
