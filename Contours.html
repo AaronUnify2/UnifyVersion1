@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Map with Contours</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
+    <script src="https://cdn.jsdelivr.net/npm/ol@v10.2.1/dist/ol.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 15px;
+            z-index: 1000;
+        }
+
+        .control-btn {
+            display: block;
+            width: 100%;
+            padding: 12px 20px;
+            margin-bottom: 10px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            color: #333;
+        }
+
+        .control-btn:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-btn:hover {
+            background: #f5f5f5;
+            border-color: #2196F3;
+        }
+
+        .control-btn.active {
+            background: #2196F3;
+            color: white;
+            border-color: #2196F3;
+        }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Location marker style */
+        .location-marker {
+            width: 20px;
+            height: 20px;
+            background: #2196F3;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+
+        .location-accuracy {
+            border: 2px solid #2196F3;
+            background: rgba(33, 150, 243, 0.1);
+        }
+
+        /* Toast notification */
+        .toast {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 2000;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+
+        /* Legend */
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            padding: 12px 15px;
+            font-size: 12px;
+            z-index: 1000;
+            max-width: 200px;
+        }
+
+        .legend-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            color: #666;
+        }
+
+        .legend-line {
+            width: 30px;
+            height: 2px;
+            margin-right: 8px;
+            background: #8B4513;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="control-panel">
+        <button id="locationBtn" class="control-btn">📍 My Location</button>
+        <button id="contoursBtn" class="control-btn">🗻 Contours</button>
+    </div>
+
+    <div id="legend" class="legend" style="display: none;">
+        <div class="legend-title">Contour Lines</div>
+        <div class="legend-item">
+            <div class="legend-line"></div>
+            <span>1m, 5m, 10m intervals</span>
+        </div>
+        <div style="font-size: 11px; color: #999; margin-top: 5px;">
+            Zoom in for higher detail
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // Create contours layer (WMS from Queensland Government)
+        const contoursLayer = new ol.layer.Tile({
+            source: new ol.source.TileWMS({
+                url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer',
+                params: {
+                    'LAYERS': 'Contour_LiDAR_1m,Contour_LiDAR_5m,Contour_SRTM_10m',
+                    'TILED': true,
+                    'FORMAT': 'image/png',
+                    'TRANSPARENT': true
+                },
+                serverType: 'mapserver',
+                crossOrigin: 'anonymous'
+            }),
+            visible: false,
+            opacity: 0.7
+        });
+
+        // Initialize the map
+        const map = new ol.Map({
+            target: 'map',
+            layers: [
+                new ol.layer.Tile({
+                    source: new ol.source.OSM()
+                }),
+                contoursLayer
+            ],
+            view: new ol.View({
+                center: ol.proj.fromLonLat([145.7781, -16.9186]), // Center of Queensland
+                zoom: 6
+            })
+        });
+
+        // Layer for user location
+        const locationLayer = new ol.layer.Vector({
+            source: new ol.source.Vector(),
+            style: new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 8,
+                    fill: new ol.style.Fill({
+                        color: '#2196F3'
+                    }),
+                    stroke: new ol.style.Stroke({
+                        color: 'white',
+                        width: 3
+                    })
+                })
+            }),
+            zIndex: 1000
+        });
+        map.addLayer(locationLayer);
+
+        // Store current location
+        let currentLocation = null;
+        let watchId = null;
+
+        // Toast notification function
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+
+        // Get user location
+        function getUserLocation() {
+            const locationBtn = document.getElementById('locationBtn');
+            
+            if (!navigator.geolocation) {
+                showToast('Geolocation is not supported by your browser');
+                return;
+            }
+
+            locationBtn.disabled = true;
+            locationBtn.textContent = '📍 Getting location...';
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const coords = [position.coords.longitude, position.coords.latitude];
+                    currentLocation = coords;
+
+                    // Clear previous location markers
+                    locationLayer.getSource().clear();
+
+                    // Add new location marker
+                    const locationFeature = new ol.Feature({
+                        geometry: new ol.geom.Point(ol.proj.fromLonLat(coords)),
+                        name: 'Your Location'
+                    });
+                    locationLayer.getSource().addFeature(locationFeature);
+
+                    // Add accuracy circle if available
+                    if (position.coords.accuracy) {
+                        const accuracyFeature = new ol.Feature({
+                            geometry: new ol.geom.Circle(
+                                ol.proj.fromLonLat(coords),
+                                position.coords.accuracy
+                            )
+                        });
+                        accuracyFeature.setStyle(new ol.style.Style({
+                            fill: new ol.style.Fill({
+                                color: 'rgba(33, 150, 243, 0.1)'
+                            }),
+                            stroke: new ol.style.Stroke({
+                                color: '#2196F3',
+                                width: 2,
+                                lineDash: [5, 5]
+                            })
+                        }));
+                        locationLayer.getSource().addFeature(accuracyFeature);
+                    }
+
+                    // Animate to location
+                    map.getView().animate({
+                        center: ol.proj.fromLonLat(coords),
+                        zoom: 15,
+                        duration: 1000
+                    });
+
+                    locationBtn.disabled = false;
+                    locationBtn.textContent = '📍 My Location';
+                    locationBtn.classList.add('active');
+                    
+                    showToast(`Location found: ${coords[1].toFixed(6)}, ${coords[0].toFixed(6)}`);
+                },
+                (error) => {
+                    let errorMessage = 'Unable to get location';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage = 'Location access denied. Please enable location permissions.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = 'Location information unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = 'Location request timed out';
+                            break;
+                    }
+                    showToast(errorMessage);
+                    locationBtn.disabled = false;
+                    locationBtn.textContent = '📍 My Location';
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        // Toggle contours
+        function toggleContours() {
+            const contoursBtn = document.getElementById('contoursBtn');
+            const legend = document.getElementById('legend');
+            const isVisible = contoursLayer.getVisible();
+            
+            contoursLayer.setVisible(!isVisible);
+            
+            if (!isVisible) {
+                contoursBtn.classList.add('active');
+                legend.style.display = 'block';
+                showToast('Contours enabled - zoom in for detail');
+            } else {
+                contoursBtn.classList.remove('active');
+                legend.style.display = 'none';
+                showToast('Contours disabled');
+            }
+        }
+
+        // Add click events
+        document.getElementById('locationBtn').addEventListener('click', getUserLocation);
+        document.getElementById('contoursBtn').addEventListener('click', toggleContours);
+
+        // Add popup on click for location marker
+        const popup = new ol.Overlay({
+            element: document.createElement('div'),
+            positioning: 'bottom-center',
+            stopEvent: false,
+            offset: [0, -10]
+        });
+        map.addOverlay(popup);
+
+        map.on('click', (evt) => {
+            const feature = map.forEachFeatureAtPixel(evt.pixel, (feature) => feature);
+            
+            if (feature && feature.get('name') === 'Your Location') {
+                const coordinates = feature.getGeometry().getCoordinates();
+                const lonLat = ol.proj.toLonLat(coordinates);
+                
+                const popupElement = popup.getElement();
+                popupElement.innerHTML = `
+                    <div style="background: white; padding: 10px 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-size: 13px;">
+                        <strong>Your Location</strong><br>
+                        <span style="color: #666;">
+                            Lat: ${lonLat[1].toFixed(6)}<br>
+                            Lon: ${lonLat[0].toFixed(6)}
+                        </span>
+                    </div>
+                `;
+                popup.setPosition(coordinates);
+            } else {
+                popup.setPosition(undefined);
+            }
+        });
+
+        // Change cursor on hover
+        map.on('pointermove', (evt) => {
+            const pixel = map.getEventPixel(evt.originalEvent);
+            const hit = map.hasFeatureAtPixel(pixel);
+            map.getTarget().style.cursor = hit ? 'pointer' : '';
+        });
+
+        // Show helpful message about zoom levels
+        map.getView().on('change:resolution', () => {
+            const zoom = map.getView().getZoom();
+            if (contoursLayer.getVisible() && zoom < 12) {
+                // User might not see contours at low zoom levels
+            }
+        });
+    </script>
+</body>
+</html>
