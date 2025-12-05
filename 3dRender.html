@@ -512,45 +512,82 @@
             loadingOverlay.classList.add('show');
 
             try {
-                const width = 100;  // Sample grid resolution
-                const height = 100;
+                const width = 50;  // Grid resolution (50x50 = 2500 samples)
+                const height = 50;
                 
-                // Build the ImageServer export request
-                const params = new URLSearchParams({
-                    bbox: `${bottomLeft[0]},${bottomLeft[1]},${topRight[0]},${topRight[1]}`,
-                    bboxSR: '4326',
-                    size: `${width},${height}`,
-                    imageSR: '4326',
-                    format: 'json',
-                    pixelType: 'F32',
-                    noData: '',
-                    interpolation: 'RSP_BilinearInterpolation',
-                    f: 'json'
-                });
-
-                const url = `https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/QldDem/ImageServer/exportImage?${params}`;
+                const lonStep = (topRight[0] - bottomLeft[0]) / (width - 1);
+                const latStep = (topRight[1] - bottomLeft[1]) / (height - 1);
                 
-                const response = await fetch(url);
-                const data = await response.json();
-                
-                if (data.href) {
-                    // Download the actual elevation data
-                    const imageResponse = await fetch(data.href);
-                    const imageData = await imageResponse.arrayBuffer();
-                    
-                    // Parse the elevation values
-                    const elevationData = new Float32Array(imageData);
-                    
-                    // Create 3D visualization
-                    create3DTerrain(elevationData, width, height, bottomLeft, topRight);
-                } else {
-                    showToast('Could not fetch elevation data for this area');
+                // Build array of sample points
+                const locations = [];
+                for (let i = 0; i < height; i++) {
+                    for (let j = 0; j < width; j++) {
+                        const lon = bottomLeft[0] + j * lonStep;
+                        const lat = bottomLeft[1] + i * latStep;
+                        locations.push({
+                            geometry: {
+                                x: lon,
+                                y: lat,
+                                spatialReference: { wkid: 4326 }
+                            }
+                        });
+                    }
                 }
+                
+                // Split into chunks to avoid URL length limits
+                const chunkSize = 100;
+                const elevationData = new Float32Array(width * height);
+                
+                for (let chunk = 0; chunk < locations.length; chunk += chunkSize) {
+                    const chunkLocations = locations.slice(chunk, chunk + chunkSize);
+                    
+                    const params = {
+                        geometryType: 'esriGeometryPoint',
+                        geometry: JSON.stringify(chunkLocations.map(l => l.geometry)),
+                        returnFirstValueOnly: false,
+                        interpolation: 'RSP_BilinearInterpolation',
+                        f: 'json'
+                    };
+                    
+                    const url = 'https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/QldDem/ImageServer/getSamples';
+                    
+                    const formData = new URLSearchParams(params);
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.samples) {
+                        // Extract elevation values
+                        for (let i = 0; i < data.samples.length; i++) {
+                            const sample = data.samples[i];
+                            const elevation = sample.value || sample.values?.[0] || 0;
+                            elevationData[chunk + i] = elevation;
+                        }
+                    } else {
+                        console.error('No samples in response:', data);
+                    }
+                    
+                    // Update loading message
+                    document.querySelector('#loadingOverlay div:last-child').textContent = 
+                        `Fetching elevation data... ${Math.round((chunk / locations.length) * 100)}%`;
+                }
+                
+                // Create 3D visualization
+                create3DTerrain(elevationData, width, height, bottomLeft, topRight);
+                
             } catch (error) {
                 console.error('Error fetching elevation:', error);
-                showToast('Error fetching elevation data');
+                showToast('Error fetching elevation data: ' + error.message);
             } finally {
                 loadingOverlay.classList.remove('show');
+                document.querySelector('#loadingOverlay div:last-child').textContent = 
+                    'Fetching elevation data...';
             }
         }
 
