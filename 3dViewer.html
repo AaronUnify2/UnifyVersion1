@@ -308,28 +308,6 @@
                 max-width: 200px;
             }
         }
-
-        /* Debug panel */
-        .debug-panel {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0, 0, 0, 0.85);
-            color: #00ff00;
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 11px;
-            font-family: monospace;
-            max-width: 90%;
-            max-height: 200px;
-            overflow-y: auto;
-            z-index: 10003;
-            line-height: 1.4;
-        }
-
-        .debug-panel div {
-            margin-bottom: 3px;
-        }
     </style>
 </head>
 <body>
@@ -358,8 +336,8 @@
                 <h4>View Settings</h4>
                 <div class="control-item">
                     <label>Vertical Scale:</label>
-                    <input type="range" id="verticalScale" min="0.1" max="5" step="0.1" value="1.0">
-                    <span id="scaleValue">1.0</span>
+                    <input type="range" id="verticalScale" min="0.1" max="5" step="0.1" value="0.1">
+                    <span id="scaleValue">0.1</span>
                 </div>
                 <div class="control-item">
                     <label>Wireframe:</label>
@@ -397,22 +375,10 @@
         <div>Loading terrain data...</div>
     </div>
 
-    <div id="debugPanel" class="debug-panel"></div>
-
     <script>
         // Store current terrain data for saving
         let currentTerrainData = null;
         let currentScene = null;
-
-        // Debug function that shows messages on screen
-        function debug(message) {
-            console.log(message);
-            const debugPanel = document.getElementById('debugPanel');
-            const msgDiv = document.createElement('div');
-            msgDiv.textContent = typeof message === 'object' ? JSON.stringify(message) : message;
-            debugPanel.appendChild(msgDiv);
-            debugPanel.scrollTop = debugPanel.scrollHeight;
-        }
 
         // Toast notification function
         function showToast(message, duration = 3000) {
@@ -444,7 +410,6 @@
             URL.revokeObjectURL(url);
             
             showToast('Terrain data saved!');
-            debug('Saved terrain data: ' + currentTerrainData.width + 'x' + currentTerrainData.height);
         }
 
         // Load terrain data from JSON file
@@ -456,9 +421,6 @@
             
             reader.onload = function(e) {
                 try {
-                    // Clear debug panel
-                    document.getElementById('debugPanel').innerHTML = '';
-                    
                     const data = JSON.parse(e.target.result);
                     
                     if (!data.elevationData || !data.width || !data.height || !data.bottomLeft || !data.topRight) {
@@ -466,9 +428,6 @@
                         loadingOverlay.classList.remove('show');
                         return;
                     }
-                    
-                    debug('Loading terrain data: ' + data.width + 'x' + data.height);
-                    debug('Saved on: ' + (data.timestamp || 'unknown'));
                     
                     // Convert back to Float32Array
                     const elevationData = new Float32Array(data.elevationData);
@@ -487,7 +446,6 @@
                     
                     showToast('Terrain data loaded!');
                 } catch (error) {
-                    debug('Error loading file: ' + error.message);
                     showToast('Error loading terrain data file');
                 } finally {
                     loadingOverlay.classList.remove('show');
@@ -499,11 +457,6 @@
 
         // Create 3D terrain visualization
         function create3DTerrain(elevationData, width, height, bottomLeft, topRight) {
-            debug('Creating 3D terrain: ' + width + 'x' + height);
-            debug('Data length: ' + elevationData.length);
-            debug('Min elev: ' + Math.min(...elevationData) + 'm');
-            debug('Max elev: ' + Math.max(...elevationData) + 'm');
-            
             const container = document.getElementById('viewer3d');
             
             // Clear previous 3D content if exists
@@ -542,8 +495,6 @@
             renderer.setSize(container.clientWidth, container.clientHeight);
             container.appendChild(renderer.domElement);
             
-            debug('Renderer: ' + container.clientWidth + 'x' + container.clientHeight);
-            
             // Find elevation range for scaling
             let minElev = Infinity;
             let maxElev = -Infinity;
@@ -556,7 +507,6 @@
             
             // If all values are zero or invalid, create a test terrain
             if (minElev === Infinity || maxElev === -Infinity || minElev === maxElev) {
-                debug('WARN: Invalid data, using test terrain');
                 minElev = 0;
                 maxElev = 100;
                 for (let i = 0; i < elevationData.length; i++) {
@@ -564,11 +514,9 @@
                 }
             }
             
-            debug('Final elevation range: ' + minElev + ' to ' + maxElev + 'm');
-            
             const elevRange = maxElev - minElev;
             const scale = Math.max(width, height) / 100;
-            const verticalExaggeration = 1.0;
+            const verticalExaggeration = 0.1;
             
             // Create geometry
             const geometry = new THREE.PlaneGeometry(
@@ -640,8 +588,6 @@
             terrain.rotation.x = -Math.PI / 2;
             scene.add(terrain);
             
-            debug('Terrain mesh added to scene');
-            
             // Add lighting
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
@@ -650,55 +596,77 @@
             directionalLight.position.set(1, 1, 1);
             scene.add(directionalLight);
             
-            // Position camera
-            const cameraStartDistance = scale * 150;
+            // Setup camera
+            const maxDim = Math.max(width * scale, height * scale);
+            const cameraStartDistance = maxDim * 1.5;
             cameraDistance = cameraStartDistance;
-            cameraTarget.set(0, 0, 0);
-            camera.position.set(0, cameraStartDistance * 0.5, cameraStartDistance);
-            camera.lookAt(0, 0, 0);
             
-            debug('Camera at: ' + camera.position.x + ',' + camera.position.y + ',' + camera.position.z);
-            
-            // Function to update camera from rotation state
             function updateCameraFromState() {
-                camera.position.x = cameraTarget.x + cameraDistance * Math.sin(cameraRotation.phi) * Math.cos(cameraRotation.theta);
-                camera.position.y = cameraTarget.y + cameraDistance * Math.cos(cameraRotation.phi);
-                camera.position.z = cameraTarget.z + cameraDistance * Math.sin(cameraRotation.phi) * Math.sin(cameraRotation.theta);
+                const distance = cameraDistance;
+                const x = cameraTarget.x + distance * Math.sin(cameraRotation.phi) * Math.cos(cameraRotation.theta);
+                const y = cameraTarget.y + distance * Math.cos(cameraRotation.phi);
+                const z = cameraTarget.z + distance * Math.sin(cameraRotation.phi) * Math.sin(cameraRotation.theta);
+                
+                camera.position.set(x, y, z);
                 camera.lookAt(cameraTarget);
             }
             
-            // Mouse/Touch controls
+            updateCameraFromState();
+            
+            // Mouse controls
             let isDragging = false;
-            let previousMousePosition = { x: 0, y: 0 };
-
+            let isPanning = false;
+            let lastMouseX = 0;
+            let lastMouseY = 0;
+            
             renderer.domElement.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                previousMousePosition = { x: e.clientX, y: e.clientY };
+                if (e.button === 0) {
+                    isDragging = true;
+                } else if (e.button === 2) {
+                    isPanning = true;
+                }
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                e.preventDefault();
             });
-
-            renderer.domElement.addEventListener('mousemove', (e) => {
+            
+            renderer.domElement.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+            });
+            
+            window.addEventListener('mouseup', () => {
+                isDragging = false;
+                isPanning = false;
+            });
+            
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging && !isPanning) return;
+                
+                const dx = e.clientX - lastMouseX;
+                const dy = e.clientY - lastMouseY;
+                
                 if (isDragging) {
-                    const deltaX = e.clientX - previousMousePosition.x;
-                    const deltaY = e.clientY - previousMousePosition.y;
-
-                    if (e.buttons === 1) {
-                        cameraRotation.theta -= deltaX * 0.01;
-                        cameraRotation.phi -= deltaY * 0.01;
-                        cameraRotation.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraRotation.phi));
-                    } else if (e.buttons === 2) {
-                        const right = new THREE.Vector3();
-                        camera.getWorldDirection(right);
-                        right.cross(new THREE.Vector3(0, 1, 0)).normalize();
-                        cameraTarget.add(right.multiplyScalar(-deltaX * 0.1));
-                        cameraTarget.y += deltaY * 0.1;
-                    }
-                    previousMousePosition = { x: e.clientX, y: e.clientY };
+                    cameraRotation.theta -= dx * 0.005;
+                    cameraRotation.phi -= dy * 0.005;
+                    cameraRotation.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraRotation.phi));
+                    updateCameraFromState();
+                } else if (isPanning) {
+                    const panSpeed = 0.5;
+                    const dir = new THREE.Vector3();
+                    const right = new THREE.Vector3();
+                    
+                    camera.getWorldDirection(dir);
+                    dir.y = 0;
+                    dir.normalize();
+                    right.crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+                    
+                    cameraTarget.sub(right.multiplyScalar(dx * panSpeed));
+                    cameraTarget.add(dir.multiplyScalar(dy * panSpeed));
                     updateCameraFromState();
                 }
-            });
-
-            renderer.domElement.addEventListener('mouseup', () => { 
-                isDragging = false; 
+                
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
             });
             
             renderer.domElement.addEventListener('wheel', (e) => {
@@ -708,9 +676,7 @@
                 updateCameraFromState();
             });
             
-            renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
-            
-            // Touch controls for swipe and pinch
+            // Touch controls
             let lastTouch = { x: 0, y: 0, dist: 0 };
             
             renderer.domElement.addEventListener('touchstart', (e) => {
@@ -722,7 +688,7 @@
                     lastTouch.dist = Math.sqrt(dx * dx + dy * dy);
                 }
             });
-
+            
             renderer.domElement.addEventListener('touchmove', (e) => {
                 e.preventDefault();
                 if (e.touches.length === 1) {
@@ -831,7 +797,6 @@
                 if (window.getComputedStyle(tc).display === 'none') {
                     tc.style.display = 'block';
                 }
-                debug('Mobile device detected - touch controls enabled');
             }
             
             // View control functions
@@ -840,7 +805,6 @@
                 cameraDistance = cameraStartDistance;
                 cameraTarget.set(0, 0, 0);
                 updateCameraFromState();
-                debug('View reset');
             }
             
             function topView() {
@@ -848,12 +812,10 @@
                 cameraDistance = cameraStartDistance * 1.5;
                 cameraTarget.set(0, 0, 0);
                 updateCameraFromState();
-                debug('Top view');
             }
             
             function toggleAutoRotate() {
                 autoRotate = !autoRotate;
-                debug('Auto-rotate: ' + (autoRotate ? 'ON' : 'OFF'));
             }
             
             function toggleTouchUI() {
@@ -862,10 +824,8 @@
                 
                 if (computedDisplay === 'none') {
                     tc.style.display = 'block';
-                    debug('Touch UI: shown');
                 } else {
                     tc.style.display = 'none';
-                    debug('Touch UI: hidden');
                 }
             }
             
@@ -904,7 +864,6 @@
             if (wireframeCheck) wireframeCheck.addEventListener('change', (e) => toggleWireframe(e.target.checked));
             
             // Animation loop
-            let frameCount = 0;
             function animate() {
                 requestAnimationFrame(animate);
                 
@@ -916,15 +875,9 @@
                 }
                 
                 renderer.render(scene, camera);
-                
-                if (frameCount < 3) {
-                    debug('Frame ' + frameCount + ' rendered');
-                    frameCount++;
-                }
             }
             
             animate();
-            debug('Animation loop started');
             
             // Show controls
             document.querySelector('.viewer-controls').style.display = 'block';
