@@ -834,6 +834,71 @@
             }
         }
 
+        // Fetch satellite imagery as texture for the terrain
+        async function fetchSatelliteTexture(bottomLeft, topRight, width, height) {
+            try {
+                debug('Fetching satellite texture for coordinates');
+                
+                // Calculate image size (max 2048 for performance)
+                const maxSize = 2048;
+                const aspectRatio = (topRight[0] - bottomLeft[0]) / (topRight[1] - bottomLeft[1]);
+                let imgWidth, imgHeight;
+                
+                if (aspectRatio > 1) {
+                    imgWidth = maxSize;
+                    imgHeight = Math.floor(maxSize / aspectRatio);
+                } else {
+                    imgHeight = maxSize;
+                    imgWidth = Math.floor(maxSize * aspectRatio);
+                }
+                
+                // Convert coordinates to Web Mercator (EPSG:3857) for ESRI
+                const bottomLeftMerc = ol.proj.transform(bottomLeft, 'EPSG:4326', 'EPSG:3857');
+                const topRightMerc = ol.proj.transform(topRight, 'EPSG:4326', 'EPSG:3857');
+                
+                // Build ESRI export request
+                const bbox = `${bottomLeftMerc[0]},${bottomLeftMerc[1]},${topRightMerc[0]},${topRightMerc[1]}`;
+                const exportUrl = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?` +
+                    `bbox=${bbox}&` +
+                    `bboxSR=3857&` +
+                    `size=${imgWidth},${imgHeight}&` +
+                    `imageSR=3857&` +
+                    `format=png&` +
+                    `transparent=false&` +
+                    `f=image`;
+                
+                debug('Fetching texture: ' + imgWidth + 'x' + imgHeight);
+                
+                // Load the texture
+                return new Promise((resolve, reject) => {
+                    const loader = new THREE.TextureLoader();
+                    loader.setCrossOrigin('anonymous');
+                    
+                    loader.load(
+                        exportUrl,
+                        (texture) => {
+                            texture.wrapS = THREE.ClampToEdgeWrapping;
+                            texture.wrapT = THREE.ClampToEdgeWrapping;
+                            texture.minFilter = THREE.LinearFilter;
+                            debug('Texture loaded successfully');
+                            resolve(texture);
+                        },
+                        (progress) => {
+                            // Progress callback
+                        },
+                        (error) => {
+                            debug('Texture load error: ' + error);
+                            reject(error);
+                        }
+                    );
+                });
+                
+            } catch (error) {
+                debug('Error fetching satellite texture: ' + error.message);
+                return null;
+            }
+        }
+
         // Create 3D terrain visualization
         function create3DTerrain(elevationData, width, height, bottomLeft, topRight) {
             debug('Creating 3D terrain: ' + width + 'x' + height);
@@ -963,12 +1028,38 @@
             
             geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
             
-            const material = new THREE.MeshPhongMaterial({
-                vertexColors: true,
-                flatShading: false,
-                shininess: 10,
-                side: THREE.DoubleSide
-            });
+            // Try to load satellite texture for the coordinates
+            let material;
+            if (bottomLeft && topRight) {
+                // Create material that will be updated when texture loads
+                material = new THREE.MeshPhongMaterial({
+                    vertexColors: true,
+                    flatShading: false,
+                    shininess: 10,
+                    side: THREE.DoubleSide
+                });
+                
+                // Fetch satellite imagery as texture
+                fetchSatelliteTexture(bottomLeft, topRight, width, height).then(texture => {
+                    if (texture) {
+                        // Update material to use texture instead of vertex colors
+                        material.map = texture;
+                        material.vertexColors = false;
+                        material.needsUpdate = true;
+                        debug('Satellite texture applied');
+                        showToast('Satellite texture loaded!');
+                    }
+                }).catch(error => {
+                    debug('Texture load failed: ' + error.message);
+                });
+            } else {
+                material = new THREE.MeshPhongMaterial({
+                    vertexColors: true,
+                    flatShading: false,
+                    shininess: 10,
+                    side: THREE.DoubleSide
+                });
+            }
             
             const terrain = new THREE.Mesh(geometry, material);
             terrain.rotation.x = -Math.PI / 2;
@@ -1375,4 +1466,3 @@
     </script>
 </body>
 </html>
-
