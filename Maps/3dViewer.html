@@ -927,7 +927,7 @@
             
             const velocity = new THREE.Vector3();
             const direction = new THREE.Vector3();
-            let moveSpeed = 0.5;  // Reduced for walking speed
+            let moveSpeed = 0.05;  // Reduced by 90% for slower, more controlled movement
             
             // Euler angles for camera rotation
             let pitch = 0;  // Up/down
@@ -981,6 +981,14 @@
             const scale = Math.max(width, height) / 100;
             const verticalExaggeration = 0.1;
             let originalHeightData = [];
+            
+            // Calculate proper player height (1.8m) in scene units
+            // The terrain scaling factor is: (verticalExaggeration * scale * 50) / elevRange
+            // So 1.8 meters in real world should be scaled the same way
+            const terrainScaleFactor = (verticalExaggeration * scale * 50) / elevRange;
+            const playerHeight = 1.8 * terrainScaleFactor;
+            
+            debug('Player height in scene units: ' + playerHeight.toFixed(3) + ' (representing 1.8m)');
             
             // Create geometry
             const geometry = new THREE.PlaneGeometry(
@@ -1088,8 +1096,9 @@
             scene.add(directionalLight);
             
             // Position camera above terrain at player height (1.8m)
-            // Start at center of terrain, 1.8m above it
-            camera.position.set(0, 1.8, 0);
+            // Start at center of terrain at eye level
+            // The collision detection will adjust this to proper ground height on first frame
+            camera.position.set(0, playerHeight, 0);
             camera.rotation.order = 'YXZ';
             
             debug('Camera at: ' + camera.position.x + ',' + camera.position.y + ',' + camera.position.z);
@@ -1111,8 +1120,8 @@
                     <input type="checkbox" id="wireframeToggle"> Wireframe
                 </label>
                 <label>
-                    Move Speed: <span id="speedValue">${moveSpeed.toFixed(1)}</span>
-                    <input type="range" id="speedSlider" min="0.1" max="5" step="0.1" value="${moveSpeed}">
+                    Move Speed: <span id="speedValue">${moveSpeed.toFixed(2)}</span>
+                    <input type="range" id="speedSlider" min="0.01" max="2" step="0.01" value="${moveSpeed}">
                 </label>
             `;
             container.appendChild(controlsUI);
@@ -1265,7 +1274,7 @@
             renderer.domElement.addEventListener('mousemove', function(e) {
                 if (!isPointerLocked || isMobile) return;
                 
-                const sensitivity = 0.0002; // Reduced by 90%
+                const sensitivity = 0.001; // Comfortable sensitivity for desktop mouse
                 yaw -= e.movementX * sensitivity;
                 pitch -= e.movementY * sensitivity;
                 
@@ -1387,7 +1396,7 @@
                     camera.position.add(velocity);
                 }
                 
-                // Terrain collision detection - keep camera 1.8m above ground
+                // Terrain collision detection - keep camera at eye level (1.8m above ground)
                 const raycaster = new THREE.Raycaster();
                 const downDirection = new THREE.Vector3(0, -1, 0);
                 // Cast ray from current position plus a bit above
@@ -1398,9 +1407,8 @@
                 
                 if (intersects.length > 0) {
                     const terrainHeight = intersects[0].point.y;
-                    const playerHeight = 1.8; // 1.8 meters tall
                     
-                    // If not actively flying up/down, stay on the ground
+                    // If not actively flying up/down, stay at eye level on the ground
                     if (!keys.up && !keys.down) {
                         camera.position.y = terrainHeight + playerHeight;
                     } else if (camera.position.y < terrainHeight + playerHeight) {
@@ -1478,7 +1486,7 @@
                     const deltaX = touchX - lastTouchX;
                     const deltaY = touchY - lastTouchY;
                     
-                    const sensitivity = 0.0003; // Reduced by 90%
+                    const sensitivity = 0.003; // Back to original
                     yaw -= deltaX * sensitivity;
                     pitch -= deltaY * sensitivity;
                     
@@ -1508,7 +1516,8 @@
             
             // View control functions
             function resetView() {
-                camera.position.set(0, 1.8, 0);
+                // Reset to ground level at eye height
+                camera.position.set(0, playerHeight, 0);
                 pitch = 0;
                 yaw = 0;
                 camera.rotation.set(0, 0, 0);
@@ -1568,7 +1577,7 @@
             
             function updateSpeed(value) {
                 moveSpeed = parseFloat(value);
-                document.getElementById('speedValue').textContent = moveSpeed.toFixed(1);
+                document.getElementById('speedValue').textContent = moveSpeed.toFixed(2);
             }
             
             // Add event listeners
@@ -1618,6 +1627,10 @@
             
             animate();
             debug('Animation loop started');
+            
+            // Do an initial movement update to position camera on terrain
+            updateMovement(0);
+            debug('Initial position set on terrain');
             
             // Handle window resize
             const resizeHandler = () => {
