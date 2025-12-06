@@ -89,8 +89,13 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
-            max-width: 280px;
+            max-width: 320px;
             width: auto;
+        }
+
+        .search-input-wrapper {
+            position: relative;
+            width: 100%;
         }
 
         .search-input {
@@ -105,6 +110,73 @@
 
         .search-input:focus {
             border-color: #2196F3;
+        }
+
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #2196F3;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            max-height: 250px;
+            overflow-y: auto;
+            display: none;
+            z-index: 1001;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .autocomplete-dropdown.show {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 13px;
+            transition: background-color 0.2s;
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .autocomplete-item.selected {
+            background-color: #e3f2fd;
+        }
+
+        .autocomplete-item .place-name {
+            font-weight: 600;
+            color: #333;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .autocomplete-item .place-address {
+            color: #666;
+            font-size: 11px;
+        }
+
+        .autocomplete-loading {
+            padding: 10px 15px;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        .autocomplete-no-results {
+            padding: 10px 15px;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
         }
 
         .search-btn {
@@ -412,7 +484,7 @@
 
         @media (max-width: 768px) {
             .search-panel {
-                max-width: 250px;
+                max-width: 280px;
             }
             
             .search-input {
@@ -476,11 +548,14 @@
     </div>
 
     <div class="search-panel">
-        <input type="text" 
-               id="search-input" 
-               class="search-input" 
-               placeholder="Search address..."
-               autocomplete="off">
+        <div class="search-input-wrapper">
+            <input type="text" 
+                   id="search-input" 
+                   class="search-input" 
+                   placeholder="Search address..."
+                   autocomplete="off">
+            <div id="autocomplete-dropdown" class="autocomplete-dropdown"></div>
+        </div>
         <button id="search-btn" class="search-btn">🔍 Search</button>
     </div>
 
@@ -526,6 +601,9 @@
         var windOverlays = [];
         var fireWindData = {};
         var popupOverlay;
+        var autocompleteTimeout = null;
+        var selectedSuggestionIndex = -1;
+        var suggestions = [];
 
         window.addEventListener('load', function() {
             try {
@@ -602,11 +680,9 @@
                         var coordinate = evt.coordinate;
                         var lonLat = ol.proj.toLonLat(coordinate);
                         
-                        // Show popup with loading weather
                         content.innerHTML = createPopupContent(props, coordinate, null);
                         popupOverlay.setPosition(coordinate);
                         
-                        // Fetch weather for this fire location
                         fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lonLat[1] + '&longitude=' + lonLat[0] + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m')
                             .then(function(response) {
                                 return response.json();
@@ -637,9 +713,18 @@
                 
                 // Search functionality
                 document.getElementById('search-btn').addEventListener('click', performSearch);
-                document.getElementById('search-input').addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        performSearch();
+                
+                var searchInput = document.getElementById('search-input');
+                searchInput.addEventListener('input', handleSearchInput);
+                searchInput.addEventListener('keydown', handleKeyDown);
+                searchInput.addEventListener('blur', function() {
+                    setTimeout(hideAutocomplete, 200);
+                });
+
+                // Close autocomplete when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!e.target.closest('.search-input-wrapper')) {
+                        hideAutocomplete();
                     }
                 });
 
@@ -653,6 +738,146 @@
             }
         });
 
+        function handleSearchInput(e) {
+            var query = e.target.value.trim();
+            
+            clearTimeout(autocompleteTimeout);
+            
+            if (query.length < 3) {
+                hideAutocomplete();
+                return;
+            }
+            
+            autocompleteTimeout = setTimeout(function() {
+                fetchAutocompleteSuggestions(query);
+            }, 300);
+        }
+
+        function handleKeyDown(e) {
+            var dropdown = document.getElementById('autocomplete-dropdown');
+            
+            if (!dropdown.classList.contains('show')) {
+                if (e.key === 'Enter') {
+                    performSearch();
+                }
+                return;
+            }
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, suggestions.length - 1);
+                updateSelectedSuggestion();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, -1);
+                updateSelectedSuggestion();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < suggestions.length) {
+                    selectSuggestion(suggestions[selectedSuggestionIndex]);
+                } else {
+                    performSearch();
+                }
+            } else if (e.key === 'Escape') {
+                hideAutocomplete();
+            }
+        }
+
+        function fetchAutocompleteSuggestions(query) {
+            var dropdown = document.getElementById('autocomplete-dropdown');
+            dropdown.innerHTML = '<div class="autocomplete-loading">Searching...</div>';
+            dropdown.classList.add('show');
+            
+            var geocodeUrl = 'https://nominatim.openstreetmap.org/search?format=json&q=' + 
+                             encodeURIComponent(query) + 
+                             '&countrycodes=au&limit=5&addressdetails=1';
+            
+            fetch(geocodeUrl, {
+                headers: {
+                    'User-Agent': 'QLD Bushfire Monitor'
+                }
+            })
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                displayAutocompleteSuggestions(data);
+            })
+            .catch(function(error) {
+                console.error('Autocomplete error:', error);
+                hideAutocomplete();
+            });
+        }
+
+        function displayAutocompleteSuggestions(data) {
+            var dropdown = document.getElementById('autocomplete-dropdown');
+            suggestions = data;
+            selectedSuggestionIndex = -1;
+            
+            if (data.length === 0) {
+                dropdown.innerHTML = '<div class="autocomplete-no-results">No results found</div>';
+                return;
+            }
+            
+            var html = '';
+            data.forEach(function(item, index) {
+                var placeName = item.name || item.display_name.split(',')[0];
+                var placeAddress = item.display_name;
+                
+                html += '<div class="autocomplete-item" data-index="' + index + '">';
+                html += '<span class="place-name">' + placeName + '</span>';
+                html += '<span class="place-address">' + placeAddress + '</span>';
+                html += '</div>';
+            });
+            
+            dropdown.innerHTML = html;
+            
+            var items = dropdown.querySelectorAll('.autocomplete-item');
+            items.forEach(function(item) {
+                item.addEventListener('click', function() {
+                    var index = parseInt(this.getAttribute('data-index'));
+                    selectSuggestion(suggestions[index]);
+                });
+            });
+        }
+
+        function updateSelectedSuggestion() {
+            var items = document.querySelectorAll('.autocomplete-item');
+            items.forEach(function(item, index) {
+                if (index === selectedSuggestionIndex) {
+                    item.classList.add('selected');
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        }
+
+        function selectSuggestion(suggestion) {
+            var lon = parseFloat(suggestion.lon);
+            var lat = parseFloat(suggestion.lat);
+            
+            userLocation = [lon, lat];
+            userLocationName = suggestion.display_name;
+            
+            document.getElementById('search-input').value = suggestion.display_name;
+            hideAutocomplete();
+            
+            setLocationOnMap(lon, lat, suggestion.display_name);
+            
+            if (!measureActive) {
+                measureActive = true;
+                document.getElementById('btn-measure').classList.add('active');
+            }
+            drawDistanceLines();
+        }
+
+        function hideAutocomplete() {
+            var dropdown = document.getElementById('autocomplete-dropdown');
+            dropdown.classList.remove('show');
+            selectedSuggestionIndex = -1;
+            suggestions = [];
+        }
+
         function performSearch() {
             var searchInput = document.getElementById('search-input');
             var searchBtn = document.getElementById('search-btn');
@@ -663,10 +888,11 @@
                 return;
             }
             
+            hideAutocomplete();
+            
             searchBtn.disabled = true;
             searchBtn.textContent = '⏳ Searching...';
             
-            // Use Nominatim geocoding service
             var geocodeUrl = 'https://nominatim.openstreetmap.org/search?format=json&q=' + 
                              encodeURIComponent(address) + 
                              '&countrycodes=au&limit=1';
@@ -693,7 +919,6 @@
                     
                     setLocationOnMap(lon, lat, result.display_name);
                     
-                    // Automatically enable measure mode
                     if (!measureActive) {
                         measureActive = true;
                         document.getElementById('btn-measure').classList.add('active');
@@ -715,7 +940,6 @@
         function setLocationOnMap(lon, lat, displayName) {
             var locationCoords = ol.proj.fromLonLat([lon, lat]);
             
-            // Remove previous location marker
             var features = measureSource.getFeatures();
             features.forEach(function(f) {
                 if (f.get('type') === 'userLocation') {
@@ -723,7 +947,6 @@
                 }
             });
             
-            // Add new location marker
             var locationFeature = new ol.Feature({
                 geometry: new ol.geom.Point(locationCoords),
                 type: 'userLocation'
@@ -744,14 +967,12 @@
             
             measureSource.addFeature(locationFeature);
             
-            // Zoom to location
             map.getView().animate({
                 center: locationCoords,
                 zoom: 10,
                 duration: 1000
             });
             
-            // Get weather for location
             getWeatherForLocation(lat, lon, displayName);
         }
 
