@@ -182,6 +182,10 @@
             background: #ff6666;
         }
 
+        .modal-close[style*="4CAF50"]:hover {
+            background: #66BB6A !important;
+        }
+
         #viewer3d {
             flex: 1;
             width: 100%;
@@ -263,6 +267,8 @@
         <button id="locationBtn" class="control-btn">📍 My Location</button>
         <button id="contoursBtn" class="control-btn">🗻 Contours</button>
         <button id="selectAreaBtn" class="control-btn">📐 Select Area</button>
+        <button id="loadDataBtn" class="control-btn">📂 Load Data</button>
+        <input type="file" id="fileInput" accept=".json" style="display: none;">
     </div>
 
     <div id="legend" class="legend" style="display: none;">
@@ -283,7 +289,10 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">3D Terrain View</div>
-                <button id="closeModal" class="modal-close">✕ Close</button>
+                <div>
+                    <button id="saveDataBtn" class="modal-close" style="background: #4CAF50; margin-right: 10px;">💾 Save Data</button>
+                    <button id="closeModal" class="modal-close">✕ Close</button>
+                </div>
             </div>
             <div id="viewer3d"></div>
             <div class="viewer-controls">
@@ -383,6 +392,9 @@
 
         // Store current location
         let currentLocation = null;
+
+        // Store current terrain data for saving/loading
+        let currentTerrainData = null;
 
         // Toast notification function
         function showToast(message, duration = 3000) {
@@ -495,6 +507,81 @@
             }
         }
 
+        // Save terrain data to JSON file
+        function saveTerrainData() {
+            if (!currentTerrainData) {
+                showToast('No terrain data to save');
+                return;
+            }
+            
+            const dataStr = JSON.stringify(currentTerrainData, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `terrain-data-${new Date().getTime()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showToast('Terrain data saved!');
+            debug('Saved terrain data: ' + currentTerrainData.width + 'x' + currentTerrainData.height);
+        }
+
+        // Load terrain data from JSON file
+        function loadTerrainData(file) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    // Clear debug panel
+                    document.getElementById('debugPanel').innerHTML = '';
+                    
+                    const data = JSON.parse(e.target.result);
+                    
+                    if (!data.elevationData || !data.width || !data.height || !data.bottomLeft || !data.topRight) {
+                        showToast('Invalid terrain data file');
+                        return;
+                    }
+                    
+                    debug('Loading terrain data: ' + data.width + 'x' + data.height);
+                    debug('Saved on: ' + (data.timestamp || 'unknown'));
+                    
+                    // Convert back to Float32Array
+                    const elevationData = new Float32Array(data.elevationData);
+                    
+                    // Create 3D visualization
+                    create3DTerrain(elevationData, data.width, data.height, data.bottomLeft, data.topRight);
+                    
+                    // Store as current data
+                    currentTerrainData = data;
+                    
+                    // Show the area on the map
+                    selectionLayer.getSource().clear();
+                    const extent = ol.proj.transformExtent(
+                        [data.bottomLeft[0], data.bottomLeft[1], data.topRight[0], data.topRight[1]],
+                        'EPSG:4326',
+                        'EPSG:3857'
+                    );
+                    const polygon = ol.geom.Polygon.fromExtent(extent);
+                    const feature = new ol.Feature(polygon);
+                    selectionLayer.getSource().addFeature(feature);
+                    
+                    // Zoom to the loaded area
+                    map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 1000 });
+                    
+                    showToast('Terrain data loaded!');
+                } catch (error) {
+                    debug('Error loading file: ' + error.message);
+                    showToast('Error loading terrain data file');
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+
         // Toggle area selection
         function toggleAreaSelection() {
             const selectBtn = document.getElementById('selectAreaBtn');
@@ -509,6 +596,7 @@
             } else {
                 // Turn on selection
                 selectionLayer.getSource().clear();
+                document.getElementById('debugPanel').innerHTML = '';
                 
                 drawInteraction = new ol.interaction.Draw({
                     source: selectionLayer.getSource(),
@@ -616,6 +704,16 @@
                 // Create 3D visualization
                 create3DTerrain(elevationData, width, height, bottomLeft, topRight);
                 
+                // Store the data for saving
+                currentTerrainData = {
+                    elevationData: Array.from(elevationData),
+                    width: width,
+                    height: height,
+                    bottomLeft: bottomLeft,
+                    topRight: topRight,
+                    timestamp: new Date().toISOString()
+                };
+                
             } catch (error) {
                 debug('ERROR: ' + error.message);
                 showToast('Error fetching elevation data: ' + error.message);
@@ -681,7 +779,7 @@
             
             const elevRange = maxElev - minElev;
             const scale = Math.max(width, height) / 100;
-            const verticalExaggeration = 3;
+            const verticalExaggeration = 1.0;  // 1:1 realistic scale
             
             // Create geometry
             const geometry = new THREE.PlaneGeometry(
@@ -845,6 +943,15 @@
         document.getElementById('closeModal').addEventListener('click', () => {
             document.getElementById('modal3d').classList.remove('show');
         });
+        document.getElementById('saveDataBtn').addEventListener('click', saveTerrainData);
+        document.getElementById('loadDataBtn').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                loadTerrainData(e.target.files[0]);
+            }
+        });
 
         // Add popup on click for location marker
         const popup = new ol.Overlay({
@@ -894,4 +1001,3 @@
     </script>
 </body>
 </html>
-
