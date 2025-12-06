@@ -353,6 +353,7 @@
                         <input type="checkbox" id="wireframeToggle" style="margin: 0;">
                         Wire
                     </label>
+                    <button id="toggleTexture" class="modal-close" style="background: #666; padding: 5px 10px; font-size: 12px; display: none;">🛰️ Sat</button>
                     <button id="resetViewBtn" class="modal-close" style="background: #666; padding: 5px 10px; font-size: 12px;">Reset</button>
                     <button id="topViewBtn" class="modal-close" style="background: #666; padding: 5px 10px; font-size: 12px;">Top</button>
                     <button id="autoRotateBtn" class="modal-close" style="background: #666; padding: 5px 10px; font-size: 12px;">Rotate</button>
@@ -1030,6 +1031,9 @@
             
             // Try to load satellite texture for the coordinates
             let material;
+            let satelliteTexture = null;
+            let useTexture = true;
+            
             if (bottomLeft && topRight) {
                 // Create material that will be updated when texture loads
                 material = new THREE.MeshPhongMaterial({
@@ -1042,12 +1046,20 @@
                 // Fetch satellite imagery as texture
                 fetchSatelliteTexture(bottomLeft, topRight, width, height).then(texture => {
                     if (texture) {
+                        satelliteTexture = texture;
                         // Update material to use texture instead of vertex colors
                         material.map = texture;
                         material.vertexColors = false;
                         material.needsUpdate = true;
                         debug('Satellite texture applied');
                         showToast('Satellite texture loaded!');
+                        
+                        // Show the toggle button
+                        const toggleBtn = document.getElementById('toggleTexture');
+                        if (toggleBtn) {
+                            toggleBtn.style.display = 'block';
+                            toggleBtn.classList.add('active');
+                        }
                     }
                 }).catch(error => {
                     debug('Texture load failed: ' + error.message);
@@ -1304,6 +1316,27 @@
                 }
             }
             
+            // Toggle between satellite texture and elevation colors
+            function toggleTexture() {
+                if (!satelliteTexture) return;
+                
+                useTexture = !useTexture;
+                const toggleBtn = document.getElementById('toggleTexture');
+                
+                if (useTexture) {
+                    material.map = satelliteTexture;
+                    material.vertexColors = false;
+                    if (toggleBtn) toggleBtn.classList.add('active');
+                    debug('Satellite texture ON');
+                } else {
+                    material.map = null;
+                    material.vertexColors = true;
+                    if (toggleBtn) toggleBtn.classList.remove('active');
+                    debug('Satellite texture OFF');
+                }
+                material.needsUpdate = true;
+            }
+            
             // Vertical scale control
             function updateVerticalScale(value) {
                 const newScale = parseFloat(value);
@@ -1328,6 +1361,7 @@
             const topBtn = document.getElementById('topViewBtn');
             const autoBtn = document.getElementById('autoRotateBtn');
             const touchBtn = document.getElementById('touchUIBtn');
+            const textureBtn = document.getElementById('toggleTexture');
             const scaleSlider = document.getElementById('verticalScale');
             const wireframeCheck = document.getElementById('wireframeToggle');
             
@@ -1335,6 +1369,7 @@
             if (topBtn) topBtn.addEventListener('click', topView);
             if (autoBtn) autoBtn.addEventListener('click', toggleAutoRotate);
             if (touchBtn) touchBtn.addEventListener('click', toggleTouchUI);
+            if (textureBtn) textureBtn.addEventListener('click', toggleTexture);
             if (scaleSlider) scaleSlider.addEventListener('input', (e) => updateVerticalScale(e.target.value));
             if (wireframeCheck) wireframeCheck.addEventListener('change', (e) => toggleWireframe(e.target.checked));
             
