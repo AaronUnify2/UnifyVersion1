@@ -921,13 +921,13 @@
             const camera = new THREE.PerspectiveCamera(
                 75,
                 container.clientWidth / container.clientHeight,
-                0.1,
+                0.01,  // Very close near plane so we can see terrain right at our feet
                 10000
             );
             
             const velocity = new THREE.Vector3();
             const direction = new THREE.Vector3();
-            let moveSpeed = 2.0;
+            let moveSpeed = 0.5;  // Reduced for walking speed
             
             // Euler angles for camera rotation
             let pitch = 0;  // Up/down
@@ -1087,8 +1087,9 @@
             directionalLight.position.set(1, 1, 1);
             scene.add(directionalLight);
             
-            // Position camera above terrain
-            camera.position.set(0, scale * 100, 0);
+            // Position camera above terrain at player height (1.8m)
+            // Start at center of terrain, 1.8m above it
+            camera.position.set(0, 1.8, 0);
             camera.rotation.order = 'YXZ';
             
             debug('Camera at: ' + camera.position.x + ',' + camera.position.y + ',' + camera.position.z);
@@ -1111,7 +1112,7 @@
                 </label>
                 <label>
                     Move Speed: <span id="speedValue">${moveSpeed.toFixed(1)}</span>
-                    <input type="range" id="speedSlider" min="0.5" max="10" step="0.5" value="${moveSpeed}">
+                    <input type="range" id="speedSlider" min="0.1" max="5" step="0.1" value="${moveSpeed}">
                 </label>
             `;
             container.appendChild(controlsUI);
@@ -1125,11 +1126,14 @@
                 pointerLockInfo.innerHTML = `
                     <h2>📱 Touch Controls</h2>
                     <p>
-                        <strong>D-Pad (left)</strong> - Move around<br>
+                        <strong>D-Pad (left)</strong> - Walk around<br>
                         <strong>↑↓ Buttons</strong> - Fly up/down<br>
                         <strong>Swipe right side</strong> - Look around<br>
                     </p>
-                    <p style="margin-top: 15px; font-size: 12px; opacity: 0.7;">
+                    <p style="margin-top: 10px; font-size: 13px; opacity: 0.8;">
+                        You're standing on the terrain at 1.8m height
+                    </p>
+                    <p style="margin-top: 10px; font-size: 12px; opacity: 0.7;">
                         Tap anywhere to dismiss
                     </p>
                 `;
@@ -1141,11 +1145,14 @@
                     <h2>🎮 Minecraft Creative Mode Controls</h2>
                     <p><strong>Click anywhere to enable mouse look</strong></p>
                     <p>
-                        <strong>W/A/S/D</strong> - Move forward/left/backward/right<br>
+                        <strong>W/A/S/D</strong> - Walk forward/left/backward/right<br>
                         <strong>Space</strong> - Fly up<br>
                         <strong>Shift</strong> - Fly down<br>
                         <strong>Mouse</strong> - Look around<br>
                         <strong>Escape</strong> - Exit mouse look
+                    </p>
+                    <p style="margin-top: 10px; font-size: 13px; opacity: 0.8;">
+                        You're standing on the terrain at 1.8m height
                     </p>
                 `;
             }
@@ -1155,7 +1162,7 @@
             const controlsHint = document.createElement('div');
             controlsHint.className = 'controls-hint hidden';
             if (isMobile) {
-                controlsHint.innerHTML = 'Use on-screen controls to fly';
+                controlsHint.innerHTML = 'Walking on terrain - Fly up/down to leave ground';
             } else {
                 controlsHint.innerHTML = 'Press ESC to exit mouse look';
             }
@@ -1258,7 +1265,7 @@
             renderer.domElement.addEventListener('mousemove', function(e) {
                 if (!isPointerLocked || isMobile) return;
                 
-                const sensitivity = 0.002;
+                const sensitivity = 0.0002; // Reduced by 90%
                 yaw -= e.movementX * sensitivity;
                 pitch -= e.movementY * sensitivity;
                 
@@ -1379,6 +1386,28 @@
                     velocity.normalize().multiplyScalar(moveSpeed);
                     camera.position.add(velocity);
                 }
+                
+                // Terrain collision detection - keep camera 1.8m above ground
+                const raycaster = new THREE.Raycaster();
+                const downDirection = new THREE.Vector3(0, -1, 0);
+                // Cast ray from current position plus a bit above
+                const rayOrigin = new THREE.Vector3(camera.position.x, camera.position.y + 100, camera.position.z);
+                raycaster.set(rayOrigin, downDirection);
+                
+                const intersects = raycaster.intersectObject(terrain);
+                
+                if (intersects.length > 0) {
+                    const terrainHeight = intersects[0].point.y;
+                    const playerHeight = 1.8; // 1.8 meters tall
+                    
+                    // If not actively flying up/down, stay on the ground
+                    if (!keys.up && !keys.down) {
+                        camera.position.y = terrainHeight + playerHeight;
+                    } else if (camera.position.y < terrainHeight + playerHeight) {
+                        // Don't go below ground level even when flying down
+                        camera.position.y = terrainHeight + playerHeight;
+                    }
+                }
             }
             
             // Touch D-pad controls
@@ -1449,7 +1478,7 @@
                     const deltaX = touchX - lastTouchX;
                     const deltaY = touchY - lastTouchY;
                     
-                    const sensitivity = 0.003;
+                    const sensitivity = 0.0003; // Reduced by 90%
                     yaw -= deltaX * sensitivity;
                     pitch -= deltaY * sensitivity;
                     
@@ -1479,7 +1508,7 @@
             
             // View control functions
             function resetView() {
-                camera.position.set(0, scale * 100, 0);
+                camera.position.set(0, 1.8, 0);
                 pitch = 0;
                 yaw = 0;
                 camera.rotation.set(0, 0, 0);
