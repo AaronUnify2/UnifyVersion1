@@ -927,7 +927,19 @@
             
             const velocity = new THREE.Vector3();
             const direction = new THREE.Vector3();
-            let moveSpeed = 0.05;  // Reduced by 90% for slower, more controlled movement
+            
+            // Calculate realistic walking speed
+            // Average human walking speed: 1.4 m/s
+            // At 60 FPS, we move 60 times per second
+            // So per frame: 1.4 / 60 = 0.0233 meters
+            const walkingSpeedMetersPerSecond = 1.4;
+            const walkingSpeedMetersPerFrame = walkingSpeedMetersPerSecond / 60;
+            const walkSpeed = walkingSpeedMetersPerFrame / metersPerSceneUnit;
+            const flySpeed = walkSpeed * 3; // Flying is 3x faster
+            
+            let moveSpeed = walkSpeed;
+            
+            debug('Walking speed: ' + walkSpeed.toFixed(4) + ' scene units/frame (' + walkingSpeedMetersPerSecond + ' m/s)');
             
             // Euler angles for camera rotation
             let pitch = 0;  // Up/down
@@ -944,6 +956,9 @@
             };
             
             let isPointerLocked = false;
+            let isFlying = false; // Flying mode toggle
+            let lastUpTapTime = 0;
+            const doubleTapDelay = 300; // milliseconds
             
             // Setup Three.js scene
             const scene = new THREE.Scene();
@@ -981,6 +996,51 @@
             const scale = Math.max(width, height) / 100;
             const verticalExaggeration = 0.1;
             let originalHeightData = [];
+            
+            // Calculate real-world distances from GPS coordinates
+            let metersPerSceneUnit = 1; // Default fallback
+            
+            if (bottomLeft && topRight) {
+                // Calculate distance in meters using Haversine formula
+                const lat1 = bottomLeft[1] * Math.PI / 180;
+                const lat2 = topRight[1] * Math.PI / 180;
+                const lon1 = bottomLeft[0] * Math.PI / 180;
+                const lon2 = topRight[0] * Math.PI / 180;
+                
+                const R = 6371000; // Earth's radius in meters
+                const dLat = lat2 - lat1;
+                const dLon = lon2 - lon1;
+                
+                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                         Math.cos(lat1) * Math.cos(lat2) *
+                         Math.sin(dLon/2) * Math.sin(dLon/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                
+                // Calculate horizontal and vertical distances
+                const latDistance = R * Math.abs(lat2 - lat1); // North-South distance
+                const lonDistance = R * Math.abs(dLon) * Math.cos((lat1 + lat2) / 2); // East-West distance
+                
+                // Scene dimensions
+                const sceneWidth = width * scale;
+                const sceneHeight = height * scale;
+                
+                // Meters per scene unit (use average of both dimensions)
+                const metersPerUnitWidth = lonDistance / sceneWidth;
+                const metersPerUnitHeight = latDistance / sceneHeight;
+                metersPerSceneUnit = (metersPerUnitWidth + metersPerUnitHeight) / 2;
+                
+                debug('Real-world width: ' + lonDistance.toFixed(2) + 'm');
+                debug('Real-world height: ' + latDistance.toFixed(2) + 'm');
+                debug('Scene width: ' + sceneWidth.toFixed(2) + ' units');
+                debug('Scene height: ' + sceneHeight.toFixed(2) + ' units');
+                debug('Meters per scene unit: ' + metersPerSceneUnit.toFixed(4));
+            } else {
+                // No GPS coordinates - use reasonable default for typical terrain
+                // Assume scene represents roughly 1km x 1km area
+                const sceneWidth = width * scale;
+                metersPerSceneUnit = 1000 / sceneWidth;
+                debug('No GPS coords - using default: ' + metersPerSceneUnit.toFixed(4) + ' meters/unit');
+            }
             
             // Calculate proper player height (1.8m) in scene units
             // The terrain scaling factor is: (verticalExaggeration * scale * 50) / elevRange
@@ -1108,6 +1168,9 @@
             controlsUI.className = 'viewer-controls';
             controlsUI.innerHTML = `
                 <h3>Controls</h3>
+                <div id="flyingModeStatus" style="padding: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; margin-bottom: 10px; text-align: center; font-weight: bold;">
+                    WALKING MODE
+                </div>
                 <button id="resetViewBtn">Reset View</button>
                 <button id="topViewBtn">Top View</button>
                 <button id="autoRotateBtn">Auto-Rotate</button>
@@ -1118,10 +1181,6 @@
                 </label>
                 <label>
                     <input type="checkbox" id="wireframeToggle"> Wireframe
-                </label>
-                <label>
-                    Move Speed: <span id="speedValue">${moveSpeed.toFixed(2)}</span>
-                    <input type="range" id="speedSlider" min="0.01" max="2" step="0.01" value="${moveSpeed}">
                 </label>
             `;
             container.appendChild(controlsUI);
@@ -1136,11 +1195,12 @@
                     <h2>📱 Touch Controls</h2>
                     <p>
                         <strong>D-Pad (left)</strong> - Walk around<br>
+                        <strong>Double-tap ↑</strong> - Toggle flying mode<br>
                         <strong>↑↓ Buttons</strong> - Fly up/down<br>
                         <strong>Swipe right side</strong> - Look around<br>
                     </p>
                     <p style="margin-top: 10px; font-size: 13px; opacity: 0.8;">
-                        You're standing on the terrain at 1.8m height
+                        Walking mode: Realistic 1.4 m/s speed at 1.8m height
                     </p>
                     <p style="margin-top: 10px; font-size: 12px; opacity: 0.7;">
                         Tap anywhere to dismiss
@@ -1155,13 +1215,13 @@
                     <p><strong>Click anywhere to enable mouse look</strong></p>
                     <p>
                         <strong>W/A/S/D</strong> - Walk forward/left/backward/right<br>
-                        <strong>Space</strong> - Fly up<br>
-                        <strong>Shift</strong> - Fly down<br>
+                        <strong>Double-tap Space</strong> - Toggle flying mode<br>
+                        <strong>Space/Shift</strong> - Fly up/down<br>
                         <strong>Mouse</strong> - Look around<br>
                         <strong>Escape</strong> - Exit mouse look
                     </p>
                     <p style="margin-top: 10px; font-size: 13px; opacity: 0.8;">
-                        You're standing on the terrain at 1.8m height
+                        Walking mode: Realistic 1.4 m/s speed at 1.8m height
                     </p>
                 `;
             }
@@ -1171,9 +1231,9 @@
             const controlsHint = document.createElement('div');
             controlsHint.className = 'controls-hint hidden';
             if (isMobile) {
-                controlsHint.innerHTML = 'Walking on terrain - Fly up/down to leave ground';
+                controlsHint.innerHTML = 'Double-tap ↑ to toggle flying mode';
             } else {
-                controlsHint.innerHTML = 'Press ESC to exit mouse look';
+                controlsHint.innerHTML = 'Press ESC to exit | Double-tap Space to fly';
             }
             container.appendChild(controlsHint);
             
@@ -1268,6 +1328,9 @@
                     pointerLockInfo.classList.add('hidden');
                     controlsHint.classList.remove('hidden');
                 }, 4000);
+            } else {
+                // On desktop, show hint immediately after pointer lock
+                controlsHint.classList.add('hidden');
             }
             
             // Mouse movement for look (desktop only, requires pointer lock)
@@ -1287,6 +1350,8 @@
             });
             
             // Keyboard controls
+            let lastSpaceTapTime = 0;
+            
             function onKeyDown(e) {
                 switch(e.code) {
                     case 'KeyW':
@@ -1308,6 +1373,17 @@
                     case 'Space':
                         e.preventDefault();
                         keys.up = true;
+                        
+                        // Double-tap detection for flying mode
+                        const now = Date.now();
+                        if (now - lastSpaceTapTime < doubleTapDelay) {
+                            isFlying = !isFlying;
+                            const mode = isFlying ? 'FLYING' : 'WALKING';
+                            showToast(mode + ' MODE');
+                            debug('Flying mode: ' + (isFlying ? 'ON' : 'OFF'));
+                            updateFlyingModeStatus();
+                        }
+                        lastSpaceTapTime = now;
                         break;
                     case 'ShiftLeft':
                     case 'ShiftRight':
@@ -1365,6 +1441,9 @@
             
             // Update camera movement
             function updateMovement(delta) {
+                // Use different speeds for walking vs flying
+                const currentSpeed = isFlying ? flySpeed : walkSpeed;
+                
                 // Get direction vectors
                 const forward = new THREE.Vector3(0, 0, -1);
                 const right = new THREE.Vector3(1, 0, 0);
@@ -1392,28 +1471,41 @@
                 
                 // Normalize and scale by speed
                 if (velocity.length() > 0) {
-                    velocity.normalize().multiplyScalar(moveSpeed);
+                    velocity.normalize().multiplyScalar(currentSpeed);
                     camera.position.add(velocity);
                 }
                 
-                // Terrain collision detection - keep camera at eye level (1.8m above ground)
-                const raycaster = new THREE.Raycaster();
-                const downDirection = new THREE.Vector3(0, -1, 0);
-                // Cast ray from current position plus a bit above
-                const rayOrigin = new THREE.Vector3(camera.position.x, camera.position.y + 100, camera.position.z);
-                raycaster.set(rayOrigin, downDirection);
-                
-                const intersects = raycaster.intersectObject(terrain);
-                
-                if (intersects.length > 0) {
-                    const terrainHeight = intersects[0].point.y;
+                // Terrain collision detection - only when NOT in flying mode
+                if (!isFlying) {
+                    const raycaster = new THREE.Raycaster();
+                    const downDirection = new THREE.Vector3(0, -1, 0);
+                    // Cast ray from current position plus a bit above
+                    const rayOrigin = new THREE.Vector3(camera.position.x, camera.position.y + 100, camera.position.z);
+                    raycaster.set(rayOrigin, downDirection);
                     
-                    // If not actively flying up/down, stay at eye level on the ground
-                    if (!keys.up && !keys.down) {
+                    const intersects = raycaster.intersectObject(terrain);
+                    
+                    if (intersects.length > 0) {
+                        const terrainHeight = intersects[0].point.y;
+                        
+                        // Stay at eye level on the ground
                         camera.position.y = terrainHeight + playerHeight;
-                    } else if (camera.position.y < terrainHeight + playerHeight) {
-                        // Don't go below ground level even when flying down
-                        camera.position.y = terrainHeight + playerHeight;
+                    }
+                } else {
+                    // In flying mode, prevent going below ground
+                    const raycaster = new THREE.Raycaster();
+                    const downDirection = new THREE.Vector3(0, -1, 0);
+                    const rayOrigin = new THREE.Vector3(camera.position.x, camera.position.y + 100, camera.position.z);
+                    raycaster.set(rayOrigin, downDirection);
+                    
+                    const intersects = raycaster.intersectObject(terrain);
+                    
+                    if (intersects.length > 0) {
+                        const terrainHeight = intersects[0].point.y;
+                        // Don't go below ground level even when flying
+                        if (camera.position.y < terrainHeight + playerHeight) {
+                            camera.position.y = terrainHeight + playerHeight;
+                        }
                     }
                 }
             }
@@ -1425,10 +1517,10 @@
                     'dpad-down': 'backward',
                     'dpad-left': 'left',
                     'dpad-right': 'right',
-                    'btn-up': 'up',
                     'btn-down': 'down'
                 };
                 
+                // Regular controls
                 Object.entries(dpadControls).forEach(([id, dir]) => {
                     const btn = document.getElementById(id);
                     if (btn) {
@@ -1455,6 +1547,60 @@
                         });
                     }
                 });
+                
+                // Special handling for up button - double tap to toggle flying
+                const upBtn = document.getElementById('btn-up');
+                if (upBtn) {
+                    const handleUpStart = () => { 
+                        keys.up = true;
+                        
+                        // Double-tap detection
+                        const now = Date.now();
+                        if (now - lastUpTapTime < doubleTapDelay) {
+                            // Double tap detected - toggle flying mode
+                            isFlying = !isFlying;
+                            const mode = isFlying ? 'FLYING' : 'WALKING';
+                            showToast(mode + ' MODE');
+                            debug('Flying mode: ' + (isFlying ? 'ON' : 'OFF'));
+                            
+                            // Update button appearance
+                            if (isFlying) {
+                                upBtn.style.background = 'rgba(33, 150, 243, 0.7)';
+                                upBtn.style.borderColor = '#2196F3';
+                            } else {
+                                upBtn.style.background = 'rgba(255, 255, 255, 0.4)';
+                                upBtn.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+                            }
+                            
+                            // Update status display
+                            updateFlyingModeStatus();
+                        }
+                        lastUpTapTime = now;
+                    };
+                    
+                    const handleUpStop = () => { 
+                        keys.up = false; 
+                    };
+                    
+                    upBtn.addEventListener('touchstart', (e) => { 
+                        e.preventDefault(); 
+                        e.stopPropagation();
+                        handleUpStart(); 
+                    });
+                    upBtn.addEventListener('touchend', (e) => { 
+                        e.preventDefault(); 
+                        e.stopPropagation();
+                        handleUpStop(); 
+                    });
+                    upBtn.addEventListener('mousedown', (e) => { 
+                        e.preventDefault(); 
+                        handleUpStart(); 
+                    });
+                    upBtn.addEventListener('mouseup', (e) => { 
+                        e.preventDefault(); 
+                        handleUpStop(); 
+                    });
+                }
             }
             
             setupDPad();
@@ -1486,7 +1632,7 @@
                     const deltaX = touchX - lastTouchX;
                     const deltaY = touchY - lastTouchY;
                     
-                    const sensitivity = 0.003; // Back to original
+                    const sensitivity = 0.005; // Increased sensitivity
                     yaw -= deltaX * sensitivity;
                     pitch -= deltaY * sensitivity;
                     
@@ -1521,6 +1667,16 @@
                 pitch = 0;
                 yaw = 0;
                 camera.rotation.set(0, 0, 0);
+                isFlying = false;
+                updateFlyingModeStatus();
+                
+                // Reset up button appearance on mobile
+                const upBtn = document.getElementById('btn-up');
+                if (upBtn) {
+                    upBtn.style.background = 'rgba(255, 255, 255, 0.4)';
+                    upBtn.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+                }
+                
                 debug('View reset');
             }
             
@@ -1575,9 +1731,17 @@
                 material.wireframe = checked;
             }
             
-            function updateSpeed(value) {
-                moveSpeed = parseFloat(value);
-                document.getElementById('speedValue').textContent = moveSpeed.toFixed(2);
+            function updateFlyingModeStatus() {
+                const statusDiv = document.getElementById('flyingModeStatus');
+                if (statusDiv) {
+                    if (isFlying) {
+                        statusDiv.textContent = 'FLYING MODE';
+                        statusDiv.style.background = 'rgba(33, 150, 243, 0.7)';
+                    } else {
+                        statusDiv.textContent = 'WALKING MODE';
+                        statusDiv.style.background = 'rgba(0, 0, 0, 0.3)';
+                    }
+                }
             }
             
             // Add event listeners
@@ -1587,7 +1751,6 @@
             const textureBtn = document.getElementById('toggleTexture');
             const scaleSlider = document.getElementById('verticalScale');
             const wireframeCheck = document.getElementById('wireframeToggle');
-            const speedSlider = document.getElementById('speedSlider');
             
             if (resetBtn) resetBtn.addEventListener('click', resetView);
             if (topBtn) topBtn.addEventListener('click', topView);
@@ -1595,7 +1758,6 @@
             if (textureBtn) textureBtn.addEventListener('click', toggleTexture);
             if (scaleSlider) scaleSlider.addEventListener('input', (e) => updateVerticalScale(e.target.value));
             if (wireframeCheck) wireframeCheck.addEventListener('change', (e) => toggleWireframe(e.target.checked));
-            if (speedSlider) speedSlider.addEventListener('input', (e) => updateSpeed(e.target.value));
             
             // Animation loop
             let lastTime = performance.now();
