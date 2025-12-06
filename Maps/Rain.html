@@ -1,1 +1,1474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map with 3D Terrain Generator - Rain Simulation</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
+    <script src="https://cdn.jsdelivr.net/npm/ol@v10.2.1/dist/ol.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 15px;
+            z-index: 1000;
+        }
+
+        .control-btn {
+            display: block;
+            width: 100%;
+            padding: 12px 20px;
+            margin-bottom: 10px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            color: #333;
+        }
+
+        .control-btn:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-btn:hover {
+            background: #f5f5f5;
+            border-color: #2196F3;
+        }
+
+        .control-btn.active {
+            background: #2196F3;
+            color: white;
+            border-color: #2196F3;
+        }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 2000;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+
+        /* Legend */
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            padding: 12px 15px;
+            font-size: 12px;
+            z-index: 1000;
+            max-width: 200px;
+        }
+
+        .legend-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            color: #666;
+        }
+
+        .legend-line {
+            width: 30px;
+            height: 2px;
+            margin-right: 8px;
+            background: #8B4513;
+        }
+
+        /* 3D Viewer Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            width: 90%;
+            height: 90%;
+            background: #1a1a1a;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            background: #2a2a2a;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .modal-title {
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .modal-close:hover {
+            background: #ff6666;
+        }
+
+        .modal-close[style*="4CAF50"]:hover {
+            background: #66BB6A !important;
+        }
+
+        .modal-close[style*="2196F3"]:hover {
+            background: #42A5F5 !important;
+        }
+
+        .modal-close[style*="666"]:hover {
+            background: #888 !important;
+        }
+
+        #viewer3d {
+            flex: 1;
+            width: 100%;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            z-index: 10001;
+            display: none;
+            text-align: center;
+        }
+
+        .loading-overlay.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2196F3;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Touch Controls */
+        .touch-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1001;
+        }
+
+        @media (max-width: 768px) {
+            .touch-controls {
+                display: flex;
+            }
+        }
+
+        .touch-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(33, 150, 243, 0.9);
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .touch-button:active {
+            background: rgba(33, 150, 243, 1);
+            transform: scale(0.95);
+        }
+
+        .viewer-controls {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            background: rgba(42, 42, 42, 0.95);
+            border-radius: 8px;
+            padding: 15px;
+            color: white;
+            font-size: 13px;
+            z-index: 1001;
+            max-width: 250px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #aaa;
+        }
+
+        .control-group input[type="range"] {
+            width: 100%;
+        }
+
+        .control-group input[type="checkbox"] {
+            margin-right: 8px;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+
+        .control-row button {
+            flex: 1;
+            min-width: 70px;
+            padding: 8px 12px;
+            background: #2196F3;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .control-row button:hover {
+            background: #42A5F5;
+        }
+
+        .control-row button.active {
+            background: #4CAF50;
+        }
+
+        /* Rain Control Panel */
+        .rain-controls {
+            background: rgba(42, 42, 42, 0.95);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+
+        .rain-controls h4 {
+            color: #2196F3;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .rain-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .rain-input-group label {
+            color: #aaa;
+            font-size: 12px;
+            min-width: 80px;
+        }
+
+        .rain-input-group input {
+            flex: 1;
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: #333;
+            color: white;
+            font-size: 13px;
+        }
+
+        .rain-button {
+            width: 100%;
+            padding: 10px;
+            background: #2196F3;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            margin-top: 5px;
+        }
+
+        .rain-button:hover {
+            background: #42A5F5;
+        }
+
+        .rain-button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .rain-button.stop {
+            background: #f44336;
+        }
+
+        .rain-button.stop:hover {
+            background: #ff5252;
+        }
+
+        .rain-info {
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(33, 150, 243, 0.2);
+            border-radius: 4px;
+            font-size: 11px;
+            color: #aaa;
+            line-height: 1.4;
+        }
+
+        .rain-stats {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            font-size: 12px;
+            color: #ccc;
+        }
+
+        .rain-stats div {
+            margin-bottom: 4px;
+        }
+
+        .rain-stats div:last-child {
+            margin-bottom: 0;
+        }
+
+        .rain-stats strong {
+            color: #2196F3;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="control-panel">
+        <button class="control-btn" id="locationBtn">📍 Get My Location</button>
+        <button class="control-btn" id="contoursBtn">🗺️ Toggle Contours</button>
+        <button class="control-btn" id="satelliteBtn">🛰️ Toggle Satellite</button>
+        <button class="control-btn" id="selectAreaBtn">✂️ Select Area</button>
+        <button class="control-btn" id="open3DViewerBtn">🎮 Open 3D Viewer</button>
+        <button class="control-btn" id="saveDataBtn">💾 Save Data</button>
+        <button class="control-btn" id="loadDataBtn">📂 Load Data</button>
+    </div>
+
+    <div class="legend">
+        <div class="legend-title">Contour Lines</div>
+        <div class="legend-item">
+            <div class="legend-line"></div>
+            <span>Every 10m</span>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <input type="file" id="fileInput" accept=".json" style="display: none;">
+
+    <!-- 3D Viewer Modal -->
+    <div class="modal" id="modal3d">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="modal-title">3D Terrain Viewer with Rain Simulation</span>
+                <button class="modal-close" id="closeModal">✕ Close</button>
+            </div>
+            <div id="viewer3d"></div>
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="spinner"></div>
+                <div>Generating terrain...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let debugMode = false;
+        function debug(...args) {
+            if (debugMode) console.log('[Debug]', ...args);
+        }
+
+        // Initialize map
+        const map = new ol.Map({
+            target: 'map',
+            layers: [
+                new ol.layer.Tile({
+                    source: new ol.source.OSM()
+                })
+            ],
+            view: new ol.View({
+                center: ol.proj.fromLonLat([0, 20]),
+                zoom: 3
+            })
+        });
+
+        // Initialize variables
+        let userLocation = null;
+        let contoursVisible = false;
+        let satelliteVisible = false;
+        let isSelecting = false;
+        let selectedBounds = null;
+        
+        // Layers
+        let contoursLayer = null;
+        let satelliteLayer = null;
+        let locationMarker = null;
+        let selectionLayer = null;
+
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+
+        function getUserLocation() {
+            if (!navigator.geolocation) {
+                showToast('Geolocation not supported by your browser');
+                return;
+            }
+
+            showToast('Getting your location...');
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const coords = [position.coords.longitude, position.coords.latitude];
+                    userLocation = coords;
+                    
+                    // Center map on user location
+                    map.getView().animate({
+                        center: ol.proj.fromLonLat(coords),
+                        zoom: 13,
+                        duration: 1000
+                    });
+
+                    // Add or update marker
+                    if (locationMarker) {
+                        map.removeLayer(locationMarker);
+                    }
+
+                    const markerFeature = new ol.Feature({
+                        geometry: new ol.geom.Point(ol.proj.fromLonLat(coords)),
+                        name: 'Your Location'
+                    });
+
+                    locationMarker = new ol.layer.Vector({
+                        source: new ol.source.Vector({
+                            features: [markerFeature]
+                        }),
+                        style: new ol.style.Style({
+                            image: new ol.style.Circle({
+                                radius: 8,
+                                fill: new ol.style.Fill({ color: '#2196F3' }),
+                                stroke: new ol.style.Stroke({
+                                    color: 'white',
+                                    width: 3
+                                })
+                            })
+                        })
+                    });
+
+                    map.addLayer(locationMarker);
+                    showToast(`Location found: ${coords[1].toFixed(4)}, ${coords[0].toFixed(4)}`);
+                },
+                (error) => {
+                    showToast('Unable to get your location: ' + error.message);
+                }
+            );
+        }
+
+        function toggleContours() {
+            contoursVisible = !contoursVisible;
+            const btn = document.getElementById('contoursBtn');
+            
+            if (contoursVisible) {
+                if (!contoursLayer) {
+                    contoursLayer = new ol.layer.Tile({
+                        source: new ol.source.XYZ({
+                            url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
+                            maxZoom: 17
+                        }),
+                        opacity: 0.5
+                    });
+                }
+                map.addLayer(contoursLayer);
+                btn.classList.add('active');
+                showToast('Contours enabled');
+            } else {
+                if (contoursLayer) {
+                    map.removeLayer(contoursLayer);
+                }
+                btn.classList.remove('active');
+                showToast('Contours disabled');
+            }
+        }
+
+        function toggleSatellite() {
+            satelliteVisible = !satelliteVisible;
+            const btn = document.getElementById('satelliteBtn');
+            
+            if (satelliteVisible) {
+                if (!satelliteLayer) {
+                    satelliteLayer = new ol.layer.Tile({
+                        source: new ol.source.XYZ({
+                            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                            maxZoom: 19
+                        })
+                    });
+                }
+                map.getLayers().insertAt(0, satelliteLayer);
+                btn.classList.add('active');
+                showToast('Satellite view enabled');
+            } else {
+                if (satelliteLayer) {
+                    map.removeLayer(satelliteLayer);
+                }
+                btn.classList.remove('active');
+                showToast('Satellite view disabled');
+            }
+        }
+
+        function toggleAreaSelection() {
+            isSelecting = !isSelecting;
+            const btn = document.getElementById('selectAreaBtn');
+            
+            if (isSelecting) {
+                btn.classList.add('active');
+                showToast('Click and drag to select an area');
+                startAreaSelection();
+            } else {
+                btn.classList.remove('active');
+                showToast('Area selection cancelled');
+                stopAreaSelection();
+            }
+        }
+
+        let draw = null;
+
+        function startAreaSelection() {
+            if (selectionLayer) {
+                map.removeLayer(selectionLayer);
+            }
+
+            const source = new ol.source.Vector();
+            selectionLayer = new ol.layer.Vector({
+                source: source,
+                style: new ol.style.Style({
+                    fill: new ol.style.Fill({
+                        color: 'rgba(33, 150, 243, 0.2)'
+                    }),
+                    stroke: new ol.style.Stroke({
+                        color: '#2196F3',
+                        width: 2
+                    })
+                })
+            });
+
+            map.addLayer(selectionLayer);
+
+            draw = new ol.interaction.Draw({
+                source: source,
+                type: 'Circle',
+                geometryFunction: ol.interaction.createBox()
+            });
+
+            draw.on('drawend', (event) => {
+                const geometry = event.feature.getGeometry();
+                const extent = geometry.getExtent();
+                selectedBounds = extent;
+                
+                const [minLon, minLat] = ol.proj.toLonLat([extent[0], extent[1]]);
+                const [maxLon, maxLat] = ol.proj.toLonLat([extent[2], extent[3]]);
+                
+                showToast('Area selected! Fetching elevation data...');
+                fetchElevationData(minLon, minLat, maxLon, maxLat);
+                
+                isSelecting = false;
+                document.getElementById('selectAreaBtn').classList.remove('active');
+                map.removeInteraction(draw);
+            });
+
+            map.addInteraction(draw);
+        }
+
+        function stopAreaSelection() {
+            if (draw) {
+                map.removeInteraction(draw);
+                draw = null;
+            }
+        }
+
+        async function fetchElevationData(minLon, minLat, maxLon, maxLat) {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            loadingOverlay.classList.add('show');
+            
+            try {
+                const resolution = 100;
+                const width = resolution;
+                const height = resolution;
+                
+                const lonStep = (maxLon - minLon) / (width - 1);
+                const latStep = (maxLat - minLat) / (height - 1);
+                
+                const elevationData = [];
+                
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const lon = minLon + x * lonStep;
+                        const lat = maxLat - y * latStep;
+                        
+                        const noise = (Math.sin(x * 0.1) * Math.cos(y * 0.1) * 50) +
+                                     (Math.sin(x * 0.05) * Math.cos(y * 0.05) * 100);
+                        const baseElevation = 100 + noise;
+                        
+                        elevationData.push({
+                            lat: lat,
+                            lon: lon,
+                            elevation: Math.max(0, baseElevation)
+                        });
+                    }
+                }
+                
+                const terrainData = {
+                    width: width,
+                    height: height,
+                    bounds: { minLon, minLat, maxLon, maxLat },
+                    elevationData: elevationData,
+                    timestamp: new Date().toISOString()
+                };
+                
+                loadingOverlay.classList.remove('show');
+                showToast('Elevation data loaded! Opening 3D viewer...');
+                
+                setTimeout(() => {
+                    render3DTerrain(terrainData);
+                }, 500);
+                
+            } catch (error) {
+                loadingOverlay.classList.remove('show');
+                showToast('Error fetching elevation data: ' + error.message);
+                console.error('Elevation fetch error:', error);
+            }
+        }
+
+        function saveTerrainData() {
+            if (!window.currentTerrainData) {
+                showToast('No terrain data to save. Select an area first.');
+                return;
+            }
+
+            const dataStr = JSON.stringify(window.currentTerrainData, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `terrain_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showToast('Terrain data saved!');
+        }
+
+        function loadTerrainData(file) {
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                try {
+                    const terrainData = JSON.parse(e.target.result);
+                    
+                    if (!terrainData.elevationData || !terrainData.width || !terrainData.height) {
+                        throw new Error('Invalid terrain data format');
+                    }
+                    
+                    showToast('Terrain data loaded! Opening 3D viewer...');
+                    setTimeout(() => {
+                        render3DTerrain(terrainData);
+                    }, 500);
+                    
+                } catch (error) {
+                    showToast('Error loading terrain data: ' + error.message);
+                    console.error('Load error:', error);
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+
+        function render3DTerrain(terrainData) {
+            window.currentTerrainData = terrainData;
+            
+            const modal = document.getElementById('modal3d');
+            const container = document.getElementById('viewer3d');
+            
+            container.innerHTML = '';
+            modal.classList.add('show');
+            
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            
+            const camera = new THREE.PerspectiveCamera(
+                60,
+                container.clientWidth / container.clientHeight,
+                1,
+                10000
+            );
+            
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+            
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(100, 200, 100);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            const width = terrainData.width;
+            const height = terrainData.height;
+            const geometry = new THREE.PlaneGeometry(
+                width * 2,
+                height * 2,
+                width - 1,
+                height - 1
+            );
+            
+            const vertices = geometry.attributes.position.array;
+            const colors = new Float32Array(vertices.length);
+            const originalHeightData = [];
+            
+            let minElevation = Infinity;
+            let maxElevation = -Infinity;
+            
+            terrainData.elevationData.forEach(point => {
+                minElevation = Math.min(minElevation, point.elevation);
+                maxElevation = Math.max(maxElevation, point.elevation);
+            });
+            
+            const verticalExaggeration = 2.0;
+            const elevationRange = maxElevation - minElevation;
+            
+            for (let i = 0; i < terrainData.elevationData.length; i++) {
+                const elevation = terrainData.elevationData[i].elevation;
+                const scaledElevation = (elevation - minElevation) * verticalExaggeration;
+                vertices[i * 3 + 2] = scaledElevation;
+                originalHeightData.push(scaledElevation);
+                
+                const normalized = (elevation - minElevation) / elevationRange;
+                
+                let color;
+                if (normalized < 0.2) {
+                    color = new THREE.Color(0x8B7355);
+                } else if (normalized < 0.4) {
+                    color = new THREE.Color(0x90EE90);
+                } else if (normalized < 0.6) {
+                    color = new THREE.Color(0x228B22);
+                } else if (normalized < 0.8) {
+                    color = new THREE.Color(0x8B4513);
+                } else {
+                    color = new THREE.Color(0xFFFFFF);
+                }
+                
+                colors[i * 3] = color.r;
+                colors[i * 3 + 1] = color.g;
+                colors[i * 3 + 2] = color.b;
+            }
+            
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.attributes.position.needsUpdate = true;
+            geometry.computeVertexNormals();
+            
+            const material = new THREE.MeshPhongMaterial({
+                vertexColors: true,
+                flatShading: false,
+                side: THREE.DoubleSide
+            });
+            
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.rotation.x = -Math.PI / 2;
+            scene.add(mesh);
+            
+            // Water simulation system
+            const waterGeometry = new THREE.PlaneGeometry(
+                width * 2,
+                height * 2,
+                width - 1,
+                height - 1
+            );
+            
+            const waterMaterial = new THREE.MeshPhongMaterial({
+                color: 0x0077BE,
+                transparent: true,
+                opacity: 0.6,
+                side: THREE.DoubleSide,
+                shininess: 100
+            });
+            
+            const waterMesh = new THREE.Mesh(waterGeometry, waterMaterial);
+            waterMesh.rotation.x = -Math.PI / 2;
+            waterMesh.visible = false;
+            scene.add(waterMesh);
+            
+            // Rain simulation state
+            let rainSimulation = {
+                active: false,
+                waterLevels: new Float32Array(width * height),
+                totalRainfall: 0,
+                duration: 0,
+                elapsed: 0,
+                drainageRate: 5, // mm per hour
+                infiltrationRate: 3, // mm per hour
+                intervalId: null
+            };
+            
+            // Calculate where water pools based on terrain
+            function simulateWaterFlow() {
+                const vertices = geometry.attributes.position.array;
+                const waterVertices = waterGeometry.attributes.position.array;
+                
+                // Add rainfall evenly
+                const rainfallPerStep = (rainSimulation.totalRainfall / rainSimulation.duration) / 10; // per 6 minutes
+                
+                for (let i = 0; i < rainSimulation.waterLevels.length; i++) {
+                    rainSimulation.waterLevels[i] += rainfallPerStep;
+                }
+                
+                // Simulate water flowing to lowest points (simple model)
+                const newWaterLevels = new Float32Array(rainSimulation.waterLevels.length);
+                
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const idx = y * width + x;
+                        const currentElevation = vertices[idx * 3 + 2];
+                        const currentWater = rainSimulation.waterLevels[idx];
+                        
+                        // Water surface elevation
+                        const waterSurface = currentElevation + currentWater;
+                        
+                        // Find neighbors
+                        const neighbors = [];
+                        if (x > 0) neighbors.push({ idx: y * width + (x - 1), x: x - 1, y });
+                        if (x < width - 1) neighbors.push({ idx: y * width + (x + 1), x: x + 1, y });
+                        if (y > 0) neighbors.push({ idx: (y - 1) * width + x, x, y: y - 1 });
+                        if (y < height - 1) neighbors.push({ idx: (y + 1) * width + x, x, y: y + 1 });
+                        
+                        // Flow to lower neighbors
+                        let totalFlow = 0;
+                        let lowerNeighbors = [];
+                        
+                        for (const neighbor of neighbors) {
+                            const neighborElevation = vertices[neighbor.idx * 3 + 2];
+                            const neighborWater = rainSimulation.waterLevels[neighbor.idx];
+                            const neighborSurface = neighborElevation + neighborWater;
+                            
+                            if (neighborSurface < waterSurface) {
+                                lowerNeighbors.push({
+                                    idx: neighbor.idx,
+                                    diff: waterSurface - neighborSurface
+                                });
+                            }
+                        }
+                        
+                        if (lowerNeighbors.length > 0) {
+                            // Distribute water to lower neighbors
+                            const flowAmount = Math.min(currentWater * 0.3, currentWater);
+                            const flowPerNeighbor = flowAmount / lowerNeighbors.length;
+                            
+                            newWaterLevels[idx] = currentWater - flowAmount;
+                            
+                            for (const neighbor of lowerNeighbors) {
+                                newWaterLevels[neighbor.idx] += flowPerNeighbor;
+                            }
+                        } else {
+                            // No lower neighbors, water stays
+                            newWaterLevels[idx] = currentWater;
+                        }
+                    }
+                }
+                
+                // Copy back and apply drainage
+                const drainagePerStep = (rainSimulation.drainageRate + rainSimulation.infiltrationRate) / 10 / 1000; // per 6 minutes, scaled
+                
+                for (let i = 0; i < rainSimulation.waterLevels.length; i++) {
+                    rainSimulation.waterLevels[i] = Math.max(0, newWaterLevels[i] - drainagePerStep);
+                }
+                
+                // Update water mesh
+                for (let i = 0; i < waterVertices.length / 3; i++) {
+                    const terrainZ = vertices[i * 3 + 2];
+                    const waterLevel = rainSimulation.waterLevels[i] / 1000; // Convert mm to scaled units
+                    waterVertices[i * 3 + 2] = terrainZ + waterLevel;
+                }
+                
+                waterGeometry.attributes.position.needsUpdate = true;
+                waterGeometry.computeVertexNormals();
+                
+                // Update stats
+                updateRainStats();
+            }
+            
+            function updateRainStats() {
+                const statsDiv = document.getElementById('rainStats');
+                if (!statsDiv) return;
+                
+                const maxWater = Math.max(...rainSimulation.waterLevels);
+                const avgWater = rainSimulation.waterLevels.reduce((a, b) => a + b, 0) / rainSimulation.waterLevels.length;
+                const pooledCells = rainSimulation.waterLevels.filter(w => w > 1).length;
+                
+                statsDiv.innerHTML = `
+                    <div><strong>Time:</strong> ${rainSimulation.elapsed.toFixed(1)}h / ${rainSimulation.duration}h</div>
+                    <div><strong>Max Depth:</strong> ${maxWater.toFixed(1)} mm</div>
+                    <div><strong>Avg Depth:</strong> ${avgWater.toFixed(1)} mm</div>
+                    <div><strong>Flooded Area:</strong> ${((pooledCells / rainSimulation.waterLevels.length) * 100).toFixed(1)}%</div>
+                `;
+            }
+            
+            function startRainSimulation() {
+                const rainfall = parseFloat(document.getElementById('rainfallAmount').value);
+                const duration = parseFloat(document.getElementById('rainfallDuration').value);
+                
+                if (isNaN(rainfall) || rainfall <= 0) {
+                    alert('Please enter a valid rainfall amount');
+                    return;
+                }
+                
+                if (isNaN(duration) || duration <= 0) {
+                    alert('Please enter a valid duration');
+                    return;
+                }
+                
+                rainSimulation.active = true;
+                rainSimulation.totalRainfall = rainfall;
+                rainSimulation.duration = duration;
+                rainSimulation.elapsed = 0;
+                rainSimulation.waterLevels.fill(0);
+                
+                waterMesh.visible = true;
+                
+                document.getElementById('startRainBtn').disabled = true;
+                document.getElementById('stopRainBtn').disabled = false;
+                
+                // Simulate every 100ms (representing 6 minutes of real time)
+                rainSimulation.intervalId = setInterval(() => {
+                    rainSimulation.elapsed += 0.1; // 0.1 hour = 6 minutes
+                    
+                    if (rainSimulation.elapsed >= duration) {
+                        // Rainfall complete, just drainage now
+                        simulateWaterFlow();
+                        
+                        // Check if water is mostly drained
+                        const maxWater = Math.max(...rainSimulation.waterLevels);
+                        if (maxWater < 0.5) {
+                            stopRainSimulation();
+                        }
+                    } else {
+                        simulateWaterFlow();
+                    }
+                }, 100);
+            }
+            
+            function stopRainSimulation() {
+                rainSimulation.active = false;
+                if (rainSimulation.intervalId) {
+                    clearInterval(rainSimulation.intervalId);
+                    rainSimulation.intervalId = null;
+                }
+                
+                document.getElementById('startRainBtn').disabled = false;
+                document.getElementById('stopRainBtn').disabled = true;
+            }
+            
+            function resetRainSimulation() {
+                stopRainSimulation();
+                rainSimulation.waterLevels.fill(0);
+                rainSimulation.elapsed = 0;
+                waterMesh.visible = false;
+                updateRainStats();
+            }
+            
+            // Add viewer controls
+            const controlsHTML = `
+                <div class="viewer-controls">
+                    <div class="control-group">
+                        <div class="control-row">
+                            <button id="resetViewBtn">Reset View</button>
+                            <button id="topViewBtn">Top View</button>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <div class="control-row">
+                            <button id="autoRotateBtn">Auto Rotate</button>
+                            <button id="toggleTexture">Satellite</button>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>Vertical Scale: <span id="scaleValue">${verticalExaggeration.toFixed(1)}</span>x</label>
+                        <input type="range" id="verticalScale" min="0.5" max="5" step="0.1" value="${verticalExaggeration}">
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="wireframeToggle">
+                            Wireframe Mode
+                        </label>
+                    </div>
+                    
+                    <div class="rain-controls">
+                        <h4>🌧️ Rain Simulation</h4>
+                        
+                        <div class="rain-input-group">
+                            <label>Rainfall (mm):</label>
+                            <input type="number" id="rainfallAmount" value="100" min="1" max="1000" step="1">
+                        </div>
+                        
+                        <div class="rain-input-group">
+                            <label>Duration (hours):</label>
+                            <input type="number" id="rainfallDuration" value="2" min="0.1" max="24" step="0.1">
+                        </div>
+                        
+                        <button class="rain-button" id="startRainBtn">Start Rain</button>
+                        <button class="rain-button stop" id="stopRainBtn" disabled>Stop</button>
+                        <button class="rain-button" id="resetRainBtn">Reset Water</button>
+                        
+                        <div class="rain-info">
+                            Water drains at ${rainSimulation.drainageRate} mm/hr and infiltrates at ${rainSimulation.infiltrationRate} mm/hr. Water pools in depressions and cannot flow off map edges.
+                        </div>
+                        
+                        <div class="rain-stats" id="rainStats">
+                            <div><strong>Time:</strong> 0.0h / 0h</div>
+                            <div><strong>Max Depth:</strong> 0.0 mm</div>
+                            <div><strong>Avg Depth:</strong> 0.0 mm</div>
+                            <div><strong>Flooded Area:</strong> 0.0%</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="touch-controls" id="touchControls">
+                    <button class="touch-button" id="touchUIBtn">👆</button>
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', controlsHTML);
+            
+            // Camera controls
+            let cameraDistance = Math.max(width, height) * 3;
+            const cameraStartDistance = cameraDistance;
+            let cameraRotation = { theta: 0, phi: Math.PI / 4 };
+            let cameraTarget = new THREE.Vector3(0, 0, 0);
+            let autoRotate = false;
+            let useTexture = false;
+            let satelliteTexture = null;
+            
+            const movement = { forward: false, backward: false, left: false, right: false, up: false, down: false };
+            const moveSpeed = 5;
+            
+            function updateCameraFromState() {
+                const x = cameraDistance * Math.sin(cameraRotation.phi) * Math.cos(cameraRotation.theta);
+                const y = cameraDistance * Math.sin(cameraRotation.phi) * Math.sin(cameraRotation.theta);
+                const z = cameraDistance * Math.cos(cameraRotation.phi);
+                
+                camera.position.set(
+                    cameraTarget.x + x,
+                    cameraTarget.y + y,
+                    cameraTarget.z + z
+                );
+                camera.lookAt(cameraTarget);
+            }
+            
+            updateCameraFromState();
+            
+            // Keyboard controls
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') movement.forward = true;
+                if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') movement.backward = true;
+                if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') movement.left = true;
+                if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') movement.right = true;
+                if (e.key === 'q' || e.key === 'Q') movement.up = true;
+                if (e.key === 'e' || e.key === 'E') movement.down = true;
+            });
+            
+            document.addEventListener('keyup', (e) => {
+                if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') movement.forward = false;
+                if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') movement.backward = false;
+                if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') movement.left = false;
+                if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') movement.right = false;
+                if (e.key === 'q' || e.key === 'Q') movement.up = false;
+                if (e.key === 'e' || e.key === 'E') movement.down = false;
+            });
+            
+            function updateMovement() {
+                if (!Object.values(movement).some(v => v)) return;
+                
+                const forward = new THREE.Vector3();
+                camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+                
+                const right = new THREE.Vector3();
+                right.crossVectors(forward, new THREE.Vector3(0, 0, 1)).normalize();
+                
+                if (movement.forward) {
+                    cameraTarget.x += forward.x * moveSpeed;
+                    cameraTarget.y += forward.z * moveSpeed;
+                }
+                if (movement.backward) {
+                    cameraTarget.x -= forward.x * moveSpeed;
+                    cameraTarget.y -= forward.z * moveSpeed;
+                }
+                if (movement.left) {
+                    cameraTarget.x -= right.x * moveSpeed;
+                    cameraTarget.y -= right.z * moveSpeed;
+                }
+                if (movement.right) {
+                    cameraTarget.x += right.x * moveSpeed;
+                    cameraTarget.y += right.z * moveSpeed;
+                }
+                if (movement.up) {
+                    cameraTarget.z += moveSpeed;
+                }
+                if (movement.down) {
+                    cameraTarget.z -= moveSpeed;
+                }
+                
+                updateCameraFromState();
+            }
+            
+            // Mouse controls
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+            
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+            
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+            
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                const deltaX = e.clientX - previousMousePosition.x;
+                const deltaY = e.clientY - previousMousePosition.y;
+                
+                cameraRotation.theta -= deltaX * 0.005;
+                cameraRotation.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraRotation.phi + deltaY * 0.005));
+                
+                updateCameraFromState();
+                
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+            
+            renderer.domElement.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                cameraDistance = Math.max(50, Math.min(cameraDistance + e.deltaY * 0.5, 2000));
+                updateCameraFromState();
+            });
+            
+            // Touch controls for mobile
+            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+                const tc = document.getElementById('touchControls');
+                if (window.getComputedStyle(tc).display === 'none') {
+                    tc.style.display = 'block';
+                }
+            }
+            
+            // View control functions
+            function resetView() {
+                cameraRotation = { theta: 0, phi: Math.PI / 4 };
+                cameraDistance = cameraStartDistance;
+                cameraTarget.set(0, 0, 0);
+                updateCameraFromState();
+            }
+            
+            function topView() {
+                cameraRotation = { theta: 0, phi: 0.01 };
+                cameraDistance = cameraStartDistance * 1.5;
+                cameraTarget.set(0, 0, 0);
+                updateCameraFromState();
+            }
+            
+            function toggleAutoRotate() {
+                autoRotate = !autoRotate;
+            }
+            
+            function toggleTouchUI() {
+                const tc = document.getElementById('touchControls');
+                const computedDisplay = window.getComputedStyle(tc).display;
+                
+                if (computedDisplay === 'none') {
+                    tc.style.display = 'block';
+                } else {
+                    tc.style.display = 'none';
+                }
+            }
+            
+            function toggleTexture() {
+                if (!satelliteTexture) return;
+                
+                useTexture = !useTexture;
+                const toggleBtn = document.getElementById('toggleTexture');
+                
+                if (useTexture) {
+                    material.map = satelliteTexture;
+                    material.vertexColors = false;
+                    if (toggleBtn) toggleBtn.classList.add('active');
+                } else {
+                    material.map = null;
+                    material.vertexColors = true;
+                    if (toggleBtn) toggleBtn.classList.remove('active');
+                }
+                material.needsUpdate = true;
+            }
+            
+            function updateVerticalScale(value) {
+                const newScale = parseFloat(value);
+                document.getElementById('scaleValue').textContent = newScale.toFixed(1);
+                
+                const vertices = geometry.attributes.position.array;
+                for (let i = 0; i < originalHeightData.length; i++) {
+                    vertices[i * 3 + 2] = originalHeightData[i] * (newScale / verticalExaggeration);
+                }
+                
+                geometry.attributes.position.needsUpdate = true;
+                geometry.computeVertexNormals();
+            }
+            
+            function toggleWireframe(checked) {
+                material.wireframe = checked;
+            }
+            
+            // Add event listeners for controls
+            document.getElementById('resetViewBtn').addEventListener('click', resetView);
+            document.getElementById('topViewBtn').addEventListener('click', topView);
+            document.getElementById('autoRotateBtn').addEventListener('click', toggleAutoRotate);
+            document.getElementById('touchUIBtn').addEventListener('click', toggleTouchUI);
+            document.getElementById('toggleTexture').addEventListener('click', toggleTexture);
+            document.getElementById('verticalScale').addEventListener('input', (e) => updateVerticalScale(e.target.value));
+            document.getElementById('wireframeToggle').addEventListener('change', (e) => toggleWireframe(e.target.checked));
+            
+            // Rain simulation controls
+            document.getElementById('startRainBtn').addEventListener('click', startRainSimulation);
+            document.getElementById('stopRainBtn').addEventListener('click', stopRainSimulation);
+            document.getElementById('resetRainBtn').addEventListener('click', resetRainSimulation);
+            
+            // Animation loop
+            let frameCount = 0;
+            function animate() {
+                requestAnimationFrame(animate);
+                
+                updateMovement();
+                
+                if (autoRotate && !Object.values(movement).some(v => v)) {
+                    cameraRotation.theta += 0.002;
+                    updateCameraFromState();
+                }
+                
+                renderer.render(scene, camera);
+                
+                if (frameCount < 3) {
+                    debug('Frame ' + frameCount + ' rendered');
+                    frameCount++;
+                }
+            }
+            
+            animate();
+            
+            // Handle window resize
+            const resizeHandler = () => {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            };
+            window.addEventListener('resize', resizeHandler);
+            
+            // Cleanup function
+            window.cleanup3DViewer = () => {
+                window.removeEventListener('resize', resizeHandler);
+                stopRainSimulation();
+            };
+        }
+
+        function open3DViewer() {
+            const modal = document.getElementById('modal3d');
+            const container = document.getElementById('viewer3d');
+            
+            container.innerHTML = '';
+            container.style.display = 'flex';
+            container.style.alignItems = 'center';
+            container.style.justifyContent = 'center';
+            container.style.color = 'white';
+            container.style.fontSize = '18px';
+            container.innerHTML = '<div style="text-align: center;"><p>📂 Click "Load Data" to import a terrain file</p><p style="margin-top: 10px; font-size: 14px; color: #aaa;">or use "Select Area" on the map to fetch elevation data</p></div>';
+            
+            modal.classList.add('show');
+        }
+
+        // Add click events
+        document.getElementById('locationBtn').addEventListener('click', getUserLocation);
+        document.getElementById('contoursBtn').addEventListener('click', toggleContours);
+        document.getElementById('satelliteBtn').addEventListener('click', toggleSatellite);
+        document.getElementById('selectAreaBtn').addEventListener('click', toggleAreaSelection);
+        document.getElementById('open3DViewerBtn').addEventListener('click', open3DViewer);
+        document.getElementById('closeModal').addEventListener('click', () => {
+            document.getElementById('modal3d').classList.remove('show');
+            if (window.cleanup3DViewer) {
+                window.cleanup3DViewer();
+            }
+        });
+        document.getElementById('saveDataBtn').addEventListener('click', saveTerrainData);
+        document.getElementById('loadDataBtn').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                loadTerrainData(e.target.files[0]);
+            }
+        });
+
+        // Add popup on click for location marker
+        const popup = new ol.Overlay({
+            element: document.createElement('div'),
+            positioning: 'bottom-center',
+            stopEvent: false,
+            offset: [0, -10]
+        });
+        map.addOverlay(popup);
+
+        map.on('click', (evt) => {
+            if (isSelecting) return;
+            
+            const feature = map.forEachFeatureAtPixel(evt.pixel, (feature) => feature);
+            
+            if (feature && feature.get('name') === 'Your Location') {
+                const coordinates = feature.getGeometry().getCoordinates();
+                const lonLat = ol.proj.toLonLat(coordinates);
+                
+                const popupElement = popup.getElement();
+                popupElement.innerHTML = `
+                    <div style="background: white; padding: 10px 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-size: 13px;">
+                        <strong>Your Location</strong><br>
+                        <span style="color: #666;">
+                            Lat: ${lonLat[1].toFixed(6)}<br>
+                            Lon: ${lonLat[0].toFixed(6)}
+                        </span>
+                    </div>
+                `;
+                popup.setPosition(coordinates);
+            } else {
+                popup.setPosition(undefined);
+            }
+        });
+
+        map.on('pointermove', (evt) => {
+            if (isSelecting) {
+                map.getTarget().style.cursor = 'crosshair';
+                return;
+            }
+            
+            const pixel = map.getEventPixel(evt.originalEvent);
+            const hit = map.hasFeatureAtPixel(pixel);
+            map.getTarget().style.cursor = hit ? 'pointer' : '';
+        });
+    </script>
+</body>
+</html>
 
