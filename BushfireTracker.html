@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QLD Bushfire Monitor - Watchtower Edition</title>
+    <title>QLD Bushfire Monitor</title>
     
     <!-- OpenLayers CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
@@ -345,75 +345,6 @@
         .popup-weather .wind-arrow {
             font-size: 14px;
         }
-
-        .warning-panel {
-            position: absolute;
-            bottom: 20px;
-            right: 10px;
-            background: white;
-            padding: 12px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 1000;
-            max-width: 350px;
-            display: none;
-        }
-
-        .warning-panel.show {
-            display: block;
-        }
-
-        .warning-item {
-            padding: 8px 12px;
-            margin: 6px 0;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .warning-fire {
-            background: #d32f2f;
-            color: white;
-        }
-
-        .warning-ember {
-            background: #f57c00;
-            color: white;
-        }
-
-        .watchtower-list {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #e0e0e0;
-            font-size: 12px;
-            max-height: 150px;
-            overflow-y: auto;
-        }
-
-        .watchtower-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 4px 0;
-            border-bottom: 1px solid #f0f0f0;
-        }
-
-        .watchtower-remove {
-            background: #f44336;
-            color: white;
-            border: none;
-            padding: 2px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 10px;
-        }
-
-        .watchtower-remove:hover {
-            background: #d32f2f;
-        }
     </style>
 </head>
 <body>
@@ -435,25 +366,33 @@
                 <span class="stat-label">Last Updated:</span>
                 <div id="last-update">-</div>
             </div>
-            <div class="stat-item">
-                <span class="stat-label">Watchtowers:</span>
-                <span id="watchtower-count">0</span>
+        </div>
+        <div class="weather-info" id="weather-info" style="display: none;">
+            <div style="font-weight: 600; margin-bottom: 5px;">Your Location Wind:</div>
+            <div class="weather-item">
+                <span>💨 Speed: <span id="weather-wind">--</span> km/h</span>
+                <span class="wind-arrow" id="wind-arrow">↑</span>
+            </div>
+            <div class="weather-item">
+                <span>🧭 Direction: <span id="wind-direction">--</span></span>
+            </div>
+            <div class="weather-item" style="margin-top: 5px; font-size: 11px; color: #666;">
+                <span>🌡️ <span id="weather-temp">--</span>°C | 💧 <span id="weather-humidity">--</span>%</span>
             </div>
         </div>
-        <div class="watchtower-list" id="watchtower-list"></div>
     </div>
 
     <div class="control-panel">
         <button class="control-btn" id="btn-refresh" title="Refresh fire data">
             🔄 Refresh
         </button>
-        <button class="control-btn" id="btn-watchtower" title="Click map to add watchtower">
-            🗼 Add Watchtower
+        <button class="control-btn" id="btn-location" title="Show my location">
+            📍 My Location
         </button>
-        <button class="control-btn" id="btn-measure" title="Show distances to fires within 100km from all watchtowers">
+        <button class="control-btn" id="btn-measure" title="Show distances to fires within 100km">
             📏 Measure
         </button>
-        <button class="control-btn" id="btn-wind" title="Show wind direction at each watchtower">
+        <button class="control-btn" id="btn-wind" title="Show wind direction at each fire">
             💨 Wind
         </button>
         <button class="control-btn" id="btn-satellite" title="Toggle satellite view">
@@ -481,8 +420,6 @@
         </div>
     </div>
 
-    <div id="warning-panel" class="warning-panel"></div>
-
     <div id="loading" class="loading">Loading bushfire data...</div>
 
     <!-- OpenLayers JS -->
@@ -492,9 +429,7 @@
         var map;
         var vectorSource;
         var vectorLayer;
-        var watchtowers = [];
-        var watchtowerIdCounter = 0;
-        var addingWatchtower = false;
+        var userLocation = null;
         var measureActive = false;
         var measureSource;
         var measureLayer;
@@ -505,7 +440,6 @@
         var windEnabled = false;
         var windOverlays = [];
         var fireWindData = {};
-        var watchtowerWindData = {};
         var popupOverlay;
 
         window.addEventListener('load', function() {
@@ -569,11 +503,6 @@
                 };
 
                 map.on('click', function(evt) {
-                    if (addingWatchtower) {
-                        addWatchtowerAtLocation(evt.coordinate);
-                        return;
-                    }
-
                     var feature = map.forEachFeatureAtPixel(evt.pixel, function(feature) {
                         return feature;
                     }, {
@@ -588,9 +517,11 @@
                         var coordinate = evt.coordinate;
                         var lonLat = ol.proj.toLonLat(coordinate);
                         
+                        // Show popup with loading weather
                         content.innerHTML = createPopupContent(props, coordinate, null);
                         popupOverlay.setPosition(coordinate);
                         
+                        // Fetch weather for this fire location
                         fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lonLat[1] + '&longitude=' + lonLat[0] + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m')
                             .then(function(response) {
                                 return response.json();
@@ -614,7 +545,7 @@
                 });
 
                 document.getElementById('btn-refresh').addEventListener('click', loadBushfireData);
-                document.getElementById('btn-watchtower').addEventListener('click', toggleAddWatchtower);
+                document.getElementById('btn-location').addEventListener('click', showMyLocation);
                 document.getElementById('btn-measure').addEventListener('click', toggleMeasure);
                 document.getElementById('btn-wind').addEventListener('click', toggleWind);
                 document.getElementById('btn-satellite').addEventListener('click', toggleSatellite);
@@ -629,121 +560,63 @@
             }
         });
 
-        function toggleAddWatchtower() {
-            addingWatchtower = !addingWatchtower;
-            var btn = document.getElementById('btn-watchtower');
-            
-            if (addingWatchtower) {
-                btn.classList.add('active');
-                map.getTargetElement().style.cursor = 'crosshair';
+        function showMyLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    userLocation = [position.coords.longitude, position.coords.latitude];
+                    
+                    var locationCoords = ol.proj.fromLonLat(userLocation);
+                    
+                    var features = measureSource.getFeatures();
+                    features.forEach(function(f) {
+                        if (f.get('type') === 'userLocation') {
+                            measureSource.removeFeature(f);
+                        }
+                    });
+                    
+                    var locationFeature = new ol.Feature({
+                        geometry: new ol.geom.Point(locationCoords),
+                        type: 'userLocation'
+                    });
+                    
+                    locationFeature.setStyle(new ol.style.Style({
+                        image: new ol.style.Circle({
+                            radius: 10,
+                            fill: new ol.style.Fill({
+                                color: '#2196F3'
+                            }),
+                            stroke: new ol.style.Stroke({
+                                color: 'white',
+                                width: 3
+                            })
+                        })
+                    }));
+                    
+                    measureSource.addFeature(locationFeature);
+                    
+                    map.getView().animate({
+                        center: locationCoords,
+                        zoom: 10,
+                        duration: 1000
+                    });
+                    
+                    getWeatherForLocation(position.coords.latitude, position.coords.longitude);
+                    
+                    if (measureActive) {
+                        drawDistanceLines();
+                    }
+                    
+                }, function(error) {
+                    alert('Could not get your location: ' + error.message);
+                });
             } else {
-                btn.classList.remove('active');
-                map.getTargetElement().style.cursor = '';
+                alert('Geolocation is not supported by your browser');
             }
-        }
-
-        function addWatchtowerAtLocation(coordinate) {
-            var lonLat = ol.proj.toLonLat(coordinate);
-            var watchtowerId = watchtowerIdCounter++;
-            
-            var watchtower = {
-                id: watchtowerId,
-                coordinate: coordinate,
-                lonLat: lonLat,
-                feature: null
-            };
-            
-            var watchtowerFeature = new ol.Feature({
-                geometry: new ol.geom.Point(coordinate),
-                type: 'watchtower',
-                watchtowerId: watchtowerId
-            });
-            
-            watchtowerFeature.setStyle(new ol.style.Style({
-                image: new ol.style.Circle({
-                    radius: 12,
-                    fill: new ol.style.Fill({
-                        color: '#FF9800'
-                    }),
-                    stroke: new ol.style.Stroke({
-                        color: 'white',
-                        width: 3
-                    })
-                }),
-                text: new ol.style.Text({
-                    text: '🗼',
-                    font: '16px sans-serif',
-                    offsetY: 0
-                })
-            }));
-            
-            watchtower.feature = watchtowerFeature;
-            measureSource.addFeature(watchtowerFeature);
-            watchtowers.push(watchtower);
-            
-            updateWatchtowerList();
-            
-            if (measureActive) {
-                drawDistanceLines();
-            }
-            
-            if (windEnabled) {
-                fetchWindDataForWatchtowers();
-            }
-            
-            addingWatchtower = false;
-            document.getElementById('btn-watchtower').classList.remove('active');
-            map.getTargetElement().style.cursor = '';
-            
-            updateWarnings();
-        }
-
-        function removeWatchtower(watchtowerId) {
-            var index = watchtowers.findIndex(function(w) { return w.id === watchtowerId; });
-            if (index !== -1) {
-                var watchtower = watchtowers[index];
-                measureSource.removeFeature(watchtower.feature);
-                watchtowers.splice(index, 1);
-                
-                delete watchtowerWindData[watchtowerId];
-                
-                updateWatchtowerList();
-                
-                if (measureActive) {
-                    drawDistanceLines();
-                }
-                
-                if (windEnabled) {
-                    drawWindOverlayForWatchtowers();
-                }
-                
-                updateWarnings();
-            }
-        }
-
-        function updateWatchtowerList() {
-            document.getElementById('watchtower-count').textContent = watchtowers.length;
-            var listDiv = document.getElementById('watchtower-list');
-            
-            if (watchtowers.length === 0) {
-                listDiv.innerHTML = '';
-                return;
-            }
-            
-            var html = '<div style="font-weight: 600; margin-bottom: 5px;">Active Watchtowers:</div>';
-            watchtowers.forEach(function(wt, idx) {
-                html += '<div class="watchtower-item">';
-                html += '<span>Watchtower ' + (idx + 1) + '</span>';
-                html += '<button class="watchtower-remove" onclick="removeWatchtower(' + wt.id + ')">Remove</button>';
-                html += '</div>';
-            });
-            
-            listDiv.innerHTML = html;
         }
 
         function toggleMeasure() {
-            if (watchtowers.length === 0) {
-                alert('Please add at least one watchtower first by clicking "Add Watchtower" and then clicking on the map');
+            if (!userLocation) {
+                alert('Please set your location first by clicking "My Location"');
                 return;
             }
             
@@ -757,66 +630,61 @@
                 btn.classList.remove('active');
                 clearDistanceLines();
             }
-            
-            updateWarnings();
         }
 
         function drawDistanceLines() {
             clearDistanceLines();
             
+            var userCoords = ol.proj.fromLonLat(userLocation);
             var fires = vectorSource.getFeatures();
             
-            watchtowers.forEach(function(watchtower) {
-                var watchtowerCoords = watchtower.coordinate;
+            fires.forEach(function(fire) {
+                var fireGeom = fire.getGeometry();
+                var fireCoords;
                 
-                fires.forEach(function(fire) {
-                    var fireGeom = fire.getGeometry();
-                    var fireCoords;
+                if (fireGeom.getType() === 'Point') {
+                    fireCoords = fireGeom.getCoordinates();
+                } else if (fireGeom.getType() === 'Polygon') {
+                    fireCoords = fireGeom.getInteriorPoint().getCoordinates();
+                }
+                
+                if (!fireCoords) return;
+                
+                var line = new ol.geom.LineString([userCoords, fireCoords]);
+                var length = ol.sphere.getLength(line);
+                
+                if (length <= 100000) {
+                    var lineFeature = new ol.Feature({
+                        geometry: line,
+                        type: 'distanceLine'
+                    });
                     
-                    if (fireGeom.getType() === 'Point') {
-                        fireCoords = fireGeom.getCoordinates();
-                    } else if (fireGeom.getType() === 'Polygon') {
-                        fireCoords = fireGeom.getInteriorPoint().getCoordinates();
-                    }
+                    lineFeature.setStyle(new ol.style.Style({
+                        stroke: new ol.style.Stroke({
+                            color: 'rgba(255, 87, 34, 0.8)',
+                            width: 2,
+                            lineDash: [5, 5]
+                        })
+                    }));
                     
-                    if (!fireCoords) return;
+                    measureSource.addFeature(lineFeature);
                     
-                    var line = new ol.geom.LineString([watchtowerCoords, fireCoords]);
-                    var length = ol.sphere.getLength(line);
+                    var midPoint = [(userCoords[0] + fireCoords[0]) / 2, (userCoords[1] + fireCoords[1]) / 2];
+                    var distanceText = formatDistance(length);
                     
-                    if (length <= 100000) {
-                        var lineFeature = new ol.Feature({
-                            geometry: line,
-                            type: 'distanceLine'
-                        });
-                        
-                        lineFeature.setStyle(new ol.style.Style({
-                            stroke: new ol.style.Stroke({
-                                color: 'rgba(255, 87, 34, 0.8)',
-                                width: 2,
-                                lineDash: [5, 5]
-                            })
-                        }));
-                        
-                        measureSource.addFeature(lineFeature);
-                        
-                        var midPoint = [(watchtowerCoords[0] + fireCoords[0]) / 2, (watchtowerCoords[1] + fireCoords[1]) / 2];
-                        var distanceText = formatDistance(length);
-                        
-                        var labelDiv = document.createElement('div');
-                        labelDiv.className = 'distance-label';
-                        labelDiv.textContent = distanceText;
-                        
-                        var labelOverlay = new ol.Overlay({
-                            element: labelDiv,
-                            position: midPoint,
-                            positioning: 'center-center'
-                        });
-                        
-                        map.addOverlay(labelOverlay);
-                        distanceOverlays.push(labelOverlay);
-                    }
-                });
+                    var labelDiv = document.createElement('div');
+                    labelDiv.className = 'distance-label';
+                    labelDiv.textContent = distanceText;
+                    
+                    var labelOverlay = new ol.Overlay({
+                        element: labelDiv,
+                        position: midPoint,
+                        positioning: 'center-center'
+                    });
+                    
+                    map.addOverlay(labelOverlay);
+                    distanceOverlays.push(labelOverlay);
+                }
             });
         }
 
@@ -860,22 +728,21 @@
         function toggleWind() {
             windEnabled = !windEnabled;
             var btn = document.getElementById('btn-wind');
+            var weatherInfo = document.getElementById('weather-info');
             
             if (windEnabled) {
                 btn.classList.add('active');
+                weatherInfo.style.display = 'block';
                 fetchWindDataForFires();
-                if (watchtowers.length > 0) {
-                    fetchWindDataForWatchtowers();
-                }
             } else {
                 btn.classList.remove('active');
                 clearWindOverlay();
             }
-            
-            updateWarnings();
         }
 
         function fetchWindDataForFires() {
+            clearWindOverlay();
+            
             var fires = vectorSource.getFeatures();
             var fetchPromises = [];
             
@@ -912,47 +779,26 @@
             });
             
             Promise.all(fetchPromises).then(function() {
-                drawWindOverlayForFires();
+                drawWindOverlay();
             });
         }
 
-        function fetchWindDataForWatchtowers() {
-            var fetchPromises = [];
+        function drawWindOverlay() {
+            clearWindOverlay();
             
-            watchtowers.forEach(function(watchtower) {
-                var lonLat = watchtower.lonLat;
-                
-                var promise = fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lonLat[1] + '&longitude=' + lonLat[0] + '&current=wind_speed_10m,wind_direction_10m')
-                    .then(function(response) {
-                        return response.json();
-                    })
-                    .then(function(data) {
-                        watchtowerWindData[watchtower.id] = {
-                            coords: watchtower.coordinate,
-                            windSpeed: data.current.wind_speed_10m,
-                            windDirection: data.current.wind_direction_10m
-                        };
-                    })
-                    .catch(function(error) {
-                        console.error('Error getting wind data for watchtower ' + watchtower.id, error);
-                    });
-                
-                fetchPromises.push(promise);
-            });
-            
-            Promise.all(fetchPromises).then(function() {
-                drawWindOverlayForWatchtowers();
-            });
-        }
-
-        function drawWindOverlayForFires() {
             Object.keys(fireWindData).forEach(function(key) {
                 var data = fireWindData[key];
                 var fireCoords = data.coords;
                 var windSpeed = data.windSpeed;
                 var windDir = data.windDirection;
                 
+                // Arrow length: windSpeed km/h = windSpeed km = windSpeed * 1000 meters
                 var arrowLength = windSpeed * 1000;
+                
+                // Convert compass bearing to mathematical angle
+                // Compass: 0° = North, 90° = East, 180° = South, 270° = West
+                // Math: 0° = East, 90° = North, 180° = West, 270° = South
+                // Conversion: mathAngle = 90° - compassAngle
                 var angleRad = (90 - windDir) * Math.PI / 180;
                 
                 var endX = fireCoords[0] + arrowLength * Math.cos(angleRad);
@@ -974,6 +820,9 @@
                 
                 measureSource.addFeature(windFeature);
                 
+                // Arrow at the end
+                // ➤ points right (East) by default, so we need to adjust rotation
+                // windDir is compass bearing, CSS rotation needs adjustment
                 var arrowRotation = windDir - 90;
                 var arrowDiv = document.createElement('div');
                 arrowDiv.style.cssText = 'font-size: 24px; transform: rotate(' + arrowRotation + 'deg);';
@@ -988,6 +837,7 @@
                 map.addOverlay(arrowOverlay);
                 windOverlays.push(arrowOverlay);
                 
+                // Wind speed label near the fire
                 var labelDiv = document.createElement('div');
                 labelDiv.className = 'wind-label';
                 labelDiv.textContent = Math.round(windSpeed) + ' km/h';
@@ -997,66 +847,6 @@
                     position: fireCoords,
                     positioning: 'bottom-center',
                     offset: [0, -20]
-                });
-                
-                map.addOverlay(labelOverlay);
-                windOverlays.push(labelOverlay);
-            });
-        }
-
-        function drawWindOverlayForWatchtowers() {
-            Object.keys(watchtowerWindData).forEach(function(key) {
-                var data = watchtowerWindData[key];
-                var watchtowerCoords = data.coords;
-                var windSpeed = data.windSpeed;
-                var windDir = data.windDirection;
-                
-                var arrowLength = windSpeed * 1000;
-                var angleRad = (90 - windDir) * Math.PI / 180;
-                
-                var endX = watchtowerCoords[0] + arrowLength * Math.cos(angleRad);
-                var endY = watchtowerCoords[1] + arrowLength * Math.sin(angleRad);
-                
-                var windLine = new ol.geom.LineString([watchtowerCoords, [endX, endY]]);
-                
-                var windFeature = new ol.Feature({
-                    geometry: windLine,
-                    type: 'windArrow'
-                });
-                
-                windFeature.setStyle(new ol.style.Style({
-                    stroke: new ol.style.Stroke({
-                        color: 'rgba(255, 152, 0, 0.9)',
-                        width: 4
-                    })
-                }));
-                
-                measureSource.addFeature(windFeature);
-                
-                var arrowRotation = windDir - 90;
-                var arrowDiv = document.createElement('div');
-                arrowDiv.style.cssText = 'font-size: 24px; transform: rotate(' + arrowRotation + 'deg); color: #FF9800;';
-                arrowDiv.textContent = '➤';
-                
-                var arrowOverlay = new ol.Overlay({
-                    element: arrowDiv,
-                    position: [endX, endY],
-                    positioning: 'center-center'
-                });
-                
-                map.addOverlay(arrowOverlay);
-                windOverlays.push(arrowOverlay);
-                
-                var labelDiv = document.createElement('div');
-                labelDiv.className = 'wind-label';
-                labelDiv.style.background = 'rgba(255, 152, 0, 0.9)';
-                labelDiv.textContent = Math.round(windSpeed) + ' km/h';
-                
-                var labelOverlay = new ol.Overlay({
-                    element: labelDiv,
-                    position: watchtowerCoords,
-                    positioning: 'top-center',
-                    offset: [0, 20]
                 });
                 
                 map.addOverlay(labelOverlay);
@@ -1078,82 +868,29 @@
             windOverlays = [];
         }
 
-        function updateWarnings() {
-            var warnings = [];
-            var fires = vectorSource.getFeatures();
-            
-            watchtowers.forEach(function(watchtower, wtIdx) {
-                var watchtowerCoords = watchtower.coordinate;
-                
-                fires.forEach(function(fire, fireIdx) {
-                    var fireGeom = fire.getGeometry();
-                    var fireCoords;
+        function getWeatherForLocation(lat, lon) {
+            fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m')
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(data) {
+                    var current = data.current;
                     
-                    if (fireGeom.getType() === 'Point') {
-                        fireCoords = fireGeom.getCoordinates();
-                    } else if (fireGeom.getType() === 'Polygon') {
-                        fireCoords = fireGeom.getInteriorPoint().getCoordinates();
-                    }
+                    document.getElementById('weather-temp').textContent = Math.round(current.temperature_2m);
+                    document.getElementById('weather-wind').textContent = Math.round(current.wind_speed_10m);
+                    document.getElementById('weather-humidity').textContent = Math.round(current.relative_humidity_2m);
                     
-                    if (!fireCoords) return;
+                    // Wind direction is "from" direction
+                    var compassDir = getCompassDirection(current.wind_direction_10m);
+                    document.getElementById('wind-direction').textContent = compassDir;
                     
-                    var line = new ol.geom.LineString([watchtowerCoords, fireCoords]);
-                    var distance = ol.sphere.getLength(line);
-                    
-                    // Fire proximity warning
-                    if (distance <= 10000) {
-                        var props = fire.get('properties');
-                        warnings.push({
-                            type: 'fire',
-                            message: '🔥 FIRE ALERT: Fire within ' + formatDistance(distance) + ' of Watchtower ' + (wtIdx + 1) + ' - ' + (props.headline || 'Bushfire')
-                        });
-                    }
-                    
-                    // Ember zone warning - check if blue wind arrows from fires come within 1km of watchtower
-                    if (windEnabled && fireWindData[fireIdx]) {
-                        var fireWindDat = fireWindData[fireIdx];
-                        var windSpeed = fireWindDat.windSpeed;
-                        var windDir = fireWindDat.windDirection;
-                        
-                        // Calculate the end point of the fire's wind arrow (blue arrow)
-                        var arrowLength = windSpeed * 1000; // km/h to meters
-                        var angleRad = (90 - windDir) * Math.PI / 180;
-                        
-                        var endX = fireCoords[0] + arrowLength * Math.cos(angleRad);
-                        var endY = fireCoords[1] + arrowLength * Math.sin(angleRad);
-                        
-                        var windEndPoint = [endX, endY];
-                        
-                        // Check distance from wind arrow endpoint to watchtower
-                        var distanceToWatchtower = new ol.geom.LineString([windEndPoint, watchtowerCoords]);
-                        var distToWT = ol.sphere.getLength(distanceToWatchtower);
-                        
-                        if (distToWT <= 1000) {
-                            var props = fire.get('properties');
-                            warnings.push({
-                                type: 'ember',
-                                message: '⚠️ EMBER ZONE: ' + Math.round(windSpeed) + ' km/h wind from fire could carry embers to Watchtower ' + (wtIdx + 1) + ' - ' + (props.headline || 'Fire')
-                            });
-                        }
-                    }
+                    // Arrow should point in the "from" direction
+                    var windArrow = document.getElementById('wind-arrow');
+                    windArrow.style.transform = 'rotate(' + current.wind_direction_10m + 'deg)';
+                })
+                .catch(function(error) {
+                    console.error('Error getting weather:', error);
                 });
-            });
-            
-            var warningPanel = document.getElementById('warning-panel');
-            
-            if (warnings.length === 0) {
-                warningPanel.classList.remove('show');
-                return;
-            }
-            
-            var html = '';
-            warnings.forEach(function(warning) {
-                var className = warning.type === 'fire' ? 'warning-fire' : 'warning-ember';
-                html += '<div class="warning-item ' + className + '">' + warning.message + '</div>';
-            });
-            
-            warningPanel.innerHTML = html;
-            warningPanel.classList.add('show');
         }
 
         function getCompassDirection(degrees) {
@@ -1205,28 +942,22 @@
             var html = '<h3>' + (props.headline || 'Bushfire Incident');
             html += '<span class="alert-badge ' + badgeClass + '">' + severity + '</span></h3>';
             
-            var lonLat = ol.proj.toLonLat(coordinate);
-            watchtowers.forEach(function(wt, idx) {
-                var distance = calculateDistance(wt.lonLat[0], wt.lonLat[1], lonLat[0], lonLat[1]);
-                html += '<div class="distance-badge">📍 ' + distance + ' from Watchtower ' + (idx + 1) + '</div>';
-            });
+            if (userLocation) {
+                var lonLat = ol.proj.toLonLat(coordinate);
+                var distance = calculateDistance(userLocation[0], userLocation[1], lonLat[0], lonLat[1]);
+                html += '<div class="distance-badge">📍 ' + distance + ' from you</div>';
+            }
             
             if (props.description) {
                 html += '<div class="detail" style="margin: 10px 0; padding: 8px; background: #f5f5f5; border-radius: 4px; font-size: 11px;">' + 
                         props.description.substring(0, 200) + (props.description.length > 200 ? '...' : '') + '</div>';
-            }
-            if (props.instruction) {
-                var instr = props.instruction;
-                if (instr.length > 200) {
-                    instr = instr.substring(0, 200) + '...';
-                }
-                html += '<div class="detail"><strong>Instructions:</strong> ' + instr + '</div>';
             }
             if (props.areaDesc) html += '<div class="detail"><strong>Area:</strong> ' + props.areaDesc + '</div>';
             if (props.certainty) html += '<div class="detail"><strong>Certainty:</strong> ' + props.certainty + '</div>';
             if (props.effective) html += '<div class="detail"><strong>Effective:</strong> ' + new Date(props.effective).toLocaleString() + '</div>';
             if (props.expires) html += '<div class="detail"><strong>Expires:</strong> ' + new Date(props.expires).toLocaleString() + '</div>';
             
+            // Add weather section
             if (weatherData) {
                 html += '<div class="popup-weather">';
                 html += '<h4>🌤️ Current Conditions at Fire Location</h4>';
@@ -1447,14 +1178,12 @@
                 }
 
                 var extent = vectorSource.getExtent();
-                if (extent[0] !== Infinity && watchtowers.length === 0) {
+                if (extent[0] !== Infinity && !userLocation) {
                     map.getView().fit(extent, {
                         padding: [50, 50, 50, 50],
                         maxZoom: 12
                     });
                 }
-                
-                updateWarnings();
             } else {
                 document.getElementById('incident-count').textContent = '0';
                 document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
@@ -1464,4 +1193,4 @@
         }
     </script>
 </body>
-</html>
+    </html>
