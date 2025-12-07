@@ -1,0 +1,1505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map with 3D Terrain Generator</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
+    <script src="https://cdn.jsdelivr.net/npm/ol@v10.2.1/dist/ol.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 15px;
+            z-index: 1000;
+        }
+
+        .control-btn {
+            display: block;
+            width: 100%;
+            padding: 12px 20px;
+            margin-bottom: 10px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            color: #333;
+        }
+
+        .control-btn:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-btn:hover {
+            background: #f5f5f5;
+            border-color: #2196F3;
+        }
+
+        .control-btn.active {
+            background: #2196F3;
+            color: white;
+            border-color: #2196F3;
+        }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            z-index: 2000;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+
+        /* Legend */
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            padding: 12px 15px;
+            font-size: 12px;
+            z-index: 1000;
+            max-width: 200px;
+        }
+
+        .legend-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            color: #666;
+        }
+
+        .legend-line {
+            width: 30px;
+            height: 2px;
+            margin-right: 8px;
+            background: #8B4513;
+        }
+
+        /* 3D Viewer Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            width: 90%;
+            height: 90%;
+            background: #1a1a1a;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            background: #2a2a2a;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .modal-title {
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .modal-close:hover {
+            background: #ff6666;
+        }
+
+        .modal-close[style*="4CAF50"]:hover {
+            background: #66BB6A !important;
+        }
+
+        .modal-close[style*="2196F3"]:hover {
+            background: #42A5F5 !important;
+        }
+
+        .modal-close[style*="666"]:hover {
+            background: #888 !important;
+        }
+
+        #viewer3d {
+            flex: 1;
+            width: 100%;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            z-index: 10001;
+            display: none;
+            text-align: center;
+        }
+
+        .loading-overlay.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2196F3;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Touch controls */
+        #touchControls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: none;
+            z-index: 10004;
+        }
+
+        #dpad {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+        }
+
+        .dpad-btn {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 2px solid rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            transition: all 0.1s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .dpad-btn:active {
+            background: rgba(76, 175, 80, 0.9);
+            transform: scale(0.95);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+
+        #dpad-up { top: 5px; left: 52.5px; }
+        #dpad-down { bottom: 5px; left: 52.5px; }
+        #dpad-left { left: 5px; top: 52.5px; }
+        #dpad-right { right: 5px; top: 52.5px; }
+        #dpad-center { 
+            left: 52.5px; 
+            top: 52.5px; 
+            background: rgba(100, 150, 255, 0.8); 
+            font-size: 16px; 
+        }
+        #dpad-center:active { 
+            background: rgba(100, 150, 255, 1); 
+        }
+
+        /* Show touch controls on mobile */
+        @media (hover: none) and (pointer: coarse) {
+            #touchControls {
+                display: block !important;
+            }
+            .modal-header {
+                padding: 10px;
+            }
+            .modal-header > div:last-child {
+                gap: 5px !important;
+            }
+            .modal-close {
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+        }
+
+
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="control-panel">
+        <button id="locationBtn" class="control-btn">📍 My Location</button>
+        <button id="contoursBtn" class="control-btn">🗻 Contours</button>
+        <button id="satelliteBtn" class="control-btn">🛰️ Satellite</button>
+        <button id="selectAreaBtn" class="control-btn">📐 Select Area</button>
+        <button id="open3DViewerBtn" class="control-btn">🎬 Open 3D Viewer</button>
+    </div>
+
+    <div id="legend" class="legend" style="display: none;">
+        <div class="legend-title">Contour Lines</div>
+        <div class="legend-item">
+            <div class="legend-line"></div>
+            <span>10m intervals</span>
+        </div>
+        <div style="font-size: 11px; color: #999; margin-top: 5px;">
+            Zoom in for higher detail
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <!-- 3D Viewer Modal -->
+    <div id="modal3d" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">3D Terrain View</div>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <button id="loadDataBtn" class="modal-close" style="background: #2196F3;">📂 Load</button>
+                    <button id="saveDataBtn" class="modal-close" style="background: #4CAF50;">💾 Save</button>
+                    <div style="display: flex; align-items: center; gap: 5px; background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 6px;">
+                        <label style="color: white; font-size: 12px; margin: 0;">Scale:</label>
+                        <input type="range" id="verticalScale" min="0.1" max="5" step="0.1" value="0.1" style="width: 80px;">
+                        <span id="scaleValue" style="color: white; font-size: 12px; min-width: 25px;">0.1</span>
+                    </div>
+                    <label style="display: flex; align-items: center; gap: 5px; color: white; font-size: 12px; background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 6px; margin: 0; cursor: pointer;">
+                        <input type="checkbox" id="wireframeToggle" style="margin: 0;">
+                        Wire
+                    </label>
+                    <button id="toggleTexture" class="modal-close" style="background: #666; padding: 5px 10px; font-size: 12px; display: none;">🛰️ Sat</button>
+                    <button id="resetViewBtn" class="modal-close" style="background: #666; padding: 5px 10px; font-size: 12px;">Reset</button>
+                    <button id="topViewBtn" class="modal-close" style="background: #666; padding: 5px 10px; font-size: 12px;">Top</button>
+                    <button id="autoRotateBtn" class="modal-close" style="background: #666; padding: 5px 10px; font-size: 12px;">Rotate</button>
+                    <button id="touchUIBtn" class="modal-close" style="background: #666; padding: 5px 10px; font-size: 12px;">D-Pad</button>
+                    <button id="closeModal" class="modal-close" style="background: #ff4444;">Close</button>
+                </div>
+            </div>
+            <div id="viewer3d"></div>
+            <input type="file" id="fileInput" accept=".json" style="display: none;">
+            
+            <!-- Touch Controls -->
+            <div id="touchControls">
+                <div id="dpad">
+                    <div class="dpad-btn" id="dpad-up">↑</div>
+                    <div class="dpad-btn" id="dpad-down">↓</div>
+                    <div class="dpad-btn" id="dpad-left">←</div>
+                    <div class="dpad-btn" id="dpad-right">→</div>
+                    <div class="dpad-btn" id="dpad-center">●</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div>Fetching elevation data...</div>
+    </div>
+
+    <script>
+        // Debug function (disabled)
+        function debug(message) {
+            // Debug output disabled
+        }
+
+        // Create contours layer
+        const contoursLayer = new ol.layer.Tile({
+            source: new ol.source.TileWMS({
+                url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer',
+                params: {
+                    'LAYERS': 'Contour_SRTM_10m28055',
+                    'FORMAT': 'image/png',
+                    'TRANSPARENT': true,
+                    'VERSION': '1.3.0'
+                },
+                serverType: 'geoserver'
+            }),
+            visible: false,
+            opacity: 0.8
+        });
+
+        // Create satellite layer
+        const satelliteLayer = new ol.layer.Tile({
+            source: new ol.source.XYZ({
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                attributions: 'Tiles © Esri'
+            }),
+            visible: false
+        });
+
+        // Create OSM base layer
+        const osmLayer = new ol.layer.Tile({
+            source: new ol.source.OSM()
+        });
+
+        // Track satellite view state
+        let isSatelliteView = false;
+
+        // Initialize the map
+        const map = new ol.Map({
+            target: 'map',
+            layers: [
+                osmLayer,
+                satelliteLayer,
+                contoursLayer
+            ],
+            view: new ol.View({
+                center: ol.proj.fromLonLat([145.7781, -16.9186]),
+                zoom: 8
+            })
+        });
+
+        // Layer for user location
+        const locationLayer = new ol.layer.Vector({
+            source: new ol.source.Vector(),
+            style: new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 8,
+                    fill: new ol.style.Fill({
+                        color: '#2196F3'
+                    }),
+                    stroke: new ol.style.Stroke({
+                        color: 'white',
+                        width: 3
+                    })
+                })
+            }),
+            zIndex: 1000
+        });
+        map.addLayer(locationLayer);
+
+        // Layer for selection box
+        const selectionLayer = new ol.layer.Vector({
+            source: new ol.source.Vector(),
+            style: new ol.style.Style({
+                stroke: new ol.style.Stroke({
+                    color: '#FF4444',
+                    width: 3,
+                    lineDash: [10, 10]
+                }),
+                fill: new ol.style.Fill({
+                    color: 'rgba(255, 68, 68, 0.1)'
+                })
+            }),
+            zIndex: 999
+        });
+        map.addLayer(selectionLayer);
+
+        // Drawing interaction
+        let drawInteraction = null;
+        let isSelecting = false;
+
+        // Store current location
+        let currentLocation = null;
+
+        // Store current terrain data for saving/loading
+        let currentTerrainData = null;
+
+        // Toast notification function
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+
+        // Get user location
+        function getUserLocation() {
+            const locationBtn = document.getElementById('locationBtn');
+            
+            if (!navigator.geolocation) {
+                showToast('Geolocation is not supported by your browser');
+                return;
+            }
+
+            locationBtn.disabled = true;
+            locationBtn.textContent = '📍 Getting location...';
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const coords = [position.coords.longitude, position.coords.latitude];
+                    currentLocation = coords;
+
+                    locationLayer.getSource().clear();
+
+                    const locationFeature = new ol.Feature({
+                        geometry: new ol.geom.Point(ol.proj.fromLonLat(coords)),
+                        name: 'Your Location'
+                    });
+                    locationLayer.getSource().addFeature(locationFeature);
+
+                    if (position.coords.accuracy) {
+                        const accuracyFeature = new ol.Feature({
+                            geometry: new ol.geom.Circle(
+                                ol.proj.fromLonLat(coords),
+                                position.coords.accuracy
+                            )
+                        });
+                        accuracyFeature.setStyle(new ol.style.Style({
+                            fill: new ol.style.Fill({
+                                color: 'rgba(33, 150, 243, 0.1)'
+                            }),
+                            stroke: new ol.style.Stroke({
+                                color: '#2196F3',
+                                width: 2,
+                                lineDash: [5, 5]
+                            })
+                        }));
+                        locationLayer.getSource().addFeature(accuracyFeature);
+                    }
+
+                    map.getView().animate({
+                        center: ol.proj.fromLonLat(coords),
+                        zoom: 15,
+                        duration: 1000
+                    });
+
+                    locationBtn.disabled = false;
+                    locationBtn.textContent = '📍 My Location';
+                    locationBtn.classList.add('active');
+                    
+                    showToast(`Location found: ${coords[1].toFixed(6)}, ${coords[0].toFixed(6)}`);
+                },
+                (error) => {
+                    let errorMessage = 'Unable to get location';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage = 'Location access denied. Please enable location permissions.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = 'Location information unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = 'Location request timed out';
+                            break;
+                    }
+                    showToast(errorMessage);
+                    locationBtn.disabled = false;
+                    locationBtn.textContent = '📍 My Location';
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 30000,
+                    maximumAge: 60000
+                }
+            );
+        }
+
+        // Toggle contours
+        function toggleContours() {
+            const contoursBtn = document.getElementById('contoursBtn');
+            const legend = document.getElementById('legend');
+            const isVisible = contoursLayer.getVisible();
+            
+            contoursLayer.setVisible(!isVisible);
+            
+            if (!isVisible) {
+                contoursBtn.classList.add('active');
+                legend.style.display = 'block';
+                showToast('Contours enabled');
+            } else {
+                contoursBtn.classList.remove('active');
+                legend.style.display = 'none';
+                showToast('Contours disabled');
+            }
+        }
+
+        // Toggle satellite view
+        function toggleSatellite() {
+            isSatelliteView = !isSatelliteView;
+            const satelliteBtn = document.getElementById('satelliteBtn');
+            
+            if (isSatelliteView) {
+                osmLayer.setVisible(false);
+                satelliteLayer.setVisible(true);
+                satelliteBtn.classList.add('active');
+                showToast('Satellite view enabled');
+            } else {
+                osmLayer.setVisible(true);
+                satelliteLayer.setVisible(false);
+                satelliteBtn.classList.remove('active');
+                showToast('Satellite view disabled');
+            }
+        }
+
+        // Save terrain data to JSON file
+        function saveTerrainData() {
+            if (!currentTerrainData) {
+                showToast('No terrain data to save');
+                return;
+            }
+            
+            const dataStr = JSON.stringify(currentTerrainData, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `terrain-data-${new Date().getTime()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showToast('Terrain data saved!');
+            debug('Saved terrain data: ' + currentTerrainData.width + 'x' + currentTerrainData.height);
+        }
+
+        // Load terrain data from JSON file
+        function loadTerrainData(file) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    
+                    if (!data.elevationData || !data.width || !data.height || !data.bottomLeft || !data.topRight) {
+                        showToast('Invalid terrain data file');
+                        return;
+                    }
+                    
+                    debug('Loading terrain data: ' + data.width + 'x' + data.height);
+                    debug('Saved on: ' + (data.timestamp || 'unknown'));
+                    
+                    // Ensure modal is open
+                    const modal = document.getElementById('modal3d');
+                    if (!modal.classList.contains('show')) {
+                        modal.classList.add('show');
+                    }
+                    
+                    // Convert back to Float32Array
+                    const elevationData = new Float32Array(data.elevationData);
+                    
+                    // Create 3D visualization
+                    create3DTerrain(elevationData, data.width, data.height, data.bottomLeft, data.topRight);
+                    
+                    // Store as current data
+                    currentTerrainData = data;
+                    
+                    // Show the area on the map
+                    selectionLayer.getSource().clear();
+                    const extent = ol.proj.transformExtent(
+                        [data.bottomLeft[0], data.bottomLeft[1], data.topRight[0], data.topRight[1]],
+                        'EPSG:4326',
+                        'EPSG:3857'
+                    );
+                    const polygon = ol.geom.Polygon.fromExtent(extent);
+                    const feature = new ol.Feature(polygon);
+                    selectionLayer.getSource().addFeature(feature);
+                    
+                    // Zoom to the loaded area
+                    map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 1000 });
+                    
+                    showToast('Terrain data loaded!');
+                } catch (error) {
+                    debug('Error loading file: ' + error.message);
+                    showToast('Error loading terrain data file');
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+
+        // Toggle area selection
+        function toggleAreaSelection() {
+            const selectBtn = document.getElementById('selectAreaBtn');
+            
+            if (isSelecting) {
+                // Turn off selection
+                map.removeInteraction(drawInteraction);
+                drawInteraction = null;
+                isSelecting = false;
+                selectBtn.classList.remove('active');
+                showToast('Selection mode disabled');
+            } else {
+                // Turn on selection
+                selectionLayer.getSource().clear();
+                
+                drawInteraction = new ol.interaction.Draw({
+                    source: selectionLayer.getSource(),
+                    type: 'Circle',
+                    geometryFunction: ol.interaction.Draw.createBox()
+                });
+
+                drawInteraction.on('drawend', function(event) {
+                    const geometry = event.feature.getGeometry();
+                    const extent = geometry.getExtent();
+                    
+                    // Convert extent to lat/lon
+                    const bottomLeft = ol.proj.toLonLat([extent[0], extent[1]]);
+                    const topRight = ol.proj.toLonLat([extent[2], extent[3]]);
+                    
+                    // Fetch elevation data and show 3D
+                    fetchElevationData(bottomLeft, topRight, extent);
+                    
+                    // Turn off selection mode
+                    map.removeInteraction(drawInteraction);
+                    isSelecting = false;
+                    selectBtn.classList.remove('active');
+                });
+
+                map.addInteraction(drawInteraction);
+                isSelecting = true;
+                selectBtn.classList.add('active');
+                showToast('Draw a box on the map to select an area');
+            }
+        }
+
+        // Fetch elevation data from Queensland DEM ImageServer
+        async function fetchElevationData(bottomLeft, topRight, extent) {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            loadingOverlay.classList.add('show');
+
+            try {
+                const width = 60;  // Grid resolution (60x60 = 3600 samples) - INCREASED FROM 40
+                const height = 60; // INCREASED FROM 40
+                
+                const lonStep = (topRight[0] - bottomLeft[0]) / (width - 1);
+                const latStep = (topRight[1] - bottomLeft[1]) / (height - 1);
+                
+                debug('Fetching elevation for ' + (width * height) + ' points');
+                
+                const elevationData = new Float32Array(width * height);
+                let successCount = 0;
+                
+                // Fetch elevation points one at a time (slower but more reliable)
+                for (let i = 0; i < height; i++) {
+                    for (let j = 0; j < width; j++) {
+                        const idx = i * width + j;
+                        const lon = bottomLeft[0] + j * lonStep;
+                        const lat = bottomLeft[1] + i * latStep;
+                        
+                        try {
+                            // Use identify endpoint to get elevation at this point
+                            const params = new URLSearchParams({
+                                geometryType: 'esriGeometryPoint',
+                                geometry: JSON.stringify({ x: lon, y: lat, spatialReference: { wkid: 4326 } }),
+                                returnGeometry: false,
+                                returnCatalogItems: false,
+                                f: 'json'
+                            });
+                            
+                            const url = 'https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/QldDem/ImageServer/identify?' + params.toString();
+                            
+                            const response = await fetch(url);
+                            const data = await response.json();
+                            
+                            if (data.value !== undefined && data.value !== null) {
+                                elevationData[idx] = data.value;
+                                successCount++;
+                            } else if (data.pixel && data.pixel.length > 0) {
+                                elevationData[idx] = data.pixel[0];
+                                successCount++;
+                            } else {
+                                elevationData[idx] = 0;
+                            }
+                        } catch (err) {
+                            elevationData[idx] = 0;
+                        }
+                        
+                        // Update progress every 10%
+                        if (idx % Math.floor((width * height) / 10) === 0) {
+                            const progress = Math.round((idx / (width * height)) * 100);
+                            document.querySelector('#loadingOverlay div:last-child').textContent = 
+                                `Fetching elevation... ${progress}% (${successCount} points)`;
+                            debug('Progress: ' + progress + '%');
+                        }
+                    }
+                }
+                
+                debug('Total successful samples: ' + successCount);
+                debug('Elevation range: ' + Math.min(...elevationData) + ' to ' + Math.max(...elevationData) + 'm');
+                
+                if (successCount === 0) {
+                    showToast('No elevation data received - using test terrain');
+                    // Create test terrain
+                    for (let i = 0; i < elevationData.length; i++) {
+                        elevationData[i] = Math.sin(i / 10) * 50 + 50;
+                    }
+                }
+                
+                // Ensure modal is open
+                const modal = document.getElementById('modal3d');
+                if (!modal.classList.contains('show')) {
+                    modal.classList.add('show');
+                }
+                
+                // Create 3D visualization
+                create3DTerrain(elevationData, width, height, bottomLeft, topRight);
+                
+                // Store the data for saving
+                currentTerrainData = {
+                    elevationData: Array.from(elevationData),
+                    width: width,
+                    height: height,
+                    bottomLeft: bottomLeft,
+                    topRight: topRight,
+                    timestamp: new Date().toISOString()
+                };
+                
+            } catch (error) {
+                debug('ERROR: ' + error.message);
+                showToast('Error fetching elevation data: ' + error.message);
+            } finally {
+                loadingOverlay.classList.remove('show');
+                document.querySelector('#loadingOverlay div:last-child').textContent = 
+                    'Fetching elevation data...';
+            }
+        }
+
+        // Fetch satellite imagery as texture for the terrain
+        async function fetchSatelliteTexture(bottomLeft, topRight, width, height) {
+            try {
+                debug('Fetching satellite texture for coordinates');
+                
+                // Calculate image size (max 2048 for performance)
+                const maxSize = 2048;
+                const aspectRatio = (topRight[0] - bottomLeft[0]) / (topRight[1] - bottomLeft[1]);
+                let imgWidth, imgHeight;
+                
+                if (aspectRatio > 1) {
+                    imgWidth = maxSize;
+                    imgHeight = Math.floor(maxSize / aspectRatio);
+                } else {
+                    imgHeight = maxSize;
+                    imgWidth = Math.floor(maxSize * aspectRatio);
+                }
+                
+                // Convert coordinates to Web Mercator (EPSG:3857) for ESRI
+                const bottomLeftMerc = ol.proj.transform(bottomLeft, 'EPSG:4326', 'EPSG:3857');
+                const topRightMerc = ol.proj.transform(topRight, 'EPSG:4326', 'EPSG:3857');
+                
+                // Build ESRI export request
+                const bbox = `${bottomLeftMerc[0]},${bottomLeftMerc[1]},${topRightMerc[0]},${topRightMerc[1]}`;
+                const exportUrl = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?` +
+                    `bbox=${bbox}&` +
+                    `bboxSR=3857&` +
+                    `size=${imgWidth},${imgHeight}&` +
+                    `imageSR=3857&` +
+                    `format=png&` +
+                    `transparent=false&` +
+                    `f=image`;
+                
+                debug('Fetching texture: ' + imgWidth + 'x' + imgHeight);
+                
+                // Load the texture
+                return new Promise((resolve, reject) => {
+                    const loader = new THREE.TextureLoader();
+                    loader.setCrossOrigin('anonymous');
+                    
+                    loader.load(
+                        exportUrl,
+                        (texture) => {
+                            texture.wrapS = THREE.ClampToEdgeWrapping;
+                            texture.wrapT = THREE.ClampToEdgeWrapping;
+                            texture.minFilter = THREE.LinearFilter;
+                            debug('Texture loaded successfully');
+                            resolve(texture);
+                        },
+                        (progress) => {
+                            // Progress callback
+                        },
+                        (error) => {
+                            debug('Texture load error: ' + error);
+                            reject(error);
+                        }
+                    );
+                });
+                
+            } catch (error) {
+                debug('Error fetching satellite texture: ' + error.message);
+                return null;
+            }
+        }
+
+        // Create 3D terrain visualization
+        function create3DTerrain(elevationData, width, height, bottomLeft, topRight) {
+            debug('Creating 3D terrain: ' + width + 'x' + height);
+            debug('Data length: ' + elevationData.length);
+            debug('Min elev: ' + Math.min(...elevationData) + 'm');
+            debug('Max elev: ' + Math.max(...elevationData) + 'm');
+            
+            const modal = document.getElementById('modal3d');
+            const container = document.getElementById('viewer3d');
+            
+            // Clear previous content
+            container.innerHTML = '';
+            
+            // Movement and camera state
+            const movement = { 
+                forward: false, backward: false, 
+                left: false, right: false, 
+                up: false, down: false 
+            };
+            let autoRotate = false;
+            let cameraRotation = { theta: 0, phi: Math.PI / 4 };
+            let cameraDistance = 0;
+            let cameraTarget = new THREE.Vector3(0, 0, 0);
+            let originalHeightData = [];
+            
+            // Setup Three.js scene
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            
+            const camera = new THREE.PerspectiveCamera(
+                75,
+                container.clientWidth / container.clientHeight,
+                0.1,
+                10000
+            );
+            
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+            
+            debug('Renderer: ' + container.clientWidth + 'x' + container.clientHeight);
+            
+            // Find elevation range for scaling
+            let minElev = Infinity;
+            let maxElev = -Infinity;
+            for (let i = 0; i < elevationData.length; i++) {
+                if (elevationData[i] > -9999 && elevationData[i] !== 0) {  // Filter out no-data values
+                    minElev = Math.min(minElev, elevationData[i]);
+                    maxElev = Math.max(maxElev, elevationData[i]);
+                }
+            }
+            
+            // If all values are zero or invalid, create a test terrain
+            if (minElev === Infinity || maxElev === -Infinity || minElev === maxElev) {
+                debug('WARN: Invalid data, using test terrain');
+                minElev = 0;
+                maxElev = 100;
+                // Create test data with some variation
+                for (let i = 0; i < elevationData.length; i++) {
+                    elevationData[i] = Math.sin(i / 10) * 50 + 50;
+                }
+            }
+            
+            debug('Final elevation range: ' + minElev + ' to ' + maxElev + 'm');
+            
+            const elevRange = maxElev - minElev;
+            const scale = Math.max(width, height) / 100;
+            const verticalExaggeration = 0.1;  // Default vertical scale
+            
+            // Create geometry
+            const geometry = new THREE.PlaneGeometry(
+                width * scale,
+                height * scale,
+                width - 1,
+                height - 1
+            );
+            
+            const vertices = geometry.attributes.position.array;
+            
+            // Apply elevation data and store original heights
+            for (let i = 0; i < height; i++) {
+                for (let j = 0; j < width; j++) {
+                    const idx = i * width + j;
+                    const vertIdx = (i * width + j) * 3;
+                    
+                    let elevation = elevationData[idx];
+                    if (elevation < -9999) elevation = minElev;  // Handle no-data
+                    
+                    const normalizedHeight = ((elevation - minElev) / elevRange) * verticalExaggeration * scale * 50;
+                    vertices[vertIdx + 2] = normalizedHeight;
+                    originalHeightData.push(normalizedHeight);
+                }
+            }
+            
+            geometry.computeVertexNormals();
+            
+            // Create material with vertex colors based on elevation
+            const colors = new Float32Array(vertices.length);
+            for (let i = 0; i < vertices.length; i += 3) {
+                const height = vertices[i + 2];
+                const normalized = height / (verticalExaggeration * scale * 50);
+                
+                // Color gradient: blue (low) -> green -> yellow -> brown (high)
+                let r, g, b;
+                if (normalized < 0.25) {
+                    r = 0.2;
+                    g = 0.5 + normalized * 2;
+                    b = 0.3;
+                } else if (normalized < 0.5) {
+                    r = 0.3 + (normalized - 0.25) * 2;
+                    g = 0.7;
+                    b = 0.2;
+                } else if (normalized < 0.75) {
+                    r = 0.7 + (normalized - 0.5) * 0.8;
+                    g = 0.7 - (normalized - 0.5) * 1.2;
+                    b = 0.2;
+                } else {
+                    r = 0.5 + (normalized - 0.75) * 0.8;
+                    g = 0.4 - (normalized - 0.75) * 0.8;
+                    b = 0.2;
+                }
+                
+                colors[i] = r;
+                colors[i + 1] = g;
+                colors[i + 2] = b;
+            }
+            
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            // Try to load satellite texture for the coordinates
+            let material;
+            let satelliteTexture = null;
+            let useTexture = true;
+            
+            if (bottomLeft && topRight) {
+                // Create material that will be updated when texture loads
+                material = new THREE.MeshPhongMaterial({
+                    vertexColors: true,
+                    flatShading: false,
+                    shininess: 10,
+                    side: THREE.DoubleSide
+                });
+                
+                // Fetch satellite imagery as texture
+                fetchSatelliteTexture(bottomLeft, topRight, width, height).then(texture => {
+                    if (texture) {
+                        satelliteTexture = texture;
+                        // Update material to use texture instead of vertex colors
+                        material.map = texture;
+                        material.vertexColors = false;
+                        material.needsUpdate = true;
+                        debug('Satellite texture applied');
+                        showToast('Satellite texture loaded!');
+                        
+                        // Show the toggle button
+                        const toggleBtn = document.getElementById('toggleTexture');
+                        if (toggleBtn) {
+                            toggleBtn.style.display = 'block';
+                            toggleBtn.classList.add('active');
+                        }
+                    }
+                }).catch(error => {
+                    debug('Texture load failed: ' + error.message);
+                });
+            } else {
+                material = new THREE.MeshPhongMaterial({
+                    vertexColors: true,
+                    flatShading: false,
+                    shininess: 10,
+                    side: THREE.DoubleSide
+                });
+            }
+            
+            const terrain = new THREE.Mesh(geometry, material);
+            terrain.rotation.x = -Math.PI / 2;
+            scene.add(terrain);
+            
+            debug('Terrain mesh added to scene');
+            
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+            
+            // Position camera
+            const cameraStartDistance = scale * 150;
+            cameraDistance = cameraStartDistance;
+            cameraTarget.set(0, 0, 0);
+            
+            debug('Camera at: ' + camera.position.x + ',' + camera.position.y + ',' + camera.position.z);
+            
+            // Function to update camera from rotation state
+            function updateCameraFromState() {
+                camera.position.x = cameraTarget.x + cameraDistance * Math.sin(cameraRotation.phi) * Math.cos(cameraRotation.theta);
+                camera.position.y = cameraTarget.y + cameraDistance * Math.cos(cameraRotation.phi);
+                camera.position.z = cameraTarget.z + cameraDistance * Math.sin(cameraRotation.phi) * Math.sin(cameraRotation.theta);
+                camera.lookAt(cameraTarget);
+            }
+            
+            // Initialize camera position using rotation state
+            updateCameraFromState();
+            
+            // Force update camera aspect ratio and renderer size to ensure proper dimensions
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            
+            // Mouse/Touch controls
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const deltaX = e.clientX - previousMousePosition.x;
+                    const deltaY = e.clientY - previousMousePosition.y;
+
+                    if (e.buttons === 1) {
+                        cameraRotation.theta -= deltaX * 0.01;
+                        cameraRotation.phi -= deltaY * 0.01;
+                        cameraRotation.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraRotation.phi));
+                    } else if (e.buttons === 2) {
+                        const right = new THREE.Vector3();
+                        camera.getWorldDirection(right);
+                        right.cross(new THREE.Vector3(0, 1, 0)).normalize();
+                        cameraTarget.add(right.multiplyScalar(-deltaX * 0.1));
+                        cameraTarget.y += deltaY * 0.1;
+                    }
+                    previousMousePosition = { x: e.clientX, y: e.clientY };
+                    updateCameraFromState();
+                }
+            });
+
+            renderer.domElement.addEventListener('mouseup', () => { 
+                isDragging = false; 
+            });
+            
+            renderer.domElement.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                cameraDistance += e.deltaY * 0.5;
+                // IMPROVED ZOOM: Changed minimum from scale * 50 to scale * 5 (10x closer zoom)
+                cameraDistance = Math.max(scale * 5, Math.min(scale * 500, cameraDistance));
+                updateCameraFromState();
+            });
+            
+            renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+            
+            // Touch controls for swipe and pinch
+            let lastTouch = { x: 0, y: 0, dist: 0 };
+            
+            renderer.domElement.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                } else if (e.touches.length === 2) {
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    lastTouch.dist = Math.sqrt(dx * dx + dy * dy);
+                }
+            });
+
+            renderer.domElement.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (e.touches.length === 1) {
+                    const dx = e.touches[0].clientX - lastTouch.x;
+                    const dy = e.touches[0].clientY - lastTouch.y;
+                    cameraRotation.theta -= dx * 0.01;
+                    cameraRotation.phi -= dy * 0.01;
+                    cameraRotation.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraRotation.phi));
+                    updateCameraFromState();
+                    lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                } else if (e.touches.length === 2) {
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    cameraDistance += (lastTouch.dist - dist) * 0.5;
+                    // IMPROVED ZOOM: Changed minimum from scale * 50 to scale * 5 (10x closer zoom)
+                    cameraDistance = Math.max(scale * 5, Math.min(scale * 500, cameraDistance));
+                    updateCameraFromState();
+                    lastTouch.dist = dist;
+                }
+            });
+            
+            // Keyboard controls
+            function onKeyDown(e) {
+                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') movement.forward = true;
+                if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') movement.backward = true;
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') movement.left = true;
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') movement.right = true;
+                if (e.key === 'q' || e.key === 'Q') movement.up = true;
+                if (e.key === 'e' || e.key === 'E') movement.down = true;
+                if (e.key === ' ') {
+                    e.preventDefault();
+                    resetView();
+                }
+            }
+
+            function onKeyUp(e) {
+                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') movement.forward = false;
+                if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') movement.backward = false;
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') movement.left = false;
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') movement.right = false;
+                if (e.key === 'q' || e.key === 'Q') movement.up = false;
+                if (e.key === 'e' || e.key === 'E') movement.down = false;
+            }
+            
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            
+            // Store cleanup function
+            window.cleanup3DViewer = function() {
+                document.removeEventListener('keydown', onKeyDown);
+                document.removeEventListener('keyup', onKeyUp);
+            };
+            
+            // Movement update function
+            function updateMovement() {
+                const moveSpeed = 0.5;
+                const dir = new THREE.Vector3();
+                const right = new THREE.Vector3();
+                
+                camera.getWorldDirection(dir);
+                dir.y = 0;
+                dir.normalize();
+                right.crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+                
+                if (movement.forward) cameraTarget.add(dir.multiplyScalar(moveSpeed));
+                if (movement.backward) cameraTarget.sub(dir.multiplyScalar(moveSpeed));
+                if (movement.left) cameraTarget.sub(right.multiplyScalar(moveSpeed));
+                if (movement.right) cameraTarget.add(right.multiplyScalar(moveSpeed));
+                if (movement.up) cameraTarget.y += moveSpeed;
+                if (movement.down) cameraTarget.y -= moveSpeed;
+                
+                if (Object.values(movement).some(v => v)) {
+                    updateCameraFromState();
+                }
+            }
+            
+            // Touch D-pad controls
+            function setupDPad() {
+                const dpadControls = {
+                    'dpad-up': 'forward',
+                    'dpad-down': 'backward',
+                    'dpad-left': 'left',
+                    'dpad-right': 'right',
+                    'dpad-center': 'up'
+                };
+                
+                Object.entries(dpadControls).forEach(([id, dir]) => {
+                    const btn = document.getElementById(id);
+                    if (btn) {
+                        const start = () => { movement[dir] = true; };
+                        const stop = () => { movement[dir] = false; };
+                        
+                        btn.addEventListener('touchstart', (e) => { e.preventDefault(); start(); });
+                        btn.addEventListener('touchend', (e) => { e.preventDefault(); stop(); });
+                        btn.addEventListener('mousedown', (e) => { e.preventDefault(); start(); });
+                        btn.addEventListener('mouseup', (e) => { e.preventDefault(); stop(); });
+                    }
+                });
+            }
+            
+            setupDPad();
+            
+            // Ensure touch controls are visible on mobile devices
+            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+                const tc = document.getElementById('touchControls');
+                // Only force show if CSS hasn't already shown it
+                if (window.getComputedStyle(tc).display === 'none') {
+                    tc.style.display = 'block';
+                }
+                debug('Mobile device detected - touch controls enabled');
+            }
+            
+            // View control functions
+            function resetView() {
+                cameraRotation = { theta: 0, phi: Math.PI / 4 };
+                cameraDistance = cameraStartDistance;
+                cameraTarget.set(0, 0, 0);
+                updateCameraFromState();
+                debug('View reset');
+            }
+            
+            function topView() {
+                cameraRotation = { theta: 0, phi: 0.01 };
+                cameraDistance = cameraStartDistance * 1.5;
+                cameraTarget.set(0, 0, 0);
+                updateCameraFromState();
+                debug('Top view');
+            }
+            
+            function toggleAutoRotate() {
+                autoRotate = !autoRotate;
+                debug('Auto-rotate: ' + (autoRotate ? 'ON' : 'OFF'));
+            }
+            
+            function toggleTouchUI() {
+                const tc = document.getElementById('touchControls');
+                // Get computed style to see actual display value
+                const computedDisplay = window.getComputedStyle(tc).display;
+                
+                if (computedDisplay === 'none') {
+                    // Show it by removing inline style (let CSS take over)
+                    tc.style.display = 'block';
+                    debug('Touch UI: shown');
+                } else {
+                    // Hide it with inline style
+                    tc.style.display = 'none';
+                    debug('Touch UI: hidden');
+                }
+            }
+            
+            // Toggle between satellite texture and elevation colors
+            function toggleTexture() {
+                if (!satelliteTexture) return;
+                
+                useTexture = !useTexture;
+                const toggleBtn = document.getElementById('toggleTexture');
+                
+                if (useTexture) {
+                    material.map = satelliteTexture;
+                    material.vertexColors = false;
+                    if (toggleBtn) toggleBtn.classList.add('active');
+                    debug('Satellite texture ON');
+                } else {
+                    material.map = null;
+                    material.vertexColors = true;
+                    if (toggleBtn) toggleBtn.classList.remove('active');
+                    debug('Satellite texture OFF');
+                }
+                material.needsUpdate = true;
+            }
+            
+            // Vertical scale control
+            function updateVerticalScale(value) {
+                const newScale = parseFloat(value);
+                document.getElementById('scaleValue').textContent = newScale.toFixed(1);
+                
+                const vertices = geometry.attributes.position.array;
+                for (let i = 0; i < originalHeightData.length; i++) {
+                    vertices[i * 3 + 2] = originalHeightData[i] * (newScale / verticalExaggeration);
+                }
+                
+                geometry.attributes.position.needsUpdate = true;
+                geometry.computeVertexNormals();
+            }
+            
+            // Wireframe toggle
+            function toggleWireframe(checked) {
+                material.wireframe = checked;
+            }
+            
+            // Add event listeners for controls
+            const resetBtn = document.getElementById('resetViewBtn');
+            const topBtn = document.getElementById('topViewBtn');
+            const autoBtn = document.getElementById('autoRotateBtn');
+            const touchBtn = document.getElementById('touchUIBtn');
+            const textureBtn = document.getElementById('toggleTexture');
+            const scaleSlider = document.getElementById('verticalScale');
+            const wireframeCheck = document.getElementById('wireframeToggle');
+            
+            if (resetBtn) resetBtn.addEventListener('click', resetView);
+            if (topBtn) topBtn.addEventListener('click', topView);
+            if (autoBtn) autoBtn.addEventListener('click', toggleAutoRotate);
+            if (touchBtn) touchBtn.addEventListener('click', toggleTouchUI);
+            if (textureBtn) textureBtn.addEventListener('click', toggleTexture);
+            if (scaleSlider) scaleSlider.addEventListener('input', (e) => updateVerticalScale(e.target.value));
+            if (wireframeCheck) wireframeCheck.addEventListener('change', (e) => toggleWireframe(e.target.checked));
+            
+            // Simple mouse controls
+            
+            // Animation loop
+            let frameCount = 0;
+            function animate() {
+                requestAnimationFrame(animate);
+                
+                // Update keyboard/touch movement
+                updateMovement();
+                
+                // Auto-rotate if enabled
+                if (autoRotate && !Object.values(movement).some(v => v)) {
+                    cameraRotation.theta += 0.002;
+                    updateCameraFromState();
+                }
+                
+                renderer.render(scene, camera);
+                
+                // Debug first few frames
+                if (frameCount < 3) {
+                    debug('Frame ' + frameCount + ' rendered');
+                    frameCount++;
+                }
+            }
+            
+            animate();
+            debug('Animation loop started');
+            
+            // Handle window resize
+            const resizeHandler = () => {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            };
+            window.addEventListener('resize', resizeHandler);
+        }
+
+        // Open empty 3D viewer
+        function open3DViewer() {
+            const modal = document.getElementById('modal3d');
+            const container = document.getElementById('viewer3d');
+            
+            // Clear any previous content
+            container.innerHTML = '';
+            
+            // Show a message
+            container.style.display = 'flex';
+            container.style.alignItems = 'center';
+            container.style.justifyContent = 'center';
+            container.style.color = 'white';
+            container.style.fontSize = '18px';
+            container.innerHTML = '<div style="text-align: center;"><p>📂 Click "Load Data" to import a terrain file</p><p style="margin-top: 10px; font-size: 14px; color: #aaa;">or use "Select Area" on the map to fetch elevation data</p></div>';
+            
+            // Show modal
+            modal.classList.add('show');
+        }
+
+        // Add click events
+        document.getElementById('locationBtn').addEventListener('click', getUserLocation);
+        document.getElementById('contoursBtn').addEventListener('click', toggleContours);
+        document.getElementById('satelliteBtn').addEventListener('click', toggleSatellite);
+        document.getElementById('selectAreaBtn').addEventListener('click', toggleAreaSelection);
+        document.getElementById('open3DViewerBtn').addEventListener('click', open3DViewer);
+        document.getElementById('closeModal').addEventListener('click', () => {
+            document.getElementById('modal3d').classList.remove('show');
+            // Clean up event listeners
+            if (window.cleanup3DViewer) {
+                window.cleanup3DViewer();
+            }
+        });
+        document.getElementById('saveDataBtn').addEventListener('click', saveTerrainData);
+        document.getElementById('loadDataBtn').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                loadTerrainData(e.target.files[0]);
+            }
+        });
+
+        // Add popup on click for location marker
+        const popup = new ol.Overlay({
+            element: document.createElement('div'),
+            positioning: 'bottom-center',
+            stopEvent: false,
+            offset: [0, -10]
+        });
+        map.addOverlay(popup);
+
+        map.on('click', (evt) => {
+            if (isSelecting) return;  // Don't show popup during selection
+            
+            const feature = map.forEachFeatureAtPixel(evt.pixel, (feature) => feature);
+            
+            if (feature && feature.get('name') === 'Your Location') {
+                const coordinates = feature.getGeometry().getCoordinates();
+                const lonLat = ol.proj.toLonLat(coordinates);
+                
+                const popupElement = popup.getElement();
+                popupElement.innerHTML = `
+                    <div style="background: white; padding: 10px 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-size: 13px;">
+                        <strong>Your Location</strong><br>
+                        <span style="color: #666;">
+                            Lat: ${lonLat[1].toFixed(6)}<br>
+                            Lon: ${lonLat[0].toFixed(6)}
+                        </span>
+                    </div>
+                `;
+                popup.setPosition(coordinates);
+            } else {
+                popup.setPosition(undefined);
+            }
+        });
+
+        // Change cursor on hover
+        map.on('pointermove', (evt) => {
+            if (isSelecting) {
+                map.getTarget().style.cursor = 'crosshair';
+                return;
+            }
+            
+            const pixel = map.getEventPixel(evt.originalEvent);
+            const hit = map.hasFeatureAtPixel(pixel);
+            map.getTarget().style.cursor = hit ? 'pointer' : '';
+        });
+    </script>
+</body>
+</html>
