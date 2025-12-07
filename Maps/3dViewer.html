@@ -166,6 +166,12 @@
             background: #2a2a2a;
             padding: 15px 20px;
             display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .modal-header-row {
+            display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
@@ -214,6 +220,61 @@
             background: #888 !important;
         }
 
+        /* Toolbar controls */
+        .toolbar-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .toolbar-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 8px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            touch-action: manipulation;
+        }
+
+        .toolbar-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .toolbar-btn.active {
+            background: #2196F3;
+            border-color: #2196F3;
+        }
+
+        .toolbar-label {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toolbar-label input[type="range"] {
+            width: 120px;
+        }
+
+        .toolbar-label input[type="checkbox"] {
+            cursor: pointer;
+        }
+
+        #flyingModeStatus {
+            padding: 6px 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+            color: white;
+        }
+
         #viewer3d {
             flex: 1;
             width: 100%;
@@ -251,66 +312,6 @@
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
-        }
-
-        /* Viewer controls */
-        .viewer-controls {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            max-width: 250px;
-            z-index: 100;
-        }
-
-        .viewer-controls h3 {
-            margin: 0 0 12px 0;
-            font-size: 16px;
-            color: #333;
-        }
-
-        .viewer-controls button {
-            display: block;
-            width: 100%;
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            background: white;
-            border: 2px solid #e0e0e0;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 13px;
-            transition: all 0.2s;
-            touch-action: manipulation;
-        }
-
-        .viewer-controls button:hover {
-            background: #f5f5f5;
-            border-color: #2196F3;
-        }
-
-        .viewer-controls button.active {
-            background: #2196F3;
-            color: white;
-            border-color: #2196F3;
-        }
-
-        .viewer-controls label {
-            display: block;
-            margin-bottom: 8px;
-            font-size: 12px;
-            color: #666;
-        }
-
-        .viewer-controls input[type="range"] {
-            width: 100%;
-            margin-top: 5px;
-        }
-
-        .viewer-controls input[type="checkbox"] {
-            margin-right: 5px;
         }
 
         /* Pointer lock info */
@@ -530,11 +531,30 @@
     <div class="modal" id="modal3d">
         <div class="modal-content">
             <div class="modal-header">
-                <span class="modal-title">🗻 3D Terrain Viewer</span>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button id="saveDataBtn3D" class="modal-close" style="background: #4CAF50;">💾 Save</button>
-                    <button id="loadDataBtn3D" class="modal-close" style="background: #2196F3;">📂 Load</button>
-                    <button id="closeModal" class="modal-close">✕ Close</button>
+                <!-- First row: Title and main buttons -->
+                <div class="modal-header-row">
+                    <span class="modal-title">🗻 3D Terrain Viewer</span>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button id="saveDataBtn3D" class="modal-close" style="background: #4CAF50;">💾 Save</button>
+                        <button id="loadDataBtn3D" class="modal-close" style="background: #2196F3;">📂 Load</button>
+                        <button id="closeModal" class="modal-close">✕ Close</button>
+                    </div>
+                </div>
+                
+                <!-- Second row: Controls -->
+                <div class="toolbar-controls">
+                    <div id="flyingModeStatus">RUNNING MODE</div>
+                    <button id="resetViewBtn" class="toolbar-btn">Reset View</button>
+                    <button id="topViewBtn" class="toolbar-btn">Top View</button>
+                    <button id="autoRotateBtn" class="toolbar-btn">Auto-Rotate</button>
+                    <button id="toggleTexture" class="toolbar-btn" style="display: none;">Toggle Texture</button>
+                    <label class="toolbar-label">
+                        Scale: <span id="scaleValue">0.1</span>x
+                        <input type="range" id="verticalScale" min="0.1" max="5" step="0.1" value="0.1">
+                    </label>
+                    <label class="toolbar-label">
+                        <input type="checkbox" id="wireframeToggle"> Wireframe
+                    </label>
                 </div>
             </div>
             <div id="viewer3d">
@@ -828,7 +848,7 @@
             reader.readAsText(file);
         }
 
-        // FIXED: Fetch satellite texture with proper coverage
+        // Fetch satellite texture with proper coverage
         async function fetchSatelliteTexture(bottomLeft, topRight, width, height) {
             try {
                 debug('Fetching satellite texture for bounds:');
@@ -945,11 +965,18 @@
             // Clear previous content
             container.innerHTML = '';
             
+            // Re-add loading overlay
+            const loadingOverlay = document.createElement('div');
+            loadingOverlay.className = 'loading-overlay';
+            loadingOverlay.id = 'loadingOverlay';
+            loadingOverlay.innerHTML = '<div class="spinner"></div><div>Generating 3D terrain...</div>';
+            container.appendChild(loadingOverlay);
+            
             // Camera state for first-person flying
             const camera = new THREE.PerspectiveCamera(
                 75,
                 container.clientWidth / container.clientHeight,
-                0.01,  // Very close near plane so we can see terrain right at our feet
+                0.01,
                 10000
             );
             
@@ -957,8 +984,8 @@
             const direction = new THREE.Vector3();
             
             // Euler angles for camera rotation
-            let pitch = 0;  // Up/down
-            let yaw = 0;    // Left/right
+            let pitch = 0;
+            let yaw = 0;
             
             // Movement state
             const keys = {
@@ -971,9 +998,9 @@
             };
             
             let isPointerLocked = false;
-            let isFlying = false; // Flying mode toggle
+            let isFlying = false;
             let lastUpTapTime = 0;
-            const doubleTapDelay = 300; // milliseconds
+            const doubleTapDelay = 300;
             
             // Setup Three.js scene
             const scene = new THREE.Scene();
@@ -1013,16 +1040,15 @@
             let originalHeightData = [];
             
             // Calculate real-world distances from GPS coordinates
-            let metersPerSceneUnit = 1; // Default fallback
+            let metersPerSceneUnit = 1;
             
             if (bottomLeft && topRight) {
-                // Calculate distance in meters using Haversine formula
                 const lat1 = bottomLeft[1] * Math.PI / 180;
                 const lat2 = topRight[1] * Math.PI / 180;
                 const lon1 = bottomLeft[0] * Math.PI / 180;
                 const lon2 = topRight[0] * Math.PI / 180;
                 
-                const R = 6371000; // Earth's radius in meters
+                const R = 6371000;
                 const dLat = lat2 - lat1;
                 const dLon = lon2 - lon1;
                 
@@ -1031,15 +1057,12 @@
                          Math.sin(dLon/2) * Math.sin(dLon/2);
                 const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
                 
-                // Calculate horizontal and vertical distances
-                const latDistance = R * Math.abs(lat2 - lat1); // North-South distance
-                const lonDistance = R * Math.abs(dLon) * Math.cos((lat1 + lat2) / 2); // East-West distance
+                const latDistance = R * Math.abs(lat2 - lat1);
+                const lonDistance = R * Math.abs(dLon) * Math.cos((lat1 + lat2) / 2);
                 
-                // Scene dimensions
                 const sceneWidth = width * scale;
                 const sceneHeight = height * scale;
                 
-                // Meters per scene unit (use average of both dimensions)
                 const metersPerUnitWidth = lonDistance / sceneWidth;
                 const metersPerUnitHeight = latDistance / sceneHeight;
                 metersPerSceneUnit = (metersPerUnitWidth + metersPerUnitHeight) / 2;
@@ -1050,36 +1073,24 @@
                 debug('Scene height: ' + sceneHeight.toFixed(2) + ' units');
                 debug('Meters per scene unit: ' + metersPerSceneUnit.toFixed(4));
             } else {
-                // No GPS coordinates - use reasonable default for typical terrain
-                // Assume scene represents roughly 1km x 1km area
                 const sceneWidth = width * scale;
                 metersPerSceneUnit = 1000 / sceneWidth;
                 debug('No GPS coords - using default: ' + metersPerSceneUnit.toFixed(4) + ' meters/unit');
             }
             
-            // Calculate proper player height (2.8m) in scene units
-            // The terrain scaling factor is: (verticalExaggeration * scale * 50) / elevRange
-            // So 2.8 meters in real world should be scaled the same way
             const terrainScaleFactor = (verticalExaggeration * scale * 50) / elevRange;
             const playerHeight = 2.8 * terrainScaleFactor;
             
             debug('Player height in scene units: ' + playerHeight.toFixed(3) + ' (representing 2.8m)');
             
-            // Calculate realistic walking speed (must be after metersPerSceneUnit is calculated)
-            // Running speed: 4.2 m/s (tripled from 1.4 m/s walking)
-            // At 60 FPS, we move 60 times per second
-            // So per frame: 4.2 / 60 = 0.07 meters
             const walkingSpeedMetersPerSecond = 4.2;
             const walkingSpeedMetersPerFrame = walkingSpeedMetersPerSecond / 60;
             const walkSpeed = walkingSpeedMetersPerFrame / metersPerSceneUnit;
             
-            // Calculate flying speed based on map size
-            // Goal: cross entire map in 10 seconds
-            // Use diagonal distance for most flexibility
             const sceneWidth = width * scale;
             const sceneHeight = height * scale;
             const mapDiagonal = Math.sqrt(sceneWidth * sceneWidth + sceneHeight * sceneHeight);
-            const flySpeed = mapDiagonal / 10 / 60; // Distance / 10 seconds / 60 fps
+            const flySpeed = mapDiagonal / 10 / 60;
             
             debug('Walking speed: ' + walkSpeed.toFixed(4) + ' scene units/frame (' + walkingSpeedMetersPerSecond + ' m/s)');
             debug('Flying speed: ' + flySpeed.toFixed(4) + ' scene units/frame (crosses map in 10s)');
@@ -1189,35 +1200,10 @@
             directionalLight.position.set(1, 1, 1);
             scene.add(directionalLight);
             
-            // Position camera above terrain at player height (1.8m)
-            // Start at center of terrain at eye level
-            // The collision detection will adjust this to proper ground height on first frame
             camera.position.set(0, playerHeight, 0);
             camera.rotation.order = 'YXZ';
             
             debug('Camera at: ' + camera.position.x + ',' + camera.position.y + ',' + camera.position.z);
-            
-            // Add controls UI
-            const controlsUI = document.createElement('div');
-            controlsUI.className = 'viewer-controls';
-            controlsUI.innerHTML = `
-                <h3>Controls</h3>
-                <div id="flyingModeStatus" style="padding: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; margin-bottom: 10px; text-align: center; font-weight: bold;">
-                    RUNNING MODE
-                </div>
-                <button id="resetViewBtn">Reset View</button>
-                <button id="topViewBtn">Top View</button>
-                <button id="autoRotateBtn">Auto-Rotate</button>
-                <button id="toggleTexture" style="display: none;">Toggle Texture</button>
-                <label>
-                    Vertical Scale: <span id="scaleValue">${verticalExaggeration.toFixed(1)}</span>x
-                    <input type="range" id="verticalScale" min="0.1" max="5" step="0.1" value="${verticalExaggeration}">
-                </label>
-                <label>
-                    <input type="checkbox" id="wireframeToggle"> Wireframe
-                </label>
-            `;
-            container.appendChild(controlsUI);
             
             // Add pointer lock instructions (desktop) or touch instructions (mobile)
             const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -1307,9 +1293,9 @@
                 lookHint.classList.remove('show');
             }, 3000);
             
-            // Pointer lock functionality (desktop only)
+            // Pointer lock functionality
             function requestPointerLock() {
-                if (isMobile) return; // Don't use pointer lock on mobile
+                if (isMobile) return;
                 renderer.domElement.requestPointerLock = 
                     renderer.domElement.requestPointerLock ||
                     renderer.domElement.mozRequestPointerLock ||
@@ -1326,7 +1312,6 @@
                 document.exitPointerLock();
             }
             
-            // Pointer lock change handler
             document.addEventListener('pointerlockchange', () => {
                 isPointerLocked = document.pointerLockElement === renderer.domElement;
                 if (isPointerLocked) {
@@ -1337,7 +1322,6 @@
                 }
             });
             
-            // Click to request pointer lock (desktop only)
             if (!isMobile) {
                 renderer.domElement.addEventListener('click', () => {
                     if (!isPointerLocked) {
@@ -1354,7 +1338,6 @@
                     case 'KeyA': keys.left = true; break;
                     case 'KeyD': keys.right = true; break;
                     case 'Space':
-                        // Double-tap detection for flying toggle
                         const now = performance.now();
                         if (now - lastUpTapTime < doubleTapDelay) {
                             isFlying = !isFlying;
@@ -1391,7 +1374,7 @@
                 }
             });
             
-            // Mouse look (desktop only)
+            // Mouse look
             if (!isMobile) {
                 document.addEventListener('mousemove', (e) => {
                     if (!isPointerLocked) return;
@@ -1400,7 +1383,6 @@
                     yaw -= e.movementX * sensitivity;
                     pitch -= e.movementY * sensitivity;
                     
-                    // Clamp pitch
                     pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
                     
                     camera.rotation.y = yaw;
@@ -1410,7 +1392,6 @@
             
             // Touch controls for mobile
             if (isMobile) {
-                // D-pad controls
                 const dpadUp = document.getElementById('dpad-up');
                 const dpadDown = document.getElementById('dpad-down');
                 const dpadLeft = document.getElementById('dpad-left');
@@ -1439,7 +1420,6 @@
                 dpadRight.addEventListener('touchstart', touchStart('right'));
                 dpadRight.addEventListener('touchend', touchEnd('right'));
                 
-                // Vertical controls
                 const btnUp = document.getElementById('btn-up');
                 const btnDown = document.getElementById('btn-down');
                 
@@ -1449,7 +1429,6 @@
                     e.preventDefault();
                     keys.up = true;
                     
-                    // Double-tap detection
                     const now = performance.now();
                     if (now - lastUpBtnTap < doubleTapDelay) {
                         isFlying = !isFlying;
@@ -1474,7 +1453,7 @@
                     keys.down = false;
                 });
                 
-                // Touch look controls in the look zone
+                // Touch look controls
                 let touchStartX = 0;
                 let touchStartY = 0;
                 
@@ -1494,7 +1473,6 @@
                     yaw -= deltaX * sensitivity;
                     pitch -= deltaY * sensitivity;
                     
-                    // Clamp pitch
                     pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
                     
                     camera.rotation.y = yaw;
@@ -1507,18 +1485,15 @@
             
             // Get terrain height at position
             function getTerrainHeightAt(x, z) {
-                // Convert world position to grid coordinates
                 const halfWidth = (width * scale) / 2;
                 const halfHeight = (height * scale) / 2;
                 
                 const gridX = ((x + halfWidth) / (width * scale)) * (width - 1);
                 const gridZ = ((z + halfHeight) / (height * scale)) * (height - 1);
                 
-                // Clamp to grid bounds
                 const clampedX = Math.max(0, Math.min(width - 2, Math.floor(gridX)));
                 const clampedZ = Math.max(0, Math.min(height - 2, Math.floor(gridZ)));
                 
-                // Get the four surrounding heights
                 const idx00 = clampedZ * width + clampedX;
                 const idx10 = clampedZ * width + (clampedX + 1);
                 const idx01 = (clampedZ + 1) * width + clampedX;
@@ -1529,7 +1504,6 @@
                 const h01 = originalHeightData[idx01] || 0;
                 const h11 = originalHeightData[idx11] || 0;
                 
-                // Bilinear interpolation
                 const fracX = gridX - clampedX;
                 const fracZ = gridZ - clampedZ;
                 
@@ -1542,12 +1516,10 @@
             
             // Movement update function
             function updateMovement(delta) {
-                if (delta > 0.1) delta = 0.1; // Cap delta to prevent huge jumps
+                if (delta > 0.1) delta = 0.1;
                 
-                // Get current speed based on mode
                 const currentSpeed = isFlying ? flySpeed : walkSpeed;
                 
-                // Calculate movement direction
                 direction.set(0, 0, 0);
                 
                 if (keys.forward) direction.z -= 1;
@@ -1555,41 +1527,34 @@
                 if (keys.left) direction.x -= 1;
                 if (keys.right) direction.x += 1;
                 
-                // Normalize direction
                 if (direction.length() > 0) {
                     direction.normalize();
                 }
                 
-                // Apply rotation to movement direction
                 const rotatedDirection = direction.clone();
                 rotatedDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
                 
-                // Update velocity
                 velocity.x = rotatedDirection.x * currentSpeed;
                 velocity.z = rotatedDirection.z * currentSpeed;
                 
-                // Vertical movement (only in flying mode)
                 if (isFlying) {
                     velocity.y = 0;
                     if (keys.up) velocity.y = currentSpeed;
                     if (keys.down) velocity.y = -currentSpeed;
                 } else {
-                    velocity.y = 0; // No vertical movement when running
+                    velocity.y = 0;
                 }
                 
-                // Apply movement
                 camera.position.x += velocity.x;
                 camera.position.y += velocity.y;
                 camera.position.z += velocity.z;
                 
-                // Ground collision (only when not flying)
                 if (!isFlying) {
                     const groundHeight = getTerrainHeightAt(camera.position.x, camera.position.z);
                     const targetY = groundHeight + playerHeight;
                     camera.position.y = targetY;
                 }
                 
-                // Keep camera within terrain bounds
                 const halfWidth = (width * scale) / 2;
                 const halfHeight = (height * scale) / 2;
                 camera.position.x = Math.max(-halfWidth, Math.min(halfWidth, camera.position.x));
@@ -1598,13 +1563,11 @@
             
             // Cleanup function
             window.cleanup3DViewer = () => {
-                // Remove event listeners
                 document.removeEventListener('keydown', null);
                 document.removeEventListener('keyup', null);
                 document.removeEventListener('mousemove', null);
                 document.removeEventListener('pointerlockchange', null);
                 
-                // Dispose of Three.js resources
                 geometry.dispose();
                 material.dispose();
                 if (satelliteTexture) satelliteTexture.dispose();
@@ -1620,7 +1583,6 @@
                 yaw = 0;
                 camera.rotation.set(pitch, yaw, 0);
                 
-                // Reset button style
                 const upBtn = document.getElementById('btn-up');
                 if (upBtn) {
                     upBtn.style.background = 'rgba(255, 255, 255, 0.4)';
@@ -1641,6 +1603,8 @@
             let autoRotate = false;
             function toggleAutoRotate() {
                 autoRotate = !autoRotate;
+                const btn = document.getElementById('autoRotateBtn');
+                if (btn) btn.classList.toggle('active', autoRotate);
                 debug('Auto-rotate: ' + (autoRotate ? 'ON' : 'OFF'));
             }
             
@@ -1720,10 +1684,8 @@
                 const delta = (currentTime - lastTime) / 1000;
                 lastTime = currentTime;
                 
-                // Update movement
                 updateMovement(delta);
                 
-                // Auto-rotate if enabled
                 if (autoRotate && !Object.values(keys).some(v => v)) {
                     yaw += 0.01;
                     camera.rotation.y = yaw;
@@ -1740,7 +1702,6 @@
             animate();
             debug('Animation loop started');
             
-            // Do an initial movement update to position camera on terrain
             updateMovement(0);
             debug('Initial position set on terrain');
             
