@@ -752,7 +752,8 @@
                 nasaFireSource = new ol.source.Vector();
                 nasaFireLayer = new ol.layer.Vector({
                     source: nasaFireSource,
-                    visible: false
+                    visible: false,
+                    zIndex: 100  // Ensure it's on top
                 });
 
                 map = new ol.Map({
@@ -800,6 +801,8 @@
                         var props = feature.get('properties');
                         var coordinate = evt.coordinate;
                         var lonLat = ol.proj.toLonLat(coordinate);
+                        
+                        console.log('Feature clicked, properties:', props);
                         
                         // Check if it's a NASA fire or regular fire
                         if (props && props.type === 'nasa_fire') {
@@ -1134,15 +1137,19 @@
             nasaFiresEnabled = !nasaFiresEnabled;
             var btn = document.getElementById('btn-nasa');
             
+            console.log('NASA fires toggled:', nasaFiresEnabled);
+            
             if (nasaFiresEnabled) {
                 btn.classList.add('active');
                 nasaFireLayer.setVisible(true);
+                console.log('NASA layer set to visible, loading data...');
                 loadNASAFires();
             } else {
                 btn.classList.remove('active');
                 nasaFireLayer.setVisible(false);
                 nasaFireSource.clear();
                 document.getElementById('nasa-count-item').style.display = 'none';
+                console.log('NASA layer hidden and cleared');
             }
         }
 
@@ -1153,19 +1160,22 @@
             
             // Queensland bounding box: roughly -10 to -29 latitude, 138 to 154 longitude
             // Using NASA FIRMS API - requires free MAP_KEY from https://firms.modaps.eosdis.nasa.gov/api/
-            // For now, using a sample endpoint structure
             
             // VIIRS data (more recent, higher resolution)
             var url = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/577b0590cbd4f45bb0cfdbfbca871a11/VIIRS_SNPP_NRT/-29,138,-10,154/1';
             
+            console.log('Fetching NASA FIRMS data from:', url);
+            
             fetch(url)
                 .then(function(response) {
+                    console.log('NASA FIRMS response status:', response.status);
                     if (!response.ok) {
                         throw new Error('NASA FIRMS API error: ' + response.status);
                     }
                     return response.text();
                 })
                 .then(function(csvData) {
+                    console.log('Received CSV data, length:', csvData.length);
                     parseNASAFiresCSV(csvData);
                     loading.style.display = 'none';
                 })
@@ -1182,16 +1192,30 @@
         function parseNASAFiresCSV(csvData) {
             nasaFireSource.clear();
             
+            console.log('Parsing NASA CSV data...');
+            console.log('First 500 chars:', csvData.substring(0, 500));
+            
             var lines = csvData.split('\n');
-            if (lines.length < 2) return;
+            console.log('Total lines:', lines.length);
+            
+            if (lines.length < 2) {
+                console.log('Not enough data lines');
+                return;
+            }
             
             var headers = lines[0].split(',');
+            console.log('Headers:', headers);
+            
             var latIndex = headers.indexOf('latitude');
             var lonIndex = headers.indexOf('longitude');
             var brightIndex = headers.indexOf('bright_ti4');
             var confidenceIndex = headers.indexOf('confidence');
             var acqDateIndex = headers.indexOf('acq_date');
             var acqTimeIndex = headers.indexOf('acq_time');
+            
+            console.log('Column indices - lat:', latIndex, 'lon:', lonIndex, 'confidence:', confidenceIndex);
+            
+            var processedCount = 0;
             
             for (var i = 1; i < lines.length; i++) {
                 if (!lines[i].trim()) continue;
@@ -1202,11 +1226,14 @@
                 var lat = parseFloat(values[latIndex]);
                 var lon = parseFloat(values[lonIndex]);
                 var brightness = parseFloat(values[brightIndex]);
-                var confidence = values[confidenceIndex];
+                var confidence = values[confidenceIndex] ? values[confidenceIndex].toLowerCase().trim() : '';
                 var acqDate = values[acqDateIndex];
                 var acqTime = values[acqTimeIndex];
                 
-                if (isNaN(lat) || isNaN(lon)) continue;
+                if (isNaN(lat) || isNaN(lon)) {
+                    console.log('Invalid coords at line', i, ':', lat, lon);
+                    continue;
+                }
                 
                 var coords = ol.proj.fromLonLat([lon, lat]);
                 
@@ -1229,8 +1256,12 @@
                     color = '#FF0000'; // Red
                 } else if (confidence === 'n' || confidence === 'nominal') {
                     color = '#FFA500'; // Orange
-                } else {
+                } else if (confidence === 'l' || confidence === 'low') {
                     color = '#FFD700'; // Yellow/Gold
+                } else {
+                    // Default color for unknown confidence
+                    color = '#FFD700'; // Yellow/Gold
+                    console.log('Unknown confidence value:', confidence);
                 }
                 
                 nasaFire.setStyle(new ol.style.Style({
@@ -1246,10 +1277,11 @@
                 }));
                 
                 nasaFireSource.addFeature(nasaFire);
+                processedCount++;
             }
             
             var nasaCount = nasaFireSource.getFeatures().length;
-            console.log('Loaded', nasaCount, 'NASA fire detections');
+            console.log('Processed', processedCount, 'fires, added', nasaCount, 'to map');
             
             document.getElementById('nasa-count').textContent = nasaCount;
             document.getElementById('nasa-count-item').style.display = 'flex';
