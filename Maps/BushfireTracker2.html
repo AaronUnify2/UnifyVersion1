@@ -476,6 +476,52 @@
         .modal-content button:hover {
             background: #1976D2;
         }
+
+        .debug-terminal {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            left: 10px;
+            max-width: 400px;
+            margin: 0 auto;
+            max-height: 250px;
+            background: rgba(0, 0, 0, 0.95);
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            padding: 10px;
+            border-radius: 8px;
+            overflow-y: auto;
+            z-index: 2001;
+            display: none;
+            box-shadow: 0 4px 15px rgba(0, 255, 0, 0.3);
+        }
+
+        .debug-terminal.show {
+            display: block;
+        }
+
+        .debug-line {
+            margin: 3px 0;
+            word-wrap: break-word;
+            line-height: 1.3;
+        }
+
+        .debug-toggle {
+            position: fixed;
+            bottom: 270px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            border: 2px solid #00ff00;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 2001;
+            box-shadow: 0 2px 8px rgba(0, 255, 0, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -576,6 +622,9 @@
         </div>
     </div>
 
+    <button class="debug-toggle" onclick="toggleDebug()">Debug</button>
+    <div id="debug-terminal" class="debug-terminal"></div>
+
     <!-- OpenLayers JS -->
     <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
     
@@ -623,6 +672,32 @@
 
         function closeModal() {
             document.getElementById('custom-modal').classList.remove('show');
+        }
+
+        var debugLines = [];
+        var maxDebugLines = 50;
+
+        function toggleDebug() {
+            var terminal = document.getElementById('debug-terminal');
+            terminal.classList.toggle('show');
+        }
+
+        function debugLog(message) {
+            console.log(message);
+            var timestamp = new Date().toLocaleTimeString();
+            debugLines.push('[' + timestamp + '] ' + message);
+            
+            if (debugLines.length > maxDebugLines) {
+                debugLines.shift();
+            }
+            
+            var terminal = document.getElementById('debug-terminal');
+            var header = '<div style="border-bottom: 1px solid #00ff00; margin-bottom: 5px; padding-bottom: 5px; font-weight: bold;">DEBUG CONSOLE</div>';
+            terminal.innerHTML = header + debugLines.map(function(line) {
+                return '<div class="debug-line">' + line + '</div>';
+            }).join('');
+            
+            terminal.scrollTop = terminal.scrollHeight;
         }
 
         function getWatchtowerColor(watchtowerIndex) {
@@ -802,7 +877,7 @@
                         var coordinate = evt.coordinate;
                         var lonLat = ol.proj.toLonLat(coordinate);
                         
-                        console.log('Feature clicked, properties:', props);
+                        debugLog('Feature clicked: ' + (props ? props.type : 'unknown'));
                         
                         // Check if it's a NASA fire or regular fire
                         if (props && props.type === 'nasa_fire') {
@@ -1137,19 +1212,22 @@
             nasaFiresEnabled = !nasaFiresEnabled;
             var btn = document.getElementById('btn-nasa');
             
-            console.log('NASA fires toggled:', nasaFiresEnabled);
+            // Auto-show debug terminal
+            document.getElementById('debug-terminal').classList.add('show');
+            
+            debugLog('NASA fires toggled: ' + nasaFiresEnabled);
             
             if (nasaFiresEnabled) {
                 btn.classList.add('active');
                 nasaFireLayer.setVisible(true);
-                console.log('NASA layer set to visible, loading data...');
+                debugLog('NASA layer visible, loading...');
                 loadNASAFires();
             } else {
                 btn.classList.remove('active');
                 nasaFireLayer.setVisible(false);
                 nasaFireSource.clear();
                 document.getElementById('nasa-count-item').style.display = 'none';
-                console.log('NASA layer hidden and cleared');
+                debugLog('NASA layer hidden');
             }
         }
 
@@ -1164,22 +1242,24 @@
             // VIIRS data (more recent, higher resolution)
             var url = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/577b0590cbd4f45bb0cfdbfbca871a11/VIIRS_SNPP_NRT/-29,138,-10,154/1';
             
-            console.log('Fetching NASA FIRMS data from:', url);
+            debugLog('Fetching NASA FIRMS data...');
+            debugLog('URL: ' + url);
             
             fetch(url)
                 .then(function(response) {
-                    console.log('NASA FIRMS response status:', response.status);
+                    debugLog('Response status: ' + response.status);
                     if (!response.ok) {
                         throw new Error('NASA FIRMS API error: ' + response.status);
                     }
                     return response.text();
                 })
                 .then(function(csvData) {
-                    console.log('Received CSV data, length:', csvData.length);
+                    debugLog('Received CSV, length: ' + csvData.length);
                     parseNASAFiresCSV(csvData);
                     loading.style.display = 'none';
                 })
                 .catch(function(error) {
+                    debugLog('ERROR: ' + error.message);
                     console.error('Error loading NASA fires:', error);
                     loading.innerHTML = 'Error loading NASA fire data.<br>Get a free API key at: <a href="https://firms.modaps.eosdis.nasa.gov/api/" target="_blank" style="color: #2196F3;">NASA FIRMS</a>';
                     loading.classList.add('error');
@@ -1192,19 +1272,19 @@
         function parseNASAFiresCSV(csvData) {
             nasaFireSource.clear();
             
-            console.log('Parsing NASA CSV data...');
-            console.log('First 500 chars:', csvData.substring(0, 500));
+            debugLog('Parsing NASA CSV data...');
+            debugLog('First 200 chars: ' + csvData.substring(0, 200));
             
             var lines = csvData.split('\n');
-            console.log('Total lines:', lines.length);
+            debugLog('Total lines: ' + lines.length);
             
             if (lines.length < 2) {
-                console.log('Not enough data lines');
+                debugLog('Not enough data lines');
                 return;
             }
             
             var headers = lines[0].split(',');
-            console.log('Headers:', headers);
+            debugLog('Headers: ' + headers.join(', '));
             
             var latIndex = headers.indexOf('latitude');
             var lonIndex = headers.indexOf('longitude');
@@ -1213,7 +1293,7 @@
             var acqDateIndex = headers.indexOf('acq_date');
             var acqTimeIndex = headers.indexOf('acq_time');
             
-            console.log('Column indices - lat:', latIndex, 'lon:', lonIndex, 'confidence:', confidenceIndex);
+            debugLog('Indices - lat:' + latIndex + ' lon:' + lonIndex + ' conf:' + confidenceIndex);
             
             var processedCount = 0;
             
@@ -1231,7 +1311,7 @@
                 var acqTime = values[acqTimeIndex];
                 
                 if (isNaN(lat) || isNaN(lon)) {
-                    console.log('Invalid coords at line', i, ':', lat, lon);
+                    debugLog('Invalid coords line ' + i + ': ' + lat + ',' + lon);
                     continue;
                 }
                 
@@ -1261,7 +1341,7 @@
                 } else {
                     // Default color for unknown confidence
                     color = '#FFD700'; // Yellow/Gold
-                    console.log('Unknown confidence value:', confidence);
+                    debugLog('Unknown confidence: ' + confidence);
                 }
                 
                 nasaFire.setStyle(new ol.style.Style({
@@ -1281,7 +1361,7 @@
             }
             
             var nasaCount = nasaFireSource.getFeatures().length;
-            console.log('Processed', processedCount, 'fires, added', nasaCount, 'to map');
+            debugLog('Processed ' + processedCount + ' fires, added ' + nasaCount + ' to map');
             
             document.getElementById('nasa-count').textContent = nasaCount;
             document.getElementById('nasa-count-item').style.display = 'flex';
