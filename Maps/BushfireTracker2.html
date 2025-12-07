@@ -399,6 +399,21 @@
             align-items: center;
             padding: 4px 0;
             border-bottom: 1px solid #f0f0f0;
+            gap: 8px;
+        }
+
+        .watchtower-name-input {
+            flex: 1;
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: inherit;
+        }
+
+        .watchtower-name-input:focus {
+            outline: none;
+            border-color: #2196F3;
         }
 
         .watchtower-remove {
@@ -589,6 +604,92 @@
             return watchtowerColors[watchtowerIndex % watchtowerColors.length];
         }
 
+        function saveWatchtowersToStorage() {
+            var watchtowerData = watchtowers.map(function(wt) {
+                return {
+                    id: wt.id,
+                    name: wt.name,
+                    lonLat: wt.lonLat,
+                    index: wt.index,
+                    color: wt.color
+                };
+            });
+            localStorage.setItem('bushfire_watchtowers', JSON.stringify(watchtowerData));
+            localStorage.setItem('bushfire_watchtower_counter', watchtowerIdCounter.toString());
+        }
+
+        function loadWatchtowersFromStorage() {
+            try {
+                var stored = localStorage.getItem('bushfire_watchtowers');
+                var counter = localStorage.getItem('bushfire_watchtower_counter');
+                
+                if (counter) {
+                    watchtowerIdCounter = parseInt(counter, 10);
+                }
+                
+                if (stored) {
+                    var watchtowerData = JSON.parse(stored);
+                    watchtowerData.forEach(function(wtData) {
+                        var coordinate = ol.proj.fromLonLat(wtData.lonLat);
+                        
+                        var watchtower = {
+                            id: wtData.id,
+                            name: wtData.name,
+                            index: wtData.index,
+                            coordinate: coordinate,
+                            lonLat: wtData.lonLat,
+                            color: wtData.color,
+                            feature: null
+                        };
+                        
+                        var watchtowerFeature = new ol.Feature({
+                            geometry: new ol.geom.Point(coordinate),
+                            type: 'watchtower',
+                            watchtowerId: wtData.id
+                        });
+                        
+                        var r = parseInt(wtData.color.slice(1, 3), 16);
+                        var g = parseInt(wtData.color.slice(3, 5), 16);
+                        var b = parseInt(wtData.color.slice(5, 7), 16);
+                        
+                        watchtowerFeature.setStyle(new ol.style.Style({
+                            image: new ol.style.Circle({
+                                radius: 12,
+                                fill: new ol.style.Fill({
+                                    color: [r, g, b, 1]
+                                }),
+                                stroke: new ol.style.Stroke({
+                                    color: 'white',
+                                    width: 3
+                                })
+                            }),
+                            text: new ol.style.Text({
+                                text: '🗼',
+                                font: '16px sans-serif',
+                                offsetY: 0
+                            })
+                        }));
+                        
+                        watchtower.feature = watchtowerFeature;
+                        measureSource.addFeature(watchtowerFeature);
+                        watchtowers.push(watchtower);
+                    });
+                    
+                    updateWatchtowerList();
+                }
+            } catch (e) {
+                console.error('Error loading watchtowers from storage:', e);
+            }
+        }
+
+        function renameWatchtower(watchtowerId, newName) {
+            var watchtower = watchtowers.find(function(w) { return w.id === watchtowerId; });
+            if (watchtower) {
+                watchtower.name = newName || 'Watchtower ' + (watchtower.index + 1);
+                saveWatchtowersToStorage();
+            }
+        }
+
         window.addEventListener('load', function() {
             try {
                 if (typeof ol === 'undefined') {
@@ -700,6 +801,7 @@
                 document.getElementById('btn-wind').addEventListener('click', toggleWind);
                 document.getElementById('btn-satellite').addEventListener('click', toggleSatellite);
 
+                loadWatchtowersFromStorage();
                 loadBushfireData();
                 setInterval(loadBushfireData, 5 * 60 * 1000);
 
@@ -731,6 +833,7 @@
             
             var watchtower = {
                 id: watchtowerId,
+                name: 'Watchtower ' + (watchtowerIndex + 1),
                 index: watchtowerIndex,
                 coordinate: coordinate,
                 lonLat: lonLat,
@@ -771,6 +874,7 @@
             measureSource.addFeature(watchtowerFeature);
             watchtowers.push(watchtower);
             
+            saveWatchtowersToStorage();
             updateWatchtowerList();
             
             if (measureActive) {
@@ -823,6 +927,7 @@
                     }));
                 });
                 
+                saveWatchtowersToStorage();
                 updateWatchtowerList();
                 
                 if (measureActive) {
@@ -845,7 +950,9 @@
             var html = '<div style="font-weight: 600; margin-bottom: 5px;">Active Watchtowers:</div>';
             watchtowers.forEach(function(wt, idx) {
                 html += '<div class="watchtower-item">';
-                html += '<span>Watchtower ' + (idx + 1) + '</span>';
+                html += '<input type="text" class="watchtower-name-input" value="' + wt.name + '" ';
+                html += 'onchange="renameWatchtower(' + wt.id + ', this.value)" ';
+                html += 'onclick="event.stopPropagation()" />';
                 html += '<button class="watchtower-remove" onclick="removeWatchtower(' + wt.id + ')">Remove</button>';
                 html += '</div>';
             });
@@ -1219,7 +1326,7 @@
                         var props = fire.get('properties');
                         warnings.push({
                             type: 'fire',
-                            message: '🔥 FIRE ALERT: Fire within ' + formatDistance(distance) + ' of Watchtower ' + (wtIdx + 1) + ' - ' + (props.headline || 'Bushfire')
+                            message: '🔥 FIRE ALERT: Fire within ' + formatDistance(distance) + ' of ' + watchtower.name + ' - ' + (props.headline || 'Bushfire')
                         });
                     }
                     
@@ -1246,7 +1353,7 @@
                             var props = fire.get('properties');
                             warnings.push({
                                 type: 'ember',
-                                message: '⚠️ EMBER ZONE: ' + Math.round(windSpeed) + ' km/h wind from fire could carry embers to Watchtower ' + (wtIdx + 1) + ' - ' + (props.headline || 'Fire')
+                                message: '⚠️ EMBER ZONE: ' + Math.round(windSpeed) + ' km/h wind from fire could carry embers to ' + watchtower.name + ' - ' + (props.headline || 'Fire')
                             });
                         }
                     }
@@ -1322,7 +1429,7 @@
             var lonLat = ol.proj.toLonLat(coordinate);
             watchtowers.forEach(function(wt, idx) {
                 var distance = calculateDistance(wt.lonLat[0], wt.lonLat[1], lonLat[0], lonLat[1]);
-                html += '<div class="distance-badge">📍 ' + distance + ' from Watchtower ' + (idx + 1) + '</div>';
+                html += '<div class="distance-badge">📍 ' + distance + ' from ' + wt.name + '</div>';
             });
             
             if (props.description) {
