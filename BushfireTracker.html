@@ -858,18 +858,15 @@
         }
 
         function toggleWind() {
-            if (watchtowers.length === 0) {
-                alert('Please add at least one watchtower first by clicking "Add Watchtower" and then clicking on the map');
-                return;
-            }
-            
             windEnabled = !windEnabled;
             var btn = document.getElementById('btn-wind');
             
             if (windEnabled) {
                 btn.classList.add('active');
                 fetchWindDataForFires();
-                fetchWindDataForWatchtowers();
+                if (watchtowers.length > 0) {
+                    fetchWindDataForWatchtowers();
+                }
             } else {
                 btn.classList.remove('active');
                 clearWindOverlay();
@@ -1103,6 +1100,7 @@
                     var line = new ol.geom.LineString([watchtowerCoords, fireCoords]);
                     var distance = ol.sphere.getLength(line);
                     
+                    // Fire proximity warning
                     if (distance <= 10000) {
                         var props = fire.get('properties');
                         warnings.push({
@@ -1110,36 +1108,35 @@
                             message: '🔥 FIRE ALERT: Fire within ' + formatDistance(distance) + ' of Watchtower ' + (wtIdx + 1) + ' - ' + (props.headline || 'Bushfire')
                         });
                     }
-                });
-                
-                if (windEnabled && watchtowerWindData[watchtower.id]) {
-                    var windData = watchtowerWindData[watchtower.id];
-                    var windSpeed = windData.windSpeed;
-                    var windDir = windData.windDirection;
-                    var arrowLength = windSpeed * 1000;
                     
-                    fires.forEach(function(fire) {
-                        if (!fireWindData[fires.indexOf(fire)]) return;
+                    // Ember zone warning - check if blue wind arrows from fires come within 1km of watchtower
+                    if (windEnabled && fireWindData[fireIdx]) {
+                        var fireWindDat = fireWindData[fireIdx];
+                        var windSpeed = fireWindDat.windSpeed;
+                        var windDir = fireWindDat.windDirection;
                         
-                        var fireWindDat = fireWindData[fires.indexOf(fire)];
-                        var fireCoords = fireWindDat.coords;
-                        
+                        // Calculate the end point of the fire's wind arrow (blue arrow)
+                        var arrowLength = windSpeed * 1000; // km/h to meters
                         var angleRad = (90 - windDir) * Math.PI / 180;
-                        var endX = watchtowerCoords[0] + arrowLength * Math.cos(angleRad);
-                        var endY = watchtowerCoords[1] + arrowLength * Math.sin(angleRad);
+                        
+                        var endX = fireCoords[0] + arrowLength * Math.cos(angleRad);
+                        var endY = fireCoords[1] + arrowLength * Math.sin(angleRad);
                         
                         var windEndPoint = [endX, endY];
-                        var distanceToWindEnd = new ol.geom.LineString([fireCoords, windEndPoint]);
-                        var distToEnd = ol.sphere.getLength(distanceToWindEnd);
                         
-                        if (distToEnd <= 5000) {
+                        // Check distance from wind arrow endpoint to watchtower
+                        var distanceToWatchtower = new ol.geom.LineString([windEndPoint, watchtowerCoords]);
+                        var distToWT = ol.sphere.getLength(distanceToWatchtower);
+                        
+                        if (distToWT <= 1000) {
+                            var props = fire.get('properties');
                             warnings.push({
                                 type: 'ember',
-                                message: '⚠️ EMBER ZONE: Wind direction from Watchtower ' + (wtIdx + 1) + ' indicates potential ember zone near fire'
+                                message: '⚠️ EMBER ZONE: ' + Math.round(windSpeed) + ' km/h wind from fire could carry embers to Watchtower ' + (wtIdx + 1) + ' - ' + (props.headline || 'Fire')
                             });
                         }
-                    });
-                }
+                    }
+                });
             });
             
             var warningPanel = document.getElementById('warning-panel');
