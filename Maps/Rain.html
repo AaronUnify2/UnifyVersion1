@@ -772,6 +772,15 @@
                         <span class="rain-stat-label">Avg Saturation:</span>
                         <span class="rain-stat-value" id="statSaturation">0%</span>
                     </div>
+                    <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.2);">
+                        <div style="font-size: 12px; color: rgba(255,255,255,0.7); margin-bottom: 8px;">Water Depth Scale:</div>
+                        <div style="font-size: 11px; color: rgba(255,255,255,0.6);">
+                            <div style="margin-bottom: 3px;">💧 &lt;100mm: No visible water</div>
+                            <div style="margin-bottom: 3px;"><span style="color: #64c8ff;">●</span> 100mm: Light blue</div>
+                            <div style="margin-bottom: 3px;"><span style="color: #8080e0;">●</span> 500mm: Blue-purple</div>
+                            <div><span style="color: #9632c8;">●</span> 1000mm+: Purple</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1438,10 +1447,14 @@
                     height - 1
                 );
                 
+                // Add color attribute for gradient visualization
+                const colors = new Float32Array((width * height) * 3);
+                waterGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                
                 const waterMaterial = new THREE.MeshPhongMaterial({
-                    color: 0x0066ff,
+                    vertexColors: true,
                     transparent: true,
-                    opacity: 0.6,
+                    opacity: 0.7,
                     side: THREE.DoubleSide,
                     shininess: 100
                 });
@@ -1533,25 +1546,54 @@
                 // Update water mesh
                 if (sim.waterMesh) {
                     const waterVertices = sim.waterMesh.geometry.attributes.position.array;
+                    const waterColors = sim.waterMesh.geometry.attributes.color.array;
                     let totalWater = 0;
                     let maxDepth = 0;
+                    let hasVisibleWater = false;
                     
                     for (let i = 0; i < height; i++) {
                         for (let j = 0; j < width; j++) {
                             const idx = i * width + j;
                             const vertIdx = (i * width + j) * 3;
                             
-                            const waterHeight = sim.state.waterDepth[idx] * terrainScaleFactor * 0.001;
-                            waterVertices[vertIdx + 2] = originalHeightData[idx] + waterHeight;
+                            const depthMM = sim.state.waterDepth[idx];
+                            totalWater += depthMM;
+                            maxDepth = Math.max(maxDepth, depthMM);
                             
-                            totalWater += sim.state.waterDepth[idx];
-                            maxDepth = Math.max(maxDepth, sim.state.waterDepth[idx]);
+                            // Only show water if depth > 100mm
+                            if (depthMM > 100) {
+                                hasVisibleWater = true;
+                                const waterHeight = depthMM * terrainScaleFactor * 0.001;
+                                waterVertices[vertIdx + 2] = originalHeightData[idx] + waterHeight;
+                                
+                                // Color gradient: light blue (100mm) -> purple (1000mm+)
+                                // Normalize depth from 100-1000mm to 0-1
+                                const normalizedDepth = Math.min((depthMM - 100) / 900, 1);
+                                
+                                // Light blue: rgb(100, 200, 255) -> Purple: rgb(150, 50, 200)
+                                const r = 100 + (150 - 100) * normalizedDepth;
+                                const g = 200 - (200 - 50) * normalizedDepth;
+                                const b = 255 - (255 - 200) * normalizedDepth;
+                                
+                                waterColors[vertIdx] = r / 255;
+                                waterColors[vertIdx + 1] = g / 255;
+                                waterColors[vertIdx + 2] = b / 255;
+                            } else {
+                                // No visible water - set to terrain height
+                                waterVertices[vertIdx + 2] = originalHeightData[idx];
+                                
+                                // Set color to transparent/invisible (will be hidden by terrain)
+                                waterColors[vertIdx] = 0;
+                                waterColors[vertIdx + 1] = 0;
+                                waterColors[vertIdx + 2] = 0;
+                            }
                         }
                     }
                     
                     sim.waterMesh.geometry.attributes.position.needsUpdate = true;
+                    sim.waterMesh.geometry.attributes.color.needsUpdate = true;
                     sim.waterMesh.geometry.computeVertexNormals();
-                    sim.waterMesh.visible = maxDepth > 0.1;
+                    sim.waterMesh.visible = hasVisibleWater;
                     
                     // Update stats
                     const gridCellArea = totalAreaSquareMeters / (width * height);
