@@ -860,17 +860,18 @@
                 const latDiff = Math.abs(topRight[1] - bottomLeft[1]);
                 const lonDiff = Math.abs(topRight[0] - bottomLeft[0]);
                 
-                // Determine zoom level - using higher zoom for better detail (roads, rivers, etc.)
+                // Determine zoom level - balanced for detail while ensuring tiles exist
+                // ArcGIS World Imagery goes up to zoom 19, but not all areas have full coverage
                 let zoom;
                 const maxDiff = Math.max(latDiff, lonDiff);
-                if (maxDiff > 1) zoom = 13;        // Large areas - still detailed
-                else if (maxDiff > 0.5) zoom = 14;
-                else if (maxDiff > 0.25) zoom = 15;
-                else if (maxDiff > 0.1) zoom = 16;
-                else if (maxDiff > 0.05) zoom = 17;
-                else if (maxDiff > 0.025) zoom = 18;
-                else if (maxDiff > 0.01) zoom = 19;
-                else zoom = 19;                     // Maximum detail
+                if (maxDiff > 1) zoom = 11;        // Large areas
+                else if (maxDiff > 0.5) zoom = 12;
+                else if (maxDiff > 0.25) zoom = 13;
+                else if (maxDiff > 0.1) zoom = 14;
+                else if (maxDiff > 0.05) zoom = 15;
+                else if (maxDiff > 0.025) zoom = 16;
+                else if (maxDiff > 0.01) zoom = 17;
+                else zoom = 17;                     // Good detail for small areas
                 
                 debug('  Zoom level: ' + zoom + ' (area size: ' + maxDiff.toFixed(4) + '°)');
                 
@@ -894,10 +895,19 @@
                 
                 const tilesX = maxX - minX + 1;
                 const tilesY = maxY - minY + 1;
+                const totalTiles = tilesX * tilesY;
                 
-                debug('  Tiles needed: ' + tilesX + ' x ' + tilesY + ' = ' + (tilesX * tilesY));
+                debug('  Tiles needed: ' + tilesX + ' x ' + tilesY + ' = ' + totalTiles);
                 debug('  Tile range X: ' + minX + ' to ' + maxX);
                 debug('  Tile range Y: ' + minY + ' to ' + maxY);
+                
+                // Limit tile count to prevent overwhelming the browser
+                if (totalTiles > 100) {
+                    debug('  WARNING: Too many tiles (' + totalTiles + '), reducing zoom');
+                    zoom = Math.max(10, zoom - 2);
+                    debug('  Reduced zoom to: ' + zoom);
+                    return fetchSatelliteTexture(bottomLeft, topRight, width, height); // Retry with lower zoom
+                }
                 
                 // Create canvas to combine tiles
                 const tileSize = 256;
@@ -906,27 +916,47 @@
                 canvas.height = tilesY * tileSize;
                 const ctx = canvas.getContext('2d');
                 
+                // Fill with a default color in case some tiles fail
+                ctx.fillStyle = '#8B7355';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
                 debug('  Canvas size: ' + canvas.width + ' x ' + canvas.height);
                 
-                // Load all tiles
+                // Load all tiles with individual error handling
+                let successCount = 0;
+                let failCount = 0;
+                
                 const tilePromises = [];
                 for (let y = minY; y <= maxY; y++) {
                     for (let x = minX; x <= maxX; x++) {
                         const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`;
                         
-                        const promise = new Promise((resolve, reject) => {
+                        const promise = new Promise((resolve) => {
                             const img = new Image();
                             img.crossOrigin = 'anonymous';
+                            
+                            const timeout = setTimeout(() => {
+                                debug('  Tile timeout: ' + x + ',' + y);
+                                failCount++;
+                                resolve();
+                            }, 10000); // 10 second timeout per tile
+                            
                             img.onload = () => {
+                                clearTimeout(timeout);
                                 const canvasX = (x - minX) * tileSize;
                                 const canvasY = (y - minY) * tileSize;
                                 ctx.drawImage(img, canvasX, canvasY);
+                                successCount++;
                                 resolve();
                             };
+                            
                             img.onerror = () => {
+                                clearTimeout(timeout);
                                 debug('  Failed to load tile: ' + x + ',' + y);
-                                reject(new Error('Tile load failed'));
+                                failCount++;
+                                resolve(); // Resolve anyway so we don't block
                             };
+                            
                             img.src = url;
                         });
                         
@@ -934,9 +964,15 @@
                     }
                 }
                 
-                // Wait for all tiles to load
+                // Wait for all tiles to load (or fail)
                 await Promise.all(tilePromises);
-                debug('  All tiles loaded successfully');
+                debug('  Tiles loaded: ' + successCount + ' success, ' + failCount + ' failed');
+                
+                // If too many tiles failed, return null
+                if (successCount === 0) {
+                    debug('  ERROR: No tiles loaded successfully');
+                    return null;
+                }
                 
                 // Create texture from canvas
                 const texture = new THREE.CanvasTexture(canvas);
@@ -1818,3 +1854,4 @@
     </script>
 </body>
 </html>
+
