@@ -1237,18 +1237,32 @@
             loading.textContent = 'Loading NASA satellite fire data...';
             
             debugLog('Fetching NASA FIRMS data...');
+            debugLog('Using AREA endpoint (country endpoint unavailable)');
             
-            // Try different sources in order
+            // Country endpoint is unavailable, using area instead
+            // Format: /area/csv/{MAP_KEY}/{source}/{area}/{dayrange}
+            // area format: {min_lat},{min_lon},{max_lat},{max_lon}
+            // Queensland: lat -29 to -10, lon 138 to 154
+            
             var sources = [
-                { name: 'MODIS_NRT', url: 'https://firms.modaps.eosdis.nasa.gov/api/country/csv/577b0590cbd4f45bb0cfdbfbca871a11/MODIS_NRT/AU/1' },
-                { name: 'VIIRS_NOAA20_NRT', url: 'https://firms.modaps.eosdis.nasa.gov/api/country/csv/577b0590cbd4f45bb0cfdbfbca871a11/VIIRS_NOAA20_NRT/AU/1' },
-                { name: 'VIIRS_SNPP_NRT', url: 'https://firms.modaps.eosdis.nasa.gov/api/country/csv/577b0590cbd4f45bb0cfdbfbca871a11/VIIRS_SNPP_NRT/AU/1' }
+                { 
+                    name: 'VIIRS_SNPP_NRT', 
+                    url: 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/577b0590cbd4f45bb0cfdbfbca871a11/VIIRS_SNPP_NRT/-29,138,-10,154/1'
+                },
+                { 
+                    name: 'MODIS_NRT', 
+                    url: 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/577b0590cbd4f45bb0cfdbfbca871a11/MODIS_NRT/-29,138,-10,154/1'
+                },
+                { 
+                    name: 'VIIRS_NOAA20_NRT', 
+                    url: 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/577b0590cbd4f45bb0cfdbfbca871a11/VIIRS_NOAA20_NRT/-29,138,-10,154/1'
+                }
             ];
             
             function trySource(index) {
                 if (index >= sources.length) {
                     debugLog('All sources failed');
-                    loading.innerHTML = 'Could not load NASA fire data from any source.<br>API key may need activation.';
+                    loading.innerHTML = 'Could not load NASA fire data.';
                     loading.classList.add('error');
                     setTimeout(function() {
                         loading.style.display = 'none';
@@ -1270,14 +1284,16 @@
                     })
                     .then(function(csvData) {
                         debugLog('Received CSV, length: ' + csvData.length);
+                        debugLog('First 100 chars: ' + csvData.substring(0, 100));
                         
                         // Check if it's an error message
                         if (csvData.indexOf('Invalid') === 0 || csvData.length < 50) {
-                            debugLog('Invalid response: ' + csvData.substring(0, 100));
+                            debugLog('Invalid response: ' + csvData.substring(0, 200));
                             throw new Error('Invalid API response');
                         }
                         
                         parseNASAFiresCSV(csvData);
+                        debugLog('SUCCESS with ' + source.name + '!');
                         loading.style.display = 'none';
                     })
                     .catch(function(error) {
@@ -1316,13 +1332,6 @@
             debugLog('Indices - lat:' + latIndex + ' lon:' + lonIndex + ' conf:' + confidenceIndex);
             
             var processedCount = 0;
-            var qldCount = 0;
-            
-            // Queensland bounds for filtering
-            var qldSouth = -29;
-            var qldNorth = -10;
-            var qldWest = 138;
-            var qldEast = 154;
             
             for (var i = 1; i < lines.length; i++) {
                 if (!lines[i].trim()) continue;
@@ -1338,16 +1347,8 @@
                 var acqTime = values[acqTimeIndex];
                 
                 if (isNaN(lat) || isNaN(lon)) {
-                    debugLog('Invalid coords line ' + i + ': ' + lat + ',' + lon);
                     continue;
                 }
-                
-                // Filter to Queensland only
-                if (lat < qldSouth || lat > qldNorth || lon < qldWest || lon > qldEast) {
-                    continue;
-                }
-                
-                qldCount++;
                 
                 var coords = ol.proj.fromLonLat([lon, lat]);
                 
@@ -1395,7 +1396,7 @@
             }
             
             var nasaCount = nasaFireSource.getFeatures().length;
-            debugLog('Total AU fires: ' + (i - 1) + ', QLD: ' + qldCount + ', added: ' + nasaCount);
+            debugLog('QLD fires added to map: ' + nasaCount);
             
             document.getElementById('nasa-count').textContent = nasaCount;
             document.getElementById('nasa-count-item').style.display = 'flex';
