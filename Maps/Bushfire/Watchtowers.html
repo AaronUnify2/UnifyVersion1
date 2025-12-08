@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QLD Bushfire Monitor - Watchtower Edition</title>
+    
+    <!-- OpenLayers CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            max-width: 300px;
+        }
+
+        .info-panel h2 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .info-panel .stats {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .info-panel .stat-item {
+            margin: 5px 0;
+        }
+
+        .info-panel .stat-label {
+            font-weight: 600;
+        }
+
+        .weather-info {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+        }
+
+        .weather-info .weather-item {
+            margin: 4px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .wind-arrow {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin-left: 5px;
+            font-size: 16px;
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-btn {
+            background: white;
+            border: 2px solid #ddd;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .control-btn:hover {
+            background: #f0f0f0;
+            border-color: #999;
+        }
+
+        .control-btn.active {
+            background: #2196F3;
+            color: white;
+            border-color: #2196F3;
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+
+        .legend h3 {
+            font-size: 13px;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 4px 0;
+            font-size: 11px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 6px;
+            border: 2px solid rgba(0,0,0,0.3);
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 2000;
+            font-size: 14px;
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .error {
+            background: #fee;
+            color: #c00;
+        }
+
+        .alert-emergency {
+            background-color: #d32f2f;
+        }
+
+        .alert-watch {
+            background-color: #f57c00;
+        }
+
+        .alert-advice {
+            background-color: #ffd700;
+        }
+
+        .alert-not-applicable {
+            background-color: #90caf9;
+        }
+
+        .ol-popup {
+            position: absolute;
+            background-color: white;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #cccccc;
+            bottom: 12px;
+            left: -50px;
+            min-width: 320px;
+            max-width: 400px;
+        }
+
+        .ol-popup:after, .ol-popup:before {
+            top: 100%;
+            border: solid transparent;
+            content: " ";
+            height: 0;
+            width: 0;
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .ol-popup:after {
+            border-top-color: white;
+            border-width: 10px;
+            left: 48px;
+            margin-left: -10px;
+        }
+
+        .ol-popup:before {
+            border-top-color: #cccccc;
+            border-width: 11px;
+            left: 48px;
+            margin-left: -11px;
+        }
+
+        .ol-popup-closer {
+            text-decoration: none;
+            position: absolute;
+            top: 2px;
+            right: 8px;
+            font-size: 20px;
+            color: #999;
+        }
+
+        .ol-popup-closer:after {
+            content: "✖";
+        }
+
+        .popup-content h3 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .popup-content .detail {
+            margin: 5px 0;
+            font-size: 12px;
+        }
+
+        .popup-content .detail strong {
+            display: inline-block;
+            min-width: 70px;
+        }
+
+        .popup-content .alert-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+            margin-left: 5px;
+        }
+
+        .badge-emergency {
+            background-color: #d32f2f;
+        }
+
+        .badge-watch {
+            background-color: #f57c00;
+        }
+
+        .badge-advice {
+            background-color: #ffa000;
+        }
+
+        .badge-not-applicable {
+            background-color: #90caf9;
+            color: #333;
+        }
+
+        .distance-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            background: #4CAF50;
+            color: white;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+        .distance-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            pointer-events: none;
+            white-space: nowrap;
+            transform: translate(-50%, -50%);
+        }
+
+        .wind-label {
+            position: absolute;
+            background: rgba(33, 150, 243, 0.9);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            pointer-events: none;
+            white-space: nowrap;
+            transform: translate(-50%, -50%);
+        }
+
+        .popup-weather {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e0e0e0;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .popup-weather h4 {
+            font-size: 12px;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .popup-weather .weather-item {
+            margin: 4px 0;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+        }
+
+        .popup-weather .wind-arrow {
+            font-size: 14px;
+        }
+
+        .warning-panel {
+            position: absolute;
+            bottom: 20px;
+            right: 10px;
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            max-width: 350px;
+            display: none;
+        }
+
+        .warning-panel.show {
+            display: block;
+        }
+
+        .warning-item {
+            padding: 8px 12px;
+            margin: 6px 0;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .warning-fire {
+            background: #d32f2f;
+            color: white;
+        }
+
+        .warning-ember {
+            background: #f57c00;
+            color: white;
+        }
+
+        .watchtower-list {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .watchtower-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+            border-bottom: 1px solid #f0f0f0;
+            gap: 8px;
+        }
+
+        .watchtower-name-input {
+            flex: 1;
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: inherit;
+        }
+
+        .watchtower-name-input:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+
+        .watchtower-remove {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 2px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+
+        .watchtower-remove:hover {
+            background: #d32f2f;
+        }
+
+        .custom-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 3000;
+        }
+
+        .custom-modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .modal-content p {
+            margin: 0 0 20px 0;
+            font-size: 15px;
+            color: #333;
+        }
+
+        .modal-content button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .modal-content button:hover {
+            background: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div id="popup" class="ol-popup">
+        <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+        <div id="popup-content" class="popup-content"></div>
+    </div>
+    
+    <div class="info-panel">
+        <h2>🔥 QLD Bushfire Monitor</h2>
+        <div class="stats">
+            <div class="stat-item">
+                <span class="stat-label">Active Incidents:</span>
+                <span id="incident-count">Loading...</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Last Updated:</span>
+                <div id="last-update">-</div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Watchtowers:</span>
+                <span id="watchtower-count">0</span>
+            </div>
+        </div>
+        <div class="watchtower-list" id="watchtower-list"></div>
+    </div>
+
+    <div class="control-panel">
+        <button class="control-btn" id="btn-refresh" title="Refresh fire data">
+            🔄 Refresh
+        </button>
+        <button class="control-btn" id="btn-watchtower" title="Click map to add watchtower">
+            🗼 Add Watchtower
+        </button>
+        <button class="control-btn" id="btn-measure" title="Show distances to fires within 100km from all watchtowers">
+            📏 Measure
+        </button>
+        <button class="control-btn" id="btn-wind" title="Show wind direction at each watchtower">
+            💨 Wind
+        </button>
+        <button class="control-btn" id="btn-satellite" title="Toggle satellite view">
+            🛰️ Satellite
+        </button>
+    </div>
+
+    <div class="legend">
+        <h3>Severity Levels</h3>
+        <div class="legend-item">
+            <div class="legend-color alert-emergency"></div>
+            <span>Extreme/Severe</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color alert-watch"></div>
+            <span>Moderate</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color alert-advice"></div>
+            <span>Minor</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color alert-not-applicable"></div>
+            <span>Unknown</span>
+        </div>
+    </div>
+
+    <div id="warning-panel" class="warning-panel"></div>
+
+    <div id="loading" class="loading">Loading bushfire data...</div>
+
+    <div id="custom-modal" class="custom-modal">
+        <div class="modal-content">
+            <p id="modal-message"></p>
+            <button onclick="closeModal()">OK</button>
+        </div>
+    </div>
+
+    <!-- OpenLayers JS -->
+    <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
+    
+    <script>
+        var map;
+        var vectorSource;
+        var vectorLayer;
+        var watchtowers = [];
+        var watchtowerIdCounter = 0;
+        var addingWatchtower = false;
+        var measureActive = false;
+        var measureSource;
+        var measureLayer;
+        var distanceOverlays = [];
+        var satelliteLayer;
+        var osmLayer;
+        var isSatelliteView = false;
+        var windEnabled = false;
+        var windOverlays = [];
+        var fireWindData = {};
+        var watchtowerWindData = {};
+        var popupOverlay;
+
+        // Green color palette for watchtowers
+        var watchtowerColors = [
+            '#4CAF50',  // Green
+            '#66BB6A',  // Light Green
+            '#81C784',  // Lighter Green
+            '#2E7D32',  // Dark Green
+            '#43A047',  // Medium Green
+            '#558B2F',  // Olive Green
+            '#689F38',  // Lime Green
+            '#7CB342',  // Yellow Green
+            '#8BC34A',  // Light Lime
+            '#9CCC65'   // Pale Lime
+        ];
+
+        function showModal(message) {
+            document.getElementById('modal-message').textContent = message;
+            document.getElementById('custom-modal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('custom-modal').classList.remove('show');
+        }
+
+        function getWatchtowerColor(watchtowerIndex) {
+            return watchtowerColors[watchtowerIndex % watchtowerColors.length];
+        }
+
+        function saveWatchtowersToStorage() {
+            var watchtowerData = watchtowers.map(function(wt) {
+                return {
+                    id: wt.id,
+                    name: wt.name,
+                    lonLat: wt.lonLat,
+                    index: wt.index,
+                    color: wt.color
+                };
+            });
+            localStorage.setItem('bushfire_watchtowers', JSON.stringify(watchtowerData));
+            localStorage.setItem('bushfire_watchtower_counter', watchtowerIdCounter.toString());
+        }
+
+        function loadWatchtowersFromStorage() {
+            try {
+                var stored = localStorage.getItem('bushfire_watchtowers');
+                var counter = localStorage.getItem('bushfire_watchtower_counter');
+                
+                if (counter) {
+                    watchtowerIdCounter = parseInt(counter, 10);
+                }
+                
+                if (stored) {
+                    var watchtowerData = JSON.parse(stored);
+                    watchtowerData.forEach(function(wtData) {
+                        var coordinate = ol.proj.fromLonLat(wtData.lonLat);
+                        
+                        var watchtower = {
+                            id: wtData.id,
+                            name: wtData.name,
+                            index: wtData.index,
+                            coordinate: coordinate,
+                            lonLat: wtData.lonLat,
+                            color: wtData.color,
+                            feature: null
+                        };
+                        
+                        var watchtowerFeature = new ol.Feature({
+                            geometry: new ol.geom.Point(coordinate),
+                            type: 'watchtower',
+                            watchtowerId: wtData.id
+                        });
+                        
+                        var r = parseInt(wtData.color.slice(1, 3), 16);
+                        var g = parseInt(wtData.color.slice(3, 5), 16);
+                        var b = parseInt(wtData.color.slice(5, 7), 16);
+                        
+                        watchtowerFeature.setStyle(new ol.style.Style({
+                            image: new ol.style.Circle({
+                                radius: 12,
+                                fill: new ol.style.Fill({
+                                    color: [r, g, b, 1]
+                                }),
+                                stroke: new ol.style.Stroke({
+                                    color: 'white',
+                                    width: 3
+                                })
+                            }),
+                            text: new ol.style.Text({
+                                text: '🗼',
+                                font: '16px sans-serif',
+                                offsetY: 0
+                            })
+                        }));
+                        
+                        watchtower.feature = watchtowerFeature;
+                        measureSource.addFeature(watchtowerFeature);
+                        watchtowers.push(watchtower);
+                    });
+                    
+                    updateWatchtowerList();
+                }
+            } catch (e) {
+                console.error('Error loading watchtowers from storage:', e);
+            }
+        }
+
+        function renameWatchtower(watchtowerId, newName) {
+            var watchtower = watchtowers.find(function(w) { return w.id === watchtowerId; });
+            if (watchtower) {
+                watchtower.name = newName || 'Watchtower ' + (watchtower.index + 1);
+                saveWatchtowersToStorage();
+            }
+        }
+
+        window.addEventListener('load', function() {
+            try {
+                if (typeof ol === 'undefined') {
+                    document.getElementById('loading').textContent = 'Error: Map library failed to load.';
+                    document.getElementById('loading').classList.add('error');
+                    return;
+                }
+
+                vectorSource = new ol.source.Vector();
+                vectorLayer = new ol.layer.Vector({ source: vectorSource });
+
+                osmLayer = new ol.layer.Tile({
+                    source: new ol.source.OSM()
+                });
+
+                satelliteLayer = new ol.layer.Tile({
+                    source: new ol.source.XYZ({
+                        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                        attributions: 'Tiles © Esri'
+                    }),
+                    visible: false
+                });
+
+                measureSource = new ol.source.Vector();
+                measureLayer = new ol.layer.Vector({
+                    source: measureSource,
+                    style: new ol.style.Style({
+                        stroke: new ol.style.Stroke({
+                            color: '#FF5722',
+                            width: 3
+                        })
+                    })
+                });
+
+                map = new ol.Map({
+                    target: 'map',
+                    layers: [osmLayer, satelliteLayer, vectorLayer, measureLayer],
+                    view: new ol.View({
+                        center: ol.proj.fromLonLat([145.0, -20.0]),
+                        zoom: 6
+                    })
+                });
+
+                var container = document.getElementById('popup');
+                var content = document.getElementById('popup-content');
+                var closer = document.getElementById('popup-closer');
+
+                popupOverlay = new ol.Overlay({
+                    element: container,
+                    autoPan: true,
+                    autoPanAnimation: { duration: 250 }
+                });
+                map.addOverlay(popupOverlay);
+
+                closer.onclick = function() {
+                    popupOverlay.setPosition(undefined);
+                    closer.blur();
+                    return false;
+                };
+
+                map.on('click', function(evt) {
+                    if (addingWatchtower) {
+                        addWatchtowerAtLocation(evt.coordinate);
+                        return;
+                    }
+
+                    var feature = map.forEachFeatureAtPixel(evt.pixel, function(feature) {
+                        return feature;
+                    }, {
+                        hitTolerance: 10,
+                        layerFilter: function(layer) {
+                            return layer === vectorLayer;
+                        }
+                    });
+                    
+                    if (feature) {
+                        var props = feature.get('properties');
+                        var coordinate = evt.coordinate;
+                        var lonLat = ol.proj.toLonLat(coordinate);
+                        
+                        content.innerHTML = createPopupContent(props, coordinate, null);
+                        popupOverlay.setPosition(coordinate);
+                        
+                        fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lonLat[1] + '&longitude=' + lonLat[0] + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m')
+                            .then(function(response) {
+                                return response.json();
+                            })
+                            .then(function(data) {
+                                var weatherData = {
+                                    temp: Math.round(data.current.temperature_2m),
+                                    humidity: Math.round(data.current.relative_humidity_2m),
+                                    windSpeed: Math.round(data.current.wind_speed_10m),
+                                    windDirection: data.current.wind_direction_10m,
+                                    windDirectionText: getCompassDirection(data.current.wind_direction_10m)
+                                };
+                                content.innerHTML = createPopupContent(props, coordinate, weatherData);
+                            })
+                            .catch(function(error) {
+                                console.error('Error getting weather for fire:', error);
+                            });
+                    } else {
+                        popupOverlay.setPosition(undefined);
+                    }
+                });
+
+                document.getElementById('btn-refresh').addEventListener('click', loadBushfireData);
+                document.getElementById('btn-watchtower').addEventListener('click', toggleAddWatchtower);
+                document.getElementById('btn-measure').addEventListener('click', toggleMeasure);
+                document.getElementById('btn-wind').addEventListener('click', toggleWind);
+                document.getElementById('btn-satellite').addEventListener('click', toggleSatellite);
+
+                loadWatchtowersFromStorage();
+                loadBushfireData();
+                setInterval(loadBushfireData, 5 * 60 * 1000);
+
+            } catch (e) {
+                console.error('Error initializing map:', e);
+                document.getElementById('loading').textContent = 'Error: ' + e.message;
+                document.getElementById('loading').classList.add('error');
+            }
+        });
+
+        function toggleAddWatchtower() {
+            addingWatchtower = !addingWatchtower;
+            var btn = document.getElementById('btn-watchtower');
+            
+            if (addingWatchtower) {
+                btn.classList.add('active');
+                map.getTargetElement().style.cursor = 'crosshair';
+            } else {
+                btn.classList.remove('active');
+                map.getTargetElement().style.cursor = '';
+            }
+        }
+
+        function addWatchtowerAtLocation(coordinate) {
+            var lonLat = ol.proj.toLonLat(coordinate);
+            var watchtowerId = watchtowerIdCounter++;
+            var watchtowerIndex = watchtowers.length;
+            var color = getWatchtowerColor(watchtowerIndex);
+            
+            var watchtower = {
+                id: watchtowerId,
+                name: 'Watchtower ' + (watchtowerIndex + 1),
+                index: watchtowerIndex,
+                coordinate: coordinate,
+                lonLat: lonLat,
+                color: color,
+                feature: null
+            };
+            
+            var watchtowerFeature = new ol.Feature({
+                geometry: new ol.geom.Point(coordinate),
+                type: 'watchtower',
+                watchtowerId: watchtowerId
+            });
+            
+            // Convert hex color to RGB for OpenLayers
+            var r = parseInt(color.slice(1, 3), 16);
+            var g = parseInt(color.slice(3, 5), 16);
+            var b = parseInt(color.slice(5, 7), 16);
+            
+            watchtowerFeature.setStyle(new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 12,
+                    fill: new ol.style.Fill({
+                        color: [r, g, b, 1]
+                    }),
+                    stroke: new ol.style.Stroke({
+                        color: 'white',
+                        width: 3
+                    })
+                }),
+                text: new ol.style.Text({
+                    text: '🗼',
+                    font: '16px sans-serif',
+                    offsetY: 0
+                })
+            }));
+            
+            watchtower.feature = watchtowerFeature;
+            measureSource.addFeature(watchtowerFeature);
+            watchtowers.push(watchtower);
+            
+            saveWatchtowersToStorage();
+            updateWatchtowerList();
+            
+            if (measureActive) {
+                drawDistanceLines();
+            }
+            
+            addingWatchtower = false;
+            document.getElementById('btn-watchtower').classList.remove('active');
+            map.getTargetElement().style.cursor = '';
+            
+            updateWarnings();
+        }
+
+        function removeWatchtower(watchtowerId) {
+            var index = watchtowers.findIndex(function(w) { return w.id === watchtowerId; });
+            if (index !== -1) {
+                var watchtower = watchtowers[index];
+                measureSource.removeFeature(watchtower.feature);
+                watchtowers.splice(index, 1);
+                
+                delete watchtowerWindData[watchtowerId];
+                
+                // Reassign indices and colors for remaining watchtowers
+                watchtowers.forEach(function(wt, idx) {
+                    wt.index = idx;
+                    var color = getWatchtowerColor(idx);
+                    wt.color = color;
+                    
+                    // Update feature color
+                    var r = parseInt(color.slice(1, 3), 16);
+                    var g = parseInt(color.slice(3, 5), 16);
+                    var b = parseInt(color.slice(5, 7), 16);
+                    
+                    wt.feature.setStyle(new ol.style.Style({
+                        image: new ol.style.Circle({
+                            radius: 12,
+                            fill: new ol.style.Fill({
+                                color: [r, g, b, 1]
+                            }),
+                            stroke: new ol.style.Stroke({
+                                color: 'white',
+                                width: 3
+                            })
+                        }),
+                        text: new ol.style.Text({
+                            text: '🗼',
+                            font: '16px sans-serif',
+                            offsetY: 0
+                        })
+                    }));
+                });
+                
+                saveWatchtowersToStorage();
+                updateWatchtowerList();
+                
+                if (measureActive) {
+                    drawDistanceLines();
+                }
+                
+                updateWarnings();
+            }
+        }
+
+        function updateWatchtowerList() {
+            document.getElementById('watchtower-count').textContent = watchtowers.length;
+            var listDiv = document.getElementById('watchtower-list');
+            
+            if (watchtowers.length === 0) {
+                listDiv.innerHTML = '';
+                return;
+            }
+            
+            var html = '<div style="font-weight: 600; margin-bottom: 5px;">Active Watchtowers:</div>';
+            watchtowers.forEach(function(wt, idx) {
+                html += '<div class="watchtower-item">';
+                html += '<input type="text" class="watchtower-name-input" value="' + wt.name + '" ';
+                html += 'onchange="renameWatchtower(' + wt.id + ', this.value)" ';
+                html += 'onclick="event.stopPropagation()" />';
+                html += '<button class="watchtower-remove" onclick="removeWatchtower(' + wt.id + ')">Remove</button>';
+                html += '</div>';
+            });
+            
+            listDiv.innerHTML = html;
+        }
+
+        function toggleMeasure() {
+            if (watchtowers.length === 0) {
+                showModal('Please add at least one watchtower first by clicking "Add Watchtower" and then clicking on the map');
+                return;
+            }
+            
+            measureActive = !measureActive;
+            var btn = document.getElementById('btn-measure');
+            
+            if (measureActive) {
+                btn.classList.add('active');
+                drawDistanceLines();
+            } else {
+                btn.classList.remove('active');
+                clearDistanceLines();
+            }
+            
+            updateWarnings();
+        }
+
+        function drawDistanceLines() {
+            clearDistanceLines();
+            
+            var fires = vectorSource.getFeatures();
+            
+            watchtowers.forEach(function(watchtower) {
+                var watchtowerCoords = watchtower.coordinate;
+                var watchtowerColor = watchtower.color;
+                
+                fires.forEach(function(fire) {
+                    var fireGeom = fire.getGeometry();
+                    var fireCoords;
+                    
+                    if (fireGeom.getType() === 'Point') {
+                        fireCoords = fireGeom.getCoordinates();
+                    } else if (fireGeom.getType() === 'Polygon') {
+                        fireCoords = fireGeom.getInteriorPoint().getCoordinates();
+                    }
+                    
+                    if (!fireCoords) return;
+                    
+                    var line = new ol.geom.LineString([watchtowerCoords, fireCoords]);
+                    var length = ol.sphere.getLength(line);
+                    
+                    if (length <= 100000) {
+                        var lineFeature = new ol.Feature({
+                            geometry: line,
+                            type: 'distanceLine'
+                        });
+                        
+                        lineFeature.setStyle(new ol.style.Style({
+                            stroke: new ol.style.Stroke({
+                                color: watchtowerColor,
+                                width: 2,
+                                lineDash: [5, 5]
+                            })
+                        }));
+                        
+                        measureSource.addFeature(lineFeature);
+                        
+                        var midPoint = [(watchtowerCoords[0] + fireCoords[0]) / 2, (watchtowerCoords[1] + fireCoords[1]) / 2];
+                        var distanceText = formatDistance(length);
+                        
+                        var labelDiv = document.createElement('div');
+                        labelDiv.className = 'distance-label';
+                        labelDiv.style.background = watchtowerColor;
+                        labelDiv.textContent = distanceText;
+                        
+                        var labelOverlay = new ol.Overlay({
+                            element: labelDiv,
+                            position: midPoint,
+                            positioning: 'center-center'
+                        });
+                        
+                        map.addOverlay(labelOverlay);
+                        distanceOverlays.push(labelOverlay);
+                    }
+                });
+            });
+        }
+
+        function clearDistanceLines() {
+            var features = measureSource.getFeatures().slice();
+            features.forEach(function(f) {
+                if (f.get('type') === 'distanceLine') {
+                    measureSource.removeFeature(f);
+                }
+            });
+            
+            distanceOverlays.forEach(function(overlay) {
+                map.removeOverlay(overlay);
+            });
+            distanceOverlays = [];
+        }
+
+        function formatDistance(meters) {
+            if (meters > 1000) {
+                return (Math.round(meters / 100) / 10) + ' km';
+            } else {
+                return Math.round(meters) + ' m';
+            }
+        }
+
+        function toggleSatellite() {
+            isSatelliteView = !isSatelliteView;
+            var btn = document.getElementById('btn-satellite');
+            
+            if (isSatelliteView) {
+                osmLayer.setVisible(false);
+                satelliteLayer.setVisible(true);
+                btn.classList.add('active');
+            } else {
+                osmLayer.setVisible(true);
+                satelliteLayer.setVisible(false);
+                btn.classList.remove('active');
+            }
+        }
+
+        function toggleWind() {
+            windEnabled = !windEnabled;
+            var btn = document.getElementById('btn-wind');
+            
+            if (windEnabled) {
+                btn.classList.add('active');
+                fetchWindDataForFires();
+            } else {
+                btn.classList.remove('active');
+                clearWindOverlay();
+            }
+            
+            updateWarnings();
+        }
+
+        function fetchWindDataForFires() {
+            var fires = vectorSource.getFeatures();
+            var fetchPromises = [];
+            
+            fires.forEach(function(fire, index) {
+                var fireGeom = fire.getGeometry();
+                var fireCoords;
+                
+                if (fireGeom.getType() === 'Point') {
+                    fireCoords = fireGeom.getCoordinates();
+                } else if (fireGeom.getType() === 'Polygon') {
+                    fireCoords = fireGeom.getInteriorPoint().getCoordinates();
+                }
+                
+                if (!fireCoords) return;
+                
+                var lonLat = ol.proj.toLonLat(fireCoords);
+                
+                var promise = fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lonLat[1] + '&longitude=' + lonLat[0] + '&current=wind_speed_10m,wind_direction_10m')
+                    .then(function(response) {
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        fireWindData[index] = {
+                            coords: fireCoords,
+                            windSpeed: data.current.wind_speed_10m,
+                            windDirection: data.current.wind_direction_10m
+                        };
+                    })
+                    .catch(function(error) {
+                        console.error('Error getting wind data for fire ' + index, error);
+                    });
+                
+                fetchPromises.push(promise);
+            });
+            
+            Promise.all(fetchPromises).then(function() {
+                drawWindOverlayForFires();
+            });
+        }
+
+        function fetchWindDataForWatchtowers() {
+            var fetchPromises = [];
+            
+            watchtowers.forEach(function(watchtower) {
+                var lonLat = watchtower.lonLat;
+                
+                var promise = fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lonLat[1] + '&longitude=' + lonLat[0] + '&current=wind_speed_10m,wind_direction_10m')
+                    .then(function(response) {
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        watchtowerWindData[watchtower.id] = {
+                            coords: watchtower.coordinate,
+                            windSpeed: data.current.wind_speed_10m,
+                            windDirection: data.current.wind_direction_10m
+                        };
+                    })
+                    .catch(function(error) {
+                        console.error('Error getting wind data for watchtower ' + watchtower.id, error);
+                    });
+                
+                fetchPromises.push(promise);
+            });
+            
+            Promise.all(fetchPromises).then(function() {
+                drawWindOverlayForWatchtowers();
+            });
+        }
+
+        function drawWindOverlayForFires() {
+            Object.keys(fireWindData).forEach(function(key) {
+                var data = fireWindData[key];
+                var fireCoords = data.coords;
+                var windSpeed = data.windSpeed;
+                var windDir = data.windDirection;
+                
+                var arrowLength = windSpeed * 1000;
+                var angleRad = (90 - windDir) * Math.PI / 180;
+                
+                var endX = fireCoords[0] + arrowLength * Math.cos(angleRad);
+                var endY = fireCoords[1] + arrowLength * Math.sin(angleRad);
+                
+                var windLine = new ol.geom.LineString([fireCoords, [endX, endY]]);
+                
+                var windFeature = new ol.Feature({
+                    geometry: windLine,
+                    type: 'windArrow'
+                });
+                
+                windFeature.setStyle(new ol.style.Style({
+                    stroke: new ol.style.Stroke({
+                        color: 'rgba(33, 150, 243, 0.9)',
+                        width: 4
+                    })
+                }));
+                
+                measureSource.addFeature(windFeature);
+                
+                var arrowRotation = windDir - 90;
+                var arrowDiv = document.createElement('div');
+                arrowDiv.style.cssText = 'font-size: 24px; transform: rotate(' + arrowRotation + 'deg);';
+                arrowDiv.textContent = '➤';
+                
+                var arrowOverlay = new ol.Overlay({
+                    element: arrowDiv,
+                    position: [endX, endY],
+                    positioning: 'center-center'
+                });
+                
+                map.addOverlay(arrowOverlay);
+                windOverlays.push(arrowOverlay);
+                
+                var labelDiv = document.createElement('div');
+                labelDiv.className = 'wind-label';
+                labelDiv.textContent = Math.round(windSpeed) + ' km/h';
+                
+                var labelOverlay = new ol.Overlay({
+                    element: labelDiv,
+                    position: fireCoords,
+                    positioning: 'bottom-center',
+                    offset: [0, -20]
+                });
+                
+                map.addOverlay(labelOverlay);
+                windOverlays.push(labelOverlay);
+            });
+        }
+
+        function drawWindOverlayForWatchtowers() {
+            watchtowers.forEach(function(watchtower) {
+                if (!watchtowerWindData[watchtower.id]) return;
+                
+                var data = watchtowerWindData[watchtower.id];
+                var watchtowerCoords = data.coords;
+                var windSpeed = data.windSpeed;
+                var windDir = data.windDirection;
+                var watchtowerColor = watchtower.color;
+                
+                var arrowLength = windSpeed * 1000;
+                var angleRad = (90 - windDir) * Math.PI / 180;
+                
+                var endX = watchtowerCoords[0] + arrowLength * Math.cos(angleRad);
+                var endY = watchtowerCoords[1] + arrowLength * Math.sin(angleRad);
+                
+                var windLine = new ol.geom.LineString([watchtowerCoords, [endX, endY]]);
+                
+                var windFeature = new ol.Feature({
+                    geometry: windLine,
+                    type: 'windArrow'
+                });
+                
+                windFeature.setStyle(new ol.style.Style({
+                    stroke: new ol.style.Stroke({
+                        color: watchtowerColor,
+                        width: 4
+                    })
+                }));
+                
+                measureSource.addFeature(windFeature);
+                
+                var arrowRotation = windDir - 90;
+                var arrowDiv = document.createElement('div');
+                arrowDiv.style.cssText = 'font-size: 24px; transform: rotate(' + arrowRotation + 'deg); color: ' + watchtowerColor + ';';
+                arrowDiv.textContent = '➤';
+                
+                var arrowOverlay = new ol.Overlay({
+                    element: arrowDiv,
+                    position: [endX, endY],
+                    positioning: 'center-center'
+                });
+                
+                map.addOverlay(arrowOverlay);
+                windOverlays.push(arrowOverlay);
+                
+                var labelDiv = document.createElement('div');
+                labelDiv.className = 'wind-label';
+                labelDiv.style.background = watchtowerColor;
+                labelDiv.textContent = Math.round(windSpeed) + ' km/h';
+                
+                var labelOverlay = new ol.Overlay({
+                    element: labelDiv,
+                    position: watchtowerCoords,
+                    positioning: 'top-center',
+                    offset: [0, 20]
+                });
+                
+                map.addOverlay(labelOverlay);
+                windOverlays.push(labelOverlay);
+            });
+        }
+
+        function clearWindOverlay() {
+            var features = measureSource.getFeatures().slice();
+            features.forEach(function(f) {
+                if (f.get('type') === 'windArrow') {
+                    measureSource.removeFeature(f);
+                }
+            });
+            
+            windOverlays.forEach(function(overlay) {
+                map.removeOverlay(overlay);
+            });
+            windOverlays = [];
+        }
+
+        function updateWarnings() {
+            var warnings = [];
+            var fires = vectorSource.getFeatures();
+            
+            watchtowers.forEach(function(watchtower, wtIdx) {
+                var watchtowerCoords = watchtower.coordinate;
+                
+                fires.forEach(function(fire, fireIdx) {
+                    var fireGeom = fire.getGeometry();
+                    var fireCoords;
+                    
+                    if (fireGeom.getType() === 'Point') {
+                        fireCoords = fireGeom.getCoordinates();
+                    } else if (fireGeom.getType() === 'Polygon') {
+                        fireCoords = fireGeom.getInteriorPoint().getCoordinates();
+                    }
+                    
+                    if (!fireCoords) return;
+                    
+                    var line = new ol.geom.LineString([watchtowerCoords, fireCoords]);
+                    var distance = ol.sphere.getLength(line);
+                    
+                    // Fire proximity warning
+                    if (distance <= 10000) {
+                        var props = fire.get('properties');
+                        warnings.push({
+                            type: 'fire',
+                            message: '🔥 FIRE ALERT: Fire within ' + formatDistance(distance) + ' of ' + watchtower.name + ' - ' + (props.headline || 'Bushfire')
+                        });
+                    }
+                    
+                    // Ember zone warning - check if blue wind arrows from fires come within 1km of watchtower
+                    if (windEnabled && fireWindData[fireIdx]) {
+                        var fireWindDat = fireWindData[fireIdx];
+                        var windSpeed = fireWindDat.windSpeed;
+                        var windDir = fireWindDat.windDirection;
+                        
+                        // Calculate the end point of the fire's wind arrow (blue arrow)
+                        var arrowLength = windSpeed * 1000; // km/h to meters
+                        var angleRad = (90 - windDir) * Math.PI / 180;
+                        
+                        var endX = fireCoords[0] + arrowLength * Math.cos(angleRad);
+                        var endY = fireCoords[1] + arrowLength * Math.sin(angleRad);
+                        
+                        var windEndPoint = [endX, endY];
+                        
+                        // Check distance from wind arrow endpoint to watchtower
+                        var distanceToWatchtower = new ol.geom.LineString([windEndPoint, watchtowerCoords]);
+                        var distToWT = ol.sphere.getLength(distanceToWatchtower);
+                        
+                        if (distToWT <= 1000) {
+                            var props = fire.get('properties');
+                            warnings.push({
+                                type: 'ember',
+                                message: '⚠️ EMBER ZONE: ' + Math.round(windSpeed) + ' km/h wind from fire could carry embers to ' + watchtower.name + ' - ' + (props.headline || 'Fire')
+                            });
+                        }
+                    }
+                });
+            });
+            
+            var warningPanel = document.getElementById('warning-panel');
+            
+            if (warnings.length === 0) {
+                warningPanel.classList.remove('show');
+                return;
+            }
+            
+            var html = '';
+            warnings.forEach(function(warning) {
+                var className = warning.type === 'fire' ? 'warning-fire' : 'warning-ember';
+                html += '<div class="warning-item ' + className + '">' + warning.message + '</div>';
+            });
+            
+            warningPanel.innerHTML = html;
+            warningPanel.classList.add('show');
+        }
+
+        function getCompassDirection(degrees) {
+            var directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+            var index = Math.round(degrees / 22.5) % 16;
+            return directions[index];
+        }
+
+        function calculateDistance(lon1, lat1, lon2, lat2) {
+            var point1 = ol.proj.fromLonLat([lon1, lat1]);
+            var point2 = ol.proj.fromLonLat([lon2, lat2]);
+            var line = new ol.geom.LineString([point1, point2]);
+            var length = ol.sphere.getLength(line);
+            return formatDistance(length);
+        }
+
+        function getAlertColor(severity) {
+            var sev = (severity || '').toLowerCase().trim();
+            
+            if (sev.includes('extreme') || sev.includes('severe')) {
+                return [211, 47, 47, 0.6];
+            } else if (sev.includes('moderate')) {
+                return [245, 124, 0, 0.6];
+            } else if (sev.includes('minor')) {
+                return [255, 215, 0, 0.6];
+            } else {
+                return [144, 202, 249, 0.6];
+            }
+        }
+
+        function getAlertBadgeClass(severity) {
+            var sev = (severity || '').toLowerCase().trim();
+            
+            if (sev.includes('extreme') || sev.includes('severe')) {
+                return 'badge-emergency';
+            } else if (sev.includes('moderate')) {
+                return 'badge-watch';
+            } else if (sev.includes('minor')) {
+                return 'badge-advice';
+            } else {
+                return 'badge-not-applicable';
+            }
+        }
+
+        function createPopupContent(props, coordinate, weatherData) {
+            var severity = props.severity || 'Unknown';
+            var badgeClass = getAlertBadgeClass(severity);
+            
+            var html = '<h3>' + (props.headline || 'Bushfire Incident');
+            html += '<span class="alert-badge ' + badgeClass + '">' + severity + '</span></h3>';
+            
+            var lonLat = ol.proj.toLonLat(coordinate);
+            watchtowers.forEach(function(wt, idx) {
+                var distance = calculateDistance(wt.lonLat[0], wt.lonLat[1], lonLat[0], lonLat[1]);
+                html += '<div class="distance-badge">📍 ' + distance + ' from ' + wt.name + '</div>';
+            });
+            
+            if (props.description) {
+                html += '<div class="detail" style="margin: 10px 0; padding: 8px; background: #f5f5f5; border-radius: 4px; font-size: 11px;">' + 
+                        props.description.substring(0, 200) + (props.description.length > 200 ? '...' : '') + '</div>';
+            }
+            if (props.instruction) {
+                var instr = props.instruction;
+                if (instr.length > 200) {
+                    instr = instr.substring(0, 200) + '...';
+                }
+                html += '<div class="detail"><strong>Instructions:</strong> ' + instr + '</div>';
+            }
+            if (props.areaDesc) html += '<div class="detail"><strong>Area:</strong> ' + props.areaDesc + '</div>';
+            if (props.certainty) html += '<div class="detail"><strong>Certainty:</strong> ' + props.certainty + '</div>';
+            if (props.effective) html += '<div class="detail"><strong>Effective:</strong> ' + new Date(props.effective).toLocaleString() + '</div>';
+            if (props.expires) html += '<div class="detail"><strong>Expires:</strong> ' + new Date(props.expires).toLocaleString() + '</div>';
+            
+            if (weatherData) {
+                html += '<div class="popup-weather">';
+                html += '<h4>🌤️ Current Conditions at Fire Location</h4>';
+                html += '<div class="weather-item">';
+                html += '<span>💨 Wind: ' + weatherData.windSpeed + ' km/h</span>';
+                html += '<span class="wind-arrow" style="transform: rotate(' + weatherData.windDirection + 'deg);">↑</span>';
+                html += '<span style="margin-left: 8px;">(' + weatherData.windDirectionText + ')</span>';
+                html += '</div>';
+                html += '<div class="weather-item">';
+                html += '<span>🌡️ Temperature: ' + weatherData.temp + '°C</span>';
+                html += '</div>';
+                html += '<div class="weather-item">';
+                html += '<span>💧 Humidity: ' + weatherData.humidity + '%</span>';
+                html += '</div>';
+                html += '</div>';
+            } else {
+                html += '<div class="popup-weather">';
+                html += '<h4>🌤️ Loading weather data...</h4>';
+                html += '</div>';
+            }
+            
+            return html;
+        }
+
+        function parseCapXMLToGeoJSON(xmlText) {
+            var parser = new DOMParser();
+            var xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+            
+            var alerts = xmlDoc.getElementsByTagNameNS('urn:oasis:names:tc:emergency:cap:1.2', 'alert');
+            
+            if (alerts.length === 0) {
+                alerts = xmlDoc.getElementsByTagName('cap:alert');
+            }
+            
+            console.log('Found', alerts.length, 'CAP alerts');
+            
+            var features = [];
+            
+            for (var i = 0; i < alerts.length; i++) {
+                var alert = alerts[i];
+                
+                var info = alert.getElementsByTagName('cap:info')[0];
+                if (!info) continue;
+                
+                var area = info.getElementsByTagName('cap:area')[0];
+                if (!area) continue;
+                
+                var getElementText = function(parent, tagName) {
+                    var elem = parent.getElementsByTagName(tagName)[0];
+                    return elem ? elem.textContent.trim() : '';
+                };
+                
+                var polygon = area.getElementsByTagName('cap:polygon')[0];
+                var circle = area.getElementsByTagName('cap:circle')[0];
+                
+                var geometry = null;
+                
+                if (polygon) {
+                    var coordsText = polygon.textContent.trim();
+                    var points = coordsText.split(/\s+/);
+                    var coordinates = [];
+                    
+                    for (var j = 0; j < points.length; j++) {
+                        var parts = points[j].split(',');
+                        if (parts.length === 2) {
+                            coordinates.push([parseFloat(parts[1]), parseFloat(parts[0])]);
+                        }
+                    }
+                    
+                    if (coordinates.length > 0) {
+                        geometry = {
+                            type: 'Polygon',
+                            coordinates: [coordinates]
+                        };
+                    }
+                } else if (circle) {
+                    var circleText = circle.textContent.trim();
+                    var parts = circleText.split(/\s+/);
+                    var centerParts = parts[0].split(',');
+                    
+                    geometry = {
+                        type: 'Point',
+                        coordinates: [parseFloat(centerParts[1]), parseFloat(centerParts[0])]
+                    };
+                }
+                
+                if (!geometry) continue;
+                
+                features.push({
+                    type: 'Feature',
+                    geometry: geometry,
+                    properties: {
+                        event: getElementText(info, 'cap:event'),
+                        category: getElementText(info, 'cap:category'),
+                        severity: getElementText(info, 'cap:severity'),
+                        certainty: getElementText(info, 'cap:certainty'),
+                        headline: getElementText(info, 'cap:headline'),
+                        description: getElementText(info, 'cap:description'),
+                        instruction: getElementText(info, 'cap:instruction'),
+                        areaDesc: getElementText(area, 'cap:areaDesc'),
+                        effective: getElementText(info, 'cap:effective'),
+                        expires: getElementText(info, 'cap:expires')
+                    }
+                });
+            }
+            
+            console.log('Parsed', features.length, 'features from CAP XML');
+            
+            return {
+                type: 'FeatureCollection',
+                features: features
+            };
+        }
+
+        function addFireToMap(feature) {
+            var props = feature.properties;
+            var geom = feature.geometry;
+            
+            if (!geom) return;
+
+            var color = getAlertColor(props.severity);
+
+            if (geom.type === 'Point') {
+                var coords = ol.proj.fromLonLat(geom.coordinates);
+                
+                var circleFeature = new ol.Feature({
+                    geometry: new ol.geom.Point(coords),
+                    properties: props
+                });
+
+                circleFeature.setStyle(new ol.style.Style({
+                    image: new ol.style.Circle({
+                        radius: 12,
+                        fill: new ol.style.Fill({ color: color }),
+                        stroke: new ol.style.Stroke({
+                            color: [color[0], color[1], color[2], 1],
+                            width: 2
+                        })
+                    })
+                }));
+
+                vectorSource.addFeature(circleFeature);
+                
+            } else if (geom.type === 'Polygon') {
+                var coordinates = geom.coordinates[0].map(function(coord) {
+                    return ol.proj.fromLonLat(coord);
+                });
+                
+                var polygonFeature = new ol.Feature({
+                    geometry: new ol.geom.Polygon([coordinates]),
+                    properties: props
+                });
+
+                polygonFeature.setStyle(new ol.style.Style({
+                    fill: new ol.style.Fill({ color: color }),
+                    stroke: new ol.style.Stroke({
+                        color: [color[0], color[1], color[2], 1],
+                        width: 3
+                    })
+                }));
+
+                vectorSource.addFeature(polygonFeature);
+            }
+        }
+
+        function loadBushfireData() {
+            var loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            loading.classList.remove('error');
+            loading.textContent = 'Loading QLD bushfire data...';
+
+            if (vectorSource) {
+                vectorSource.clear();
+            }
+
+            var corsProxy = 'https://corsproxy.io/?';
+            var feedUrl = 'https://publiccontent-gis-psba-qld-gov-au.s3.amazonaws.com/content/Feeds/BushfireCurrentIncidents/bushfireAlert_capau.xml';
+            
+            fetch(corsProxy + encodeURIComponent(feedUrl))
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    return response.text();
+                })
+                .then(function(xmlText) {
+                    var data = parseCapXMLToGeoJSON(xmlText);
+                    processData(data);
+                })
+                .catch(function(error) {
+                    console.error('Error:', error);
+                    loading.classList.add('error');
+                    loading.textContent = 'Error loading QLD data: ' + error.message;
+                    setTimeout(function() {
+                        loading.style.display = 'none';
+                    }, 5000);
+                });
+        }
+
+        function processData(data) {
+            var loading = document.getElementById('loading');
+            var features = data.features || [];
+            
+            if (features.length > 0) {
+                features.forEach(function(feature) {
+                    addFireToMap(feature);
+                });
+
+                document.getElementById('incident-count').textContent = features.length;
+                document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+
+                if (measureActive) {
+                    drawDistanceLines();
+                }
+                
+                if (windEnabled) {
+                    fetchWindDataForFires();
+                }
+
+                var extent = vectorSource.getExtent();
+                if (extent[0] !== Infinity && watchtowers.length === 0) {
+                    map.getView().fit(extent, {
+                        padding: [50, 50, 50, 50],
+                        maxZoom: 12
+                    });
+                }
+                
+                updateWarnings();
+            } else {
+                document.getElementById('incident-count').textContent = '0';
+                document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+            }
+
+            loading.style.display = 'none';
+        }
+    </script>
+</body>
+</html>
