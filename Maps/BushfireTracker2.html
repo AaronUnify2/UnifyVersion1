@@ -494,7 +494,7 @@
                 <span id="incident-count">Loading...</span>
             </div>
             <div class="stat-item" id="nasa-count-item" style="display: none;">
-                <span class="stat-label">✱ NASA Detections:</span>
+                <span class="stat-label">NASA Detections:</span>
                 <span id="nasa-count">0</span>
             </div>
             <div class="stat-item">
@@ -523,7 +523,7 @@
             💨 Wind
         </button>
         <button class="control-btn" id="btn-nasa" title="Toggle NASA satellite fire detections (VIIRS/MODIS)">
-            ✱ NASA Fires
+            🛰️ NASA Fires
         </button>
         <button class="control-btn" id="btn-satellite" title="Toggle satellite view">
             🗺️ Satellite
@@ -551,15 +551,15 @@
         <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd;">
             <div style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">NASA Detections</div>
             <div class="legend-item">
-                <div style="width: 16px; text-align: center; margin-right: 6px; font-size: 16px; color: #FF0000;">✱</div>
+                <div class="legend-color" style="background-color: rgba(255, 0, 0, 0.7);"></div>
                 <span>High Confidence</span>
             </div>
             <div class="legend-item">
-                <div style="width: 16px; text-align: center; margin-right: 6px; font-size: 16px; color: #FFA500;">✱</div>
+                <div class="legend-color" style="background-color: rgba(255, 165, 0, 0.7);"></div>
                 <span>Nominal</span>
             </div>
             <div class="legend-item">
-                <div style="width: 16px; text-align: center; margin-right: 6px; font-size: 16px; color: #FFD700;">✱</div>
+                <div class="legend-color" style="background-color: rgba(255, 255, 0, 0.6);"></div>
                 <span>Low Confidence</span>
             </div>
         </div>
@@ -752,8 +752,7 @@
                 nasaFireSource = new ol.source.Vector();
                 nasaFireLayer = new ol.layer.Vector({
                     source: nasaFireSource,
-                    visible: false,
-                    zIndex: 100  // Ensure it's on top
+                    visible: false
                 });
 
                 map = new ol.Map({
@@ -802,12 +801,10 @@
                         var coordinate = evt.coordinate;
                         var lonLat = ol.proj.toLonLat(coordinate);
                         
-                        console.log('Feature clicked, properties:', props);
-                        
                         // Check if it's a NASA fire or regular fire
                         if (props && props.type === 'nasa_fire') {
                             // NASA fire popup
-                            var html = '<h3>✱ NASA Fire Detection</h3>';
+                            var html = '<h3>🛰️ NASA Fire Detection</h3>';
                             html += '<div class="detail"><strong>Source:</strong> VIIRS Satellite</div>';
                             html += '<div class="detail"><strong>Detection Time:</strong> ' + props.acqDate + ' ' + props.acqTime + '</div>';
                             html += '<div class="detail"><strong>Confidence:</strong> ' + props.confidence.toUpperCase() + '</div>';
@@ -1137,19 +1134,15 @@
             nasaFiresEnabled = !nasaFiresEnabled;
             var btn = document.getElementById('btn-nasa');
             
-            console.log('NASA fires toggled:', nasaFiresEnabled);
-            
             if (nasaFiresEnabled) {
                 btn.classList.add('active');
                 nasaFireLayer.setVisible(true);
-                console.log('NASA layer set to visible, loading data...');
                 loadNASAFires();
             } else {
                 btn.classList.remove('active');
                 nasaFireLayer.setVisible(false);
                 nasaFireSource.clear();
                 document.getElementById('nasa-count-item').style.display = 'none';
-                console.log('NASA layer hidden and cleared');
             }
         }
 
@@ -1160,22 +1153,19 @@
             
             // Queensland bounding box: roughly -10 to -29 latitude, 138 to 154 longitude
             // Using NASA FIRMS API - requires free MAP_KEY from https://firms.modaps.eosdis.nasa.gov/api/
+            // For now, using a sample endpoint structure
             
             // VIIRS data (more recent, higher resolution)
-            var url = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/577b0590cbd4f45bb0cfdbfbca871a11/VIIRS_SNPP_NRT/-29,138,-10,154/1';
-            
-            console.log('Fetching NASA FIRMS data from:', url);
+            var url = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/c6f343818f5691a4ec8f7c48e5924ae6/VIIRS_SNPP_NRT/-29,138,-10,154/1';
             
             fetch(url)
                 .then(function(response) {
-                    console.log('NASA FIRMS response status:', response.status);
                     if (!response.ok) {
                         throw new Error('NASA FIRMS API error: ' + response.status);
                     }
                     return response.text();
                 })
                 .then(function(csvData) {
-                    console.log('Received CSV data, length:', csvData.length);
                     parseNASAFiresCSV(csvData);
                     loading.style.display = 'none';
                 })
@@ -1192,30 +1182,16 @@
         function parseNASAFiresCSV(csvData) {
             nasaFireSource.clear();
             
-            console.log('Parsing NASA CSV data...');
-            console.log('First 500 chars:', csvData.substring(0, 500));
-            
             var lines = csvData.split('\n');
-            console.log('Total lines:', lines.length);
-            
-            if (lines.length < 2) {
-                console.log('Not enough data lines');
-                return;
-            }
+            if (lines.length < 2) return;
             
             var headers = lines[0].split(',');
-            console.log('Headers:', headers);
-            
             var latIndex = headers.indexOf('latitude');
             var lonIndex = headers.indexOf('longitude');
             var brightIndex = headers.indexOf('bright_ti4');
             var confidenceIndex = headers.indexOf('confidence');
             var acqDateIndex = headers.indexOf('acq_date');
             var acqTimeIndex = headers.indexOf('acq_time');
-            
-            console.log('Column indices - lat:', latIndex, 'lon:', lonIndex, 'confidence:', confidenceIndex);
-            
-            var processedCount = 0;
             
             for (var i = 1; i < lines.length; i++) {
                 if (!lines[i].trim()) continue;
@@ -1226,14 +1202,11 @@
                 var lat = parseFloat(values[latIndex]);
                 var lon = parseFloat(values[lonIndex]);
                 var brightness = parseFloat(values[brightIndex]);
-                var confidence = values[confidenceIndex] ? values[confidenceIndex].toLowerCase().trim() : '';
+                var confidence = values[confidenceIndex];
                 var acqDate = values[acqDateIndex];
                 var acqTime = values[acqTimeIndex];
                 
-                if (isNaN(lat) || isNaN(lon)) {
-                    console.log('Invalid coords at line', i, ':', lat, lon);
-                    continue;
-                }
+                if (isNaN(lat) || isNaN(lon)) continue;
                 
                 var coords = ol.proj.fromLonLat([lon, lat]);
                 
@@ -1253,35 +1226,29 @@
                 // Color based on confidence: red (high), orange (nominal), yellow (low)
                 var color;
                 if (confidence === 'h' || confidence === 'high') {
-                    color = '#FF0000'; // Red
+                    color = [255, 0, 0, 0.7]; // Red
                 } else if (confidence === 'n' || confidence === 'nominal') {
-                    color = '#FFA500'; // Orange
-                } else if (confidence === 'l' || confidence === 'low') {
-                    color = '#FFD700'; // Yellow/Gold
+                    color = [255, 165, 0, 0.7]; // Orange
                 } else {
-                    // Default color for unknown confidence
-                    color = '#FFD700'; // Yellow/Gold
-                    console.log('Unknown confidence value:', confidence);
+                    color = [255, 255, 0, 0.6]; // Yellow
                 }
                 
                 nasaFire.setStyle(new ol.style.Style({
-                    text: new ol.style.Text({
-                        text: '✱',
-                        font: 'bold 20px sans-serif',
+                    image: new ol.style.Circle({
+                        radius: 6,
                         fill: new ol.style.Fill({ color: color }),
                         stroke: new ol.style.Stroke({
-                            color: 'rgba(255, 255, 255, 0.8)',
-                            width: 2
+                            color: [255, 255, 255, 0.8],
+                            width: 1
                         })
                     })
                 }));
                 
                 nasaFireSource.addFeature(nasaFire);
-                processedCount++;
             }
             
             var nasaCount = nasaFireSource.getFeatures().length;
-            console.log('Processed', processedCount, 'fires, added', nasaCount, 'to map');
+            console.log('Loaded', nasaCount, 'NASA fire detections');
             
             document.getElementById('nasa-count').textContent = nasaCount;
             document.getElementById('nasa-count-item').style.display = 'flex';
@@ -1894,4 +1861,4 @@
         }
     </script>
 </body>
-    </html>
+</html>
