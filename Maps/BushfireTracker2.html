@@ -482,13 +482,13 @@
             bottom: 10px;
             right: 10px;
             left: 10px;
-            max-width: 600px;
+            max-width: 400px;
             margin: 0 auto;
-            max-height: 400px;
+            max-height: 250px;
             background: rgba(0, 0, 0, 0.95);
             color: #00ff00;
             font-family: 'Courier New', monospace;
-            font-size: 10px;
+            font-size: 11px;
             padding: 10px;
             border-radius: 8px;
             overflow-y: auto;
@@ -509,7 +509,7 @@
 
         .debug-toggle {
             position: fixed;
-            bottom: 420px;
+            bottom: 270px;
             right: 10px;
             background: rgba(0, 0, 0, 0.8);
             color: #00ff00;
@@ -1236,74 +1236,37 @@
             loading.style.display = 'block';
             loading.textContent = 'Loading NASA satellite fire data...';
             
+            // Queensland bounding box: roughly -10 to -29 latitude, 138 to 154 longitude
+            // Using NASA FIRMS API - requires free MAP_KEY from https://firms.modaps.eosdis.nasa.gov/api/
+            
+            // VIIRS data (more recent, higher resolution)
+            var url = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/577b0590cbd4f45bb0cfdbfbca871a11/VIIRS_SNPP_NRT/-29,138,-10,154/1';
+            
             debugLog('Fetching NASA FIRMS data...');
-            debugLog('Using AREA endpoint (country endpoint unavailable)');
+            debugLog('URL: ' + url);
             
-            // Country endpoint is unavailable, using area instead
-            // Testing different coordinate orders to find what works
-            // Queensland: lat -29 to -10, lon 138 to 154
-            
-            var sources = [
-                { 
-                    name: 'VIIRS_SNPP_NRT (west,south,east,north)', 
-                    url: 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/577b0590cbd4f45bb0cfdbfbca871a11/VIIRS_SNPP_NRT/138,-29,154,-10/1'
-                },
-                { 
-                    name: 'VIIRS_SNPP_NRT (south,west,north,east)', 
-                    url: 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/577b0590cbd4f45bb0cfdbfbca871a11/VIIRS_SNPP_NRT/-29,138,-10,154/1'
-                },
-                { 
-                    name: 'MODIS_NRT (west,south,east,north)', 
-                    url: 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/577b0590cbd4f45bb0cfdbfbca871a11/MODIS_NRT/138,-29,154,-10/1'
-                }
-            ];
-            
-            function trySource(index) {
-                if (index >= sources.length) {
-                    debugLog('All sources failed');
-                    loading.innerHTML = 'Could not load NASA fire data.';
+            fetch(url)
+                .then(function(response) {
+                    debugLog('Response status: ' + response.status);
+                    if (!response.ok) {
+                        throw new Error('NASA FIRMS API error: ' + response.status);
+                    }
+                    return response.text();
+                })
+                .then(function(csvData) {
+                    debugLog('Received CSV, length: ' + csvData.length);
+                    parseNASAFiresCSV(csvData);
+                    loading.style.display = 'none';
+                })
+                .catch(function(error) {
+                    debugLog('ERROR: ' + error.message);
+                    console.error('Error loading NASA fires:', error);
+                    loading.innerHTML = 'Error loading NASA fire data.<br>Get a free API key at: <a href="https://firms.modaps.eosdis.nasa.gov/api/" target="_blank" style="color: #2196F3;">NASA FIRMS</a>';
                     loading.classList.add('error');
                     setTimeout(function() {
                         loading.style.display = 'none';
                     }, 5000);
-                    return;
-                }
-                
-                var source = sources[index];
-                debugLog('Trying ' + source.name + '...');
-                debugLog('URL: ' + source.url);
-                
-                fetch(source.url)
-                    .then(function(response) {
-                        debugLog('Response status: ' + response.status);
-                        if (!response.ok) {
-                            throw new Error('HTTP ' + response.status);
-                        }
-                        return response.text();
-                    })
-                    .then(function(csvData) {
-                        debugLog('Received CSV, length: ' + csvData.length);
-                        debugLog('=== FULL CSV RESPONSE ===');
-                        debugLog(csvData);
-                        debugLog('=== END CSV ===');
-                        
-                        // Check if it's an error message
-                        if (csvData.indexOf('Invalid') === 0 || csvData.length < 50) {
-                            debugLog('Invalid response: ' + csvData.substring(0, 200));
-                            throw new Error('Invalid API response');
-                        }
-                        
-                        parseNASAFiresCSV(csvData);
-                        debugLog('SUCCESS with ' + source.name + '!');
-                        loading.style.display = 'none';
-                    })
-                    .catch(function(error) {
-                        debugLog('Failed: ' + error.message);
-                        trySource(index + 1);
-                    });
-            }
-            
-            trySource(0);
+                });
         }
 
         function parseNASAFiresCSV(csvData) {
@@ -1348,6 +1311,7 @@
                 var acqTime = values[acqTimeIndex];
                 
                 if (isNaN(lat) || isNaN(lon)) {
+                    debugLog('Invalid coords line ' + i + ': ' + lat + ',' + lon);
                     continue;
                 }
                 
@@ -1397,7 +1361,7 @@
             }
             
             var nasaCount = nasaFireSource.getFeatures().length;
-            debugLog('QLD fires added to map: ' + nasaCount);
+            debugLog('Processed ' + processedCount + ' fires, added ' + nasaCount + ' to map');
             
             document.getElementById('nasa-count').textContent = nasaCount;
             document.getElementById('nasa-count-item').style.display = 'flex';
@@ -2010,4 +1974,4 @@
         }
     </script>
 </body>
-</html>
+    </html>
