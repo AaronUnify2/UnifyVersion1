@@ -1236,37 +1236,57 @@
             loading.style.display = 'block';
             loading.textContent = 'Loading NASA satellite fire data...';
             
-            // Use Australia country code instead of bounding box
-            // This will show all fires in Australia, then we filter to Queensland
-            
             debugLog('Fetching NASA FIRMS data...');
             
-            // VIIRS_SNPP_NRT for Australia
-            var url = 'https://firms.modaps.eosdis.nasa.gov/api/country/csv/577b0590cbd4f45bb0cfdbfbca871a11/VIIRS_SNPP_NRT/AUS/1';
-            debugLog('URL: ' + url);
+            // Try different sources in order
+            var sources = [
+                { name: 'MODIS_NRT', url: 'https://firms.modaps.eosdis.nasa.gov/api/country/csv/577b0590cbd4f45bb0cfdbfbca871a11/MODIS_NRT/AU/1' },
+                { name: 'VIIRS_NOAA20_NRT', url: 'https://firms.modaps.eosdis.nasa.gov/api/country/csv/577b0590cbd4f45bb0cfdbfbca871a11/VIIRS_NOAA20_NRT/AU/1' },
+                { name: 'VIIRS_SNPP_NRT', url: 'https://firms.modaps.eosdis.nasa.gov/api/country/csv/577b0590cbd4f45bb0cfdbfbca871a11/VIIRS_SNPP_NRT/AU/1' }
+            ];
             
-            fetch(url)
-                .then(function(response) {
-                    debugLog('Response status: ' + response.status);
-                    if (!response.ok) {
-                        throw new Error('NASA FIRMS API error: ' + response.status);
-                    }
-                    return response.text();
-                })
-                .then(function(csvData) {
-                    debugLog('Received CSV, length: ' + csvData.length);
-                    parseNASAFiresCSV(csvData);
-                    loading.style.display = 'none';
-                })
-                .catch(function(error) {
-                    debugLog('ERROR: ' + error.message);
-                    console.error('Error loading NASA fires:', error);
-                    loading.innerHTML = 'Error loading NASA fire data.<br>Error: ' + error.message;
+            function trySource(index) {
+                if (index >= sources.length) {
+                    debugLog('All sources failed');
+                    loading.innerHTML = 'Could not load NASA fire data from any source.<br>API key may need activation.';
                     loading.classList.add('error');
                     setTimeout(function() {
                         loading.style.display = 'none';
                     }, 5000);
-                });
+                    return;
+                }
+                
+                var source = sources[index];
+                debugLog('Trying ' + source.name + '...');
+                debugLog('URL: ' + source.url);
+                
+                fetch(source.url)
+                    .then(function(response) {
+                        debugLog('Response status: ' + response.status);
+                        if (!response.ok) {
+                            throw new Error('HTTP ' + response.status);
+                        }
+                        return response.text();
+                    })
+                    .then(function(csvData) {
+                        debugLog('Received CSV, length: ' + csvData.length);
+                        
+                        // Check if it's an error message
+                        if (csvData.indexOf('Invalid') === 0 || csvData.length < 50) {
+                            debugLog('Invalid response: ' + csvData.substring(0, 100));
+                            throw new Error('Invalid API response');
+                        }
+                        
+                        parseNASAFiresCSV(csvData);
+                        loading.style.display = 'none';
+                    })
+                    .catch(function(error) {
+                        debugLog('Failed: ' + error.message);
+                        trySource(index + 1);
+                    });
+            }
+            
+            trySource(0);
         }
 
         function parseNASAFiresCSV(csvData) {
