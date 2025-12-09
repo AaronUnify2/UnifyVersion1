@@ -1422,6 +1422,16 @@
             
             const playerHeight = 2;
             
+            // Calculate movement speeds
+            const walkingSpeedMetersPerSecond = 4.2;
+            const walkingSpeedMetersPerFrame = walkingSpeedMetersPerSecond / 60;
+            const walkSpeed = walkingSpeedMetersPerFrame / metersPerSceneUnit;
+            
+            const sceneWidth = width * scale;
+            const sceneHeight = height * scale;
+            const mapDiagonal = Math.sqrt(sceneWidth * sceneWidth + sceneHeight * sceneHeight);
+            const flySpeed = mapDiagonal / 10 / 60;
+            
             debug('Elevation range: ' + minElev.toFixed(1) + 'm to ' + maxElev.toFixed(1) + 'm (Δ ' + elevRange.toFixed(1) + 'm)');
             
             // Build terrain geometry
@@ -2077,8 +2087,9 @@
             
             // Movement
             function updateMovement(delta) {
-                const moveSpeed = 10 * metersPerSceneUnit / scale;
-                const flySpeed = 20 * metersPerSceneUnit / scale;
+                if (delta > 0.1) delta = 0.1;
+                
+                const currentSpeed = isFlying ? flySpeed : walkSpeed;
                 
                 direction.set(0, 0, 0);
                 
@@ -2089,26 +2100,26 @@
                 
                 if (direction.length() > 0) {
                     direction.normalize();
-                    direction.applyEuler(new THREE.Euler(0, yaw, 0));
                 }
                 
-                const speed = isFlying ? flySpeed : moveSpeed;
-                velocity.x = direction.x * speed;
-                velocity.z = direction.z * speed;
+                const rotatedDirection = direction.clone();
+                rotatedDirection.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+                
+                velocity.x = rotatedDirection.x * currentSpeed;
+                velocity.z = rotatedDirection.z * currentSpeed;
                 
                 if (isFlying) {
-                    if (keys.up) velocity.y = flySpeed;
-                    else if (keys.down) velocity.y = -flySpeed;
-                    else velocity.y = 0;
+                    velocity.y = 0;
+                    if (keys.up) velocity.y = currentSpeed;
+                    if (keys.down) velocity.y = -currentSpeed;
                 } else {
                     velocity.y = 0;
                 }
                 
-                camera.position.x += velocity.x * delta;
-                camera.position.y += velocity.y * delta;
-                camera.position.z += velocity.z * delta;
+                camera.position.x += velocity.x;
+                camera.position.y += velocity.y;
+                camera.position.z += velocity.z;
                 
-                // Keep camera above terrain
                 if (!isFlying) {
                     const camX = camera.position.x;
                     const camZ = camera.position.z;
@@ -2119,14 +2130,20 @@
                     if (gridX >= 0 && gridX < width && gridZ >= 0 && gridZ < height) {
                         const idx = gridZ * width + gridX;
                         const terrainHeight = vertices[idx * 3 + 2];
-                        camera.position.y = Math.max(camera.position.y, terrainHeight + playerHeight);
+                        camera.position.y = terrainHeight + playerHeight;
                     }
                 }
+                
+                // Keep camera within bounds
+                const halfWidth = (width * scale) / 2;
+                const halfHeight = (height * scale) / 2;
+                camera.position.x = Math.max(-halfWidth, Math.min(halfWidth, camera.position.x));
+                camera.position.z = Math.max(-halfHeight, Math.min(halfHeight, camera.position.z));
             }
             
             function resetView() {
-                camera.position.set(0, scale * 30, scale * 50);
-                pitch = -0.3;
+                camera.position.set(0, playerHeight, 0);
+                pitch = 0;
                 yaw = 0;
                 camera.rotation.set(pitch, yaw, 0);
             }
