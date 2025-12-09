@@ -1157,14 +1157,41 @@ F F F F F F F F F F
     topBound = actualHeight / 2;
     bottomBound = -actualHeight / 2;
     
+    // Adjust camera to fit the entire level
+    adjustCameraForLevel(actualHeight, actualWidth);
+    
     // For debugging
     console.log(`Level ${level} boundaries:`, {
         left: leftBound,
         right: rightBound,
         top: topBound,
         bottom: bottomBound,
-        scale: scale
+        scale: scale,
+        actualHeight: actualHeight,
+        actualWidth: actualWidth
     });
+}
+
+function adjustCameraForLevel(levelHeight, levelWidth) {
+    if (!camera) return;
+    
+    // Calculate required camera distance based on level dimensions
+    const aspect = window.innerWidth / window.innerHeight;
+    const fov = camera.fov * (Math.PI / 180); // Convert to radians
+    
+    // Calculate distance needed to fit height
+    const distanceForHeight = (levelHeight / 2) / Math.tan(fov / 2);
+    
+    // Calculate distance needed to fit width
+    const distanceForWidth = (levelWidth / 2) / (Math.tan(fov / 2) * aspect);
+    
+    // Use the larger distance and add 20% padding for better view
+    const requiredDistance = Math.max(distanceForHeight, distanceForWidth) * 1.2;
+    
+    camera.position.set(0, 0, requiredDistance);
+    camera.lookAt(0, 0, 0); // Look at center of level
+    
+    console.log(`Camera adjusted to z=${camera.position.z} for level height=${levelHeight}, width=${levelWidth}`);
 }
 
 function showBoundaries() {
@@ -1642,7 +1669,7 @@ function showBoundaries() {
             
             // Set up camera
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.z = 35; // Pull back further to see the massive level
+            camera.position.z = 50; // Default position, will be adjusted by setupGameBoundaries
             
             // Set up renderer
             renderer = new THREE.WebGLRenderer({ 
@@ -1774,6 +1801,13 @@ function showBoundaries() {
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
+                
+                // Recalculate camera position for new aspect ratio
+                if (topBound && bottomBound) {
+                    const levelHeight = topBound - bottomBound;
+                    const levelWidth = rightBound - leftBound;
+                    adjustCameraForLevel(levelHeight, levelWidth);
+                }
             });
             
             // Initialize audio context for sounds
