@@ -329,7 +329,7 @@
             position: absolute;
             bottom: 20px;
             left: 20px;
-            z-index: 100;
+            z-index: 150; /* Higher than look-zone to receive touches first */
             display: none;
         }
 
@@ -437,6 +437,13 @@
             height: 100%;
             z-index: 50;
             touch-action: none;
+        }
+
+        @media (max-width: 768px), (pointer: coarse) {
+            .look-zone {
+                left: 40%; /* Start from 40% to avoid D-pad area */
+                width: 60%;
+            }
         }
 
         /* 3D Viewer Container */
@@ -1955,6 +1962,7 @@
                 function touchStart(key) {
                     return (e) => {
                         e.preventDefault();
+                        e.stopPropagation(); // Prevent event from bubbling to look zone
                         keys[key] = true;
                     };
                 }
@@ -1962,6 +1970,7 @@
                 function touchEnd(key) {
                     return (e) => {
                         e.preventDefault();
+                        e.stopPropagation(); // Prevent event from bubbling to look zone
                         keys[key] = false;
                     };
                 }
@@ -1979,6 +1988,7 @@
                 
                 btnUp.addEventListener('touchstart', (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     keys.up = true;
                     
                     const now = performance.now();
@@ -1991,11 +2001,20 @@
                 
                 btnUp.addEventListener('touchend', (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     keys.up = false;
                 });
                 
-                btnDown.addEventListener('touchstart', touchStart('down'));
-                btnDown.addEventListener('touchend', touchEnd('down'));
+                btnDown.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    keys.down = true;
+                });
+                btnDown.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    keys.down = false;
+                });
                 
                 // Touch look controls
                 let touchStartX = 0;
@@ -2004,9 +2023,16 @@
                 
                 lookZone.addEventListener('touchstart', (e) => {
                     if (e.touches.length === 1) {
+                        const touch = e.touches[0];
+                        // Ignore touches in the D-pad area (left 40% of screen)
+                        const screenWidthPercent = (touch.clientX / window.innerWidth) * 100;
+                        if (screenWidthPercent < 40) {
+                            return;
+                        }
+                        
                         isTouchingLookZone = true;
-                        touchStartX = e.touches[0].clientX;
-                        touchStartY = e.touches[0].clientY;
+                        touchStartX = touch.clientX;
+                        touchStartY = touch.clientY;
                         lookHint.classList.remove('show');
                     }
                 });
@@ -2217,8 +2243,10 @@
                 
                 if (autoRotate && !Object.values(keys).some(v => v)) {
                     yaw += 0.01;
-                    camera.rotation.y = yaw;
                 }
+                
+                // Always maintain camera rotation based on pitch and yaw
+                camera.rotation.set(pitch, yaw, 0);
                 
                 // Update rain particles and advance simulation
                 if (rainSimulation.active && rainSimulation.particles && rainSimulation.particles.visible) {
