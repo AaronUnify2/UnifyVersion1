@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cavernous Brick Breaker - Fortress Edition</title>
+    <title>Three.js Brick Breaker - With In-game Store</title>
 
  <style>
     #gameContainer {
         position: relative;
         width: 95%;
-        height: 90vh;
-        margin: 10px auto;
+        height: 85vh;
+        margin: 20px auto;
         border: 2px solid #444;
         border-radius: 8px;
         overflow: hidden;
@@ -42,23 +42,14 @@
             font-size: 18px;
             z-index: 10;
         }
-        #ballCount {
-            position: absolute;
-            top: 35px;
-            left: 10px;
-            color: #ffaa00;
-            font-family: Arial, sans-serif;
-            font-size: 16px;
-            z-index: 10;
-        }
         #instructions {
             position: absolute;
-            top: 60px;
+            top: 40px;
             width: 100%;
             text-align: center;
             color: white;
             font-family: Arial, sans-serif;
-            font-size: 14px;
+            font-size: 16px;
             z-index: 10;
         }
         #gameOver {
@@ -115,6 +106,7 @@
             padding: 5px;
             border-radius: 5px;
         }
+        /* New pause button styles */
         #pauseButton {
             position: absolute;
             top: 10px;
@@ -135,6 +127,7 @@
         #pauseButton:hover {
             background-color: #777;
         }
+        /* Pause overlay styles */
         #pauseOverlay {
             position: absolute;
             top: 0;
@@ -166,6 +159,7 @@
         #resumeButton:hover {
             background-color: #45a049;
         }
+        /* Pause icon styles */
         .pause-icon {
             width: 12px;
             height: 14px;
@@ -185,6 +179,7 @@
         .pause-icon::after {
             right: 0;
         }
+        /* Play icon styles for when game is paused */
         .play-icon {
             width: 0;
             height: 0;
@@ -197,36 +192,34 @@
         /* Store styles */
         #storeContainer {
             position: absolute;
-            bottom: 80px;
+            bottom: 40px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
             gap: 15px;
             z-index: 20;
-            background-color: rgba(0, 0, 50, 0.8);
-            padding: 12px;
+            background-color: rgba(0, 0, 50, 0.7);
+            padding: 10px;
             border-radius: 10px;
             max-width: 90%;
-            border: 2px solid #444;
         }
         
         .store-item {
             display: flex;
             flex-direction: column;
             align-items: center;
-            background-color: rgba(0, 0, 0, 0.6);
+            background-color: rgba(0, 0, 0, 0.5);
             border-radius: 8px;
-            padding: 8px;
-            border: 2px solid #666;
+            padding: 5px;
+            border: 1px solid #666;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
-            min-width: 80px;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
         
         .store-item:hover {
             transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(0, 200, 255, 0.5);
-            border-color: #0cf;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            border-color: #aaa;
         }
         
         .store-item-disabled {
@@ -241,28 +234,26 @@
         }
         
         .item-icon {
-            width: 45px;
-            height: 45px;
+            width: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
             margin-bottom: 5px;
-            font-size: 28px;
         }
         
         .item-cost {
-            color: #33ff33;
+            color: #33cc33;
             font-family: Arial, sans-serif;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: bold;
         }
         
         .item-name {
             color: white;
             font-family: Arial, sans-serif;
-            font-size: 11px;
+            font-size: 12px;
             text-align: center;
-            margin-top: 3px;
         }
         
         .notification {
@@ -271,10 +262,9 @@
             font-family: Arial, sans-serif;
             font-size: 18px;
             font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
             pointer-events: none;
-            z-index: 100;
-            animation: floatUp 2s ease-out forwards;
+            z-index: 30;
+            animation: floatUp 1.5s ease-out forwards;
         }
         
         @keyframes floatUp {
@@ -284,1059 +274,1773 @@
             }
             100% {
                 opacity: 0;
-                transform: translateY(-100px);
+                transform: translateY(-50px);
             }
         }
     </style>
 </head>
 <body>
-    <div id="gameContainer">
+   <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
         <div id="score">Score: 0</div>
         <div id="cash">Cash: $3</div>
-        <div id="ballCount">Balls: 1</div>
-        <div id="instructions">Arrow Keys or Mouse to Move | Space or Click to Launch | Breach the Fortress Above!</div>
+        <div id="instructions">Click & Hold to launch | A/D or ← → to move</div>
         <div id="levelSelector">
-            <label>Level:</label>
+            <label for="levelSelect">Level:</label>
             <select id="levelSelect">
-                <option value="1">Level 1 - Galton Board</option>
-                <option value="2">Level 2 - Maze Runner</option>
-                <option value="3">Level 3 - The Fortress</option>
-                <option value="4">Level 4 - Chaos Chamber</option>
-                <option value="5">Level 5 - The Gauntlet</option>
+                <option value="1">Level 1</option>
+                <option value="2">Level 2</option>
+                <option value="3">Level 3</option>
+                <option value="4">Level 4</option>
+                <option value="5">Level 5</option>
+                <option value="6">Level 6</option>
+                <option value="7">Level 7</option>
+                <option value="8">Level 8</option>
+                <option value="9">Level 9</option>
             </select>
         </div>
-        <button id="pauseButton"><span class="pause-icon"></span>Pause</button>
-        <div id="gameOver">Game Over</div>
-        <button id="startButton">Restart</button>
-        <button id="launchButton">Launch Ball</button>
-        
+        <button id="pauseButton">
+            <span class="pause-icon"></span>
+            Pause
+        </button>
         <div id="pauseOverlay">
-            <h2>Paused</h2>
+            <h2>PAUSED</h2>
             <button id="resumeButton">Resume</button>
         </div>
-        
-        <div id="storeContainer">
-            <div class="store-item" id="buyMultiball" title="Launch 3 extra balls">
-                <div class="item-icon">⚾</div>
-                <div class="item-cost">$2</div>
-                <div class="item-name">Multi Ball</div>
-            </div>
-            <div class="store-item" id="buyExpandPaddle" title="Wider paddle for 10 seconds">
-                <div class="item-icon">↔️</div>
-                <div class="item-cost">$1</div>
-                <div class="item-name">Expand</div>
-            </div>
-            <div class="store-item" id="buyLaser" title="Shoot lasers to destroy bricks">
-                <div class="item-icon">🔫</div>
-                <div class="item-cost">$2</div>
-                <div class="item-name">Laser</div>
-            </div>
-            <div class="store-item" id="buyBomb" title="Massive explosion destroys nearby bricks">
-                <div class="item-icon">💣</div>
-                <div class="item-cost">$3</div>
-                <div class="item-name">Mega Bomb</div>
-            </div>
-            <div class="store-item" id="buySlowTime" title="Slow ball speed for 8 seconds">
-                <div class="item-icon">⏱️</div>
-                <div class="item-cost">$1</div>
-                <div class="item-name">Slow Time</div>
-            </div>
-            <div class="store-item" id="buyPaddleMultiball" title="Auto-launch balls for 15 seconds">
-                <div class="item-icon">🎯</div>
-                <div class="item-cost">$4</div>
-                <div class="item-name">Ball Rain</div>
-            </div>
+        <div id="gameOver">
+            Level Complete!<br>
+            <span id="finalScore"></span>
         </div>
+        <button id="startButton">Start Next Level</button>
+        <button id="launchButton">Launch Ball</button>
+        <div id="storeContainer"></div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-    let scene, camera, renderer, paddle, balls = [], bricks = [], powerups = [], lasers = [], bombs = [];
-    let ballSpeed = 0.09;
-    let paddleSpeed = 0.25;
-    let score = 0;
-    let cash = 3;
-    let level = 1;
-    let gameActive = false;
-    let gamePaused = false;
-    let ballLaunched = false;
-    let keys = {};
-    let mouseX = 0;
-    let touchX = 0;
-    let animationFrameId = null;
-    
-    // Expanded boundaries for cavernous levels
-    let leftBound = -14;
-    let rightBound = 14;
-    let topBound = 30;  // Much taller!
-    let bottomBound = -10;
-    
-    // Store powerup timers
-    let paddleExpandTimer = null;
-    let laserActiveTimer = null;
-    let slowTimeTimer = null;
-    let paddleMultiballTimer = null;
-    let remainingPaddleBalls = 0;
-    
-    // Powerup effects
-    let paddleExpanded = false;
-    let laserActive = false;
-    let slowTimeActive = false;
-    const normalPaddleWidth = 3;
-    const expandedPaddleWidth = 5;
-    
-    function init() {
-        // Scene setup
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x001144);
-        
-        // Enhanced camera for larger view
-        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 35;
-        camera.position.y = 10;
-        camera.lookAt(0, 10, 0);
-        
-        // Renderer
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        const container = document.getElementById('gameContainer');
-        renderer.setSize(container.clientWidth, container.clientHeight);
-        container.appendChild(renderer.domElement);
-        
-        // Lighting - enhanced for larger scene
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        scene.add(ambientLight);
-        
-        const pointLight1 = new THREE.PointLight(0xffffff, 0.8);
-        pointLight1.position.set(10, 20, 10);
-        scene.add(pointLight1);
-        
-        const pointLight2 = new THREE.PointLight(0xffffff, 0.8);
-        pointLight2.position.set(-10, 20, 10);
-        scene.add(pointLight2);
-        
-        // Create paddle
-        const paddleGeometry = new THREE.BoxGeometry(normalPaddleWidth, 0.5, 1);
-        const paddleMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
-        paddle = new THREE.Mesh(paddleGeometry, paddleMaterial);
-        paddle.position.y = bottomBound + 0.5;
-        scene.add(paddle);
-        
-        // Create ball
-        const ballGeometry = new THREE.SphereGeometry(0.4, 16, 16);
-        const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
-        const ball = new THREE.Mesh(ballGeometry, ballMaterial);
-        ball.position.y = bottomBound + 0.9;
-        ball.direction = new THREE.Vector3(0.5, 1, 0).normalize();
-        balls.push(ball);
-        scene.add(ball);
-        
-        // Setup game boundaries
-        setupGameBoundaries();
-        
-        // Create bricks
-        createBricks();
-        
-        // Event listeners
-        document.addEventListener('keydown', (e) => keys[e.key] = true);
-        document.addEventListener('keyup', (e) => keys[e.key] = false);
-        document.addEventListener('mousemove', (e) => {
-            const rect = renderer.domElement.getBoundingClientRect();
-            mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        });
-        
-        renderer.domElement.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const rect = renderer.domElement.getBoundingClientRect();
-            touchX = ((e.touches[0].clientX - rect.left) / rect.width) * 2 - 1;
-        });
-        
-        renderer.domElement.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            const rect = renderer.domElement.getBoundingClientRect();
-            touchX = ((e.touches[0].clientX - rect.left) / rect.width) * 2 - 1;
-        });
-        
-        document.getElementById('launchButton').addEventListener('click', launchBall);
-        document.getElementById('startButton').addEventListener('click', restartGame);
-        document.getElementById('pauseButton').addEventListener('click', togglePause);
-        document.getElementById('resumeButton').addEventListener('click', resumeGame);
-        
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !ballLaunched && gameActive) {
-                e.preventDefault();
-                launchBall();
-            }
-        });
-        
-        renderer.domElement.addEventListener('click', () => {
-            if (!ballLaunched && gameActive) {
-                launchBall();
-            }
-        });
-        
-        // Level selector
-        document.getElementById('levelSelect').addEventListener('change', (e) => {
-            level = parseInt(e.target.value);
-            if (!gameActive) {
-                createBricks();
-            }
-        });
-        
-        // Store button event listeners
-        document.getElementById('buyMultiball').addEventListener('click', () => buyPowerup('multiball', 2));
-        document.getElementById('buyExpandPaddle').addEventListener('click', () => buyPowerup('expand', 1));
-        document.getElementById('buyLaser').addEventListener('click', () => buyPowerup('laser', 2));
-        document.getElementById('buyBomb').addEventListener('click', () => buyPowerup('bomb', 3));
-        document.getElementById('buySlowTime').addEventListener('click', () => buyPowerup('slowtime', 1));
-        document.getElementById('buyPaddleMultiball').addEventListener('click', () => buyPowerup('paddleMultiball', 4));
-        
-        // Window resize
-        window.addEventListener('resize', () => {
-            const container = document.getElementById('gameContainer');
-            camera.aspect = container.clientWidth / container.clientHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(container.clientWidth, container.clientHeight);
-        });
-        
-        updateScore();
-        updateCash();
-        animate();
-    }
-    
-    function setupGameBoundaries() {
-        // Visual boundaries for massive cavern
-        const wallMaterial = new THREE.MeshPhongMaterial({ 
-            color: 0x333366,
-            transparent: true,
-            opacity: 0.3
-        });
-        
-        // Remove old walls if they exist
-        scene.children.filter(child => child.userData.isWall).forEach(wall => scene.remove(wall));
-        
-        // Left wall
-        const leftWall = new THREE.Mesh(
-            new THREE.BoxGeometry(0.5, (topBound - bottomBound) + 5, 2),
-            wallMaterial
-        );
-        leftWall.position.set(leftBound - 0.25, (topBound + bottomBound) / 2, 0);
-        leftWall.userData.isWall = true;
-        scene.add(leftWall);
-        
-        // Right wall
-        const rightWall = new THREE.Mesh(
-            new THREE.BoxGeometry(0.5, (topBound - bottomBound) + 5, 2),
-            wallMaterial
-        );
-        rightWall.position.set(rightBound + 0.25, (topBound + bottomBound) / 2, 0);
-        rightWall.userData.isWall = true;
-        scene.add(rightWall);
-        
-        // Top wall
-        const topWall = new THREE.Mesh(
-            new THREE.BoxGeometry((rightBound - leftBound) + 1, 0.5, 2),
-            wallMaterial
-        );
-        topWall.position.set(0, topBound + 0.25, 0);
-        topWall.userData.isWall = true;
-        scene.add(topWall);
-    }
-    
-    function createBricks() {
-        // Clear existing bricks
-        bricks.forEach(brick => scene.remove(brick));
-        bricks = [];
-        
-        const brickWidth = 1.8;
-        const brickHeight = 0.6;
-        const brickDepth = 1;
-        const cols = 14;
-        
-        // Calculate zones (bottom third, middle third, top third)
-        const zoneHeight = (topBound - bottomBound - 5) / 3;
-        const bottomZoneTop = bottomBound + 5 + zoneHeight;
-        const middleZoneTop = bottomZoneTop + zoneHeight;
-        
-        if (level === 1) {
-            // Level 1: Galton Board
-            createBottomZone(cols, brickWidth, brickHeight, brickDepth, bottomZoneTop);
-            createMiddleZone(cols, brickWidth, brickHeight, brickDepth, bottomZoneTop, middleZoneTop);
-            createGaltonBoard(cols, brickWidth, brickHeight, brickDepth, middleZoneTop);
-        } else if (level === 2) {
-            // Level 2: Vertical Maze
-            createBottomZone(cols, brickWidth, brickHeight, brickDepth, bottomZoneTop);
-            createMiddleZone(cols, brickWidth, brickHeight, brickDepth, bottomZoneTop, middleZoneTop);
-            createVerticalMaze(cols, brickWidth, brickHeight, brickDepth, middleZoneTop);
-        } else if (level === 3) {
-            // Level 3: The Fortress
-            createBottomZone(cols, brickWidth, brickHeight, brickDepth, bottomZoneTop);
-            createMiddleZone(cols, brickWidth, brickHeight, brickDepth, bottomZoneTop, middleZoneTop);
-            createFortress(cols, brickWidth, brickHeight, brickDepth, middleZoneTop);
-        } else if (level === 4) {
-            // Level 4: Chaos Chamber
-            createBottomZone(cols, brickWidth, brickHeight, brickDepth, bottomZoneTop);
-            createMiddleZone(cols, brickWidth, brickHeight, brickDepth, bottomZoneTop, middleZoneTop);
-            createChaos(cols, brickWidth, brickHeight, brickDepth, middleZoneTop);
-        } else if (level === 5) {
-            // Level 5: The Gauntlet
-            createBottomZone(cols, brickWidth, brickHeight, brickDepth, bottomZoneTop);
-            createMiddleZone(cols, brickWidth, brickHeight, brickDepth, bottomZoneTop, middleZoneTop);
-            createGauntlet(cols, brickWidth, brickHeight, brickDepth, middleZoneTop);
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script type="module">
+  // Firebase imports
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+  import { getDatabase, ref, set, update, onValue, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+  
+  // Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyCUmh7DvXdHm0lwSQBDYhGKe_rqM5lNxj0",
+    authDomain: "brick-breaker-coop.firebaseapp.com",
+    databaseURL: "https://brick-breaker-coop-default-rtdb.firebaseio.com",
+    projectId: "brick-breaker-coop",
+    storageBucket: "brick-breaker-coop.firebasestorage.app",
+    messagingSenderId: "447787515662",
+    appId: "1:447787515662:web:0a1c9e8e1b75823a8f4e8b",
+    measurementId: "G-JTV9CGXP2F"
+  };
+  
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  
+  // Generate a unique player ID
+  const playerId = 'player_' + Math.random().toString(36).substr(2, 9);
+  let currentRoomId = null;
+  
+  // Enhanced multiplayer object
+  window.multiplayer = {
+    init: function(roomId) {
+      currentRoomId = roomId;
+      
+      // Create player in Firebase
+      const playerRef = ref(db, 'players/' + playerId);
+      set(playerRef, {
+        id: playerId,
+        x: 0,
+        y: 0,
+        lastUpdate: Date.now(),
+        roomId: roomId
+      });
+      
+      // Update player position periodically
+      setInterval(() => {
+        if (window.paddle && currentRoomId) {
+          const playerRef = ref(db, 'players/' + playerId);
+          update(playerRef, {
+            x: window.paddle.position.x,
+            y: window.paddle.position.y,
+            lastUpdate: Date.now()
+          });
         }
-    }
+      }, 100);
+    },
     
-    function createBottomZone(cols, brickWidth, brickHeight, brickDepth, zoneTop) {
-        // Bottom zone: Easy 1-hit bricks, scattered pattern for easy access
-        const rows = 8;
-        const startY = bottomBound + 5;
-        
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                // Create gaps for easier access
-                if (Math.random() > 0.75) continue;
-                
-                const x = leftBound + (col + 0.5) * (rightBound - leftBound) / cols;
-                const y = startY + row * brickHeight * 1.2;
-                
-                createBrick(x, y, brickWidth, brickHeight, brickDepth, 'normal', 1);
-            }
+    updateOtherPlayers: function(players) {
+      if (!window.scene) return;
+      
+      // Remove old player paddles
+      if (window.otherPlayers) {
+        window.otherPlayers.forEach(paddle => window.scene.remove(paddle));
+      }
+      
+      // Create new player paddles
+      window.otherPlayers = [];
+      for (let id in players) {
+        if (id !== playerId && players[id].roomId === currentRoomId) {
+          const geometry = new THREE.BoxGeometry(3, 0.3, 0.5);
+          const material = new THREE.MeshPhongMaterial({ 
+            color: 0x00ff00, 
+            transparent: true, 
+            opacity: 0.5 
+          });
+          const paddle = new THREE.Mesh(geometry, material);
+          paddle.position.x = players[id].x;
+          paddle.position.y = players[id].y;
+          window.scene.add(paddle);
+          window.otherPlayers.push(paddle);
         }
-    }
+      }
+    },
     
-    function createMiddleZone(cols, brickWidth, brickHeight, brickDepth, startY, endY) {
-        // Middle zone: Mix of normal and tough bricks
-        const rows = Math.floor((endY - startY) / (brickHeight * 1.2));
-        
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                if (Math.random() > 0.7) continue;
-                
-                const x = leftBound + (col + 0.5) * (rightBound - leftBound) / cols;
-                const y = startY + row * brickHeight * 1.2;
-                
-                const brickType = Math.random() > 0.6 ? 'tough' : 'normal';
-                const hits = brickType === 'tough' ? 2 : 1;
-                
-                createBrick(x, y, brickWidth, brickHeight, brickDepth, brickType, hits);
-            }
+    cleanupPlayer: function() {
+      if (playerId) {
+        const playerRef = ref(db, 'players/' + playerId);
+        remove(playerRef);
+      }
+    }
+  };
+  
+  // Initialize multiplayer (you can change the room ID)
+  window.multiplayer.init('room1');
+
+// Enhanced initialization for bricks
+function initBricks() {
+  const bricksRef = ref(db, `rooms/${currentRoomId}/bricks`);
+  
+  // Initialize brick state in Firebase
+  if (window.bricks) {
+    const brickData = {};
+    window.bricks.forEach((brick, index) => {
+      brickData[`brick_${index}`] = {
+        active: true,
+        position: {
+          x: brick.position.x,
+          y: brick.position.y,
+          z: brick.position.z
         }
-    }
+      };
+    });
+    set(bricksRef, brickData);
     
-    function createGaltonBoard(cols, brickWidth, brickHeight, brickDepth, startY) {
-        // Galton board: staggered pegs of unbreakable bricks
-        const rows = 12;
+    // Listen for brick changes
+    onValue(bricksRef, (snapshot) => {
+      const brickData = snapshot.val();
+      if (brickData) {
+        window.multiplayer.syncBricks(brickData);
+      }
+    });
+  }
+}
+
+// Enhanced reportBrickBreak - now pass the whole brick object
+reportBrickBreak: function(brickIndex) {
+  if (!currentRoomId) return;
+  
+  // Mark in our local model that we broke this brick
+  if (window.bricks[brickIndex]) {
+    window.bricks[brickIndex].userData.removedByMe = true;
+  }
+  
+  // Update the brick state in Firebase
+  const brickRef = ref(db, `rooms/${currentRoomId}/bricks/brick_${brickIndex}`);
+  update(brickRef, {
+    active: false,
+    brokenBy: playerId,
+    brokenAt: Date.now()
+  });
+}
+
+// Create room and call initBricks
+createRoom: function() {
+  const roomsRef = ref(db, 'rooms');
+  const newRoomId = 'room_' + Math.random().toString(36).substr(2, 9);
+  currentRoomId = newRoomId;
+  
+  set(ref(db, 'rooms/' + newRoomId), {
+    id: newRoomId,
+    created: Date.now(),
+    active: true
+  });
+  
+  // Initialize bricks after creating the room
+  setTimeout(() => initBricks(), 500);
+  
+  return newRoomId;
+},
+
+joinRoom: function(roomId) {
+  currentRoomId = roomId;
+  
+  // Initialize bricks after joining
+  setTimeout(() => initBricks(), 500);
+  
+  // Listen for other players' movements
+  const playersRef = ref(db, 'players');
+  onValue(playersRef, (snapshot) => {
+    const players = snapshot.val() || {};
+    window.multiplayer.updateOtherPlayers(players);
+  });
+  
+  // Clean up inactive players (those who haven't updated in 30 seconds)
+  setInterval(() => {
+    const thirtySecondsAgo = Date.now() - 30000;
+    onValue(playersRef, (snapshot) => {
+      const players = snapshot.val() || {};
+      for (let id in players) {
+        if (players[id].lastUpdate < thirtySecondsAgo) {
+          const inactiveRef = ref(db, 'players/' + id);
+          remove(inactiveRef);
+        }
+      }
+    }, { onlyOnce: true });
+  }, 10000);
+  
+  // Clean up when window is closed
+  window.addEventListener('beforeunload', () => {
+    window.multiplayer.cleanupPlayer();
+  });
+
+// Enhanced reportBrickBreak function - add to the multiplayer object
+reportBrickBreak: function(brickIndex) {
+  if (!currentRoomId) return;
+  
+  // Mark in our local model that we broke this brick
+  if (window.bricks[brickIndex]) {
+    window.bricks[brickIndex].userData.removedByMe = true;
+  }
+  
+  // Update the brick state in Firebase
+  const brickRef = ref(db, `rooms/${currentRoomId}/bricks/brick_${brickIndex}`);
+  update(brickRef, {
+    active: false,
+    brokenBy: playerId,
+    brokenAt: Date.now()
+  });
+}
+
+// Enhanced syncBricks function - add to the multiplayer object
+syncBricks: function(brickData) {
+  if (!window.bricks || !window.scene) return;
+  
+  Object.keys(brickData).forEach(key => {
+    const serverBrick = brickData[key];
+    const brickIndex = parseInt(key.split('_')[1]);
+    
+    // Find the matching local brick
+    if (brickIndex < window.bricks.length) {
+      const localBrick = window.bricks[brickIndex];
+      
+      // If server says brick is gone but we still have it, remove it
+      if (!serverBrick.active && localBrick.parent) {
+        window.scene.remove(localBrick);
         
-        for (let row = 0; row < rows; row++) {
-            const offset = row % 2 === 0 ? 0 : 0.5;
-            const numPegs = row % 2 === 0 ? 7 : 6;
+        // If this wasn't initiated by us, we should add points!
+        if (!localBrick.userData.removedByMe) {
+          // Award points for someone else breaking the brick
+          if (localBrick.userData && localBrick.userData.points) {
+            window.score += localBrick.userData.points / 2; // Half points for team breaks
+            window.updateScore();
             
-            for (let peg = 0; peg < numPegs; peg++) {
-                const x = leftBound + (peg + offset + 1) * (rightBound - leftBound) / 8;
-                const y = startY + row * brickHeight * 1.5;
-                
-                createBrick(x, y, brickWidth * 0.8, brickHeight, brickDepth, 'metal', Infinity);
+            // Play brick break sound
+            if (window.brickBreakSound) {
+              window.brickBreakSound();
             }
-        }
-        
-        // Add some breakable gaps
-        for (let i = 0; i < 15; i++) {
-            const x = leftBound + Math.random() * (rightBound - leftBound);
-            const y = startY + Math.random() * (rows * brickHeight * 1.5);
-            createBrick(x, y, brickWidth * 0.6, brickHeight * 0.6, brickDepth, 'tough', 3);
-        }
-    }
-    
-    function createVerticalMaze(cols, brickWidth, brickHeight, brickDepth, startY) {
-        // Vertical maze with narrow passages
-        const rows = 15;
-        
-        for (let row = 0; row < rows; row++) {
-            // Create walls with gaps
-            const gapPos = Math.floor(Math.random() * (cols - 2)) + 1;
-            const gapWidth = 1 + Math.floor(Math.random() * 2);
             
-            for (let col = 0; col < cols; col++) {
-                if (col >= gapPos && col < gapPos + gapWidth) {
-                    // This is a gap - maybe add a tough brick
-                    if (Math.random() > 0.7) {
-                        const x = leftBound + (col + 0.5) * (rightBound - leftBound) / cols;
-                        const y = startY + row * brickHeight * 1.3;
-                        createBrick(x, y, brickWidth * 0.8, brickHeight, brickDepth, 'tough', 2);
-                    }
-                } else {
-                    const x = leftBound + (col + 0.5) * (rightBound - leftBound) / cols;
-                    const y = startY + row * brickHeight * 1.3;
-                    createBrick(x, y, brickWidth, brickHeight, brickDepth, 'metal', Infinity);
-                }
-            }
+            // Create visual feedback that someone else broke this brick
+            createTeamBreakEffect(localBrick.position);
+          }
         }
+      }
     }
-    
-    function createFortress(cols, brickWidth, brickHeight, brickDepth, startY) {
-        // Fortress: layers of defense with strategic weak points
-        const rows = 14;
+  });
+}
+
+</script>
+
+<script>
+
+     // Game variables
+        let scene, camera, renderer;
+        let paddle, ball;
+        let bricks = [];
+        let powerups = [];
+        let balls = [];
+        let lasers = [];
+        let paddleMultiballTimer = null;
+        let remainingPaddleBalls = 0;
+        let laserTimer = null;
+        let activeLasers = 0;
+        let paddleSpeed = 0.15;
+        let ballSpeed = 0.08;
+        let ballDirection = new THREE.Vector3(0.5, -1, 0).normalize();
+        let score = 0;
+        let cash = 3;
+        let level = 1;
+        let gameActive = true;
+        let ballLaunched = false;
+        let keysPressed = {};
+        let touchX = 0;
+        let launchButton;
         
-        // Outer walls
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                const x = leftBound + (col + 0.5) * (rightBound - leftBound) / cols;
-                const y = startY + row * brickHeight * 1.2;
-                
-                // Create fortress walls
-                if (col === 0 || col === cols - 1 || 
-                    (row % 3 === 0 && col % 3 !== 1) ||
-                    (row % 5 === 2 && col % 2 === 0)) {
-                    createBrick(x, y, brickWidth, brickHeight, brickDepth, 'metal', Infinity);
-                } else if (Math.random() > 0.5) {
-                    // Tough bricks in between
-                    createBrick(x, y, brickWidth, brickHeight, brickDepth, 'tough', 3);
-                }
-            }
-        }
+        // Audio context for sound effects
+        let audioContext;
+        let fungusSpreadSound;
+        let brickBreakSound;
         
-        // Add treasure room at top (valuable but protected)
-        const topRow = rows - 1;
-        for (let col = 4; col < 10; col++) {
-            const x = leftBound + (col + 0.5) * (rightBound - leftBound) / cols;
-            const y = startY + topRow * brickHeight * 1.2;
-            if (col === 6 || col === 7) {
-                // Small gap to enter
-                createBrick(x, y, brickWidth * 0.5, brickHeight, brickDepth, 'tough', 1);
-            } else {
-                createBrick(x, y, brickWidth, brickHeight, brickDepth, 'metal', Infinity);
-            }
-        }
-    }
-    
-    function createChaos(cols, brickWidth, brickHeight, brickDepth, startY) {
-        // Chaotic pattern with random unbreakable obstacles
-        const totalBricks = 120;
+        // Pause system variables
+        let gamePaused = false;
+        let animationFrameId = null;
         
-        for (let i = 0; i < totalBricks; i++) {
-            const x = leftBound + Math.random() * (rightBound - leftBound);
-            const y = startY + Math.random() * 18;
-            
-            const rand = Math.random();
-            if (rand > 0.7) {
-                createBrick(x, y, brickWidth, brickHeight, brickDepth, 'metal', Infinity);
-            } else if (rand > 0.4) {
-                createBrick(x, y, brickWidth * 0.9, brickHeight, brickDepth, 'tough', 2);
-            } else {
-                createBrick(x, y, brickWidth * 0.8, brickHeight, brickDepth, 'normal', 1);
-            }
-        }
-    }
-    
-    function createGauntlet(cols, brickWidth, brickHeight, brickDepth, startY) {
-        // The ultimate challenge: narrow passages through dense defenses
-        const rows = 16;
+        // Bomb queue system variables
+        let bombQueue = [];
+        let activeBomb = null;
+        let totalBombsCollected = 0;
+        let totalBricksDestroyedByBombs = 0;
         
-        for (let row = 0; row < rows; row++) {
-            // Create zigzag pattern
-            const zigzagOffset = Math.sin(row * 0.5) * 3;
-            
-            for (let col = 0; col < cols; col++) {
-                const x = leftBound + (col + 0.5) * (rightBound - leftBound) / cols;
-                const y = startY + row * brickHeight * 1.1;
-                
-                // Create narrow winding path
-                const distFromCenter = Math.abs(col - (cols/2 + zigzagOffset));
-                
-                if (distFromCenter > 1.5) {
-                    createBrick(x, y, brickWidth, brickHeight, brickDepth, 'metal', Infinity);
-                } else if (distFromCenter > 0.8 && Math.random() > 0.5) {
-                    createBrick(x, y, brickWidth * 0.9, brickHeight, brickDepth, 'tough', 3);
-                }
-            }
-        }
-    }
-    
-    function createBrick(x, y, width, height, depth, type, hitsRequired) {
-        let color;
-        switch(type) {
-            case 'normal':
-                color = 0x3399ff;
-                break;
-            case 'tough':
-                color = 0xff9933;
-                break;
-            case 'metal':
-                color = 0x666666;
-                break;
-            default:
-                color = 0x3399ff;
-        }
+        // Game boundaries - WILL BE DYNAMICALLY ADJUSTED BASED ON LEVEL
+        let gameWidth = 32;
+        let gameHeight = 32;
+        let leftBound, rightBound, topBound, bottomBound;
         
-        const geometry = new THREE.BoxGeometry(width, height, depth);
-        const material = new THREE.MeshPhongMaterial({ 
-            color: color,
-            shininess: type === 'metal' ? 100 : 30
-        });
-        const brick = new THREE.Mesh(geometry, material);
-        brick.position.set(x, y, 0);
-        brick.userData = {
-            type: type,
-            hits: hitsRequired,
-            maxHits: hitsRequired
+        // ASCII Level Design
+        const brickSymbols = {
+            'R': { color: 0xff0000, points: 10 },  // Red
+            'O': { color: 0xff7700, points: 20 },  // Orange
+            'Y': { color: 0xffff00, points: 30 },  // Yellow
+            'G': { color: 0x00ff00, points: 40 },  // Green
+            'B': { color: 0x0077ff, points: 50 },  // Blue
+            'P': { color: 0xaa00ff, points: 60 },  // Purple
+            'W': { color: 0xffffff, points: 70 },  // White
+            'M': { color: 0xff00ff, points: 100 }, // Magenta (special brick)
+            'C': { color: 0x00ffff, points: 80 },  // Cyan
+            'X': { color: 0x888888, points: 0, indestructible: true }, // Gray (indestructible)
+            'F': { color: 0x33cc33, points: 150, fungus: true }, // Green fungus brick
+            'Z': { color: 0x8800bb, points: 200, phaze: true }, // Phaze brick - purple with blue tint
+            ' ': null  // Empty space (no brick)
         };
-        
-        scene.add(brick);
-        bricks.push(brick);
-    }
-    
-    function movePaddle() {
-        if (gamePaused) return;
-        
-        let targetX = paddle.position.x;
-        
-        if (keys['ArrowLeft'] || keys['a']) {
-            targetX -= paddleSpeed;
-        }
-        if (keys['ArrowRight'] || keys['d']) {
-            targetX += paddleSpeed;
-        }
-        
-        // Mouse control
-        if (mouseX !== 0) {
-            targetX = mouseX * (rightBound - 2);
-        }
-        
-        // Touch control
-        if (touchX !== 0) {
-            targetX = touchX * (rightBound - 2);
-        }
-        
-        // Constrain paddle
-        const paddleWidth = paddleExpanded ? expandedPaddleWidth : normalPaddleWidth;
-        const halfWidth = paddleWidth / 2;
-        paddle.position.x = Math.max(leftBound + halfWidth, Math.min(rightBound - halfWidth, targetX));
-        
-        // If ball not launched, keep it with paddle
-        if (!ballLaunched && balls.length > 0) {
-            balls[0].position.x = paddle.position.x;
-        }
-    }
-    
-    function launchBall() {
-        if (ballLaunched || !gameActive) return;
-        
-        ballLaunched = true;
-        balls[0].direction = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.5,
-            1,
-            0
-        ).normalize();
-        
-        document.getElementById('launchButton').style.display = 'none';
-    }
-    
-    function moveBall() {
-        if (gamePaused) return;
-        
-        const currentSpeed = slowTimeActive ? ballSpeed * 0.5 : ballSpeed;
-        
-        balls.forEach((ball, index) => {
-            ball.position.x += ball.direction.x * currentSpeed;
-            ball.position.y += ball.direction.y * currentSpeed;
-            
-            // Wall collisions
-            if (ball.position.x <= leftBound + 0.4 || ball.position.x >= rightBound - 0.4) {
-                ball.direction.x *= -1;
-                ball.position.x = Math.max(leftBound + 0.4, Math.min(rightBound - 0.4, ball.position.x));
-            }
-            
-            // Top collision
-            if (ball.position.y >= topBound - 0.4) {
-                ball.direction.y *= -1;
-                ball.position.y = topBound - 0.4;
-            }
-            
-            // Paddle collision
-            const paddleWidth = paddleExpanded ? expandedPaddleWidth : normalPaddleWidth;
-            if (ball.position.y <= paddle.position.y + 0.5 &&
-                ball.position.y >= paddle.position.y - 0.5 &&
-                Math.abs(ball.position.x - paddle.position.x) < paddleWidth / 2) {
-                
-                ball.direction.y = Math.abs(ball.direction.y);
-                const hitOffset = (ball.position.x - paddle.position.x) / (paddleWidth / 2);
-                ball.direction.x = hitOffset * 0.8;
-                ball.direction.normalize();
-                ball.position.y = paddle.position.y + 0.5;
-            }
-            
-            // Bottom boundary - lose ball
-            if (ball.position.y < bottomBound - 1) {
-                if (balls.length === 1) {
-                    gameOver();
-                } else {
-                    scene.remove(ball);
-                    balls.splice(index, 1);
-                    updateBallCount();
-                }
-            }
-            
-            // Brick collisions
-            checkBrickCollisions(ball);
-        });
-    }
-    
-    function checkBrickCollisions(ball) {
-        for (let i = bricks.length - 1; i >= 0; i--) {
-            const brick = bricks[i];
-            const brickBox = new THREE.Box3().setFromObject(brick);
-            const ballBox = new THREE.Box3().setFromObject(ball);
-            
-            if (brickBox.intersectsBox(ballBox)) {
-                // Determine collision side
-                const ballCenter = ball.position;
-                const brickCenter = brick.position;
-                const dx = ballCenter.x - brickCenter.x;
-                const dy = ballCenter.y - brickCenter.y;
-                
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    ball.direction.x *= -1;
-                } else {
-                    ball.direction.y *= -1;
-                }
-                
-                // Handle brick hit
-                if (brick.userData.type === 'metal') {
-                    // Unbreakable - just bounce
-                    continue;
-                }
-                
-                brick.userData.hits--;
-                
-                if (brick.userData.hits <= 0) {
-                    // Brick destroyed
-                    scene.remove(brick);
-                    bricks.splice(i, 1);
+// Pre-defined ASCII Levels (Optimized)
+const asciiLevels = [
+
+                   
+
+    // Level 1 - Farm Bottom, Galton Board Defense, Final Maze
+    `
                     
-                    // Award points based on brick type and position
-                    let points = 10;
-                    if (brick.userData.type === 'tough') points = 25;
-                    if (brick.position.y > topBound - 10) points *= 3; // Top zone bonus
-                    else if (brick.position.y > topBound - 18) points *= 2; // Middle zone bonus
+    MMMMMMMMMMM     
+   MPPPPPPPPPPM    
+  MPPWWWWWWWPPM   
+ MPPWWBBBBWWPPM  
+MPPWWBB  BBWWPPM 
+ MPPWWBBBBWWPPM  
+  MPPWWWWWWWPPM   
+   MPPPPPPPPPPM    
+    MMMM  MMMM     
                     
-                    score += points;
-                    updateScore();
                     
-                    // High drop rate for powerups (40%)
-                    if (Math.random() < 0.4) {
-                        spawnPowerup(brick.position.x, brick.position.y);
-                    }
+  X   X   X   X   
+ X X X X X X X X  
+X X X X X X X X X 
+ X X X X X X X X  
+  X X X X X X X   
+   X X X X X X    
+    X X X X X     
+     X X X X      
+      X X X       
+       X X        
+        X         
                     
-                    // Cash reward (enhanced)
-                    if (Math.random() < 0.35) {
-                        cash++;
-                        updateCash();
-                        showNotification(`+$1`, brick.position.x, brick.position.y);
-                    }
                     
-                    // Check win condition
-                    if (bricks.filter(b => b.userData.type !== 'metal').length === 0) {
-                        levelComplete();
-                    }
-                } else {
-                    // Update brick color based on remaining hits
-                    const hitRatio = brick.userData.hits / brick.userData.maxHits;
-                    if (brick.userData.type === 'tough') {
-                        brick.material.color.setHex(hitRatio > 0.5 ? 0xff9933 : 0xff3333);
-                    }
-                }
-                
-                break;
+    GGGGGGGGGG     
+   GGGGGGGGGGGG    
+  GGGGGGGGGGGGGG   
+ GGGGGGGGGGGGGGGG  
+                    
+    YYYYYYYYYYY    
+   YYYYYYYYYYYYY   
+  YYYYYYYYYYYYYYY  
+ YYYYYYYYYYYYYYY   
+                    
+   OOOOOOOOOOOOO   
+  OOOOOOOOOOOOOOO  
+ OOOOOOOOOOOOOOOOO 
+                    
+  RRRRRRRRRRRRRRR  
+ RRRRRRRRRRRRRRRRR 
+RRRRRRRRRRRRRRRRRRR
+               `,
+
+    // Level 2 - Fortress Layout (reduced size and 80% less fungus/phaze bricks)
+    `
+                 
+F     ZZMMMMMMZZ     
+    ZBBBMMMMBBBZ    
+   ZBBMMMMMMMBBZ   
+  ZBBBMMMMMMBBBBZ  
+  ZBBBBMMMMMMBBBBZ  
+  ZBMBZ      ZBMBZ  
+  ZBMBZ      ZBMBZ  
+  ZBMBZ  F  ZBMBZ  
+  ZBMBZ      ZBMBZ  
+  ZBMBZ      ZBMBZ  
+  ZBBBBMMMMMMBBBBZ  
+  ZBBBBBMMMBBBBBZ  
+   ZBBMMMMMMMBBZ   
+    ZBBBBMMMMBBBZ    
+     ZBBBBMMBBBBZ     
+        ZZMMMMMZZ       
+         F          
+                    
+      WWWWWWWW      
+     WWWWWWWWWW     
+    WWWZZZZZZWWW    
+   WWWZBBBBBBZWWW   
+   WWWZZ    ZZWWW   
+   WWWZZ    ZZWWW   
+   WWWZZ    ZZWWW   
+   WWWZZ    ZZWWW   
+   WWWZZZFZZZZWWW   
+    WWWZWWWWZWWW    
+     WWFWWWWWWW     
+      WWWWWWWW      
+                    
+       F   F        
+                    
+    CCCCCCCCCCCC    
+   CCCFCCCCCCCCCC   
+  CCCCCCCCCCCCCCC   
+ CCCCCCZZZZZZCCCCC  
+CCCCCCZB    BZCCCCC 
+CCCCCZB  XX  BZCCCC 
+CCCCCCZB    BZCCCFC 
+ CCCCCCZBZZBZCCCCC  
+                    
+              
+
+`,
+    
+    // Level 3 - Into the Void (reduced size and 80% less fungus/phaze bricks)
+    `
+
+                    
+    RRRRRRRRRRRR    
+   RRROOOOOOOORRR   
+  RRROOOYYYYYOOORR  
+ RRROOOYYGGGYYOOORR 
+RRROOOYYGGGGGYYOOORR
+RRROOOYYGGGGGYYOOORR
+RRROOOYYGGGGGYYOOORR
+ RRROOOYYGGGYYOOORR 
+  RRROOOYYYYYOOORR  
+   RRROOOOOOOORRR   
+    RRRRRRRRRRRR    
+       FF  FF       
+                    
+                    
+    WWWWWWWWWWWW    
+   WWWZZZZZZZZWWW   
+  WWWZZ      ZZWWW  
+ WWWZZ   FF   ZZWWW 
+WWWZZ          ZZWWW
+WWWZZ          ZZWWW
+WWWZZ    FF    ZZWWW
+WWWZZ          ZZWWW
+WWWZZ          ZZWWW
+ WWWZZ        ZZWWW 
+  WWWZZ      ZZWWW  
+   WWWZZZZZZZZWWW   
+    WWWWWWWWWWWW    
+       F    F       
+                    
+  MMMMMMMMMMMMMMMM  
+ MMMMBBBBBBBBBBBMMM 
+MMMBBBPPPPPPPPBBBMMM
+MMMBPPPPPPPPPPPPBMMM
+MMMBPP        PPBMMM
+MMMBPP   FF   PPBMMM
+MMMBPP        PPBMMM
+MMMBPPPPPPPPPPPPBMMM
+MMMBBBPPPPPPPPBBBMMM
+ MMMMBBBBBBBBBBBMMM 
+  MMMMMMMMMMMMMMMM  
+                    
+     
+`,
+    // Level 4 - God of Thieves (reduced size, 80% less phaze bricks)
+`    
+ R                
+  RRR               
+ RRRRR        F     
+  RRR               
+   R                
+                    
+                    
+                    
+        YYYY        
+       YYYYYY       
+      YYYYYYYY      
+     YYYYYYYYYY     
+      YYYYYYYY      
+       YYYYYY       
+        YYYY        
+                    
+            F       
+                    
+                    
+                    
+               GGG  
+              GGGGG 
+            F GGGGG 
+              GGGGG 
+               GGG  
+                    
+                    
+                    
+     BBB            
+    BBBBB           
+   BBBBBBB          
+  BBBBBBBBB    F    
+   BBBBBBB          
+    BBBBB           
+     BBB            
+                    
+                    
+                    
+                    
+          PPPP      
+         PPPPPP     
+        PPPPPPPP    
+       PPPPPPPPPP   
+    F  PPPPPPPPPP   
+       PPPPPPPPPP   
+        PPPPPPPP    
+         PPPPPP     
+          PPPP      
+                    
+
+`,
+    // Level 5 - Bigfoots Shoe (reduced size, 80% less phaze/fungus bricks)
+    `
+         FFFFFF       
+     FFFFFFFFFF     
+    FFFFFFFFFFFF    
+   FFFFFFFFFFFFF    
+  FFFFFFFFFFFFFFX   
+ FFFFFFFFFFFFFFFXX  
+FFFFFFFFFFFFFFFFXX  
+XXZZXXXZZZXXXZZXX   
+X                 X 
+X                 X 
+X                 X 
+X    FFFFFFFF     X 
+X   FFFFFFFFFF    X 
+X  FFFFFFFFFFFF   X 
+X  FFFFFFFFFFFF   X 
+X  FF        FF   X 
+X  FF   FF   FF   X 
+X  FF        FF   X 
+X  FF        FF   X 
+X  FFFFFFFFFFFF   X 
+X  FFFFFFFFFFFF   X 
+X   FFFFFFFFFF    X 
+X    FFFFFFFF     X 
+X                 X 
+X                 X 
+X                 X 
+XXXXXXXXXXXXXXXXXXX 
+                    
+   FFFFFFFFFFFF     
+  FFFFFFFFFFFF F    
+ FFFFFFFFFFFF  FF   
+FFFFFFFFFFFF   FFF  
+FFFFFFFFFF    FFFF  
+FFFFFFFF     FFFFF  
+FFFFFF      FFFFFF  
+FFFF       FFFFFFF  
+FF    F    FFFFFFFF 
+     FFF   FFFFFFFF 
+    FFFFF  FFFFFFFF 
+   FFFFFFF FFFFFFFF 
+  FFFFFFFFFFFFFF    
+ FFFFFFFFFFFFF      
+FFFFFFFFFFFF
+
+`,
+    // Level 6 - The Judge (reduced size and 80% less fungus/phaze bricks)
+    `
+B
+B
+B
+W
+W
+W
+B
+XXXXXXXXXXXXXXXXXX
+X                 X
+X                 X
+X  BBBBBBBBBBBBB   X
+X  BBBBBBBBBBBBB   X
+X  BBWWWWWWWWWBB   X
+X  BBWWWWWWWWWBB   X
+X  BBWBBBBBBBWBB   X
+X  BBWBWWWWWWBWBB   X
+X  BBWBWXXWWXXBWBB   X
+X  BBWBWXXWWXXBWBB   X
+X  BBWBWWWWWWWBWBB   X
+X  BBWBWWWWWWWBWBB   X
+X  BBWBWWWWWWWBWBB   X           M
+X  BBWBWWWRRWWWBWBB   X
+X  BBWBWWRRRRRWBWBB   X
+X  BBWBWRRRRRRBWBB   X
+X  BBWBWRRRRRRBWBB   X
+X  BBWBWWRRRRRWBWBB   X
+X  BBWBWWWRRWWWBWBB   X
+X  BBWBWWWWWWWBWBB   X
+X  BBWBWWWWWWWBWBB   X
+X  BBWBBBBBBBWBB   X
+X  BBWWWWWWWWWBB   X
+X  BBWWWWWWWWWBB   X
+X  BBBBBBBBBBBBB   X
+X  BBBBBBBBBBBBB   X
+X                 X
+X                 X
+X    PPPPPPP       X
+X  PPPPPPPPP       X
+X PPPPPPPPP        X
+X PPWWPPWPP        X
+X PPWWPPWPP        X
+X PPPPPPPPP        X
+X PPPPPPPPP        Z
+X PPPPZPPPP        X
+X PPPZZZPPP        Z
+X PPPZMPPP        X
+X PPPZZZPPP        Z
+X PPPPZPPPP        X
+X PPPPPPPPP        Z
+X PPPPPPPPP        X
+X PPP   PPPP       Z
+X PP     PPP       X
+X P       PP       Z
+X                 X
+X                 X
+XMXMXMXMXMXMXMXMXMXMX
+
+M
+`,
+    // Level 7 - The Fungus Portal (Final Level - reduced size and 80% less fungus/phaze bricks)
+    `
+    FXFMMRRRRRXXX
+   WWWWWWWWWWW
+FFZMMZFMMMWWWW
+MMZMMZFRRFRWWWWW
+MFZZZZFXXMFWWWWW
+FRZFRZGRZFRZGRZFRZFRZFRZ
+MMMMMMMMMMMMMMMMMMMMMMMMM
+  WWWWZZZWWWW
+   WWWWWWZZZZW
+    FRFRFRGRMMM
+      FRGRFRGRG
+        WWWW
+         ZRZ
+          Z
+         RR
+       RRBBR
+     RRBBBBR
+   RRBBBBBBBR
+   RBPPPPPPPBR
+   RBPCCCCCPBR
+   RBPCYYYPCPBR
+   RBPCYGGPCPBR
+   RBPCYRRPCPBR
+   RBPCYRXPCPBR
+   RBPCYRXPCPBR
+   RBPCYRRPCPBR
+   RBPCYGGPCPBR
+   RBPCYYYPCPBR
+   RBPCCCCCPBR
+   RBPPPPPPPBR
+   RRBBBBBBBR
+     RRBBBBR
+       RRBBR
+         RR
+`,
+  // Level 8
+
+`
+XXXXXXXXXXXXXXXX
+F                X           F
+X 
+X
+X
+X
+FXXXXXXXXXXXXXXF
+X
+X
+X
+X
+X
+
+   
+`,
+    // Level 9 - The Friendly Fungus
+`
+
+              G
+              G
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG   F     F
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+              G
+              G
+              G
+              G
+              G
+              G
+              G
+              G
+              G
+              G
+              G
+              G
+`,
+
+
+    // Level 10 - The Laser Maze
+    `
+    XXXXXXXXXXXX    
+   XMMMMMMMMMMX   
+  XMPPPPPPPPPMX  
+ XMPWWWWWWWWPMX 
+XMPWBBBBBBBWPMX
+XMPWB     BWPMX
+XMPWB XXX BWPMX
+XMPWB X X BWPMX
+XMPWB XXX BWPMX
+XMPWB     BWPMX
+XMPWBBBBBBBWPMX
+ XMPWWWWWWWWPMX 
+  XMPPPPPPPPPMX  
+   XMMMMMMMMMMX   
+    XXXXXXXXXXXX    
+                    
+                    
+      RRRRRRR       
+     ROOOOOOR      
+    ROYYYYYYYOR     
+   ROYGGGGGGYOR    
+  ROYGBBBBBGYOR   
+ ROYGBPPPPPBGYOR  
+ROYGBPWWWWWPBGYOR 
+ROYGBPWXXXWPBGYOR 
+ROYGBPWWWWWPBGYOR 
+ ROYGBPPPPPBGYOR  
+  ROYGBBBBBGYOR   
+   ROYGGGGGGYOR    
+    ROYYYYYYYOR     
+     ROOOOOOR      
+      RRRRRRR       
+                    
+                    
+    F F F F F F    
+   F F F F F F F   
+  F F F F F F F F  
+ F F F F F F F F F 
+F F F F F F F F F F
+               `
+];
+
+    
+   function setupGameBoundaries() {
+    if (!asciiLevels[level - 1]) {
+        console.error(`Level ${level} not found!`);
+        return;
+    }
+
+    const levelStr = asciiLevels[level - 1].trim();
+    const lines = levelStr.split('\n');
+    
+    // Calculate actual content dimensions
+    const contentHeight = lines.length;
+    const contentWidth = Math.max(...lines.map(line => line.length));
+    
+    // Calculate scale factors
+    const verticalScale = gameHeight / contentHeight;
+    const horizontalScale = gameWidth / contentWidth;
+    const scale = Math.min(verticalScale, horizontalScale) * 0.9; // 0.9 for padding
+    
+    // Calculate actual game area
+    const actualHeight = contentHeight * scale;
+    const actualWidth = contentWidth * scale;
+    
+    // Set boundaries
+    leftBound = -actualWidth / 2;
+    rightBound = actualWidth / 2;
+    topBound = actualHeight / 2;
+    bottomBound = -actualHeight / 2;
+    
+    // For debugging
+    console.log(`Level ${level} boundaries:`, {
+        left: leftBound,
+        right: rightBound,
+        top: topBound,
+        bottom: bottomBound,
+        scale: scale
+    });
+}
+
+function showBoundaries() {
+    // Remove old boundary visualizations
+    scene.children.forEach(child => {
+        if (child.userData && child.userData.isBoundary) {
+            scene.remove(child);
+        }
+    });
+    
+    // Create visible boundary markers
+    const boundaryMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+    
+    // Top boundary
+    const topGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(leftBound, topBound, 0),
+        new THREE.Vector3(rightBound, topBound, 0)
+    ]);
+    const topLine = new THREE.Line(topGeometry, boundaryMaterial);
+    topLine.userData.isBoundary = true;
+    scene.add(topLine);
+    
+    // Bottom boundary
+    const bottomGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(leftBound, bottomBound, 0),
+        new THREE.Vector3(rightBound, bottomBound, 0)
+    ]);
+    const bottomLine = new THREE.Line(bottomGeometry, boundaryMaterial);
+    bottomLine.userData.isBoundary = true;
+    scene.add(bottomLine);
+    
+    // Left boundary
+    const leftGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(leftBound, bottomBound, 0),
+        new THREE.Vector3(leftBound, topBound, 0)
+    ]);
+    const leftLine = new THREE.Line(leftGeometry, boundaryMaterial);
+    leftLine.userData.isBoundary = true;
+    scene.add(leftLine);
+    
+    // Right boundary
+    const rightGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(rightBound, bottomBound, 0),
+        new THREE.Vector3(rightBound, topBound, 0)
+    ]);
+    const rightLine = new THREE.Line(rightGeometry, boundaryMaterial);
+    rightLine.userData.isBoundary = true;
+    scene.add(rightLine);
+}
+
+   // Create bricks from ASCII level
+        function createBricks() {
+    // Remove existing bricks
+    bricks.forEach(brick => scene.remove(brick));
+    bricks = [];
+
+    if (!asciiLevels[level - 1]) {
+        console.error(`Level ${level} not found!`);
+        return;
+    }
+
+    const levelStr = asciiLevels[level - 1].trim();
+    const lines = levelStr.split('\n');
+    
+    // Calculate dimensions
+    const contentHeight = lines.length;
+    const contentWidth = Math.max(...lines.map(line => line.length));
+    
+    // Calculate scale
+    const verticalScale = gameHeight / contentHeight;
+    const horizontalScale = gameWidth / contentWidth;
+    const scale = Math.min(verticalScale, horizontalScale) * 0.9;
+    
+    // Calculate actual dimensions
+    const actualHeight = contentHeight * scale;
+    const actualWidth = contentWidth * scale;
+    
+    // Calculate brick size based on scale
+    const brickWidth = scale * 0.95;  // Slightly smaller than scale for gaps
+    const brickHeight = scale * 0.95;
+    
+    for (let row = 0; row < lines.length; row++) {
+        const line = lines[row];
+        for (let col = 0; col < line.length; col++) {
+            const symbol = line[col];
+            const brickData = brickSymbols[symbol];
+
+            if (brickData) {
+                const geometry = new THREE.BoxGeometry(brickWidth, brickHeight, 0.5);
+                const material = new THREE.MeshPhongMaterial({ color: brickData.color });
+                const brick = new THREE.Mesh(geometry, material);
+
+                // Position calculation
+                const x = -actualWidth / 2 + (col * scale) + (brickWidth / 2);
+                const y = actualHeight / 2 - (row * scale) - (brickHeight / 2);
+
+                brick.position.set(x, y, 0);
+                brick.userData = {
+                    points: brickData.points,
+                    indestructible: brickData.indestructible || false,
+                    fungus: brickData.fungus || false,
+                    phaze: brickData.phaze || false
+                };
+
+                scene.add(brick);
+                bricks.push(brick);
             }
         }
     }
-    
-    function spawnPowerup(x, y) {
-        const powerupTypes = [
-            { type: 'multiball', color: 0xff00ff, size: 0.4, emoji: '⚾' },
-            { type: 'expandPaddle', color: 0x00ffff, size: 0.4, emoji: '↔️' },
-            { type: 'slowBall', color: 0xffff00, size: 0.4, emoji: '⏱️' },
-            { type: 'laser', color: 0xff0000, size: 0.4, emoji: '🔫' },
-            { type: 'extraBall', color: 0x00ff00, size: 0.4, emoji: '🎾' },
-            { type: 'bomb', color: 0xff6600, size: 0.5, emoji: '💣' },
-            { type: 'cash', color: 0x33ff33, size: 0.3, emoji: '💰' }
-        ];
+}
         
-        const powerup = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
-        
-        const geometry = new THREE.SphereGeometry(powerup.size, 16, 16);
-        const material = new THREE.MeshPhongMaterial({ 
-            color: powerup.color,
-            emissive: powerup.color,
-            emissiveIntensity: 0.5
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(x, y, 0);
-        mesh.userData = { type: powerup.type, fallSpeed: 0.08 };
-        
-        scene.add(mesh);
-        powerups.push(mesh);
-    }
-    
-    function updatePowerups() {
-        if (gamePaused) return;
-        
-        for (let i = powerups.length - 1; i >= 0; i--) {
-            const powerup = powerups[i];
-            powerup.position.y -= powerup.userData.fallSpeed;
-            
-            // Check paddle collision
-            const paddleWidth = paddleExpanded ? expandedPaddleWidth : normalPaddleWidth;
-            if (powerup.position.y <= paddle.position.y + 0.5 &&
-                powerup.position.y >= paddle.position.y - 0.5 &&
-                Math.abs(powerup.position.x - paddle.position.x) < paddleWidth / 2) {
-                
-                activatePowerup(powerup.userData.type);
-                scene.remove(powerup);
-                powerups.splice(i, 1);
-            } else if (powerup.position.y < bottomBound - 2) {
-                scene.remove(powerup);
-                powerups.splice(i, 1);
-            }
-        }
-    }
-    
-    function activatePowerup(type) {
-        showNotification(type.toUpperCase(), paddle.position.x, paddle.position.y + 2);
-        
-        switch(type) {
-            case 'multiball':
-                for (let i = 0; i < 3; i++) {
-                    setTimeout(() => {
-                        const newBall = balls[0].clone();
+        // Store items configuration
+        const storeItems = [
+            {
+                id: 'multiball',
+                name: 'Multi-Ball',
+                cost: 2,
+                icon: '🔴🔴🔴',
+                effect: function() {
+                    // Add 3 additional balls
+                    for (let i = 0; i < 3; i++) {
+                        const newBall = createBall();
+                        // Spread them out a bit
+                        newBall.position.x = balls[0].position.x + (Math.random() - 0.5) * 2;
+                        newBall.position.y = balls[0].position.y;
                         newBall.direction = new THREE.Vector3(
-                            (Math.random() - 0.5) * 1.5,
-                            Math.random() * 0.5 + 0.5,
-                            0
-                        ).normalize();
-                        balls.push(newBall);
-                        scene.add(newBall);
-                        updateBallCount();
-                    }, i * 200);
-                }
-                break;
-                
-            case 'expandPaddle':
-                if (paddleExpandTimer) clearTimeout(paddleExpandTimer);
-                paddleExpanded = true;
-                paddle.geometry.dispose();
-                paddle.geometry = new THREE.BoxGeometry(expandedPaddleWidth, 0.5, 1);
-                paddleExpandTimer = setTimeout(() => {
-                    paddleExpanded = false;
-                    paddle.geometry.dispose();
-                    paddle.geometry = new THREE.BoxGeometry(normalPaddleWidth, 0.5, 1);
-                }, 10000);
-                break;
-                
-            case 'slowBall':
-                if (slowTimeTimer) clearTimeout(slowTimeTimer);
-                slowTimeActive = true;
-                slowTimeTimer = setTimeout(() => {
-                    slowTimeActive = false;
-                }, 8000);
-                break;
-                
-            case 'laser':
-                if (laserActiveTimer) clearTimeout(laserActiveTimer);
-                laserActive = true;
-                paddle.material.color.setHex(0xff0000);
-                laserActiveTimer = setTimeout(() => {
-                    laserActive = false;
-                    paddle.material.color.setHex(0x00ff00);
-                }, 6000);
-                break;
-                
-            case 'extraBall':
-                const newBall = balls[0].clone();
-                newBall.direction = new THREE.Vector3(
-                    Math.random() - 0.5,
-                    1,
-                    0
-                ).normalize();
-                balls.push(newBall);
-                scene.add(newBall);
-                updateBallCount();
-                break;
-                
-            case 'bomb':
-                activateBomb();
-                break;
-                
-            case 'cash':
-                cash += 2;
-                updateCash();
-                break;
-        }
-    }
-    
-    function activateBomb() {
-        // Create massive explosion effect
-        const explosionRadius = 6;
-        const explosionGeometry = new THREE.SphereGeometry(0.1, 16, 16);
-        const explosionMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0xff6600,
-            transparent: true,
-            opacity: 0.8
-        });
-        const explosion = new THREE.Mesh(explosionGeometry, explosionMaterial);
-        
-        // Place explosion in middle of screen
-        explosion.position.set(0, (topBound + bottomBound) / 2, 0);
-        scene.add(explosion);
-        bombs.push(explosion);
-        
-        // Animate explosion
-        let scale = 1;
-        const expandInterval = setInterval(() => {
-            if (gamePaused) return;
-            
-            scale += 1;
-            explosion.scale.set(scale, scale, scale);
-            explosion.material.opacity -= 0.05;
-            
-            if (scale >= 12) {
-                clearInterval(expandInterval);
-                scene.remove(explosion);
-                const index = bombs.indexOf(explosion);
-                if (index > -1) bombs.splice(index, 1);
-            }
-        }, 50);
-        
-        // Destroy bricks in radius
-        setTimeout(() => {
-            for (let i = bricks.length - 1; i >= 0; i--) {
-                const brick = bricks[i];
-                if (brick.userData.type === 'metal') continue;
-                
-                const distance = explosion.position.distanceTo(brick.position);
-                if (distance < explosionRadius) {
-                    let points = 10;
-                    if (brick.userData.type === 'tough') points = 25;
-                    score += points;
-                    
-                    scene.remove(brick);
-                    bricks.splice(i, 1);
-                }
-            }
-            updateScore();
-        }, 300);
-    }
-    
-    function clearBombs() {
-        bombs.forEach(bomb => scene.remove(bomb));
-        bombs = [];
-    }
-    
-    function updateLasers() {
-        if (gamePaused) return;
-        
-        // Auto-fire lasers if active
-        if (laserActive && Math.random() < 0.15) {
-            fireLaser();
-        }
-        
-        // Move lasers
-        for (let i = lasers.length - 1; i >= 0; i--) {
-            const laser = lasers[i];
-            laser.position.y += 0.3;
-            
-            // Check brick collisions
-            for (let j = bricks.length - 1; j >= 0; j--) {
-                const brick = bricks[j];
-                if (brick.userData.type === 'metal') continue;
-                
-                const brickBox = new THREE.Box3().setFromObject(brick);
-                const laserBox = new THREE.Box3().setFromObject(laser);
-                
-                if (brickBox.intersectsBox(laserBox)) {
-                    brick.userData.hits--;
-                    
-                    if (brick.userData.hits <= 0) {
-                        let points = 10;
-                        if (brick.userData.type === 'tough') points = 25;
-                        if (brick.position.y > topBound - 10) points *= 3;
-                        else if (brick.position.y > topBound - 18) points *= 2;
-                        
-                        score += points;
-                        updateScore();
-                        
-                        scene.remove(brick);
-                        bricks.splice(j, 1);
-                        
-                        if (Math.random() < 0.3) {
-                            spawnPowerup(brick.position.x, brick.position.y);
-                        }
-                    }
-                    
-                    scene.remove(laser);
-                    lasers.splice(i, 1);
-                    break;
-                }
-            }
-            
-            // Remove if off screen
-            if (laser.position.y > topBound + 2) {
-                scene.remove(laser);
-                lasers.splice(i, 1);
-            }
-        }
-    }
-    
-    function fireLaser() {
-        const laserGeometry = new THREE.BoxGeometry(0.2, 1, 0.2);
-        const laserMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-        const laser = new THREE.Mesh(laserGeometry, laserMaterial);
-        laser.position.set(paddle.position.x, paddle.position.y + 1, 0);
-        
-        scene.add(laser);
-        lasers.push(laser);
-    }
-    
-    function clearLasers() {
-        lasers.forEach(laser => scene.remove(laser));
-        lasers = [];
-    }
-    
-    function buyPowerup(type, cost) {
-        if (cash < cost) {
-            showNotification('Not enough cash!', 0, bottomBound + 3);
-            return;
-        }
-        
-        cash -= cost;
-        updateCash();
-        
-        switch(type) {
-            case 'multiball':
-                activatePowerup('multiball');
-                break;
-            case 'expand':
-                activatePowerup('expandPaddle');
-                break;
-            case 'laser':
-                activatePowerup('laser');
-                break;
-            case 'bomb':
-                activateBomb();
-                break;
-            case 'slowtime':
-                activatePowerup('slowBall');
-                break;
-            case 'paddleMultiball':
-                if (paddleMultiballTimer) clearInterval(paddleMultiballTimer);
-                remainingPaddleBalls = 15;
-                paddleMultiballTimer = setInterval(() => {
-                    if (gamePaused) return;
-                    if (remainingPaddleBalls > 0) {
-                        const newBall = balls[0].clone();
-                        newBall.position.y = paddle.position.y + 1;
-                        newBall.position.x = paddle.position.x + (Math.random() - 0.5) * 2;
-                        newBall.direction = new THREE.Vector3(
-                            (Math.random() - 0.5) * 0.8,
+                            (Math.random() - 0.5) * 2,
                             1,
                             0
                         ).normalize();
                         balls.push(newBall);
                         scene.add(newBall);
-                        remainingPaddleBalls--;
-                        updateBallCount();
-                    } else {
-                        clearInterval(paddleMultiballTimer);
-                        paddleMultiballTimer = null;
                     }
-                }, 1000);
-                break;
-        }
-    }
-    
-    function showNotification(text, x, y) {
-        const notification = document.createElement('div');
-        notification.className = 'notification';
-        notification.textContent = text;
-        
-        const screenPos = toScreenPosition(x, y);
-        notification.style.left = screenPos.x + 'px';
-        notification.style.top = screenPos.y + 'px';
-        
-        document.getElementById('gameContainer').appendChild(notification);
-        
-        setTimeout(() => {
-            notification.remove();
-        }, 2000);
-    }
-    
-    function toScreenPosition(x, y) {
-        const vector = new THREE.Vector3(x, y, 0);
-        vector.project(camera);
-        
-        const container = document.getElementById('gameContainer');
-        const widthHalf = container.clientWidth / 2;
-        const heightHalf = container.clientHeight / 2;
-        
-        return {
-            x: (vector.x * widthHalf) + widthHalf,
-            y: -(vector.y * heightHalf) + heightHalf
-        };
-    }
-    
-    function updateScore() {
-        document.getElementById('score').textContent = `Score: ${score}`;
-    }
-    
-    function updateCash() {
-        document.getElementById('cash').textContent = `Cash: $${cash}`;
-        
-        // Update store button states
-        updateStoreButtons();
-    }
-    
-    function updateBallCount() {
-        document.getElementById('ballCount').textContent = `Balls: ${balls.length}`;
-    }
-    
-    function updateStoreButtons() {
-        const items = [
-            { id: 'buyMultiball', cost: 2 },
-            { id: 'buyExpandPaddle', cost: 1 },
-            { id: 'buyLaser', cost: 2 },
-            { id: 'buyBomb', cost: 3 },
-            { id: 'buySlowTime', cost: 1 },
-            { id: 'buyPaddleMultiball', cost: 4 }
+                    showNotification('+3 Balls!', '#4CAF50');
+                }
+            },
+            {
+                id: 'widerPaddle',
+                name: 'Wider Paddle',
+                cost: 3,
+                icon: '📏',
+                effect: function() {
+                    // Increase paddle width
+                    paddle.scale.x = Math.min(paddle.scale.x * 1.5, 3);
+                    showNotification('Paddle Widened!', '#2196F3');
+                }
+            },
+            {
+                id: 'fasterBall',
+                name: 'Faster Ball',
+                cost: 1,
+                icon: '⚡',
+                effect: function() {
+                    ballSpeed *= 1.3;
+                    showNotification('Speed Boost!', '#FF9800');
+                }
+            },
+            {
+                id: 'laser',
+                name: 'Laser Gun',
+                cost: 4,
+                icon: '🔫',
+                effect: function() {
+                    activateLaser();
+                    showNotification('Laser Activated!', '#F44336');
+                }
+            },
+            {
+                id: 'bomb',
+                name: 'Bomb',
+                cost: 5,
+                icon: '💣',
+                effect: function() {
+                    addBombToQueue();
+                    showNotification('Bomb Added!', '#9C27B0');
+                }
+            },
+            {
+                id: 'paddleMultiball',
+                name: 'Paddle Gun',
+                cost: 6,
+                icon: '🔵',
+                effect: function() {
+                    activatePaddleMultiball();
+                    showNotification('Paddle Gun Activated!', '#00BCD4');
+                }
+            }
         ];
         
-        items.forEach(item => {
-            const button = document.getElementById(item.id);
-            if (cash < item.cost) {
-                button.classList.add('store-item-disabled');
-            } else {
-                button.classList.remove('store-item-disabled');
-            }
-        });
-    }
-    
-    function levelComplete() {
-        showNotification('LEVEL COMPLETE!', 0, topBound / 2);
-        cash += 10;
-        updateCash();
+        // Initialize store UI
+        function initStore() {
+            const storeContainer = document.getElementById('storeContainer');
+            storeContainer.innerHTML = '';
+            
+            storeItems.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'store-item';
+                itemDiv.id = `store-${item.id}`;
+                
+                itemDiv.innerHTML = `
+                    <div class="item-icon">${item.icon}</div>
+                    <div class="item-cost">$${item.cost}</div>
+                    <div class="item-name">${item.name}</div>
+                `;
+                
+                itemDiv.addEventListener('click', () => purchaseItem(item));
+                storeContainer.appendChild(itemDiv);
+            });
+            
+            updateStoreUI();
+        }
         
-        setTimeout(() => {
-            if (level < 5) {
-                level++;
-                document.getElementById('levelSelect').value = level;
-                createBricks();
-                showNotification(`LEVEL ${level}`, 0, topBound / 2);
+        // Update store item availability based on cash
+        function updateStoreUI() {
+            storeItems.forEach(item => {
+                const itemDiv = document.getElementById(`store-${item.id}`);
+                if (itemDiv) {
+                    if (cash >= item.cost) {
+                        itemDiv.classList.remove('store-item-disabled');
+                    } else {
+                        itemDiv.classList.add('store-item-disabled');
+                    }
+                }
+            });
+        }
+        
+        // Purchase item from store
+        function purchaseItem(item) {
+            if (cash >= item.cost) {
+                cash -= item.cost;
+                updateCash();
+                updateStoreUI();
+                item.effect();
             } else {
-                showNotification('YOU WIN!', 0, topBound / 2);
-                setTimeout(() => {
-                    gameOver();
-                }, 2000);
+                showNotification('Not enough cash!', '#F44336');
             }
-        }, 2000);
-    }
+        }
+        
+        // Show notification
+        function showNotification(text, color) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = text;
+            notification.style.color = color;
+            notification.style.left = '50%';
+            notification.style.top = '30%';
+            notification.style.transform = 'translateX(-50%)';
+            
+            document.getElementById('gameContainer').appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 1500);
+        }
+        
+        // Laser functionality
+        function activateLaser() {
+            if (laserTimer) {
+                clearInterval(laserTimer);
+            }
+            
+            activeLasers = 10; // 10 shots
+            
+            // Visual feedback on paddle
+            paddle.material.color.setHex(0xff0000);
+            
+            laserTimer = setInterval(() => {
+                if (gamePaused) return;
+                
+                if (activeLasers > 0) {
+                    fireLaser();
+                    activeLasers--;
+                } else {
+                    clearInterval(laserTimer);
+                    laserTimer = null;
+                    paddle.material.color.setHex(0x0077ff);
+                }
+            }, 300); // Fire every 300ms
+        }
+        
+        function fireLaser() {
+            const laserGeometry = new THREE.BoxGeometry(0.1, 2, 0.1);
+            const laserMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const laser = new THREE.Mesh(laserGeometry, laserMaterial);
+            
+            laser.position.set(paddle.position.x, paddle.position.y + 1, 0);
+            laser.userData = { speed: 0.5 };
+            
+            scene.add(laser);
+            lasers.push(laser);
+        }
+        
+        function updateLasers() {
+            if (gamePaused) return;
+            
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                const laser = lasers[i];
+                laser.position.y += laser.userData.speed;
+                
+                // Check collision with bricks
+                for (let j = bricks.length - 1; j >= 0; j--) {
+                    const brick = bricks[j];
+                    if (checkCollision(laser, brick)) {
+                        if (!brick.userData.indestructible) {
+                            handleBrickDestruction(brick, j);
+                        }
+                        scene.remove(laser);
+                        lasers.splice(i, 1);
+                        break;
+                    }
+                }
+                
+                // Remove if off screen
+                if (laser.position.y > topBound + 5) {
+                    scene.remove(laser);
+                    lasers.splice(i, 1);
+                }
+            }
+        }
+        
+        function clearLasers() {
+            lasers.forEach(laser => scene.remove(laser));
+            lasers = [];
+            if (laserTimer) {
+                clearInterval(laserTimer);
+                laserTimer = null;
+            }
+            activeLasers = 0;
+            paddle.material.color.setHex(0x0077ff);
+        }
+        
+        // Paddle multiball functionality
+        function activatePaddleMultiball() {
+            if (paddleMultiballTimer) {
+                clearInterval(paddleMultiballTimer);
+            }
+            
+            remainingPaddleBalls = 20; // 20 balls
+            
+            // Visual feedback on paddle
+            paddle.material.emissive.setHex(0x0000ff);
+            
+            paddleMultiballTimer = setInterval(() => {
+                if (gamePaused) return;
+                
+                if (remainingPaddleBalls > 0) {
+                    firePaddleBall();
+                    remainingPaddleBalls--;
+                } else {
+                    clearInterval(paddleMultiballTimer);
+                    paddleMultiballTimer = null;
+                    paddle.material.emissive.setHex(0x000000);
+                }
+            }, 150); // Fire every 150ms
+        }
+        
+        function firePaddleBall() {
+            const newBall = createBall();
+            newBall.position.set(paddle.position.x, paddle.position.y + 0.5, 0);
+            
+            // Slight spread in angle
+            const angle = (Math.random() - 0.5) * 0.5; // ±0.25 radians
+            newBall.direction = new THREE.Vector3(Math.sin(angle), Math.cos(angle), 0).normalize();
+            
+            balls.push(newBall);
+            scene.add(newBall);
+        }
+        
+        // Bomb functionality
+        function addBombToQueue() {
+            totalBombsCollected++;
+            bombQueue.push({
+                id: totalBombsCollected,
+                armed: false
+            });
+            
+            // If no active bomb, arm the first one
+            if (!activeBomb && bombQueue.length > 0) {
+                armNextBomb();
+            }
+        }
+        
+        function armNextBomb() {
+            if (bombQueue.length === 0) {
+                activeBomb = null;
+                return;
+            }
+            
+            activeBomb = bombQueue.shift();
+            activeBomb.armed = true;
+            
+            // Visual feedback
+            showNotification('Bomb Armed! Press SPACE to detonate', '#9C27B0');
+        }
+        
+        function detonateBomb() {
+            if (!activeBomb || !activeBomb.armed) return;
+            
+            // Find nearest brick to any ball
+            let nearestBrick = null;
+            let minDistance = Infinity;
+            
+            balls.forEach(ball => {
+                bricks.forEach(brick => {
+                    const distance = ball.position.distanceTo(brick.position);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestBrick = brick;
+                    }
+                });
+            });
+            
+            if (nearestBrick) {
+                const explosionCenter = nearestBrick.position.clone();
+                const explosionRadius = 5; // Adjust as needed
+                
+                // Create explosion effect
+                createExplosionEffect(explosionCenter);
+                
+                // Destroy bricks within radius
+                for (let i = bricks.length - 1; i >= 0; i--) {
+                    const brick = bricks[i];
+                    const distance = brick.position.distanceTo(explosionCenter);
+                    
+                    if (distance <= explosionRadius && !brick.userData.indestructible) {
+                        handleBrickDestruction(brick, i);
+                        totalBricksDestroyedByBombs++;
+                    }
+                }
+                
+                showNotification(`${totalBricksDestroyedByBombs} bricks destroyed!`, '#FF5722');
+            }
+            
+            activeBomb = null;
+            armNextBomb();
+        }
+        
+        function createExplosionEffect(center) {
+            const explosionGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+            const explosionMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff6600,
+                transparent: true,
+                opacity: 0.8
+            });
+            const explosion = new THREE.Mesh(explosionGeometry, explosionMaterial);
+            explosion.position.copy(center);
+            scene.add(explosion);
+            
+            // Animate explosion
+            let scale = 1;
+            const expandInterval = setInterval(() => {
+                if (gamePaused) return;
+                
+                scale += 0.5;
+                explosion.scale.set(scale, scale, scale);
+                explosion.material.opacity -= 0.05;
+                
+                if (explosion.material.opacity <= 0) {
+                    clearInterval(expandInterval);
+                    scene.remove(explosion);
+                }
+            }, 30);
+        }
+        
+        function clearBombs() {
+            bombQueue = [];
+            activeBomb = null;
+        }
+        
+        // Initialize Three.js
+        function init() {
+            // Set up scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000033);
+            
+            // Set up camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 20;
+            
+            // Set up renderer
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('gameCanvas'),
+                antialias: true 
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            // Add lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(0, 10, 10);
+            scene.add(directionalLight);
+            
+            // Setup game boundaries first
+            setupGameBoundaries();
+            
+            // Create paddle
+            const paddleGeometry = new THREE.BoxGeometry(3, 0.3, 0.5);
+            const paddleMaterial = new THREE.MeshPhongMaterial({ color: 0x0077ff });
+            paddle = new THREE.Mesh(paddleGeometry, paddleMaterial);
+            paddle.position.y = bottomBound + 0.5;
+            scene.add(paddle);
+            
+            // Expose paddle globally for multiplayer
+            window.paddle = paddle;
+            window.scene = scene;
+            
+            // Create ball
+            const ballGeometry = new THREE.SphereGeometry(0.4, 16, 16);
+            const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+            ball = new THREE.Mesh(ballGeometry, ballMaterial);
+            ball.position.y = bottomBound + 0.9;
+            ball.direction = new THREE.Vector3(0.5, 1, 0).normalize();
+            scene.add(ball);
+            balls.push(ball);
+            
+            // Create bricks after boundaries are set
+            createBricks();
+            
+            // Expose bricks globally for multiplayer
+            window.bricks = bricks;
+            
+            // Initialize store
+            initStore();
+            
+            // Add event listeners
+            document.addEventListener('keydown', (e) => {
+                keysPressed[e.key.toLowerCase()] = true;
+                
+                // Space bar to detonate bomb
+                if (e.key === ' ' && activeBomb && activeBomb.armed) {
+                    detonateBomb();
+                }
+            });
+            
+            document.addEventListener('keyup', (e) => {
+                keysPressed[e.key.toLowerCase()] = false;
+            });
+            
+            renderer.domElement.addEventListener('touchstart', handleTouchStart);
+            renderer.domElement.addEventListener('touchmove', handleTouchMove);
+            
+            // Launch button
+            launchButton = document.getElementById('launchButton');
+            
+            // Mouse/touch event for launching
+            let isHoldingLaunch = false;
+            let launchStartTime = 0;
+            
+            launchButton.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                isHoldingLaunch = true;
+                launchStartTime = Date.now();
+                updateLaunchButton(0);
+            });
+            
+            launchButton.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                isHoldingLaunch = true;
+                launchStartTime = Date.now();
+                updateLaunchButton(0);
+            });
+            
+            const releaseLaunch = () => {
+                if (isHoldingLaunch && !ballLaunched) {
+                    const holdDuration = Date.now() - launchStartTime;
+                    const power = Math.min(holdDuration / 1000, 1); // Max 1 second hold
+                    launchBall(power);
+                    launchButton.style.display = 'none';
+                }
+                isHoldingLaunch = false;
+            };
+            
+            document.addEventListener('mouseup', releaseLaunch);
+            document.addEventListener('touchend', releaseLaunch);
+            
+            // Update button while holding
+            setInterval(() => {
+                if (isHoldingLaunch && !ballLaunched) {
+                    const holdDuration = Date.now() - launchStartTime;
+                    const power = Math.min(holdDuration / 1000, 1);
+                    updateLaunchButton(power);
+                }
+            }, 50);
+            
+            // Level selector
+            document.getElementById('levelSelect').addEventListener('change', (e) => {
+                level = parseInt(e.target.value);
+                restartGame();
+            });
+            
+            // Start button
+            document.getElementById('startButton').addEventListener('click', () => {
+                level++;
+                if (level > asciiLevels.length) level = 1;
+                document.getElementById('levelSelect').value = level;
+                restartGame();
+            });
+            
+            // Pause button and resume functionality
+            document.getElementById('pauseButton').addEventListener('click', togglePause);
+            document.getElementById('resumeButton').addEventListener('click', resumeGame);
+            
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+            
+            // Initialize audio context for sounds
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                initSounds();
+            } catch (e) {
+                console.log('Web Audio API not supported');
+            }
+            
+            // Start animation
+            animate();
+        }
+        
+        // Sound initialization
+        function initSounds() {
+            // Fungus spread sound
+            fungusSpreadSound = function() {
+                if (!audioContext) return;
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 150;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.3);
+            };
+            
+            // Brick break sound
+            brickBreakSound = function() {
+                if (!audioContext) return;
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 500;
+                oscillator.type = 'square';
+                
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.1);
+            };
+            
+            // Expose sounds globally
+            window.fungusSpreadSound = fungusSpreadSound;
+            window.brickBreakSound = brickBreakSound;
+        }
+        
+        function updateLaunchButton(power) {
+            const percentage = Math.round(power * 100);
+            launchButton.textContent = `Launch Ball (${percentage}%)`;
+            launchButton.style.backgroundColor = `hsl(${120 * power}, 70%, 50%)`;
+        }
+        
+        function createBall() {
+            const ballGeometry = new THREE.SphereGeometry(0.4, 16, 16);
+            const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+            const newBall = new THREE.Mesh(ballGeometry, ballMaterial);
+            newBall.direction = new THREE.Vector3(0.5, 1, 0).normalize();
+            return newBall;
+        }
+        
+        function launchBall(power = 0.5) {
+            if (!ballLaunched) {
+                ballLaunched = true;
+                // Set initial direction with power-based angle
+                const angle = (power - 0.5) * Math.PI / 3; // -60° to +60°
+                balls[0].direction = new THREE.Vector3(Math.sin(angle), Math.cos(angle), 0).normalize();
+            }
+        }
+        
+        function handleTouchStart(e) {
+            e.preventDefault();
+            touchX = e.touches[0].clientX;
+        }
+        
+        function handleTouchMove(e) {
+            e.preventDefault();
+            const deltaX = e.touches[0].clientX - touchX;
+            paddle.position.x += deltaX * 0.02;
+            
+            // Keep paddle within bounds
+            paddle.position.x = Math.max(leftBound + 1.5, Math.min(rightBound - 1.5, paddle.position.x));
+            
+            touchX = e.touches[0].clientX;
+        }
+        
+        function movePaddle() {
+            if (gamePaused) return;
+            
+            // Keyboard controls
+            if (keysPressed['a'] || keysPressed['arrowleft']) {
+                paddle.position.x -= paddleSpeed;
+            }
+            if (keysPressed['d'] || keysPressed['arrowright']) {
+                paddle.position.x += paddleSpeed;
+            }
+            
+            // Keep paddle within bounds
+            paddle.position.x = Math.max(leftBound + 1.5, Math.min(rightBound - 1.5, paddle.position.x));
+            
+            // Move ball with paddle before launch
+            if (!ballLaunched && balls[0]) {
+                balls[0].position.x = paddle.position.x;
+            }
+        }
+        
+        function moveBall() {
+            if (gamePaused) return;
+            
+            if (!ballLaunched) return;
+            
+            for (let i = balls.length - 1; i >= 0; i--) {
+                const ball = balls[i];
+                
+                // Move ball
+                ball.position.x += ball.direction.x * ballSpeed;
+                ball.position.y += ball.direction.y * ballSpeed;
+                
+                // Ball collision with walls
+                if (ball.position.x - 0.4 <= leftBound || ball.position.x + 0.4 >= rightBound) {
+                    ball.direction.x *= -1;
+                    ball.position.x = Math.max(leftBound + 0.4, Math.min(rightBound - 0.4, ball.position.x));
+                }
+                
+                if (ball.position.y + 0.4 >= topBound) {
+                    ball.direction.y *= -1;
+                    ball.position.y = topBound - 0.4;
+                }
+                
+                // Ball collision with paddle
+                if (checkCollision(ball, paddle) && ball.direction.y < 0) {
+                    ball.direction.y *= -1;
+                    
+                    // Add spin based on where ball hits paddle
+                    const hitPosition = (ball.position.x - paddle.position.x) / 1.5;
+                    ball.direction.x += hitPosition * 0.5;
+                    ball.direction.normalize();
+                    
+                    ball.position.y = paddle.position.y + 0.55;
+                }
+                
+                // Ball collision with bricks
+                for (let j = bricks.length - 1; j >= 0; j--) {
+                    const brick = bricks[j];
+                    if (checkCollision(ball, brick)) {
+                        // Handle phaze bricks (ghost through once)
+                        if (brick.userData.phaze && !brick.userData.phazed) {
+                            brick.userData.phazed = true;
+                            brick.material.opacity = 0.3;
+                            brick.material.transparent = true;
+                            continue;
+                        }
+                        
+                        if (!brick.userData.indestructible) {
+                            handleBrickDestruction(brick, j);
+                        }
+                        
+                        // Bounce ball
+                        const ballCenter = ball.position;
+                        const brickCenter = brick.position;
+                        const dx = ballCenter.x - brickCenter.x;
+                        const dy = ballCenter.y - brickCenter.y;
+                        
+                        if (Math.abs(dx) > Math.abs(dy)) {
+                            ball.direction.x *= -1;
+                        } else {
+                            ball.direction.y *= -1;
+                        }
+                        
+                        break;
+                    }
+                }
+                
+                // Remove ball if it falls off screen
+                if (ball.position.y < bottomBound - 1) {
+                    scene.remove(ball);
+                    balls.splice(i, 1);
+                    
+                    // Game over if no balls left
+                    if (balls.length === 0) {
+                        gameOver();
+                    }
+                }
+            }
+        }
+        
+        function handleBrickDestruction(brick, index) {
+            // Report to multiplayer system
+            if (window.multiplayer && window.multiplayer.reportBrickBreak) {
+                window.multiplayer.reportBrickBreak(index);
+            }
+            
+            // Play sound
+            if (brickBreakSound) {
+                brickBreakSound();
+            }
+            
+            // Handle fungus bricks
+            if (brick.userData.fungus) {
+                spreadFungus(brick.position);
+                if (fungusSpreadSound) {
+                    fungusSpreadSound();
+                }
+            }
+            
+            // Update score and cash
+            score += brick.userData.points;
+            cash += Math.floor(brick.userData.points / 50);
+            updateScore();
+            updateCash();
+            
+            // Create particle effect
+            createParticleEffect(brick.position, brick.material.color);
+            
+            // Remove brick
+            scene.remove(brick);
+            bricks.splice(index, 1);
+            
+            // Random powerup drop (10% chance)
+            if (Math.random() < 0.1) {
+                createPowerup(brick.position);
+            }
+            
+            // Check for level completion
+            const remainingBricks = bricks.filter(b => !b.userData.indestructible).length;
+            if (remainingBricks === 0) {
+                levelComplete();
+            }
+        }
+        
+        function spreadFungus(position) {
+            const spreadRadius = 2;
+            
+            bricks.forEach((brick, index) => {
+                if (brick.userData.indestructible || brick.userData.fungus) return;
+                
+                const distance = brick.position.distanceTo(position);
+                if (distance < spreadRadius && Math.random() < 0.5) {
+                    // Convert to fungus brick
+                    brick.userData.fungus = true;
+                    brick.userData.points = 150;
+                    brick.material.color.setHex(0x33cc33);
+                }
+            });
+        }
+        
+        function createParticleEffect(position, color) {
+            for (let i = 0; i < 8; i++) {
+                const particleGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+                const particleMaterial = new THREE.MeshBasicMaterial({ color: color });
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                
+                particle.position.copy(position);
+                particle.velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.2,
+                    (Math.random() - 0.5) * 0.2,
+                    0
+                );
+                
+                scene.add(particle);
+                
+                // Animate particle
+                const particleInterval = setInterval(() => {
+                    if (gamePaused) return;
+                    
+                    particle.position.add(particle.velocity);
+                    particle.velocity.y -= 0.01; // Gravity
+                    particle.material.opacity -= 0.02;
+                    
+                    if (particle.material.opacity <= 0) {
+                        clearInterval(particleInterval);
+                        scene.remove(particle);
+                    }
+                }, 16);
+                
+                particle.material.transparent = true;
+            }
+        }
+        
+        function createPowerup(position) {
+            const powerupTypes = [
+                { color: 0x00ff00, type: 'multiball' },
+                { color: 0xff00ff, type: 'widerPaddle' },
+                { color: 0xffff00, type: 'slowerBall' }
+            ];
+            
+            const powerupType = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
+            const powerupGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+            const powerupMaterial = new THREE.MeshPhongMaterial({ color: powerupType.color });
+            const powerup = new THREE.Mesh(powerupGeometry, powerupMaterial);
+            
+            powerup.position.copy(position);
+            powerup.userData = { type: powerupType.type, velocity: -0.05 };
+            
+            scene.add(powerup);
+            powerups.push(powerup);
+        }
+        
+        function checkCollision(obj1, obj2) {
+            const box1 = new THREE.Box3().setFromObject(obj1);
+            const box2 = new THREE.Box3().setFromObject(obj2);
+            return box1.intersectsBox(box2);
+        }
+        
+        function updateScore() {
+            document.getElementById('score').textContent = `Score: ${score}`;
+        }
+        
+        function updateCash() {
+            document.getElementById('cash').textContent = `Cash: $${cash}`;
+            updateStoreUI();
+        }
+        
+        // Expose update functions globally
+        window.updateScore = updateScore;
+        window.updateCash = updateCash;
+        window.score = score;
+        window.cash = cash;
+        
+        function levelComplete() {
+            gameActive = false;
+            document.getElementById('gameOver').textContent = 'Level Complete!';
+            document.getElementById('finalScore').textContent = `Score: ${score}`;
+            document.getElementById('gameOver').style.display = 'block';
+            document.getElementById('startButton').style.display = 'block';
+            
+            // Keep the launch button hidden during level complete
+            if (document.getElementById('launchButton')) {
+                document.getElementById('launchButton').style.display = 'none';
+            }
+        }
     
     function gameOver() {
         gameActive = false;
@@ -1344,72 +2048,130 @@
         document.getElementById('startButton').style.display = 'block';
         document.getElementById('launchButton').style.display = 'none';
         
+        // Clear paddle multiball timer
         if (paddleMultiballTimer) {
             clearInterval(paddleMultiballTimer);
             paddleMultiballTimer = null;
             remainingPaddleBalls = 0;
         }
         
+        // Clear all bombs
         clearBombs();
-        clearLasers();
     }
     
     function restartGame() {
+        // Reset game state
         gameActive = true;
         gamePaused = false;
         paddle.position.x = 0;
         
+        // Update pause button to show "Pause"
         const pauseButton = document.getElementById('pauseButton');
         pauseButton.innerHTML = '<span class="pause-icon"></span>Pause';
+        
+        // Hide pause overlay
         document.getElementById('pauseOverlay').style.display = 'none';
         
-        // Reset balls
+        // Reset all balls and powerups
         balls.forEach((b, index) => {
-            if (index > 0) scene.remove(b);
+            if (index > 0) {
+                scene.remove(b);
+            }
         });
         balls = [balls[0]];
         
         powerups.forEach(p => scene.remove(p));
         powerups = [];
         
+        // Clear any lasers
         clearLasers();
+        
+        // Clear all bombs
         clearBombs();
         
+        // Reset main ball position
         balls[0].position.y = bottomBound + 0.9;
         balls[0].position.x = paddle.position.x;
         ballLaunched = false;
         
+        // Reset level and ball speed
         level = parseInt(document.getElementById('levelSelect').value);
-        ballSpeed = 0.09;
+        ballSpeed = 0.08;
         
+        // First setup game boundaries for the new level
         setupGameBoundaries();
+        
+        // Then create bricks after boundaries are established
         createBricks();
         
+        // Reset score and cash
         score = 0;
         cash = 3;
         updateScore();
         updateCash();
-        updateBallCount();
         
+        // Update UI
         document.getElementById('gameOver').style.display = 'none';
         document.getElementById('startButton').style.display = 'none';
         document.getElementById('launchButton').style.display = 'block';
         
+        // Restart animation loop if it was stopped
         if (!animationFrameId) {
             animate();
         }
     }
     
+// Add this function to your game code (outside the multiplayer object)
+function createTeamBreakEffect(position) {
+  // Create a visual indicator at the position of the broken brick
+  const effectGeometry = new THREE.SphereGeometry(0.6, 16, 16);
+  const effectMaterial = new THREE.MeshBasicMaterial({ 
+    color: 0x00ffff, 
+    transparent: true,
+    opacity: 0.7 
+  });
+  const effect = new THREE.Mesh(effectGeometry, effectMaterial);
+  effect.position.copy(position);
+  
+  // Add to scene
+  window.scene.add(effect);
+  
+  // Animate the effect
+  let scale = 1;
+  const expandInterval = setInterval(() => {
+    if (window.gamePaused) return;
+    
+    scale += 0.1;
+    effect.scale.set(scale, scale, scale);
+    effect.material.opacity -= 0.05;
+    
+    if (effect.material.opacity <= 0) {
+      clearInterval(expandInterval);
+      window.scene.remove(effect);
+    }
+  }, 30);
+}
+
+    // Pause system functions
     function togglePause() {
         gamePaused = !gamePaused;
         const pauseButton = document.getElementById('pauseButton');
         const pauseOverlay = document.getElementById('pauseOverlay');
         
         if (gamePaused) {
+            // Change button to show "Resume"
             pauseButton.innerHTML = '<span class="play-icon"></span>Resume';
+            
+            // Show pause overlay
             pauseOverlay.style.display = 'flex';
+            
+            // If any active timers or intervals, they should check gamePaused status
+            // No need to explicitly pause animation as the animate function checks gamePaused
         } else {
+            // Change button back to "Pause"
             pauseButton.innerHTML = '<span class="pause-icon"></span>Pause';
+            
+            // Hide pause overlay
             pauseOverlay.style.display = 'none';
         }
     }
@@ -1421,20 +2183,115 @@
     }
     
     function animate() {
-        animationFrameId = requestAnimationFrame(animate);
+    animationFrameId = requestAnimationFrame(animate);
+    
+    if (gameActive) {
+        // Only update game state if not paused
+        if (!gamePaused) {
+            movePaddle();
+            moveBall();
+            updateLasers();
+            detectAndFixStuckBalls(); // Add this line to check for stuck balls
+        }
         
-        if (gameActive) {
-            if (!gamePaused) {
-                movePaddle();
-                moveBall();
-                updatePowerups();
-                updateLasers();
+        // Always render the scene, even when paused
+        renderer.render(scene, camera);
+    }
+}
+    
+function detectAndFixStuckBalls() {
+    // Skip if game is paused
+    if (gamePaused) return;
+    
+    // Define the "stuck zone" near the top boundary
+    const ballRadius = 0.4; // Make sure this matches your ball radius
+    const stuckZoneThreshold = 0.1; // How close to the top boundary to check
+    const stuckZone = topBound - ballRadius - stuckZoneThreshold;
+    
+    // Keep track of time a ball might be stuck
+    const currentTime = Date.now();
+    
+    // Check each ball
+    for (let i = 0; i < balls.length; i++) {
+        const ball = balls[i];
+        
+        // If ball is very close to the top boundary
+        if (ball.position.y > stuckZone) {
+            // Initialize stuck detection data if not present
+            if (!ball.userData.stuckData) {
+                ball.userData.stuckData = {
+                    lastY: ball.position.y,
+                    lastChangeTime: currentTime,
+                    possiblyStuck: false
+                };
             }
             
-            renderer.render(scene, camera);
+            // Check if the ball has moved vertically
+            const verticalMovement = Math.abs(ball.position.y - ball.userData.stuckData.lastY);
+            
+            // If the ball hasn't moved significantly in vertical direction
+            if (verticalMovement < 0.01) {
+                // If we haven't marked it as possibly stuck yet
+                if (!ball.userData.stuckData.possiblyStuck) {
+                    ball.userData.stuckData.possiblyStuck = true;
+                    ball.userData.stuckData.stuckStartTime = currentTime;
+                } 
+                // If it's been possibly stuck for more than 1 second
+                else if (currentTime - ball.userData.stuckData.stuckStartTime > 1000) {
+                    console.log("Ball unstuck from top boundary");
+                    
+                    // Fix the ball position and direction
+                    ball.position.y -= 0.5; // Move ball down a bit
+                    
+                    // Make sure the ball is moving downward
+                    if (ball.direction.y >= 0) {
+                        ball.direction.y = -Math.abs(ball.direction.y) - 0.1;
+                        
+                        // Ensure the direction is still normalized
+                        ball.direction.normalize();
+                    }
+                    
+                    // Reset the stuck detection data
+                    ball.userData.stuckData.possiblyStuck = false;
+                }
+            } else {
+                // Ball is moving normally, update tracking data
+                ball.userData.stuckData.lastY = ball.position.y;
+                ball.userData.stuckData.lastChangeTime = currentTime;
+                ball.userData.stuckData.possiblyStuck = false;
+            }
+        } else {
+            // Ball is not in the stuck zone, reset tracking data
+            if (ball.userData.stuckData) {
+                ball.userData.stuckData.possiblyStuck = false;
+            }
         }
     }
+}
+
+    // Helper function for testing - toggle debug visualization
+    function toggleDebug() {
+        showBoundaries();
+    }
+
+// Add this code at the end of the init() function or in a separate function
+// that runs after the page loads
+function moveStoreDown() {
+  const storeContainer = document.getElementById('storeContainer');
+  storeContainer.style.bottom = '25px'; // Move closer to bottom
+  
+  // Also adjust the launch button if needed
+  const launchButton = document.getElementById('launchButton');
+  launchButton.style.bottom = '10px';
+}
+
+// Call this function after the page loads
+window.addEventListener('load', function() {
+  // Give time for any other scripts to finish
+  setTimeout(moveStoreDown, 500);
+});
     
+    // Make sure focus stays on canvas for keyboard controls
     document.addEventListener('click', function() {
         renderer.domElement.focus();
     });
