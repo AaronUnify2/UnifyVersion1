@@ -324,6 +324,121 @@
             cursor: pointer;
         }
 
+        /* Touch controls */
+        .touch-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 100;
+            display: none;
+        }
+
+        @media (max-width: 768px), (pointer: coarse) {
+            .touch-controls {
+                display: flex;
+                gap: 40px;
+                align-items: flex-end;
+            }
+        }
+
+        .dpad-container {
+            position: relative;
+            width: 140px;
+            height: 140px;
+        }
+
+        .dpad {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .dpad-btn {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            user-select: none;
+            touch-action: manipulation;
+            transition: all 0.1s;
+        }
+
+        .dpad-btn:active {
+            background: rgba(33, 150, 243, 0.6);
+            border-color: rgba(33, 150, 243, 0.8);
+            transform: scale(0.95);
+        }
+
+        #dpad-up {
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        #dpad-down {
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        #dpad-left {
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        #dpad-right {
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .vertical-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .vertical-btn {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            user-select: none;
+            touch-action: manipulation;
+            transition: all 0.1s;
+        }
+
+        .vertical-btn:active {
+            background: rgba(33, 150, 243, 0.6);
+            border-color: rgba(33, 150, 243, 0.8);
+            transform: scale(0.95);
+        }
+
+        /* Look zone for touch look controls */
+        .look-zone {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 50%;
+            height: 100%;
+            z-index: 50;
+            touch-action: none;
+        }
+
         /* 3D Viewer Container */
         #viewer3d {
             flex: 1;
@@ -383,6 +498,20 @@
             z-index: 20;
             display: none;
             backdrop-filter: blur(10px);
+        }
+
+        @media (max-width: 768px), (pointer: coarse) {
+            .rain-panel {
+                top: auto;
+                bottom: 180px; /* Position above D-pad */
+                left: 10px;
+                right: 10px;
+                min-width: auto;
+                max-width: none;
+                padding: 15px;
+                max-height: 50vh;
+                overflow-y: auto;
+            }
         }
 
         .rain-panel.show {
@@ -489,6 +618,18 @@
             backdrop-filter: blur(10px);
         }
 
+        @media (max-width: 768px), (pointer: coarse) {
+            .rain-stats {
+                top: 80px; /* Below header */
+                right: 10px;
+                left: 10px;
+                min-width: auto;
+                padding: 12px 15px;
+                max-height: 40vh;
+                overflow-y: auto;
+            }
+        }
+
         .rain-stats.show {
             display: block;
         }
@@ -520,9 +661,9 @@
         /* Mouse look hint */
         .look-hint {
             position: absolute;
-            bottom: 20px;
+            top: 50%;
             left: 50%;
-            transform: translateX(-50%);
+            transform: translate(-50%, -50%);
             background: rgba(0, 0, 0, 0.7);
             color: white;
             padding: 10px 20px;
@@ -1510,6 +1651,7 @@
                 rainSimulation.state.soilSaturation.fill(0);
                 rainSimulation.state.totalWaterLiters = 0;
                 rainSimulation.state.maxDepth = 0;
+                rainSimTimeAccumulator = 0; // Reset timer
                 
                 // Create rain particles
                 if (!rainSimulation.particles) {
@@ -1712,18 +1854,65 @@
                 }
                 
                 rainSimulation.particles.geometry.attributes.position.needsUpdate = true;
+            }
+            
+            // Track time for rain simulation advancement
+            let rainSimTimeAccumulator = 0;
+            const rainSimStepInterval = 1.0; // Advance simulation every 1 second
+            
+            function advanceRainSimulation(delta) {
+                if (!rainSimulation.active || rainSimulation.paused) return;
+                if (rainSimulation.state.currentHour >= rainSimulation.config.duration) return;
                 
-                // Auto-advance simulation
-                if (!rainSimulation.paused && rainSimulation.state.currentHour < rainSimulation.config.duration) {
+                rainSimTimeAccumulator += delta;
+                
+                if (rainSimTimeAccumulator >= rainSimStepInterval) {
+                    rainSimTimeAccumulator -= rainSimStepInterval;
                     simulateRainStep();
                 }
             }
             
             // Mouse/touch controls
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                           ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+            
+            // Touch controls (D-pad)
+            const touchControls = document.createElement('div');
+            touchControls.className = 'touch-controls';
+            touchControls.id = 'touchControls';
+            touchControls.innerHTML = `
+                <div class="dpad-container">
+                    <div class="dpad">
+                        <div class="dpad-btn" id="dpad-up">W</div>
+                        <div class="dpad-btn" id="dpad-down">S</div>
+                        <div class="dpad-btn" id="dpad-left">A</div>
+                        <div class="dpad-btn" id="dpad-right">D</div>
+                    </div>
+                </div>
+                <div class="vertical-controls">
+                    <div class="vertical-btn" id="btn-up">↑</div>
+                    <div class="vertical-btn" id="btn-down">↓</div>
+                </div>
+            `;
+            container.appendChild(touchControls);
+            
+            // Look zone for mobile
+            const lookZone = document.createElement('div');
+            lookZone.className = 'look-zone';
+            container.appendChild(lookZone);
+            
             const lookHint = document.createElement('div');
             lookHint.className = 'look-hint';
-            lookHint.textContent = 'Click to look around (WASD to move, Space to fly)';
-            container.appendChild(lookHint);
+            if (isMobile) {
+                lookHint.textContent = 'Swipe right side to look around';
+            } else {
+                lookHint.textContent = 'Click to look around (WASD to move, Space to fly)';
+            }
+            if (isMobile) {
+                lookZone.appendChild(lookHint);
+            } else {
+                container.appendChild(lookHint);
+            }
             
             setTimeout(() => {
                 lookHint.classList.add('show');
@@ -1731,7 +1920,9 @@
             }, 1000);
             
             renderer.domElement.addEventListener('click', () => {
-                renderer.domElement.requestPointerLock();
+                if (!isMobile) {
+                    renderer.domElement.requestPointerLock();
+                }
             });
             
             document.addEventListener('pointerlockchange', () => {
@@ -1752,41 +1943,96 @@
                 camera.rotation.set(pitch, yaw, 0);
             });
             
-            // Touch controls
-            let touchStartX = 0;
-            let touchStartY = 0;
-            let isTouching = false;
-            
-            renderer.domElement.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 1) {
-                    isTouching = true;
-                    touchStartX = e.touches[0].clientX;
-                    touchStartY = e.touches[0].clientY;
-                    lookHint.classList.remove('show');
+            // Touch controls implementation for mobile
+            if (isMobile) {
+                const dpadUp = document.getElementById('dpad-up');
+                const dpadDown = document.getElementById('dpad-down');
+                const dpadLeft = document.getElementById('dpad-left');
+                const dpadRight = document.getElementById('dpad-right');
+                const btnUp = document.getElementById('btn-up');
+                const btnDown = document.getElementById('btn-down');
+                
+                function touchStart(key) {
+                    return (e) => {
+                        e.preventDefault();
+                        keys[key] = true;
+                    };
                 }
-            });
-            
-            renderer.domElement.addEventListener('touchmove', (e) => {
-                if (!isTouching || e.touches.length !== 1) return;
-                e.preventDefault();
                 
-                const touch = e.touches[0];
-                const deltaX = touch.clientX - touchStartX;
-                const deltaY = touch.clientY - touchStartY;
+                function touchEnd(key) {
+                    return (e) => {
+                        e.preventDefault();
+                        keys[key] = false;
+                    };
+                }
                 
-                yaw -= deltaX * sensitivity * 2;
-                pitch -= deltaY * sensitivity * 2;
-                pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+                dpadUp.addEventListener('touchstart', touchStart('forward'));
+                dpadUp.addEventListener('touchend', touchEnd('forward'));
+                dpadDown.addEventListener('touchstart', touchStart('backward'));
+                dpadDown.addEventListener('touchend', touchEnd('backward'));
+                dpadLeft.addEventListener('touchstart', touchStart('left'));
+                dpadLeft.addEventListener('touchend', touchEnd('left'));
+                dpadRight.addEventListener('touchstart', touchStart('right'));
+                dpadRight.addEventListener('touchend', touchEnd('right'));
                 
-                camera.rotation.set(pitch, yaw, 0);
+                let lastUpBtnTap = 0;
                 
-                touchStartX = touch.clientX;
-                touchStartY = touch.clientY;
-            });
-            
-            renderer.domElement.addEventListener('touchend', () => {
-                isTouching = false;
-            });
+                btnUp.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    keys.up = true;
+                    
+                    const now = performance.now();
+                    if (now - lastUpBtnTap < doubleTapDelay) {
+                        isFlying = !isFlying;
+                        updateFlyingModeStatus();
+                    }
+                    lastUpBtnTap = now;
+                });
+                
+                btnUp.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    keys.up = false;
+                });
+                
+                btnDown.addEventListener('touchstart', touchStart('down'));
+                btnDown.addEventListener('touchend', touchEnd('down'));
+                
+                // Touch look controls
+                let touchStartX = 0;
+                let touchStartY = 0;
+                let isTouchingLookZone = false;
+                
+                lookZone.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 1) {
+                        isTouchingLookZone = true;
+                        touchStartX = e.touches[0].clientX;
+                        touchStartY = e.touches[0].clientY;
+                        lookHint.classList.remove('show');
+                    }
+                });
+                
+                lookZone.addEventListener('touchmove', (e) => {
+                    if (!isTouchingLookZone || e.touches.length !== 1) return;
+                    e.preventDefault();
+                    
+                    const touch = e.touches[0];
+                    const deltaX = touch.clientX - touchStartX;
+                    const deltaY = touch.clientY - touchStartY;
+                    
+                    yaw -= deltaX * sensitivity * 2;
+                    pitch -= deltaY * sensitivity * 2;
+                    pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+                    
+                    camera.rotation.set(pitch, yaw, 0);
+                    
+                    touchStartX = touch.clientX;
+                    touchStartY = touch.clientY;
+                });
+                
+                lookZone.addEventListener('touchend', () => {
+                    isTouchingLookZone = false;
+                });
+            }
             
             // Keyboard controls
             const keyMap = {
@@ -1974,9 +2220,10 @@
                     camera.rotation.y = yaw;
                 }
                 
-                // Update rain particles
+                // Update rain particles and advance simulation
                 if (rainSimulation.active && rainSimulation.particles && rainSimulation.particles.visible) {
                     updateRainParticles(delta);
+                    advanceRainSimulation(delta);
                 }
                 
                 renderer.render(scene, camera);
