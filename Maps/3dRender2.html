@@ -94,6 +94,28 @@
             opacity: 1;
         }
 
+        /* Debug panel */
+        .debug-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 400px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .debug-panel.show {
+            display: block;
+        }
+
         /* Legend */
         .legend {
             position: absolute;
@@ -185,12 +207,15 @@
     <div id="map"></div>
     
     <div class="control-panel">
+        <button id="debugBtn" class="control-btn">🐛 Debug Console</button>
         <button id="contoursBtn" class="control-btn">🗻 Contours</button>
         <button id="satelliteBtn" class="control-btn">🛰️ Satellite View</button>
         <button id="selectAreaBtn" class="control-btn">📍 Select Area</button>
         <button id="fetchDataBtn" class="control-btn" disabled>📊 Fetch Terrain Data</button>
         <button id="saveDataBtn" class="control-btn" disabled>💾 Save JSON</button>
     </div>
+
+    <div id="debugPanel" class="debug-panel"></div>
 
     <div id="legend" class="legend" style="display: none;">
         <div class="legend-title">Contour Lines</div>
@@ -217,16 +242,17 @@
         let currentElevationData = null;
         let isSelectingArea = false;
         let dragBox = null;
+        let debugMessages = [];
         
         // Tap selection state for mobile
-        let tapSelectionState = 'idle'; // 'idle', 'waitingForFirstCorner', 'waitingForSecondCorner'
+        let tapSelectionState = 'idle';
         let firstCorner = null;
         let previewFeature = null;
 
-        // Queensland 1m high-resolution DEM service
-        const QLD_DEM_1M_SERVICE = 'https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/DEM1mHillshadeAustralia_AllQld_Cache/ImageServer';
+        // Use the PROVEN working service from reference file
+        const QLD_DEM_SERVICE = 'https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/QldDem/ImageServer';
 
-        // Map setup with better initial view of Queensland
+        // Map setup
         const map = new ol.Map({
             target: 'map',
             layers: [
@@ -235,7 +261,7 @@
                 })
             ],
             view: new ol.View({
-                center: ol.proj.fromLonLat([153.0260, -27.4705]), // Brisbane area
+                center: ol.proj.fromLonLat([153.0260, -27.4705]), // Brisbane
                 zoom: 13,
                 maxZoom: 20
             })
@@ -283,6 +309,28 @@
         });
         map.getLayers().insertAt(0, satelliteLayer);
 
+        // Debug functions
+        function debug(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            debugMessages.push(`[${timestamp}] ${message}`);
+            if (debugMessages.length > 50) debugMessages.shift();
+            console.log('[Debug] ' + message);
+            updateDebugPanel();
+        }
+
+        function updateDebugPanel() {
+            const panel = document.getElementById('debugPanel');
+            panel.innerHTML = debugMessages.map(msg => `<div>${msg}</div>`).join('');
+            panel.scrollTop = panel.scrollHeight;
+        }
+
+        function toggleDebug() {
+            const panel = document.getElementById('debugPanel');
+            const btn = document.getElementById('debugBtn');
+            panel.classList.toggle('show');
+            btn.classList.toggle('active');
+        }
+
         // Utility functions
         function showToast(message, duration = 3000) {
             const toast = document.getElementById('toast');
@@ -302,11 +350,7 @@
             }
         }
 
-        function debug(message) {
-            console.log('[Debug] ' + message);
-        }
-
-        // Toggle contour layer
+        // Toggle functions
         function toggleContours() {
             const isVisible = contourLayer.getVisible();
             contourLayer.setVisible(!isVisible);
@@ -314,39 +358,83 @@
             document.getElementById('legend').style.display = !isVisible ? 'block' : 'none';
             
             if (!isVisible && contourVectorSource.getFeatures().length === 0) {
-                showToast('Zoom in and pan to see contour lines (computed from Queensland DEM)');
+                showToast('Zoom in and pan to see contour lines');
                 generateContours();
             }
         }
 
-        // Toggle satellite layer
         function toggleSatellite() {
             const isVisible = satelliteLayer.getVisible();
             satelliteLayer.setVisible(!isVisible);
             document.getElementById('satelliteBtn').classList.toggle('active');
         }
 
-        // Generate contour lines for the current view
+        // Query elevation - EXACT method from reference file
+        async function queryElevation(lon, lat) {
+            try {
+                const params = new URLSearchParams({
+                    geometryType: 'esriGeometryPoint',
+                    geometry: JSON.stringify({ x: lon, y: lat, spatialReference: { wkid: 4326 } }),
+                    returnGeometry: false,
+                    returnCatalogItems: false,
+                    f: 'json'
+                });
+                
+                const url = QLD_DEM_SERVICE + '/identify?' + params.toString();
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                // Debug first few responses
+                if (Math.random() < 0.01) {
+                    debug(`Sample response at (${lon.toFixed(4)}, ${lat.toFixed(4)}): ${JSON.stringify(data)}`);
+                }
+                
+                if (data.value !== undefined && data.value !== null) {
+                    return data.value;
+                } else if (data.pixel && data.pixel.length > 0) {
+                    return data.pixel[0];
+                } else {
+                    if (Math.random() < 0.01) {
+                        debug(`No elevation data in response: ${JSON.stringify(data)}`);
+                    }
+                    return null;
+                }
+            } catch (error) {
+                if (Math.random() < 0.01) {
+                    debug(`Error querying elevation: ${error.message}`);
+                }
+                return null;
+            }
+        }
+
+        // Generate contour lines
         async function generateContours() {
             const view = map.getView();
             const extent = view.calculateExtent(map.getSize());
             const zoom = view.getZoom();
             
             if (zoom < 13) {
+                debug('Zoom level too low for contours');
                 return;
             }
             
+            debug('Generating contours...');
             contourVectorSource.clear();
             
             const [minX, minY, maxX, maxY] = extent;
             const bottomLeft = ol.proj.toLonLat([minX, minY]);
             const topRight = ol.proj.toLonLat([maxX, maxY]);
             
-            const gridSize = 50;
+            debug(`Contour area: ${bottomLeft[0].toFixed(4)}, ${bottomLeft[1].toFixed(4)} to ${topRight[0].toFixed(4)}, ${topRight[1].toFixed(4)}`);
+            
+            const gridSize = 30; // Smaller for faster testing
             const lonStep = (topRight[0] - bottomLeft[0]) / (gridSize - 1);
             const latStep = (topRight[1] - bottomLeft[1]) / (gridSize - 1);
             
             const elevationGrid = [];
+            let validCount = 0;
+            
             for (let i = 0; i < gridSize; i++) {
                 elevationGrid[i] = [];
                 for (let j = 0; j < gridSize; j++) {
@@ -354,7 +442,15 @@
                     const lat = bottomLeft[1] + i * latStep;
                     const elevation = await queryElevation(lon, lat);
                     elevationGrid[i][j] = elevation !== null ? elevation : 0;
+                    if (elevation !== null) validCount++;
                 }
+            }
+            
+            debug(`Contour grid complete: ${validCount}/${gridSize * gridSize} valid points`);
+            
+            if (validCount === 0) {
+                showToast('No elevation data available for contours in this area');
+                return;
             }
             
             let interval;
@@ -362,24 +458,25 @@
             else if (zoom >= 14) interval = 5;
             else interval = 10;
             
-            const minElev = Math.min(...elevationGrid.flat());
+            const minElev = Math.min(...elevationGrid.flat().filter(v => v !== 0));
             const maxElev = Math.max(...elevationGrid.flat());
+            
+            debug(`Elevation range: ${minElev.toFixed(1)}m - ${maxElev.toFixed(1)}m, interval: ${interval}m`);
             
             for (let elev = Math.ceil(minElev / interval) * interval; elev <= maxElev; elev += interval) {
                 const segments = marchingSquares(elevationGrid, elev, bottomLeft, lonStep, latStep);
                 segments.forEach(segment => {
-                    const coords = segment.map(([lon, lat]) => 
-                        ol.proj.fromLonLat([lon, lat])
-                    );
-                    const feature = new ol.Feature({
-                        geometry: new ol.geom.LineString(coords)
-                    });
+                    const coords = segment.map(([lon, lat]) => ol.proj.fromLonLat([lon, lat]));
+                    const feature = new ol.Feature({ geometry: new ol.geom.LineString(coords) });
                     contourVectorSource.addFeature(feature);
                 });
             }
+            
+            debug(`Generated ${contourVectorSource.getFeatures().length} contour segments`);
+            showToast(`Contours generated: ${minElev.toFixed(0)}m - ${maxElev.toFixed(0)}m`);
         }
 
-        // Simplified marching squares for contour generation
+        // Marching squares
         function marchingSquares(grid, threshold, origin, lonStep, latStep) {
             const segments = [];
             const rows = grid.length;
@@ -393,7 +490,6 @@
                     const br = grid[i+1][j+1] >= threshold ? 1 : 0;
                     
                     const cellType = tl * 8 + tr * 4 + br * 2 + bl;
-                    
                     if (cellType === 0 || cellType === 15) continue;
                     
                     const x = origin[0] + j * lonStep;
@@ -428,7 +524,7 @@
             return segments;
         }
 
-        // Handle map click for tap selection
+        // Area selection handlers
         function handleMapClick(evt) {
             if (!isSelectingArea) return;
             
@@ -438,7 +534,6 @@
                 showToast('Tap the second corner', 3000);
             } else if (tapSelectionState === 'waitingForSecondCorner') {
                 const secondCorner = evt.coordinate;
-                
                 const extent = [
                     Math.min(firstCorner[0], secondCorner[0]),
                     Math.min(firstCorner[1], secondCorner[1]),
@@ -447,31 +542,26 @@
                 ];
                 
                 selectionVectorSource.clear();
-                if (previewFeature) {
-                    previewFeature = null;
-                }
+                if (previewFeature) previewFeature = null;
                 
                 const polygon = new ol.geom.Polygon([[
-                    [extent[0], extent[1]],
-                    [extent[2], extent[1]],
-                    [extent[2], extent[3]],
-                    [extent[0], extent[3]],
+                    [extent[0], extent[1]], [extent[2], extent[1]],
+                    [extent[2], extent[3]], [extent[0], extent[3]],
                     [extent[0], extent[1]]
                 ]]);
                 
                 const feature = new ol.Feature(polygon);
                 selectionVectorSource.addFeature(feature);
                 selectedArea = extent;
-                
                 document.getElementById('fetchDataBtn').disabled = false;
                 
                 const [minX, minY, maxX, maxY] = extent;
                 const bottomLeft = ol.proj.toLonLat([minX, minY]);
                 const topRight = ol.proj.toLonLat([maxX, maxY]);
-                
                 const widthKm = (Math.abs(topRight[0] - bottomLeft[0]) * 111).toFixed(2);
                 const heightKm = (Math.abs(topRight[1] - bottomLeft[1]) * 111).toFixed(2);
                 
+                debug(`Area selected: ${widthKm}km × ${heightKm}km`);
                 showToast(`Area selected: ${widthKm}km × ${heightKm}km - Ready to fetch!`, 5000);
                 
                 tapSelectionState = 'waitingForFirstCorner';
@@ -479,11 +569,9 @@
             }
         }
 
-        // Handle pointer move for preview
         function handlePointerMove(evt) {
             if (tapSelectionState === 'waitingForSecondCorner' && firstCorner) {
                 const currentCoord = evt.coordinate;
-                
                 const extent = [
                     Math.min(firstCorner[0], currentCoord[0]),
                     Math.min(firstCorner[1], currentCoord[1]),
@@ -492,12 +580,9 @@
                 ];
                 
                 selectionVectorSource.clear();
-                
                 const polygon = new ol.geom.Polygon([[
-                    [extent[0], extent[1]],
-                    [extent[2], extent[1]],
-                    [extent[2], extent[3]],
-                    [extent[0], extent[3]],
+                    [extent[0], extent[1]], [extent[2], extent[1]],
+                    [extent[2], extent[3]], [extent[0], extent[3]],
                     [extent[0], extent[1]]
                 ]]);
                 
@@ -506,7 +591,6 @@
             }
         }
 
-        // Toggle area selection mode
         function toggleAreaSelection() {
             const selectBtn = document.getElementById('selectAreaBtn');
             
@@ -535,39 +619,33 @@
                 
                 dragBox.on('boxend', function() {
                     const extent = dragBox.getGeometry().getExtent();
-                    
                     selectionVectorSource.clear();
+                    
                     const polygon = new ol.geom.Polygon([[
-                        [extent[0], extent[1]],
-                        [extent[2], extent[1]],
-                        [extent[2], extent[3]],
-                        [extent[0], extent[3]],
+                        [extent[0], extent[1]], [extent[2], extent[1]],
+                        [extent[2], extent[3]], [extent[0], extent[3]],
                         [extent[0], extent[1]]
                     ]]);
                     
                     const feature = new ol.Feature(polygon);
                     selectionVectorSource.addFeature(feature);
                     selectedArea = extent;
-                    
                     document.getElementById('fetchDataBtn').disabled = false;
                     
                     const [minX, minY, maxX, maxY] = extent;
                     const bottomLeft = ol.proj.toLonLat([minX, minY]);
                     const topRight = ol.proj.toLonLat([maxX, maxY]);
-                    
                     const widthKm = (Math.abs(topRight[0] - bottomLeft[0]) * 111).toFixed(2);
                     const heightKm = (Math.abs(topRight[1] - bottomLeft[1]) * 111).toFixed(2);
                     
+                    debug(`Drag box selected: ${widthKm}km × ${heightKm}km`);
                     showToast(`Area selected: ${widthKm}km × ${heightKm}km - Ready to fetch!`, 5000);
                     
-                    // Reset tap selection state
                     tapSelectionState = 'waitingForFirstCorner';
                     firstCorner = null;
                 });
                 
                 map.addInteraction(dragBox);
-                
-                // Enable tap selection
                 isSelectingArea = true;
                 tapSelectionState = 'waitingForFirstCorner';
                 selectBtn.classList.add('active');
@@ -575,15 +653,12 @@
             }
         }
 
-        // Add event listeners for tap selection
         map.on('click', handleMapClick);
         map.on('pointermove', handlePointerMove);
 
-        // Get satellite tiles for the selected area at zoom level 16
+        // Get satellite tiles
         function getSatelliteTiles(extent, zoom = 16) {
             const [minX, minY, maxX, maxY] = extent;
-            
-            // Convert extent corners to tile coordinates
             const getTileCoord = (lon, lat, zoom) => {
                 const n = Math.pow(2, zoom);
                 const xtile = Math.floor((lon + 180) / 360 * n);
@@ -593,7 +668,6 @@
             
             const bottomLeft = ol.proj.toLonLat([minX, minY]);
             const topRight = ol.proj.toLonLat([maxX, maxY]);
-            
             const tileBL = getTileCoord(bottomLeft[0], bottomLeft[1], zoom);
             const tileTR = getTileCoord(topRight[0], topRight[1], zoom);
             
@@ -601,77 +675,55 @@
             for (let x = Math.min(tileBL.x, tileTR.x); x <= Math.max(tileBL.x, tileTR.x); x++) {
                 for (let y = Math.min(tileBL.y, tileTR.y); y <= Math.max(tileBL.y, tileTR.y); y++) {
                     tiles.push({
-                        x: x,
-                        y: y,
-                        z: zoom,
+                        x: x, y: y, z: zoom,
                         url: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`
                     });
                 }
             }
-            
             return tiles;
         }
 
-        // Query elevation from Queensland 1m DEM ImageServer using the proven method
-        async function queryElevation(lon, lat) {
-            try {
-                // Use identify endpoint with URLSearchParams (proven method from reference file)
-                const params = new URLSearchParams({
-                    geometryType: 'esriGeometryPoint',
-                    geometry: JSON.stringify({ x: lon, y: lat, spatialReference: { wkid: 4326 } }),
-                    returnGeometry: false,
-                    returnCatalogItems: false,
-                    f: 'json'
-                });
-                
-                const url = QLD_DEM_1M_SERVICE + '/identify?' + params.toString();
-                
-                const response = await fetch(url);
-                const data = await response.json();
-                
-                // Check data.value first, then fallback to data.pixel[0]
-                if (data.value !== undefined && data.value !== null) {
-                    return data.value;
-                } else if (data.pixel && data.pixel.length > 0) {
-                    return data.pixel[0];
-                } else {
-                    return null;
-                }
-            } catch (error) {
-                console.error('Error querying elevation:', error);
-                return null;
-            }
-        }
-
-        // Fetch elevation data for the selected area using the proven method from reference file
+        // Fetch elevation data - EXACT method from reference file
         async function fetchElevationData() {
             if (!selectedArea) {
                 showToast('Please select an area first');
                 return;
             }
             
-            showLoading(true, 'Preparing to fetch 1m resolution elevation data...');
+            showLoading(true, 'Preparing to fetch elevation data...');
             
             const [minX, minY, maxX, maxY] = selectedArea;
             const bottomLeft = ol.proj.toLonLat([minX, minY]);
             const topRight = ol.proj.toLonLat([maxX, maxY]);
             
+            debug(`Fetching data for area: (${bottomLeft[0].toFixed(4)}, ${bottomLeft[1].toFixed(4)}) to (${topRight[0].toFixed(4)}, ${topRight[1].toFixed(4)})`);
+            debug(`Using service: ${QLD_DEM_SERVICE}`);
+            
             try {
-                // Use proven grid size from reference file (60x60 = 3600 samples)
-                const gridSize = 60;
+                const gridSize = 60; // Same as reference file
                 const width = gridSize;
                 const height = gridSize;
                 
                 const lonStep = (topRight[0] - bottomLeft[0]) / (width - 1);
                 const latStep = (topRight[1] - bottomLeft[1]) / (height - 1);
                 
-                debug('Fetching elevation for ' + (width * height) + ' points at 1m resolution');
+                debug(`Grid: ${width}x${height} = ${width * height} points`);
                 
                 const elevationGrid = [];
                 let successCount = 0;
                 let nullCount = 0;
                 
-                // Fetch elevation points one at a time (proven reliable method)
+                // Test first point before full fetch
+                const testLon = bottomLeft[0];
+                const testLat = bottomLeft[1];
+                const testElev = await queryElevation(testLon, testLat);
+                debug(`Test query at (${testLon.toFixed(4)}, ${testLat.toFixed(4)}): ${testElev !== null ? testElev + 'm' : 'NULL'}`);
+                
+                if (testElev === null) {
+                    showToast('Warning: Test query returned null. Service may not cover this area.', 5000);
+                }
+                
+                // Fetch all points
                 for (let i = 0; i < height; i++) {
                     elevationGrid[i] = [];
                     for (let j = 0; j < width; j++) {
@@ -682,36 +734,24 @@
                         const elevation = await queryElevation(lon, lat);
                         
                         if (elevation !== null) {
-                            elevationGrid[i][j] = {
-                                elevation: elevation,
-                                lon: lon,
-                                lat: lat
-                            };
+                            elevationGrid[i][j] = { elevation: elevation, lon: lon, lat: lat };
                             successCount++;
                         } else {
-                            elevationGrid[i][j] = {
-                                elevation: 0,
-                                lon: lon,
-                                lat: lat
-                            };
+                            elevationGrid[i][j] = { elevation: 0, lon: lon, lat: lat };
                             nullCount++;
                         }
                         
-                        // Update progress every 5%
                         if (idx % Math.floor((width * height) / 20) === 0) {
                             const progress = Math.round((idx / (width * height)) * 100);
-                            showLoading(true, `Fetching elevation... ${progress}% (${successCount} valid, ${nullCount} null)`);
-                            debug('Progress: ' + progress + '% - Success: ' + successCount + ', Null: ' + nullCount);
+                            showLoading(true, `Fetching... ${progress}% (${successCount} valid, ${nullCount} null)`);
                         }
                     }
                 }
                 
-                debug('Total successful samples: ' + successCount + ' out of ' + (width * height));
+                debug(`Fetch complete: ${successCount} valid, ${nullCount} null out of ${width * height}`);
                 
-                // Get satellite tiles
                 const satelliteTiles = getSatelliteTiles(selectedArea, 16);
                 
-                // Calculate min/max elevation for metadata
                 let minElevation = Infinity;
                 let maxElevation = -Infinity;
                 elevationGrid.forEach(row => {
@@ -721,28 +761,24 @@
                     });
                 });
                 
-                debug('Elevation range: ' + minElevation + 'm to ' + maxElevation + 'm');
+                debug(`Elevation range: ${minElevation}m to ${maxElevation}m`);
                 
-                // Store the complete dataset
                 currentElevationData = {
                     metadata: {
                         gridSize: gridSize,
                         bounds: {
-                            minLon: bottomLeft[0],
-                            minLat: bottomLeft[1],
-                            maxLon: topRight[0],
-                            maxLat: topRight[1]
+                            minLon: bottomLeft[0], minLat: bottomLeft[1],
+                            maxLon: topRight[0], maxLat: topRight[1]
                         },
                         center: {
                             lon: (bottomLeft[0] + topRight[0]) / 2,
                             lat: (bottomLeft[1] + topRight[1]) / 2
                         },
                         elevation: {
-                            min: minElevation,
-                            max: maxElevation,
+                            min: minElevation, max: maxElevation,
                             range: maxElevation - minElevation
                         },
-                        dataSource: 'Queensland DEM 1m (High-Resolution LiDAR)',
+                        dataSource: 'Queensland DEM (QldDem ImageServer)',
                         timestamp: new Date().toISOString(),
                         satelliteZoom: 16,
                         successRate: ((successCount / (width * height)) * 100).toFixed(1) + '%',
@@ -758,19 +794,19 @@
                 document.getElementById('saveDataBtn').disabled = false;
                 
                 if (successCount > 0) {
-                    showToast(`1m data fetched! ${gridSize}x${gridSize} grid, elevation: ${minElevation.toFixed(1)}m - ${maxElevation.toFixed(1)}m, success rate: ${((successCount / (width * height)) * 100).toFixed(1)}%`, 6000);
+                    showToast(`Data fetched! ${gridSize}x${gridSize}, ${minElevation.toFixed(1)}m-${maxElevation.toFixed(1)}m, ${((successCount/(width*height))*100).toFixed(1)}% success`, 6000);
                 } else {
-                    showToast('Warning: No valid elevation data received. Check service availability.', 6000);
+                    showToast('ERROR: All queries returned null. Service may not cover this area.', 6000);
                 }
                 
             } catch (error) {
                 debug('ERROR: ' + error.message);
-                showToast('Error fetching elevation data: ' + error.message);
+                showToast('Error: ' + error.message);
                 showLoading(false);
             }
         }
 
-        // Save elevation data as JSON
+        // Save data
         function saveTerrainData() {
             if (!currentElevationData) {
                 showToast('No terrain data to save');
@@ -779,25 +815,28 @@
             
             const dataStr = JSON.stringify(currentElevationData, null, 2);
             const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            
             const url = URL.createObjectURL(dataBlob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `terrain_1m_data_${Date.now()}.json`;
+            link.download = `terrain_data_${Date.now()}.json`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             
-            showToast('1m terrain data saved successfully! Ready for 3D rendering.');
+            debug('Data saved successfully');
+            showToast('Terrain data saved!');
         }
 
         // Event listeners
+        document.getElementById('debugBtn').addEventListener('click', toggleDebug);
         document.getElementById('contoursBtn').addEventListener('click', toggleContours);
         document.getElementById('satelliteBtn').addEventListener('click', toggleSatellite);
         document.getElementById('selectAreaBtn').addEventListener('click', toggleAreaSelection);
         document.getElementById('fetchDataBtn').addEventListener('click', fetchElevationData);
         document.getElementById('saveDataBtn').addEventListener('click', saveTerrainData);
+
+        debug('App initialized - using service: ' + QLD_DEM_SERVICE);
     </script>
 </body>
 </html>
