@@ -205,8 +205,8 @@
 
     <div id="loadingOverlay" class="loading-overlay">
         <div class="spinner"></div>
-        <div class="loading-text">Fetching high-resolution terrain data...</div>
-        <div class="loading-progress" id="loadingProgress"></div>
+        <div class="loading-text">Fetching high-resolution elevation data...</div>
+        <div class="loading-progress" id="loadingProgress">Initializing...</div>
     </div>
 
     <div id="toast" class="toast"></div>
@@ -223,8 +223,8 @@
         let firstCorner = null;
         let previewFeature = null;
 
-        // Queensland high-resolution DEM service (LiDAR-based)
-        const QLD_DEM_SERVICE = 'https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/DEM1mHillshadeAustralia_AllQld_Cache/ImageServer';
+        // Queensland 1m high-resolution DEM service
+        const QLD_DEM_1M_SERVICE = 'https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/DEM1mHillshadeAustralia_AllQld_Cache/ImageServer';
 
         // Map setup with better initial view of Queensland
         const map = new ol.Map({
@@ -300,6 +300,10 @@
             } else {
                 overlay.classList.remove('show');
             }
+        }
+
+        function debug(message) {
+            console.log('[Debug] ' + message);
         }
 
         // Toggle contour layer
@@ -523,7 +527,7 @@
                 selectionVectorSource.clear();
                 selectedArea = null;
                 document.getElementById('fetchDataBtn').disabled = true;
-                document.getElementById('saveDataBtn').disabled = false;
+                document.getElementById('saveDataBtn').disabled = true;
                 
                 dragBox = new ol.interaction.DragBox({
                     condition: ol.events.condition.platformModifierKeyOnly
@@ -608,28 +612,28 @@
             return tiles;
         }
 
-        // Query elevation from Queensland DEM ImageServer
+        // Query elevation from Queensland 1m DEM ImageServer using the proven method
         async function queryElevation(lon, lat) {
-            // Format geometry as JSON object with spatial reference
-            const geometry = {
-                x: lon,
-                y: lat,
-                spatialReference: { wkid: 4326 }
-            };
-            
-            const url = `${QLD_DEM_SERVICE}/identify?` + 
-                `geometry=${encodeURIComponent(JSON.stringify(geometry))}` +
-                `&geometryType=esriGeometryPoint` +
-                `&returnGeometry=false` +
-                `&returnCatalogItems=false` +
-                `&f=json`;
-            
             try {
+                // Use identify endpoint with URLSearchParams (proven method from reference file)
+                const params = new URLSearchParams({
+                    geometryType: 'esriGeometryPoint',
+                    geometry: JSON.stringify({ x: lon, y: lat, spatialReference: { wkid: 4326 } }),
+                    returnGeometry: false,
+                    returnCatalogItems: false,
+                    f: 'json'
+                });
+                
+                const url = QLD_DEM_1M_SERVICE + '/identify?' + params.toString();
+                
                 const response = await fetch(url);
                 const data = await response.json();
                 
+                // Check data.value first, then fallback to data.pixel[0]
                 if (data.value !== undefined && data.value !== null) {
-                    return data.value; // Elevation in meters
+                    return data.value;
+                } else if (data.pixel && data.pixel.length > 0) {
+                    return data.pixel[0];
                 } else {
                     return null;
                 }
@@ -639,114 +643,131 @@
             }
         }
 
-        // Fetch elevation data for the selected area using Queensland DEM
+        // Fetch elevation data for the selected area using the proven method from reference file
         async function fetchElevationData() {
             if (!selectedArea) {
                 showToast('Please select an area first');
                 return;
             }
             
-            showLoading(true, 'Preparing to fetch high-resolution elevation data...');
+            showLoading(true, 'Preparing to fetch 1m resolution elevation data...');
             
             const [minX, minY, maxX, maxY] = selectedArea;
             const bottomLeft = ol.proj.toLonLat([minX, minY]);
             const topRight = ol.proj.toLonLat([maxX, maxY]);
             
-            const gridSize = 90;
-            const lonStep = (topRight[0] - bottomLeft[0]) / (gridSize - 1);
-            const latStep = (topRight[1] - bottomLeft[1]) / (gridSize - 1);
-            
-            const elevationGrid = [];
-            const coordinates = [];
-            
-            // Generate grid coordinates
-            for (let i = 0; i < gridSize; i++) {
-                elevationGrid[i] = [];
-                for (let j = 0; j < gridSize; j++) {
-                    const lon = bottomLeft[0] + j * lonStep;
-                    const lat = bottomLeft[1] + i * latStep;
-                    coordinates.push({ lon, lat, i, j });
+            try {
+                // Use proven grid size from reference file (60x60 = 3600 samples)
+                const gridSize = 60;
+                const width = gridSize;
+                const height = gridSize;
+                
+                const lonStep = (topRight[0] - bottomLeft[0]) / (width - 1);
+                const latStep = (topRight[1] - bottomLeft[1]) / (height - 1);
+                
+                debug('Fetching elevation for ' + (width * height) + ' points at 1m resolution');
+                
+                const elevationGrid = [];
+                let successCount = 0;
+                let nullCount = 0;
+                
+                // Fetch elevation points one at a time (proven reliable method)
+                for (let i = 0; i < height; i++) {
+                    elevationGrid[i] = [];
+                    for (let j = 0; j < width; j++) {
+                        const idx = i * width + j;
+                        const lon = bottomLeft[0] + j * lonStep;
+                        const lat = bottomLeft[1] + i * latStep;
+                        
+                        const elevation = await queryElevation(lon, lat);
+                        
+                        if (elevation !== null) {
+                            elevationGrid[i][j] = {
+                                elevation: elevation,
+                                lon: lon,
+                                lat: lat
+                            };
+                            successCount++;
+                        } else {
+                            elevationGrid[i][j] = {
+                                elevation: 0,
+                                lon: lon,
+                                lat: lat
+                            };
+                            nullCount++;
+                        }
+                        
+                        // Update progress every 5%
+                        if (idx % Math.floor((width * height) / 20) === 0) {
+                            const progress = Math.round((idx / (width * height)) * 100);
+                            showLoading(true, `Fetching elevation... ${progress}% (${successCount} valid, ${nullCount} null)`);
+                            debug('Progress: ' + progress + '% - Success: ' + successCount + ', Null: ' + nullCount);
+                        }
+                    }
                 }
-            }
-            
-            const totalPoints = coordinates.length;
-            let completedPoints = 0;
-            
-            // Fetch elevation data with batching to avoid overwhelming the server
-            const batchSize = 10;
-            const delayBetweenBatches = 100; // ms
-            
-            for (let i = 0; i < coordinates.length; i += batchSize) {
-                const batch = coordinates.slice(i, i + batchSize);
                 
-                // Process batch in parallel
-                const promises = batch.map(coord => queryElevation(coord.lon, coord.lat));
-                const results = await Promise.all(promises);
+                debug('Total successful samples: ' + successCount + ' out of ' + (width * height));
                 
-                // Store results
-                results.forEach((elevation, idx) => {
-                    const coord = batch[idx];
-                    elevationGrid[coord.i][coord.j] = {
-                        elevation: elevation !== null ? elevation : 0,
-                        lon: coord.lon,
-                        lat: coord.lat
-                    };
+                // Get satellite tiles
+                const satelliteTiles = getSatelliteTiles(selectedArea, 16);
+                
+                // Calculate min/max elevation for metadata
+                let minElevation = Infinity;
+                let maxElevation = -Infinity;
+                elevationGrid.forEach(row => {
+                    row.forEach(point => {
+                        if (point.elevation < minElevation) minElevation = point.elevation;
+                        if (point.elevation > maxElevation) maxElevation = point.elevation;
+                    });
                 });
                 
-                completedPoints += batch.length;
-                const percentage = ((completedPoints / totalPoints) * 100).toFixed(1);
-                showLoading(true, `Fetching elevation data: ${completedPoints}/${totalPoints} (${percentage}%)`);
+                debug('Elevation range: ' + minElevation + 'm to ' + maxElevation + 'm');
                 
-                // Small delay between batches
-                if (i + batchSize < coordinates.length) {
-                    await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+                // Store the complete dataset
+                currentElevationData = {
+                    metadata: {
+                        gridSize: gridSize,
+                        bounds: {
+                            minLon: bottomLeft[0],
+                            minLat: bottomLeft[1],
+                            maxLon: topRight[0],
+                            maxLat: topRight[1]
+                        },
+                        center: {
+                            lon: (bottomLeft[0] + topRight[0]) / 2,
+                            lat: (bottomLeft[1] + topRight[1]) / 2
+                        },
+                        elevation: {
+                            min: minElevation,
+                            max: maxElevation,
+                            range: maxElevation - minElevation
+                        },
+                        dataSource: 'Queensland DEM 1m (High-Resolution LiDAR)',
+                        timestamp: new Date().toISOString(),
+                        satelliteZoom: 16,
+                        successRate: ((successCount / (width * height)) * 100).toFixed(1) + '%',
+                        totalPoints: width * height,
+                        validPoints: successCount,
+                        nullPoints: nullCount
+                    },
+                    elevationGrid: elevationGrid,
+                    satelliteTiles: satelliteTiles
+                };
+                
+                showLoading(false);
+                document.getElementById('saveDataBtn').disabled = false;
+                
+                if (successCount > 0) {
+                    showToast(`1m data fetched! ${gridSize}x${gridSize} grid, elevation: ${minElevation.toFixed(1)}m - ${maxElevation.toFixed(1)}m, success rate: ${((successCount / (width * height)) * 100).toFixed(1)}%`, 6000);
+                } else {
+                    showToast('Warning: No valid elevation data received. Check service availability.', 6000);
                 }
+                
+            } catch (error) {
+                debug('ERROR: ' + error.message);
+                showToast('Error fetching elevation data: ' + error.message);
+                showLoading(false);
             }
-            
-            // Get satellite tiles
-            const satelliteTiles = getSatelliteTiles(selectedArea, 16);
-            
-            // Calculate min/max elevation for metadata
-            let minElevation = Infinity;
-            let maxElevation = -Infinity;
-            elevationGrid.forEach(row => {
-                row.forEach(point => {
-                    if (point.elevation < minElevation) minElevation = point.elevation;
-                    if (point.elevation > maxElevation) maxElevation = point.elevation;
-                });
-            });
-            
-            // Store the complete dataset
-            currentElevationData = {
-                metadata: {
-                    gridSize: gridSize,
-                    bounds: {
-                        minLon: bottomLeft[0],
-                        minLat: bottomLeft[1],
-                        maxLon: topRight[0],
-                        maxLat: topRight[1]
-                    },
-                    center: {
-                        lon: (bottomLeft[0] + topRight[0]) / 2,
-                        lat: (bottomLeft[1] + topRight[1]) / 2
-                    },
-                    elevation: {
-                        min: minElevation,
-                        max: maxElevation,
-                        range: maxElevation - minElevation
-                    },
-                    dataSource: 'Queensland DEM (0.5m-1m LiDAR resolution)',
-                    timestamp: new Date().toISOString(),
-                    satelliteZoom: 16
-                },
-                elevationGrid: elevationGrid,
-                satelliteTiles: satelliteTiles
-            };
-            
-            showLoading(false);
-            document.getElementById('saveDataBtn').disabled = false;
-            
-            showToast(`High-res data fetched! ${gridSize}x${gridSize} grid, elevation range: ${minElevation.toFixed(1)}m - ${maxElevation.toFixed(1)}m, ${satelliteTiles.length} satellite tiles`, 6000);
         }
 
         // Save elevation data as JSON
@@ -762,13 +783,13 @@
             const url = URL.createObjectURL(dataBlob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `terrain_data_${Date.now()}.json`;
+            link.download = `terrain_1m_data_${Date.now()}.json`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             
-            showToast('Terrain data saved successfully! Ready for 3D rendering.');
+            showToast('1m terrain data saved successfully! Ready for 3D rendering.');
         }
 
         // Event listeners
