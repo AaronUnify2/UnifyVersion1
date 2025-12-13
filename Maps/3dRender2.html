@@ -39,7 +39,6 @@
             display: block;
             width: 100%;
             padding: 12px 20px;
-            margin-bottom: 10px;
             background: white;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
@@ -48,10 +47,6 @@
             font-weight: 500;
             transition: all 0.2s ease;
             color: #333;
-        }
-
-        .control-btn:last-child {
-            margin-bottom: 0;
         }
 
         .control-btn:hover {
@@ -132,7 +127,6 @@
     <div id="map"></div>
     
     <div class="control-panel">
-        <button id="locationBtn" class="control-btn">📍 My Location</button>
         <button id="contoursBtn" class="control-btn">🗻 Contours</button>
     </div>
 
@@ -150,12 +144,12 @@
     <div id="toast" class="toast"></div>
 
     <script>
-        // Create contours layer with 1m LiDAR contours using correct layer name
+        // Create contours layer with 1m LiDAR contours
         const contoursLayer = new ol.layer.Tile({
             source: new ol.source.TileWMS({
                 url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer',
                 params: {
-                    'LAYERS': 'Contour_LiDAR_1m3693',  // Correct 1m LiDAR layer name from WMS capabilities
+                    'LAYERS': 'Contour_LiDAR_1m3693',
                     'FORMAT': 'image/png',
                     'TRANSPARENT': true,
                     'VERSION': '1.3.0'
@@ -181,28 +175,6 @@
             })
         });
 
-        // Layer for user location
-        const locationLayer = new ol.layer.Vector({
-            source: new ol.source.Vector(),
-            style: new ol.style.Style({
-                image: new ol.style.Circle({
-                    radius: 8,
-                    fill: new ol.style.Fill({
-                        color: '#2196F3'
-                    }),
-                    stroke: new ol.style.Stroke({
-                        color: 'white',
-                        width: 3
-                    })
-                })
-            }),
-            zIndex: 1000
-        });
-        map.addLayer(locationLayer);
-
-        // Store current location
-        let currentLocation = null;
-
         // Toast notification function
         function showToast(message, duration = 3000) {
             const toast = document.getElementById('toast');
@@ -211,92 +183,6 @@
             setTimeout(() => {
                 toast.classList.remove('show');
             }, duration);
-        }
-
-        // Get user location
-        function getUserLocation() {
-            const locationBtn = document.getElementById('locationBtn');
-            
-            if (!navigator.geolocation) {
-                showToast('Geolocation is not supported by your browser');
-                return;
-            }
-
-            locationBtn.disabled = true;
-            locationBtn.textContent = '📍 Getting location...';
-
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const coords = [position.coords.longitude, position.coords.latitude];
-                    currentLocation = coords;
-
-                    // Clear previous location markers
-                    locationLayer.getSource().clear();
-
-                    // Add new location marker
-                    const locationFeature = new ol.Feature({
-                        geometry: new ol.geom.Point(ol.proj.fromLonLat(coords)),
-                        name: 'Your Location'
-                    });
-                    locationLayer.getSource().addFeature(locationFeature);
-
-                    // Add accuracy circle if available
-                    if (position.coords.accuracy) {
-                        const accuracyFeature = new ol.Feature({
-                            geometry: new ol.geom.Circle(
-                                ol.proj.fromLonLat(coords),
-                                position.coords.accuracy
-                            )
-                        });
-                        accuracyFeature.setStyle(new ol.style.Style({
-                            fill: new ol.style.Fill({
-                                color: 'rgba(33, 150, 243, 0.1)'
-                            }),
-                            stroke: new ol.style.Stroke({
-                                color: '#2196F3',
-                                width: 2,
-                                lineDash: [5, 5]
-                            })
-                        }));
-                        locationLayer.getSource().addFeature(accuracyFeature);
-                    }
-
-                    // Animate to location
-                    map.getView().animate({
-                        center: ol.proj.fromLonLat(coords),
-                        zoom: 15,
-                        duration: 1000
-                    });
-
-                    locationBtn.disabled = false;
-                    locationBtn.textContent = '📍 My Location';
-                    locationBtn.classList.add('active');
-                    
-                    showToast(`Location found: ${coords[1].toFixed(6)}, ${coords[0].toFixed(6)}`);
-                },
-                (error) => {
-                    let errorMessage = 'Unable to get location';
-                    switch(error.code) {
-                        case error.PERMISSION_DENIED:
-                            errorMessage = 'Location access denied. Please enable location permissions.';
-                            break;
-                        case error.POSITION_UNAVAILABLE:
-                            errorMessage = 'Location information unavailable';
-                            break;
-                        case error.TIMEOUT:
-                            errorMessage = 'Location request timed out';
-                            break;
-                    }
-                    showToast(errorMessage);
-                    locationBtn.disabled = false;
-                    locationBtn.textContent = '📍 My Location';
-                },
-                {
-                    enableHighAccuracy: false,  // Changed to false for better compatibility
-                    timeout: 30000,  // Increased to 30 seconds
-                    maximumAge: 60000  // Allow cached location up to 1 minute old
-                }
-            );
         }
 
         // Toggle contours
@@ -318,48 +204,8 @@
             }
         }
 
-        // Add click events
-        document.getElementById('locationBtn').addEventListener('click', getUserLocation);
+        // Add click event for contours button
         document.getElementById('contoursBtn').addEventListener('click', toggleContours);
-
-        // Add popup on click for location marker
-        const popup = new ol.Overlay({
-            element: document.createElement('div'),
-            positioning: 'bottom-center',
-            stopEvent: false,
-            offset: [0, -10]
-        });
-        map.addOverlay(popup);
-
-        map.on('click', (evt) => {
-            const feature = map.forEachFeatureAtPixel(evt.pixel, (feature) => feature);
-            
-            if (feature && feature.get('name') === 'Your Location') {
-                const coordinates = feature.getGeometry().getCoordinates();
-                const lonLat = ol.proj.toLonLat(coordinates);
-                
-                const popupElement = popup.getElement();
-                popupElement.innerHTML = `
-                    <div style="background: white; padding: 10px 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-size: 13px;">
-                        <strong>Your Location</strong><br>
-                        <span style="color: #666;">
-                            Lat: ${lonLat[1].toFixed(6)}<br>
-                            Lon: ${lonLat[0].toFixed(6)}
-                        </span>
-                    </div>
-                `;
-                popup.setPosition(coordinates);
-            } else {
-                popup.setPosition(undefined);
-            }
-        });
-
-        // Change cursor on hover
-        map.on('pointermove', (evt) => {
-            const pixel = map.getEventPixel(evt.originalEvent);
-            const hit = map.hasFeatureAtPixel(pixel);
-            map.getTarget().style.cursor = hit ? 'pointer' : '';
-        });
     </script>
 </body>
 </html>
