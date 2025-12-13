@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Basic Map with Contours</title>
+    <title>Terrain Analysis & 3D Export</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
     <script src="https://cdn.jsdelivr.net/npm/ol@v10.2.1/dist/ol.js"></script>
     <style>
@@ -33,12 +33,14 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             padding: 15px;
             z-index: 1000;
+            min-width: 200px;
         }
 
         .control-btn {
             display: block;
             width: 100%;
             padding: 12px 20px;
+            margin-bottom: 10px;
             background: white;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
@@ -49,7 +51,11 @@
             color: #333;
         }
 
-        .control-btn:hover {
+        .control-btn:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-btn:hover:not(:disabled) {
             background: #f5f5f5;
             border-color: #2196F3;
         }
@@ -80,6 +86,8 @@
             opacity: 0;
             transition: opacity 0.3s ease;
             pointer-events: none;
+            max-width: 80%;
+            text-align: center;
         }
 
         .toast.show {
@@ -120,7 +128,57 @@
             background: #8B4513;
         }
 
+        /* Loading overlay */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 3000;
+            flex-direction: column;
+            color: white;
+        }
 
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .loading-progress {
+            margin-top: 10px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        /* Selection box style */
+        .ol-dragbox {
+            background-color: rgba(33, 150, 243, 0.2);
+            border: 2px dashed #2196F3;
+        }
     </style>
 </head>
 <body>
@@ -128,6 +186,10 @@
     
     <div class="control-panel">
         <button id="contoursBtn" class="control-btn">🗻 Contours</button>
+        <button id="satelliteBtn" class="control-btn">🛰️ Satellite View</button>
+        <button id="selectAreaBtn" class="control-btn">📍 Select Area</button>
+        <button id="fetchDataBtn" class="control-btn" disabled>📊 Fetch Terrain Data</button>
+        <button id="saveDataBtn" class="control-btn" disabled>💾 Save JSON</button>
     </div>
 
     <div id="legend" class="legend" style="display: none;">
@@ -141,10 +203,34 @@
         </div>
     </div>
 
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text">Fetching high-resolution terrain data...</div>
+        <div class="loading-progress" id="loadingProgress"></div>
+    </div>
+
     <div id="toast" class="toast"></div>
 
     <script>
-        // Create 10m contour layer (base layer - always available statewide)
+        // Global variables
+        let selectedArea = null;
+        let currentElevationData = null;
+        let isSelectingArea = false;
+        let dragBox = null;
+
+        // Queensland DEM ImageServer URL (0.5m-1m resolution!)
+        const QLD_DEM_SERVICE = 'https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/QldDem/ImageServer';
+
+        // Create satellite imagery layer
+        const satelliteLayer = new ol.layer.Tile({
+            source: new ol.source.XYZ({
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                maxZoom: 19
+            }),
+            visible: false
+        });
+
+        // Create 10m contour layer
         const contours10mLayer = new ol.layer.Tile({
             source: new ol.source.TileWMS({
                 url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer',
@@ -161,7 +247,7 @@
             zIndex: 1
         });
 
-        // Create 5m LiDAR contour layer (available in some areas)
+        // Create 5m LiDAR contour layer
         const contours5mLayer = new ol.layer.Tile({
             source: new ol.source.TileWMS({
                 url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer',
@@ -178,7 +264,7 @@
             zIndex: 2
         });
 
-        // Create 1m LiDAR contour layer (available in limited areas when zoomed in)
+        // Create 1m LiDAR contour layer
         const contours1mLayer = new ol.layer.Tile({
             source: new ol.source.TileWMS({
                 url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer',
@@ -195,22 +281,44 @@
             zIndex: 3
         });
 
+        // Create base map layer
+        const baseMapLayer = new ol.layer.Tile({
+            source: new ol.source.OSM()
+        });
+
         // Initialize the map
         const map = new ol.Map({
             target: 'map',
             layers: [
-                new ol.layer.Tile({
-                    source: new ol.source.OSM()
-                }),
-                contours10mLayer,  // 10m layer (base)
-                contours5mLayer,   // 5m layer (overlays 10m where available)
-                contours1mLayer    // 1m layer (overlays 5m where available and zoomed in)
+                baseMapLayer,
+                satelliteLayer,
+                contours10mLayer,
+                contours5mLayer,
+                contours1mLayer
             ],
             view: new ol.View({
-                center: ol.proj.fromLonLat([145.7781, -16.9186]), // Center of Queensland
+                center: ol.proj.fromLonLat([145.7781, -16.9186]),
                 zoom: 8
             })
         });
+
+        // Create vector source and layer for selection box
+        const selectionSource = new ol.source.Vector();
+        const selectionLayer = new ol.layer.Vector({
+            source: selectionSource,
+            style: new ol.style.Style({
+                stroke: new ol.style.Stroke({
+                    color: '#2196F3',
+                    width: 3,
+                    lineDash: [10, 10]
+                }),
+                fill: new ol.style.Fill({
+                    color: 'rgba(33, 150, 243, 0.1)'
+                })
+            }),
+            zIndex: 1000
+        });
+        map.addLayer(selectionLayer);
 
         // Toast notification function
         function showToast(message, duration = 3000) {
@@ -222,13 +330,24 @@
             }, duration);
         }
 
+        // Show/hide loading overlay
+        function showLoading(show, progress = '') {
+            const overlay = document.getElementById('loadingOverlay');
+            const progressEl = document.getElementById('loadingProgress');
+            if (show) {
+                overlay.classList.add('show');
+                progressEl.textContent = progress;
+            } else {
+                overlay.classList.remove('show');
+            }
+        }
+
         // Toggle contours
         function toggleContours() {
             const contoursBtn = document.getElementById('contoursBtn');
             const legend = document.getElementById('legend');
             const isVisible = contours10mLayer.getVisible();
             
-            // Toggle all three layers together
             contours10mLayer.setVisible(!isVisible);
             contours5mLayer.setVisible(!isVisible);
             contours1mLayer.setVisible(!isVisible);
@@ -236,7 +355,7 @@
             if (!isVisible) {
                 contoursBtn.classList.add('active');
                 legend.style.display = 'block';
-                showToast('Contours enabled - resolution adapts to zoom and coverage');
+                showToast('Contours enabled');
             } else {
                 contoursBtn.classList.remove('active');
                 legend.style.display = 'none';
@@ -244,8 +363,270 @@
             }
         }
 
-        // Add click event for contours button
+        // Toggle satellite view
+        function toggleSatellite() {
+            const satelliteBtn = document.getElementById('satelliteBtn');
+            const isVisible = satelliteLayer.getVisible();
+            
+            satelliteLayer.setVisible(!isVisible);
+            baseMapLayer.setVisible(isVisible);
+            
+            if (!isVisible) {
+                satelliteBtn.classList.add('active');
+                showToast('Satellite view enabled');
+            } else {
+                satelliteBtn.classList.remove('active');
+                showToast('Satellite view disabled');
+            }
+        }
+
+        // Toggle area selection mode
+        function toggleAreaSelection() {
+            const selectBtn = document.getElementById('selectAreaBtn');
+            
+            if (isSelectingArea) {
+                // Disable selection mode
+                if (dragBox) {
+                    map.removeInteraction(dragBox);
+                    dragBox = null;
+                }
+                isSelectingArea = false;
+                selectBtn.classList.remove('active');
+                showToast('Area selection disabled');
+            } else {
+                // Enable selection mode
+                dragBox = new ol.interaction.DragBox({
+                    condition: ol.events.condition.platformModifierKeyOnly
+                });
+                
+                dragBox.on('boxend', function() {
+                    const extent = dragBox.getGeometry().getExtent();
+                    selectedArea = extent;
+                    
+                    // Clear previous selection
+                    selectionSource.clear();
+                    
+                    // Add new selection box
+                    const selectionPolygon = ol.geom.Polygon.fromExtent(extent);
+                    const feature = new ol.Feature(selectionPolygon);
+                    selectionSource.addFeature(feature);
+                    
+                    // Enable fetch button
+                    document.getElementById('fetchDataBtn').disabled = false;
+                    
+                    // Convert to lat/lon for display
+                    const [minX, minY, maxX, maxY] = extent;
+                    const bottomLeft = ol.proj.toLonLat([minX, minY]);
+                    const topRight = ol.proj.toLonLat([maxX, maxY]);
+                    
+                    const widthKm = (Math.abs(topRight[0] - bottomLeft[0]) * 111).toFixed(2);
+                    const heightKm = (Math.abs(topRight[1] - bottomLeft[1]) * 111).toFixed(2);
+                    
+                    showToast(`Area selected: ${widthKm}km × ${heightKm}km - Ready to fetch high-res elevation data!`, 5000);
+                });
+                
+                map.addInteraction(dragBox);
+                isSelectingArea = true;
+                selectBtn.classList.add('active');
+                showToast('Hold Ctrl/Cmd and drag to select area');
+            }
+        }
+
+        // Get satellite tiles for the selected area at zoom level 16
+        function getSatelliteTiles(extent, zoom = 16) {
+            const [minX, minY, maxX, maxY] = extent;
+            
+            // Convert extent corners to tile coordinates
+            const getTileCoord = (lon, lat, zoom) => {
+                const n = Math.pow(2, zoom);
+                const xtile = Math.floor((lon + 180) / 360 * n);
+                const ytile = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n);
+                return { x: xtile, y: ytile, z: zoom };
+            };
+            
+            const bottomLeft = ol.proj.toLonLat([minX, minY]);
+            const topRight = ol.proj.toLonLat([maxX, maxY]);
+            
+            const tileBL = getTileCoord(bottomLeft[0], bottomLeft[1], zoom);
+            const tileTR = getTileCoord(topRight[0], topRight[1], zoom);
+            
+            const tiles = [];
+            for (let x = Math.min(tileBL.x, tileTR.x); x <= Math.max(tileBL.x, tileTR.x); x++) {
+                for (let y = Math.min(tileBL.y, tileTR.y); y <= Math.max(tileBL.y, tileTR.y); y++) {
+                    tiles.push({
+                        x: x,
+                        y: y,
+                        z: zoom,
+                        url: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`
+                    });
+                }
+            }
+            
+            return tiles;
+        }
+
+        // Query elevation from Queensland DEM ImageServer
+        async function queryElevation(lon, lat) {
+            const url = `${QLD_DEM_SERVICE}/identify?` + 
+                `geometry=${lon},${lat}` +
+                `&geometryType=esriGeometryPoint` +
+                `&returnGeometry=false` +
+                `&returnCatalogItems=false` +
+                `&f=json`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.value !== undefined && data.value !== null) {
+                    return data.value; // Elevation in meters
+                } else {
+                    return null;
+                }
+            } catch (error) {
+                console.error('Error querying elevation:', error);
+                return null;
+            }
+        }
+
+        // Fetch elevation data for the selected area using Queensland DEM
+        async function fetchElevationData() {
+            if (!selectedArea) {
+                showToast('Please select an area first');
+                return;
+            }
+            
+            showLoading(true, 'Preparing to fetch high-resolution elevation data...');
+            
+            const [minX, minY, maxX, maxY] = selectedArea;
+            const bottomLeft = ol.proj.toLonLat([minX, minY]);
+            const topRight = ol.proj.toLonLat([maxX, maxY]);
+            
+            const gridSize = 90;
+            const lonStep = (topRight[0] - bottomLeft[0]) / (gridSize - 1);
+            const latStep = (topRight[1] - bottomLeft[1]) / (gridSize - 1);
+            
+            const elevationGrid = [];
+            const coordinates = [];
+            
+            // Generate grid coordinates
+            for (let i = 0; i < gridSize; i++) {
+                elevationGrid[i] = [];
+                for (let j = 0; j < gridSize; j++) {
+                    const lon = bottomLeft[0] + j * lonStep;
+                    const lat = bottomLeft[1] + i * latStep;
+                    coordinates.push({ lon, lat, i, j });
+                }
+            }
+            
+            const totalPoints = coordinates.length;
+            let completedPoints = 0;
+            
+            // Fetch elevation data with batching to avoid overwhelming the server
+            const batchSize = 10;
+            const delayBetweenBatches = 100; // ms
+            
+            for (let i = 0; i < coordinates.length; i += batchSize) {
+                const batch = coordinates.slice(i, i + batchSize);
+                
+                // Process batch in parallel
+                const promises = batch.map(coord => queryElevation(coord.lon, coord.lat));
+                const results = await Promise.all(promises);
+                
+                // Store results
+                results.forEach((elevation, idx) => {
+                    const coord = batch[idx];
+                    elevationGrid[coord.i][coord.j] = {
+                        elevation: elevation !== null ? elevation : 0,
+                        lon: coord.lon,
+                        lat: coord.lat
+                    };
+                });
+                
+                completedPoints += batch.length;
+                const percentage = ((completedPoints / totalPoints) * 100).toFixed(1);
+                showLoading(true, `Fetching elevation data: ${completedPoints}/${totalPoints} (${percentage}%)`);
+                
+                // Small delay between batches
+                if (i + batchSize < coordinates.length) {
+                    await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+                }
+            }
+            
+            // Get satellite tiles
+            const satelliteTiles = getSatelliteTiles(selectedArea, 16);
+            
+            // Calculate min/max elevation for metadata
+            let minElevation = Infinity;
+            let maxElevation = -Infinity;
+            elevationGrid.forEach(row => {
+                row.forEach(point => {
+                    if (point.elevation < minElevation) minElevation = point.elevation;
+                    if (point.elevation > maxElevation) maxElevation = point.elevation;
+                });
+            });
+            
+            // Store the complete dataset
+            currentElevationData = {
+                metadata: {
+                    gridSize: gridSize,
+                    bounds: {
+                        minLon: bottomLeft[0],
+                        minLat: bottomLeft[1],
+                        maxLon: topRight[0],
+                        maxLat: topRight[1]
+                    },
+                    center: {
+                        lon: (bottomLeft[0] + topRight[0]) / 2,
+                        lat: (bottomLeft[1] + topRight[1]) / 2
+                    },
+                    elevation: {
+                        min: minElevation,
+                        max: maxElevation,
+                        range: maxElevation - minElevation
+                    },
+                    dataSource: 'Queensland DEM (0.5m-1m LiDAR resolution)',
+                    timestamp: new Date().toISOString(),
+                    satelliteZoom: 16
+                },
+                elevationGrid: elevationGrid,
+                satelliteTiles: satelliteTiles
+            };
+            
+            showLoading(false);
+            document.getElementById('saveDataBtn').disabled = false;
+            
+            showToast(`High-res data fetched! ${gridSize}x${gridSize} grid, elevation range: ${minElevation.toFixed(1)}m - ${maxElevation.toFixed(1)}m, ${satelliteTiles.length} satellite tiles`, 6000);
+        }
+
+        // Save elevation data as JSON
+        function saveTerrainData() {
+            if (!currentElevationData) {
+                showToast('No terrain data to save');
+                return;
+            }
+            
+            const dataStr = JSON.stringify(currentElevationData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `terrain_data_${Date.now()}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            showToast('Terrain data saved successfully! Ready for 3D rendering.');
+        }
+
+        // Event listeners
         document.getElementById('contoursBtn').addEventListener('click', toggleContours);
+        document.getElementById('satelliteBtn').addEventListener('click', toggleSatellite);
+        document.getElementById('selectAreaBtn').addEventListener('click', toggleAreaSelection);
+        document.getElementById('fetchDataBtn').addEventListener('click', fetchElevationData);
+        document.getElementById('saveDataBtn').addEventListener('click', saveTerrainData);
     </script>
 </body>
 </html>
