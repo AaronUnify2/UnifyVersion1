@@ -132,6 +132,31 @@
             min-width: 280px;
             z-index: 1000;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease;
+        }
+
+        .control-panel.collapsed {
+            transform: translateX(calc(100% + 20px));
+        }
+
+        .control-panel-toggle {
+            position: absolute;
+            left: -50px;
+            top: 20px;
+            width: 40px;
+            height: 40px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 20px;
+            transition: all 0.3s;
+        }
+
+        .control-panel-toggle:hover {
+            background: rgba(103, 126, 234, 0.8);
         }
 
         .control-section {
@@ -418,6 +443,43 @@
             font-family: monospace;
             z-index: 1000;
         }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            padding: 30px 40px;
+            border-radius: 15px;
+            z-index: 5000;
+            font-size: 16px;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            max-width: 80%;
+            border: 2px solid #677eea;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+
+        .toast-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #677eea;
+        }
+
+        .toast-message {
+            font-size: 14px;
+            opacity: 0.9;
+            line-height: 1.6;
+        }
     </style>
 </head>
 <body>
@@ -437,7 +499,13 @@
 
     <div class="stats" id="stats">FPS: 0</div>
 
+    <div class="toast" id="toast">
+        <div class="toast-title">✅ Terrain Loaded!</div>
+        <div class="toast-message" id="toastMessage"></div>
+    </div>
+
     <div class="control-panel" id="controlPanel" style="display: none;">
+        <div class="control-panel-toggle" id="controlPanelToggle">◀</div>
         <div class="control-section">
             <div class="control-title">Visualization</div>
             <button class="control-btn" id="satelliteToggle">
@@ -588,6 +656,18 @@
         let mobileUpTapCount = 0;
         let mobileUpTapTimer = null;
 
+        // Toast notification
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            toastMessage.innerHTML = message;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+
         // Initialize
         init();
 
@@ -604,15 +684,41 @@
             const file = event.target.files[0];
             if (!file) return;
             
+            const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            
             document.getElementById('uploadArea').style.display = 'none';
             document.getElementById('loadingSpinner').classList.add('active');
             document.getElementById('loadingText').classList.add('active');
+            document.getElementById('loadingText').textContent = `Loading file (${fileSizeMB} MB)...`;
             
             const reader = new FileReader();
+            reader.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const percentLoaded = Math.round((e.loaded / e.total) * 100);
+                    document.getElementById('loadingText').textContent = `Loading file (${fileSizeMB} MB) - ${percentLoaded}%`;
+                }
+            };
+            
             reader.onload = function(e) {
+                document.getElementById('loadingText').textContent = `Parsing JSON data...`;
                 try {
                     terrainData = JSON.parse(e.target.result);
-                    initScene();
+                    
+                    // Validate data
+                    if (!terrainData.metadata || !terrainData.elevationGrid) {
+                        throw new Error('Invalid terrain data format');
+                    }
+                    
+                    const gridSize = terrainData.metadata.gridSize;
+                    const tileCount = terrainData.satelliteTiles ? terrainData.satelliteTiles.length : 0;
+                    
+                    document.getElementById('loadingText').textContent = 
+                        `Processing ${gridSize}x${gridSize} elevation grid with ${tileCount} satellite tiles...`;
+                    
+                    // Give UI time to update
+                    setTimeout(() => {
+                        initScene();
+                    }, 100);
                 } catch (error) {
                     alert('Error loading terrain data: ' + error.message);
                     location.reload();
@@ -676,9 +782,36 @@
             // Update UI
             updateInfoPanel();
             document.getElementById('loadingScreen').classList.add('hidden');
+            
+            // Show success message with data summary
+            const gridSize = terrainData.metadata.gridSize;
+            const tileCount = terrainData.satelliteTiles ? terrainData.satelliteTiles.length : 0;
+            const minElev = terrainData.metadata.elevation.min || 0;
+            const maxElev = terrainData.metadata.elevation.max || 0;
+            
+            console.log('✅ Terrain loaded successfully!');
+            console.log(`📊 Grid: ${gridSize}x${gridSize} points`);
+            console.log(`🏔️ Elevation: ${minElev.toFixed(1)}m to ${maxElev.toFixed(1)}m`);
+            console.log(`🛰️ Satellite tiles: ${tileCount}`);
+            console.log(`💾 Data source: ${terrainData.metadata.dataSource}`);
+            
             setTimeout(() => {
                 document.getElementById('controlPanel').style.display = 'block';
                 document.getElementById('infoPanel').style.display = 'block';
+                
+                // Show success toast
+                showToast(
+                    `<strong>Grid:</strong> ${gridSize}x${gridSize} points<br>` +
+                    `<strong>Elevation:</strong> ${minElev.toFixed(1)}m - ${maxElev.toFixed(1)}m<br>` +
+                    `<strong>Satellite tiles:</strong> ${tileCount}<br>` +
+                    `<strong>Click to lock pointer and explore!</strong>`,
+                    4000
+                );
+                
+                // Auto-show instructions on first load
+                setTimeout(() => {
+                    document.getElementById('instructions').classList.add('show');
+                }, 4500);
             }, 500);
             
             // Start animation loop
@@ -1152,6 +1285,13 @@
         }
 
         function setupEventListeners() {
+            // Control panel toggle
+            document.getElementById('controlPanelToggle').addEventListener('click', function() {
+                const panel = document.getElementById('controlPanel');
+                panel.classList.toggle('collapsed');
+                this.textContent = panel.classList.contains('collapsed') ? '▶' : '◀';
+            });
+            
             // Satellite toggle
             document.getElementById('satelliteToggle').addEventListener('click', function() {
                 showSatellite = !showSatellite;
