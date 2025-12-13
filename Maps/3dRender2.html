@@ -217,6 +217,11 @@
         let currentElevationData = null;
         let isSelectingArea = false;
         let dragBox = null;
+        
+        // Tap selection state for mobile
+        let tapSelectionState = 'idle'; // 'idle', 'waitingForFirstCorner', 'waitingForSecondCorner'
+        let firstCorner = null;
+        let previewFeature = null;
 
         // Queensland DEM ImageServer URL (0.5m-1m resolution!)
         const QLD_DEM_SERVICE = 'https://spatial-img.information.qld.gov.au/arcgis/rest/services/Elevation/QldDem/ImageServer';
@@ -320,6 +325,26 @@
         });
         map.addLayer(selectionLayer);
 
+        // Create vector source and layer for corner markers
+        const markerSource = new ol.source.Vector();
+        const markerLayer = new ol.layer.Vector({
+            source: markerSource,
+            style: new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 8,
+                    fill: new ol.style.Fill({
+                        color: '#FF5722'
+                    }),
+                    stroke: new ol.style.Stroke({
+                        color: 'white',
+                        width: 3
+                    })
+                })
+            }),
+            zIndex: 1001
+        });
+        map.addLayer(markerLayer);
+
         // Toast notification function
         function showToast(message, duration = 3000) {
             const toast = document.getElementById('toast');
@@ -380,6 +405,102 @@
             }
         }
 
+        // Handle map click for tap-to-select
+        function handleMapClick(evt) {
+            if (!isSelectingArea) return;
+            
+            const coordinate = evt.coordinate;
+            
+            if (tapSelectionState === 'waitingForFirstCorner') {
+                // Place first corner
+                firstCorner = coordinate;
+                tapSelectionState = 'waitingForSecondCorner';
+                
+                // Add marker for first corner
+                markerSource.clear();
+                const marker = new ol.Feature({
+                    geometry: new ol.geom.Point(coordinate)
+                });
+                markerSource.addFeature(marker);
+                
+                showToast('Tap to place second corner');
+                
+            } else if (tapSelectionState === 'waitingForSecondCorner') {
+                // Place second corner and create selection
+                const secondCorner = coordinate;
+                
+                // Create extent from two corners
+                const extent = [
+                    Math.min(firstCorner[0], secondCorner[0]),
+                    Math.min(firstCorner[1], secondCorner[1]),
+                    Math.max(firstCorner[0], secondCorner[0]),
+                    Math.max(firstCorner[1], secondCorner[1])
+                ];
+                
+                selectedArea = extent;
+                
+                // Clear markers and add selection box
+                markerSource.clear();
+                selectionSource.clear();
+                
+                const selectionPolygon = ol.geom.Polygon.fromExtent(extent);
+                const feature = new ol.Feature(selectionPolygon);
+                selectionSource.addFeature(feature);
+                
+                // Enable fetch button
+                document.getElementById('fetchDataBtn').disabled = false;
+                
+                // Convert to lat/lon for display
+                const [minX, minY, maxX, maxY] = extent;
+                const bottomLeft = ol.proj.toLonLat([minX, minY]);
+                const topRight = ol.proj.toLonLat([maxX, maxY]);
+                
+                const widthKm = (Math.abs(topRight[0] - bottomLeft[0]) * 111).toFixed(2);
+                const heightKm = (Math.abs(topRight[1] - bottomLeft[1]) * 111).toFixed(2);
+                
+                showToast(`Area selected: ${widthKm}km × ${heightKm}km - Ready to fetch!`, 5000);
+                
+                // Reset state but keep selection mode active
+                tapSelectionState = 'waitingForFirstCorner';
+                firstCorner = null;
+            }
+        }
+
+        // Handle pointer move for preview
+        function handlePointerMove(evt) {
+            if (tapSelectionState === 'waitingForSecondCorner' && firstCorner) {
+                const currentCoord = evt.coordinate;
+                
+                // Create preview box
+                const extent = [
+                    Math.min(firstCorner[0], currentCoord[0]),
+                    Math.min(firstCorner[1], currentCoord[1]),
+                    Math.max(firstCorner[0], currentCoord[0]),
+                    Math.max(firstCorner[1], currentCoord[1])
+                ];
+                
+                // Update preview
+                const previewPolygon = ol.geom.Polygon.fromExtent(extent);
+                
+                if (previewFeature) {
+                    previewFeature.setGeometry(previewPolygon);
+                } else {
+                    previewFeature = new ol.Feature(previewPolygon);
+                    previewFeature.setStyle(new ol.style.Style({
+                        stroke: new ol.style.Stroke({
+                            color: '#FF9800',
+                            width: 2,
+                            lineDash: [5, 5]
+                        }),
+                        fill: new ol.style.Fill({
+                            color: 'rgba(255, 152, 0, 0.05)'
+                        })
+                    }));
+                    selectionSource.addFeature(previewFeature);
+                }
+            }
+        }
+
         // Toggle area selection mode
         function toggleAreaSelection() {
             const selectBtn = document.getElementById('selectAreaBtn');
@@ -391,10 +512,19 @@
                     dragBox = null;
                 }
                 isSelectingArea = false;
+                tapSelectionState = 'idle';
+                firstCorner = null;
+                markerSource.clear();
+                if (previewFeature) {
+                    selectionSource.removeFeature(previewFeature);
+                    previewFeature = null;
+                }
                 selectBtn.classList.remove('active');
                 showToast('Area selection disabled');
             } else {
                 // Enable selection mode
+                
+                // Add drag box for desktop (with Ctrl/Cmd)
                 dragBox = new ol.interaction.DragBox({
                     condition: ol.events.condition.platformModifierKeyOnly
                 });
@@ -405,6 +535,8 @@
                     
                     // Clear previous selection
                     selectionSource.clear();
+                    markerSource.clear();
+                    previewFeature = null;
                     
                     // Add new selection box
                     const selectionPolygon = ol.geom.Polygon.fromExtent(extent);
@@ -422,15 +554,26 @@
                     const widthKm = (Math.abs(topRight[0] - bottomLeft[0]) * 111).toFixed(2);
                     const heightKm = (Math.abs(topRight[1] - bottomLeft[1]) * 111).toFixed(2);
                     
-                    showToast(`Area selected: ${widthKm}km × ${heightKm}km - Ready to fetch high-res elevation data!`, 5000);
+                    showToast(`Area selected: ${widthKm}km × ${heightKm}km - Ready to fetch!`, 5000);
+                    
+                    // Reset tap selection state
+                    tapSelectionState = 'waitingForFirstCorner';
+                    firstCorner = null;
                 });
                 
                 map.addInteraction(dragBox);
+                
+                // Enable tap selection
                 isSelectingArea = true;
+                tapSelectionState = 'waitingForFirstCorner';
                 selectBtn.classList.add('active');
-                showToast('Hold Ctrl/Cmd and drag to select area');
+                showToast('Desktop: Hold Ctrl/Cmd + drag | Mobile: Tap two corners', 5000);
             }
         }
+
+        // Add event listeners for tap selection
+        map.on('click', handleMapClick);
+        map.on('pointermove', handlePointerMove);
 
         // Get satellite tiles for the selected area at zoom level 16
         function getSatelliteTiles(extent, zoom = 16) {
