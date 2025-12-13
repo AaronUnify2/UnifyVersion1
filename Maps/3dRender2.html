@@ -3,9 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Basic Map with Contours</title>
+    <title>3D Terrain Viewer V2 - High Resolution Contour Mapping</title>
+    
+    <!-- OpenLayers -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
     <script src="https://cdn.jsdelivr.net/npm/ol@v10.2.1/dist/ol.js"></script>
+    
+    <!-- Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+    
     <style>
         * {
             margin: 0;
@@ -13,10 +20,24 @@
             box-sizing: border-box;
         }
 
-        body, html {
-            width: 100%;
-            height: 100%;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+
+        #container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Map Panel */
+        #mapPanel {
+            width: 40%;
+            position: relative;
+            border-right: 2px solid #333;
         }
 
         #map {
@@ -24,65 +45,203 @@
             height: 100%;
         }
 
+        /* 3D Viewer Panel */
+        #viewerPanel {
+            width: 60%;
+            position: relative;
+            background: #0a0a0a;
+        }
+
+        #viewer3d {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Control Panel */
         .control-panel {
             position: absolute;
             top: 20px;
             right: 20px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            padding: 15px;
+            background: rgba(30, 30, 30, 0.95);
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 20px;
             z-index: 1000;
+            min-width: 250px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
         }
 
-        .control-btn {
-            display: block;
+        .control-section {
+            margin-bottom: 20px;
+        }
+
+        .control-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .btn {
             width: 100%;
-            padding: 12px 20px;
-            background: white;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 6px;
+            color: #e0e0e0;
             cursor: pointer;
             font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            color: #333;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .control-btn:hover {
-            background: #f5f5f5;
-            border-color: #2196F3;
+        .btn:hover {
+            background: #3a3a3a;
+            border-color: #00bcd4;
         }
 
-        .control-btn.active {
-            background: #2196F3;
-            color: white;
-            border-color: #2196F3;
+        .btn.active {
+            background: #00bcd4;
+            border-color: #00bcd4;
+            color: #fff;
         }
 
-        .control-btn:disabled {
-            opacity: 0.5;
+        .btn:disabled {
+            opacity: 0.4;
             cursor: not-allowed;
         }
 
-        /* Toast notification */
-        .toast {
+        .btn-primary {
+            background: #00bcd4;
+            border-color: #00bcd4;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .btn-primary:hover {
+            background: #00acc1;
+        }
+
+        /* Info Display */
+        #infoDisplay {
             position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(30, 30, 30, 0.95);
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            z-index: 1000;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            min-width: 300px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            padding: 4px 0;
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .info-label {
+            color: #00bcd4;
+            font-weight: 600;
+        }
+
+        .info-value {
+            color: #e0e0e0;
+            text-align: right;
+        }
+
+        /* Loading Overlay */
+        #loadingOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        #loadingOverlay.show {
+            display: flex;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #333;
+            border-top-color: #00bcd4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 16px;
+            color: #00bcd4;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            width: 300px;
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #00bcd4, #00acc1);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        /* Toast Messages */
+        #toast {
+            position: fixed;
             bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
+            background: rgba(0, 188, 212, 0.95);
+            color: #fff;
             padding: 12px 24px;
-            border-radius: 8px;
-            z-index: 2000;
+            border-radius: 6px;
+            z-index: 3000;
             font-size: 14px;
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.3s;
             pointer-events: none;
         }
 
-        .toast.show {
+        #toast.show {
             opacity: 1;
         }
 
@@ -90,162 +249,1197 @@
         .legend {
             position: absolute;
             bottom: 20px;
-            left: 20px;
-            background: white;
+            right: 20px;
+            background: rgba(30, 30, 30, 0.95);
+            border: 1px solid #444;
             border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            padding: 12px 15px;
-            font-size: 12px;
+            padding: 15px;
             z-index: 1000;
-            max-width: 220px;
+            font-size: 11px;
         }
 
         .legend-title {
             font-weight: 600;
-            margin-bottom: 8px;
-            color: #333;
+            margin-bottom: 10px;
+            color: #00bcd4;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .legend-item {
             display: flex;
             align-items: center;
-            margin-bottom: 5px;
-            color: #666;
+            margin-bottom: 6px;
+            color: #ccc;
         }
 
         .legend-line {
             width: 30px;
             height: 2px;
-            margin-right: 8px;
+            margin-right: 10px;
             background: #8B4513;
         }
 
-
-    </style>
-</head>
-<body>
-    <div id="map"></div>
-    
-    <div class="control-panel">
-        <button id="contoursBtn" class="control-btn">🗻 Contours</button>
-    </div>
-
-    <div id="legend" class="legend" style="display: none;">
-        <div class="legend-title">Contour Lines</div>
-        <div class="legend-item">
-            <div class="legend-line"></div>
-            <span>Smart contours</span>
-        </div>
-        <div style="font-size: 11px; color: #999; margin-top: 5px;">
-            Shows 1m (LiDAR areas), 5m (photogrammetry), or 10m (statewide)
-        </div>
-    </div>
-
-    <div id="toast" class="toast"></div>
-
-    <script>
-        // Create 10m contour layer (base layer - shows everywhere)
-        const contours10m = new ol.layer.Tile({
-            source: new ol.source.TileWMS({
-                url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer',
-                params: {
-                    'LAYERS': 'Contour_SRTM_10m28055',
-                    'FORMAT': 'image/png',
-                    'TRANSPARENT': true,
-                    'VERSION': '1.3.0'
-                },
-                serverType: 'geoserver'
-            }),
-            visible: false,
-            opacity: 0.8,
-            zIndex: 1
-        });
-
-        // Create 5m contour layer (shows where available, on top of 10m)
-        const contours5m = new ol.layer.Tile({
-            source: new ol.source.TileWMS({
-                url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer',
-                params: {
-                    'LAYERS': 'Contour_LiDAR_5m7465',
-                    'FORMAT': 'image/png',
-                    'TRANSPARENT': true,
-                    'VERSION': '1.3.0'
-                },
-                serverType: 'geoserver'
-            }),
-            visible: false,
-            opacity: 0.8,
-            zIndex: 2
-        });
-
-        // Create 1m contour layer (shows where available, on top of all)
-        const contours1m = new ol.layer.Tile({
-            source: new ol.source.TileWMS({
-                url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer',
-                params: {
-                    'LAYERS': 'Contour_LiDAR_1m3693',
-                    'FORMAT': 'image/png',
-                    'TRANSPARENT': true,
-                    'VERSION': '1.3.0'
-                },
-                serverType: 'geoserver'
-            }),
-            visible: false,
-            opacity: 0.8,
-            zIndex: 3
-        });
-
-        // Initialize the map
-        const map = new ol.Map({
-            target: 'map',
-            layers: [
-                new ol.layer.Tile({
-                    source: new ol.source.OSM()
-                }),
-                contours10m,  // Bottom layer
-                contours5m,   // Middle layer
-                contours1m    // Top layer
-            ],
-            view: new ol.View({
-                center: ol.proj.fromLonLat([145.7781, -16.9186]), // Center of Queensland
-                zoom: 8
-            })
-        });
-
-        // Toast notification function
-        function showToast(message, duration = 3000) {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.classList.add('show');
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, duration);
+        /* Mobile Controls */
+        #mobileControls {
+            display: none;
+            position: absolute;
+            bottom: 80px;
+            right: 20px;
+            z-index: 1500;
+            gap: 10px;
+            flex-direction: column;
         }
 
-        // Toggle contours
-        function toggleContours() {
-            const contoursBtn = document.getElementById('contoursBtn');
-            const legend = document.getElementById('legend');
-            const isVisible = contours10m.getVisible();
+        .mobile-btn {
+            width: 60px;
+            height: 60px;
+            background: rgba(30, 30, 30, 0.95);
+            border: 2px solid #00bcd4;
+            border-radius: 50%;
+            color: #00bcd4;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .mobile-btn:active {
+            background: rgba(0, 188, 212, 0.3);
+        }
+
+        #dpad {
+            display: none;
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1500;
+        }
+
+        .dpad-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 60px);
+            grid-template-rows: repeat(3, 60px);
+            gap: 5px;
+        }
+
+        .dpad-btn {
+            background: rgba(30, 30, 30, 0.95);
+            border: 2px solid #00bcd4;
+            border-radius: 8px;
+            color: #00bcd4;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .dpad-btn:active {
+            background: rgba(0, 188, 212, 0.3);
+        }
+
+        .dpad-center {
+            background: transparent;
+            border: none;
+            cursor: default;
+        }
+
+        @media (max-width: 1024px) {
+            #container {
+                flex-direction: column;
+            }
             
-            // Toggle all three layers together
-            contours10m.setVisible(!isVisible);
-            contours5m.setVisible(!isVisible);
-            contours1m.setVisible(!isVisible);
+            #mapPanel {
+                width: 100%;
+                height: 50%;
+                border-right: none;
+                border-bottom: 2px solid #333;
+            }
             
-            if (!isVisible) {
-                contoursBtn.classList.add('active');
-                legend.style.display = 'block';
-                showToast('Contours enabled - automatically uses best available data');
-            } else {
-                contoursBtn.classList.remove('active');
-                legend.style.display = 'none';
-                showToast('Contours disabled');
+            #viewerPanel {
+                width: 100%;
+                height: 50%;
+            }
+
+            #mobileControls,
+            #dpad {
+                display: flex;
             }
         }
 
-        // Add click event for contours button
-        document.getElementById('contoursBtn').addEventListener('click', toggleContours);
+        /* Instructions */
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(30, 30, 30, 0.98);
+            border: 2px solid #00bcd4;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 500px;
+            z-index: 1500;
+            display: none;
+        }
+
+        #instructions.show {
+            display: block;
+        }
+
+        .instructions-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #00bcd4;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .instructions-content {
+            line-height: 1.8;
+            color: #ccc;
+        }
+
+        .instructions-content strong {
+            color: #fff;
+        }
+
+        .close-btn {
+            margin-top: 20px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <!-- Map Panel -->
+        <div id="mapPanel">
+            <div id="map"></div>
+            
+            <div class="control-panel">
+                <div class="control-section">
+                    <div class="control-title">Map Layers</div>
+                    <button id="satelliteBtn" class="btn">🛰️ Satellite View</button>
+                    <button id="contoursBtn" class="btn">🗻 Contours</button>
+                </div>
+                
+                <div class="control-section">
+                    <div class="control-title">Select Area</div>
+                    <button id="selectAreaBtn" class="btn btn-primary">📐 Draw Bounding Box</button>
+                    <button id="generateBtn" class="btn" disabled>⚡ Generate 3D Terrain</button>
+                </div>
+            </div>
+
+            <div class="legend" id="mapLegend" style="display: none;">
+                <div class="legend-title">Contour Data</div>
+                <div class="legend-item">
+                    <div class="legend-line"></div>
+                    <span>1m LiDAR (where available)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line"></div>
+                    <span>5m Photogrammetry</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line"></div>
+                    <span>10m SRTM (base coverage)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3D Viewer Panel -->
+        <div id="viewerPanel">
+            <div id="viewer3d"></div>
+            
+            <div class="control-panel" style="right: 20px;">
+                <div class="control-section">
+                    <div class="control-title">Camera</div>
+                    <button id="resetCameraBtn" class="btn">🎯 Reset View</button>
+                    <button id="topViewBtn" class="btn">⬇️ Top-Down View</button>
+                    <button id="autoRotateBtn" class="btn">🔄 Auto-Rotate</button>
+                </div>
+                
+                <div class="control-section">
+                    <div class="control-title">Visualization</div>
+                    <button id="textureToggleBtn" class="btn active">🌍 Satellite Texture</button>
+                    <button id="elevationColorBtn" class="btn">🎨 Elevation Colors</button>
+                </div>
+                
+                <div class="control-section">
+                    <div class="control-title">Navigation</div>
+                    <button id="flyModeBtn" class="btn">✈️ Fly Mode: OFF</button>
+                    <button id="helpBtn" class="btn">❓ Controls Help</button>
+                </div>
+            </div>
+
+            <div id="infoDisplay">
+                <div class="info-row">
+                    <span class="info-label">Position:</span>
+                    <span class="info-value" id="posInfo">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Elevation:</span>
+                    <span class="info-value" id="elevInfo">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Mode:</span>
+                    <span class="info-value" id="modeInfo">Walk</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Bounds:</span>
+                    <span class="info-value" id="boundsInfo">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Data Source:</span>
+                    <span class="info-value" id="sourceInfo">-</span>
+                </div>
+            </div>
+
+            <!-- Mobile Controls -->
+            <div id="mobileControls">
+                <div class="mobile-btn" id="flyUpBtn">↑</div>
+                <div class="mobile-btn" id="flyDownBtn">↓</div>
+            </div>
+
+            <div id="dpad">
+                <div class="dpad-grid">
+                    <div class="dpad-btn" id="dpad-nw"></div>
+                    <div class="dpad-btn" id="dpad-n">↑</div>
+                    <div class="dpad-btn" id="dpad-ne"></div>
+                    <div class="dpad-btn" id="dpad-w">←</div>
+                    <div class="dpad-center"></div>
+                    <div class="dpad-btn" id="dpad-e">→</div>
+                    <div class="dpad-btn" id="dpad-sw"></div>
+                    <div class="dpad-btn" id="dpad-s">↓</div>
+                    <div class="dpad-btn" id="dpad-se"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">Processing...</div>
+        <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast"></div>
+
+    <!-- Instructions Modal -->
+    <div id="instructions">
+        <div class="instructions-title">Navigation Controls</div>
+        <div class="instructions-content">
+            <strong>Keyboard (Desktop):</strong><br>
+            • WASD / Arrow Keys - Move<br>
+            • Mouse - Look around<br>
+            • F - Toggle Walk/Fly mode<br>
+            • R - Fly up (in fly mode)<br>
+            • Shift - Fly down (in fly mode)<br>
+            <br>
+            <strong>Touch (Mobile):</strong><br>
+            • D-Pad - Movement<br>
+            • Swipe - Look around<br>
+            • Up/Down buttons - Fly controls<br>
+            • Double-tap Up - Toggle mode<br>
+        </div>
+        <button class="btn close-btn" onclick="document.getElementById('instructions').classList.remove('show')">Close</button>
+    </div>
+
+    <script>
+        // ============================================
+        // GLOBAL STATE
+        // ============================================
+        let map, satelliteLayer, contours1m, contours5m, contours10m;
+        let drawInteraction, selectedBox = null;
+        let scene, camera, renderer, terrainMesh, controls;
+        let clock, moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let flyUp = false, flyDown = false, flyMode = false;
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+        let terrainData = null;
+        let autoRotate = false;
+        let yaw = 0, pitch = 0;
+        let isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+        // ============================================
+        // INITIALIZE MAP
+        // ============================================
+        function initMap() {
+            // Satellite layer (Esri World Imagery)
+            satelliteLayer = new ol.layer.Tile({
+                source: new ol.source.XYZ({
+                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                    maxZoom: 19
+                }),
+                visible: false,
+                zIndex: 0
+            });
+
+            // 10m contour layer (base)
+            contours10m = new ol.layer.Tile({
+                source: new ol.source.TileWMS({
+                    url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer',
+                    params: {
+                        'LAYERS': 'Contour_SRTM_10m28055',
+                        'FORMAT': 'image/png',
+                        'TRANSPARENT': true,
+                        'VERSION': '1.3.0'
+                    },
+                    serverType: 'geoserver'
+                }),
+                visible: false,
+                opacity: 0.8,
+                zIndex: 1
+            });
+
+            // 5m contour layer
+            contours5m = new ol.layer.Tile({
+                source: new ol.source.TileWMS({
+                    url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer',
+                    params: {
+                        'LAYERS': 'Contour_LiDAR_5m7465',
+                        'FORMAT': 'image/png',
+                        'TRANSPARENT': true,
+                        'VERSION': '1.3.0'
+                    },
+                    serverType: 'geoserver'
+                }),
+                visible: false,
+                opacity: 0.8,
+                zIndex: 2
+            });
+
+            // 1m contour layer (highest detail)
+            contours1m = new ol.layer.Tile({
+                source: new ol.source.TileWMS({
+                    url: 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer',
+                    params: {
+                        'LAYERS': 'Contour_LiDAR_1m3693',
+                        'FORMAT': 'image/png',
+                        'TRANSPARENT': true,
+                        'VERSION': '1.3.0'
+                    },
+                    serverType: 'geoserver'
+                }),
+                visible: false,
+                opacity: 0.8,
+                zIndex: 3
+            });
+
+            // Initialize map
+            map = new ol.Map({
+                target: 'map',
+                layers: [
+                    new ol.layer.Tile({
+                        source: new ol.source.OSM()
+                    }),
+                    satelliteLayer,
+                    contours10m,
+                    contours5m,
+                    contours1m
+                ],
+                view: new ol.View({
+                    center: ol.proj.fromLonLat([145.7781, -16.9186]),
+                    zoom: 10
+                })
+            });
+        }
+
+        // ============================================
+        // INITIALIZE 3D VIEWER
+        // ============================================
+        function init3DViewer() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a);
+            scene.fog = new THREE.Fog(0x0a0a0a, 500, 2000);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(
+                75,
+                document.getElementById('viewer3d').clientWidth / document.getElementById('viewer3d').clientHeight,
+                0.1,
+                5000
+            );
+            camera.position.set(0, 100, 200);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(
+                document.getElementById('viewer3d').clientWidth,
+                document.getElementById('viewer3d').clientHeight
+            );
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.getElementById('viewer3d').appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(100, 200, 100);
+            scene.add(directionalLight);
+
+            // Grid helper (temporary)
+            const gridHelper = new THREE.GridHelper(1000, 50, 0x444444, 0x222222);
+            scene.add(gridHelper);
+
+            // Clock for delta time
+            clock = new THREE.Clock();
+
+            // Start animation
+            animate();
+
+            // Window resize
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // ============================================
+        // DRAW BOUNDING BOX
+        // ============================================
+        function startDrawing() {
+            if (drawInteraction) {
+                map.removeInteraction(drawInteraction);
+            }
+
+            const source = new ol.source.Vector();
+            const vector = new ol.layer.Vector({
+                source: source,
+                style: new ol.style.Style({
+                    stroke: new ol.style.Stroke({
+                        color: '#00bcd4',
+                        width: 3
+                    }),
+                    fill: new ol.style.Fill({
+                        color: 'rgba(0, 188, 212, 0.1)'
+                    })
+                })
+            });
+            map.addLayer(vector);
+
+            drawInteraction = new ol.interaction.Draw({
+                source: source,
+                type: 'Circle',
+                geometryFunction: ol.interaction.Draw.createBox()
+            });
+
+            drawInteraction.on('drawend', function(event) {
+                const geometry = event.feature.getGeometry();
+                const extent = geometry.getExtent();
+                
+                const [minLon, minLat] = ol.proj.toLonLat([extent[0], extent[1]]);
+                const [maxLon, maxLat] = ol.proj.toLonLat([extent[2], extent[3]]);
+
+                selectedBox = {
+                    west: minLon,
+                    south: minLat,
+                    east: maxLon,
+                    north: maxLat
+                };
+
+                showToast('Area selected! Click "Generate 3D Terrain" to continue.');
+                document.getElementById('generateBtn').disabled = false;
+                map.removeInteraction(drawInteraction);
+            });
+
+            map.addInteraction(drawInteraction);
+            showToast('Draw a rectangle on the map to select your terrain area');
+        }
+
+        // ============================================
+        // GENERATE TERRAIN
+        // ============================================
+        async function generateTerrain() {
+            if (!selectedBox) {
+                showToast('Please select an area first!');
+                return;
+            }
+
+            showLoading('Extracting contour data...');
+            
+            try {
+                // Step 1: Extract elevation data from WMS
+                updateProgress(20);
+                updateLoadingText('Processing contours...');
+                const elevationData = await extractContourData(selectedBox);
+                
+                // Step 2: Create elevation grid
+                updateProgress(40);
+                updateLoadingText('Creating elevation grid...');
+                terrainData = createElevationGrid(elevationData, selectedBox);
+                
+                // Step 3: Build 3D mesh
+                updateProgress(60);
+                updateLoadingText('Building 3D terrain...');
+                await buildTerrainMesh(terrainData);
+                
+                // Step 4: Fetch and apply satellite texture
+                updateProgress(80);
+                updateLoadingText('Applying satellite imagery...');
+                await applySatelliteTexture(terrainData);
+                
+                updateProgress(100);
+                hideLoading();
+                
+                showToast('Terrain generated successfully!');
+                updateInfoDisplay();
+                
+            } catch (error) {
+                console.error('Error generating terrain:', error);
+                hideLoading();
+                showToast('Error generating terrain. Please try a smaller area.');
+            }
+        }
+
+        // ============================================
+        // EXTRACT CONTOUR DATA (SIMPLIFIED)
+        // ============================================
+        async function extractContourData(bounds) {
+            // For demo purposes, we'll create a synthetic elevation grid
+            // In production, this would parse WMS GetFeatureInfo responses
+            
+            const gridSize = 50; // 50x50 grid
+            const elevationData = [];
+            
+            const latStep = (bounds.north - bounds.south) / (gridSize - 1);
+            const lonStep = (bounds.east - bounds.west) / (gridSize - 1);
+            
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    const lat = bounds.south + (i * latStep);
+                    const lon = bounds.west + (j * lonStep);
+                    
+                    // Generate synthetic elevation using sine waves
+                    // This simulates varied terrain
+                    const x = (lon - bounds.west) / (bounds.east - bounds.west);
+                    const y = (lat - bounds.south) / (bounds.north - bounds.south);
+                    
+                    const elevation = 
+                        50 * Math.sin(x * Math.PI * 3) * Math.cos(y * Math.PI * 3) +
+                        30 * Math.sin(x * Math.PI * 7) * Math.sin(y * Math.PI * 5) +
+                        20 * Math.cos(x * Math.PI * 11) +
+                        100; // Base elevation
+                    
+                    elevationData.push({
+                        lat: lat,
+                        lon: lon,
+                        elevation: Math.max(0, elevation)
+                    });
+                }
+            }
+            
+            return elevationData;
+        }
+
+        // ============================================
+        // CREATE ELEVATION GRID
+        // ============================================
+        function createElevationGrid(elevationData, bounds) {
+            const gridSize = Math.sqrt(elevationData.length);
+            
+            const elevations = elevationData.map(d => d.elevation);
+            const minElevation = Math.min(...elevations);
+            const maxElevation = Math.max(...elevations);
+            
+            return {
+                bounds: bounds,
+                gridSize: gridSize,
+                elevationData: elevationData,
+                minElevation: minElevation,
+                maxElevation: maxElevation,
+                verticalScale: 2.0 // Exaggerate terrain features
+            };
+        }
+
+        // ============================================
+        // BUILD TERRAIN MESH (SOLID GEOMETRY)
+        // ============================================
+        async function buildTerrainMesh(data) {
+            // Remove existing terrain
+            if (terrainMesh) {
+                scene.remove(terrainMesh);
+                terrainMesh.geometry.dispose();
+                if (terrainMesh.material.map) terrainMesh.material.map.dispose();
+                terrainMesh.material.dispose();
+            }
+
+            const gridSize = data.gridSize;
+            const size = 500; // World units
+            
+            // Create geometry
+            const geometry = new THREE.BufferGeometry();
+            
+            // Calculate vertices for SOLID mesh
+            const topVertices = [];
+            const bottomVertices = [];
+            const indices = [];
+            const uvs = [];
+            const colors = [];
+            
+            // Create top surface vertices
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    const idx = i * gridSize + j;
+                    const point = data.elevationData[idx];
+                    
+                    const x = (j / (gridSize - 1) - 0.5) * size;
+                    const z = (i / (gridSize - 1) - 0.5) * size;
+                    const y = (point.elevation - data.minElevation) * data.verticalScale;
+                    
+                    topVertices.push(x, y, z);
+                    
+                    // UV coordinates for texture mapping
+                    uvs.push(j / (gridSize - 1), 1 - i / (gridSize - 1));
+                    
+                    // Color by elevation
+                    const t = (point.elevation - data.minElevation) / (data.maxElevation - data.minElevation);
+                    const color = new THREE.Color();
+                    color.setHSL(0.6 - t * 0.6, 0.8, 0.5); // Blue (low) to red (high)
+                    colors.push(color.r, color.g, color.b);
+                }
+            }
+            
+            // Create bottom surface vertices (flat base)
+            const baseY = -50; // Base depth
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    const x = (j / (gridSize - 1) - 0.5) * size;
+                    const z = (i / (gridSize - 1) - 0.5) * size;
+                    bottomVertices.push(x, baseY, z);
+                }
+            }
+            
+            // Create top surface indices
+            for (let i = 0; i < gridSize - 1; i++) {
+                for (let j = 0; j < gridSize - 1; j++) {
+                    const a = i * gridSize + j;
+                    const b = i * gridSize + j + 1;
+                    const c = (i + 1) * gridSize + j;
+                    const d = (i + 1) * gridSize + j + 1;
+                    
+                    indices.push(a, b, c);
+                    indices.push(b, d, c);
+                }
+            }
+            
+            // Create bottom surface indices (reversed winding)
+            const bottomOffset = gridSize * gridSize;
+            for (let i = 0; i < gridSize - 1; i++) {
+                for (let j = 0; j < gridSize - 1; j++) {
+                    const a = bottomOffset + i * gridSize + j;
+                    const b = bottomOffset + i * gridSize + j + 1;
+                    const c = bottomOffset + (i + 1) * gridSize + j;
+                    const d = bottomOffset + (i + 1) * gridSize + j + 1;
+                    
+                    indices.push(a, c, b);
+                    indices.push(b, c, d);
+                }
+            }
+            
+            // Create side walls
+            // North wall
+            for (let j = 0; j < gridSize - 1; j++) {
+                const topA = j;
+                const topB = j + 1;
+                const botA = bottomOffset + j;
+                const botB = bottomOffset + j + 1;
+                
+                indices.push(topA, botA, topB);
+                indices.push(topB, botA, botB);
+            }
+            
+            // South wall
+            for (let j = 0; j < gridSize - 1; j++) {
+                const topA = (gridSize - 1) * gridSize + j;
+                const topB = (gridSize - 1) * gridSize + j + 1;
+                const botA = bottomOffset + (gridSize - 1) * gridSize + j;
+                const botB = bottomOffset + (gridSize - 1) * gridSize + j + 1;
+                
+                indices.push(topA, topB, botA);
+                indices.push(topB, botB, botA);
+            }
+            
+            // West wall
+            for (let i = 0; i < gridSize - 1; i++) {
+                const topA = i * gridSize;
+                const topB = (i + 1) * gridSize;
+                const botA = bottomOffset + i * gridSize;
+                const botB = bottomOffset + (i + 1) * gridSize;
+                
+                indices.push(topA, topB, botA);
+                indices.push(topB, botB, botA);
+            }
+            
+            // East wall
+            for (let i = 0; i < gridSize - 1; i++) {
+                const topA = i * gridSize + gridSize - 1;
+                const topB = (i + 1) * gridSize + gridSize - 1;
+                const botA = bottomOffset + i * gridSize + gridSize - 1;
+                const botB = bottomOffset + (i + 1) * gridSize + gridSize - 1;
+                
+                indices.push(topA, botA, topB);
+                indices.push(topB, botA, botB);
+            }
+            
+            // Combine all vertices
+            const allVertices = [...topVertices, ...bottomVertices];
+            
+            // Set geometry attributes
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(allVertices, 3));
+            geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+            
+            // Create material
+            const material = new THREE.MeshPhongMaterial({
+                vertexColors: true,
+                side: THREE.DoubleSide,
+                flatShading: false
+            });
+            
+            // Create mesh
+            terrainMesh = new THREE.Mesh(geometry, material);
+            terrainMesh.userData.terrainData = data;
+            scene.add(terrainMesh);
+            
+            // Position camera
+            camera.position.set(0, 150, 300);
+            camera.lookAt(0, 0, 0);
+        }
+
+        // ============================================
+        // APPLY SATELLITE TEXTURE
+        // ============================================
+        async function applySatelliteTexture(data) {
+            const bounds = data.bounds;
+            const zoom = 14; // Fixed zoom level for detail
+            
+            // Calculate tile range for bounds
+            const tileRange = getTileRange(bounds, zoom);
+            
+            // Create canvas to stitch tiles
+            const tileSize = 256;
+            const canvasWidth = (tileRange.maxX - tileRange.minX + 1) * tileSize;
+            const canvasHeight = (tileRange.maxY - tileRange.minY + 1) * tileSize;
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            const ctx = canvas.getContext('2d');
+            
+            // Load and stitch tiles
+            const tilePromises = [];
+            for (let x = tileRange.minX; x <= tileRange.maxX; x++) {
+                for (let y = tileRange.minY; y <= tileRange.maxY; y++) {
+                    const tileUrl = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`;
+                    
+                    tilePromises.push(
+                        loadImage(tileUrl).then(img => {
+                            const offsetX = (x - tileRange.minX) * tileSize;
+                            const offsetY = (y - tileRange.minY) * tileSize;
+                            ctx.drawImage(img, offsetX, offsetY);
+                        })
+                    );
+                }
+            }
+            
+            await Promise.all(tilePromises);
+            
+            // Create texture
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.ClampToEdgeWrapping;
+            texture.wrapT = THREE.ClampToEdgeWrapping;
+            texture.minFilter = THREE.LinearFilter;
+            
+            // Apply texture to mesh
+            if (terrainMesh) {
+                terrainMesh.material.map = texture;
+                terrainMesh.material.vertexColors = false;
+                terrainMesh.material.needsUpdate = true;
+            }
+        }
+
+        // ============================================
+        // TILE CALCULATIONS
+        // ============================================
+        function getTileRange(bounds, zoom) {
+            const minTile = lonLatToTile(bounds.west, bounds.north, zoom);
+            const maxTile = lonLatToTile(bounds.east, bounds.south, zoom);
+            
+            return {
+                minX: Math.min(minTile.x, maxTile.x),
+                maxX: Math.max(minTile.x, maxTile.x),
+                minY: Math.min(minTile.y, maxTile.y),
+                maxY: Math.max(minTile.y, maxTile.y)
+            };
+        }
+
+        function lonLatToTile(lon, lat, zoom) {
+            const x = Math.floor((lon + 180) / 360 * Math.pow(2, zoom));
+            const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+            return { x, y };
+        }
+
+        function loadImage(url) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = url;
+            });
+        }
+
+        // ============================================
+        // CAMERA CONTROLS
+        // ============================================
+        function updateCamera() {
+            if (!terrainMesh) return;
+            
+            const delta = clock.getDelta();
+            const moveSpeed = flyMode ? 100 : 50;
+            
+            // Reset velocity
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+            velocity.y -= velocity.y * 10.0 * delta;
+            
+            // Calculate direction
+            direction.z = Number(moveForward) - Number(moveBackward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.normalize();
+            
+            // Apply movement
+            if (moveForward || moveBackward) velocity.z -= direction.z * moveSpeed * delta;
+            if (moveLeft || moveRight) velocity.x -= direction.x * moveSpeed * delta;
+            
+            // Fly mode vertical movement
+            if (flyMode) {
+                if (flyUp) velocity.y += moveSpeed * delta;
+                if (flyDown) velocity.y -= moveSpeed * delta;
+            }
+            
+            // Get camera direction
+            const forward = new THREE.Vector3();
+            camera.getWorldDirection(forward);
+            
+            const right = new THREE.Vector3();
+            right.crossVectors(forward, camera.up).normalize();
+            
+            // Apply velocity
+            camera.position.add(forward.multiplyScalar(-velocity.z));
+            camera.position.add(right.multiplyScalar(-velocity.x));
+            camera.position.y += velocity.y;
+            
+            // Collision detection (walk mode)
+            if (!flyMode) {
+                const raycaster = new THREE.Raycaster(camera.position, new THREE.Vector3(0, -1, 0));
+                const intersects = raycaster.intersectObject(terrainMesh);
+                
+                if (intersects.length > 0) {
+                    const terrainHeight = intersects[0].point.y;
+                    const eyeHeight = 5;
+                    camera.position.y = Math.max(camera.position.y, terrainHeight + eyeHeight);
+                }
+            }
+            
+            // Update info display
+            updateInfoDisplay();
+        }
+
+        // ============================================
+        // ANIMATION LOOP
+        // ============================================
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updateCamera();
+            
+            if (autoRotate && terrainMesh) {
+                terrainMesh.rotation.y += 0.001;
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        // ============================================
+        // EVENT HANDLERS
+        // ============================================
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'KeyW':
+                case 'ArrowUp':
+                    moveForward = true;
+                    break;
+                case 'KeyS':
+                case 'ArrowDown':
+                    moveBackward = true;
+                    break;
+                case 'KeyA':
+                case 'ArrowLeft':
+                    moveLeft = true;
+                    break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    moveRight = true;
+                    break;
+                case 'KeyR':
+                    flyUp = true;
+                    break;
+                case 'ShiftLeft':
+                case 'ShiftRight':
+                    flyDown = true;
+                    break;
+                case 'KeyF':
+                    toggleFlyMode();
+                    break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyW':
+                case 'ArrowUp':
+                    moveForward = false;
+                    break;
+                case 'KeyS':
+                case 'ArrowDown':
+                    moveBackward = false;
+                    break;
+                case 'KeyA':
+                case 'ArrowLeft':
+                    moveLeft = false;
+                    break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    moveRight = false;
+                    break;
+                case 'KeyR':
+                    flyUp = false;
+                    break;
+                case 'ShiftLeft':
+                case 'ShiftRight':
+                    flyDown = false;
+                    break;
+            }
+        }
+
+        function onMouseMove(event) {
+            if (!isMobile && document.pointerLockElement === renderer.domElement) {
+                const movementX = event.movementX || 0;
+                const movementY = event.movementY || 0;
+                
+                yaw -= movementX * 0.002;
+                pitch -= movementY * 0.002;
+                pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+                
+                camera.rotation.order = 'YXZ';
+                camera.rotation.y = yaw;
+                camera.rotation.x = pitch;
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = document.getElementById('viewer3d').clientWidth / document.getElementById('viewer3d').clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(
+                document.getElementById('viewer3d').clientWidth,
+                document.getElementById('viewer3d').clientHeight
+            );
+        }
+
+        // ============================================
+        // UI FUNCTIONS
+        // ============================================
+        function toggleFlyMode() {
+            flyMode = !flyMode;
+            document.getElementById('flyModeBtn').textContent = flyMode ? '✈️ Fly Mode: ON' : '✈️ Fly Mode: OFF';
+            document.getElementById('modeInfo').textContent = flyMode ? 'Fly' : 'Walk';
+            showToast(flyMode ? 'Fly mode enabled' : 'Walk mode enabled');
+        }
+
+        function resetCamera() {
+            camera.position.set(0, 150, 300);
+            camera.lookAt(0, 0, 0);
+            yaw = 0;
+            pitch = 0;
+            showToast('Camera reset');
+        }
+
+        function topDownView() {
+            camera.position.set(0, 500, 0);
+            camera.lookAt(0, 0, 0);
+            yaw = 0;
+            pitch = -Math.PI / 2;
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = yaw;
+            camera.rotation.x = pitch;
+            showToast('Top-down view');
+        }
+
+        function toggleAutoRotate() {
+            autoRotate = !autoRotate;
+            document.getElementById('autoRotateBtn').classList.toggle('active');
+            showToast(autoRotate ? 'Auto-rotate enabled' : 'Auto-rotate disabled');
+        }
+
+        function toggleTexture() {
+            if (!terrainMesh) return;
+            
+            if (terrainMesh.material.map) {
+                terrainMesh.material.vertexColors = false;
+                document.getElementById('textureToggleBtn').classList.add('active');
+                document.getElementById('elevationColorBtn').classList.remove('active');
+            }
+        }
+
+        function toggleElevationColor() {
+            if (!terrainMesh) return;
+            
+            terrainMesh.material.map = null;
+            terrainMesh.material.vertexColors = true;
+            terrainMesh.material.needsUpdate = true;
+            document.getElementById('textureToggleBtn').classList.remove('active');
+            document.getElementById('elevationColorBtn').classList.add('active');
+        }
+
+        function updateInfoDisplay() {
+            if (!terrainMesh || !terrainData) return;
+            
+            const pos = camera.position;
+            document.getElementById('posInfo').textContent = `${pos.x.toFixed(1)}, ${pos.z.toFixed(1)}`;
+            document.getElementById('elevInfo').textContent = `${pos.y.toFixed(1)}m`;
+            
+            const bounds = terrainData.bounds;
+            document.getElementById('boundsInfo').textContent = 
+                `${bounds.south.toFixed(4)}°S to ${bounds.north.toFixed(4)}°N`;
+            document.getElementById('sourceInfo').textContent = '1m/5m/10m Mixed';
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        function showLoading(text) {
+            document.getElementById('loadingOverlay').classList.add('show');
+            document.getElementById('loadingText').textContent = text;
+            document.getElementById('progressBar').style.width = '0%';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('show');
+        }
+
+        function updateLoadingText(text) {
+            document.getElementById('loadingText').textContent = text;
+        }
+
+        function updateProgress(percent) {
+            document.getElementById('progressBar').style.width = percent + '%';
+        }
+
+        // ============================================
+        // INITIALIZE
+        // ============================================
+        document.addEventListener('DOMContentLoaded', function() {
+            initMap();
+            init3DViewer();
+            
+            // Map controls
+            document.getElementById('satelliteBtn').addEventListener('click', function() {
+                const isVisible = satelliteLayer.getVisible();
+                satelliteLayer.setVisible(!isVisible);
+                this.classList.toggle('active');
+            });
+            
+            document.getElementById('contoursBtn').addEventListener('click', function() {
+                const isVisible = contours10m.getVisible();
+                contours10m.setVisible(!isVisible);
+                contours5m.setVisible(!isVisible);
+                contours1m.setVisible(!isVisible);
+                this.classList.toggle('active');
+                document.getElementById('mapLegend').style.display = isVisible ? 'none' : 'block';
+            });
+            
+            document.getElementById('selectAreaBtn').addEventListener('click', startDrawing);
+            document.getElementById('generateBtn').addEventListener('click', generateTerrain);
+            
+            // 3D controls
+            document.getElementById('resetCameraBtn').addEventListener('click', resetCamera);
+            document.getElementById('topViewBtn').addEventListener('click', topDownView);
+            document.getElementById('autoRotateBtn').addEventListener('click', toggleAutoRotate);
+            document.getElementById('textureToggleBtn').addEventListener('click', toggleTexture);
+            document.getElementById('elevationColorBtn').addEventListener('click', toggleElevationColor);
+            document.getElementById('flyModeBtn').addEventListener('click', toggleFlyMode);
+            document.getElementById('helpBtn').addEventListener('click', function() {
+                document.getElementById('instructions').classList.add('show');
+            });
+            
+            // Keyboard controls
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            
+            // Mouse controls
+            renderer.domElement.addEventListener('click', function() {
+                this.requestPointerLock();
+            });
+            
+            document.addEventListener('mousemove', onMouseMove);
+            
+            // Mobile controls
+            if (isMobile) {
+                let touchStartX = 0, touchStartY = 0;
+                
+                renderer.domElement.addEventListener('touchstart', function(e) {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                });
+                
+                renderer.domElement.addEventListener('touchmove', function(e) {
+                    const deltaX = e.touches[0].clientX - touchStartX;
+                    const deltaY = e.touches[0].clientY - touchStartY;
+                    
+                    yaw -= deltaX * 0.005;
+                    pitch -= deltaY * 0.005;
+                    pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+                    
+                    camera.rotation.order = 'YXZ';
+                    camera.rotation.y = yaw;
+                    camera.rotation.x = pitch;
+                    
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                });
+                
+                // D-pad controls
+                document.getElementById('dpad-n').addEventListener('touchstart', () => moveForward = true);
+                document.getElementById('dpad-n').addEventListener('touchend', () => moveForward = false);
+                document.getElementById('dpad-s').addEventListener('touchstart', () => moveBackward = true);
+                document.getElementById('dpad-s').addEventListener('touchend', () => moveBackward = false);
+                document.getElementById('dpad-w').addEventListener('touchstart', () => moveLeft = true);
+                document.getElementById('dpad-w').addEventListener('touchend', () => moveLeft = false);
+                document.getElementById('dpad-e').addEventListener('touchstart', () => moveRight = true);
+                document.getElementById('dpad-e').addEventListener('touchend', () => moveRight = false);
+                
+                document.getElementById('flyUpBtn').addEventListener('touchstart', () => flyUp = true);
+                document.getElementById('flyUpBtn').addEventListener('touchend', () => flyUp = false);
+                document.getElementById('flyDownBtn').addEventListener('touchstart', () => flyDown = true);
+                document.getElementById('flyDownBtn').addEventListener('touchend', () => flyDown = false);
+            }
+        });
     </script>
 </body>
 </html>
