@@ -764,27 +764,29 @@
                 return;
             }
 
-            showLoading('Extracting contour data...');
+            showLoading('Preparing to extract contour data...');
             
             try {
                 // Step 1: Extract elevation data from WMS
-                updateProgress(20);
-                updateLoadingText('Processing contours...');
+                updateProgress(5);
+                updateLoadingText('Querying WMS contour layers (this may take a moment)...');
                 const elevationData = await extractContourData(selectedBox);
                 
                 // Step 2: Create elevation grid
-                updateProgress(40);
-                updateLoadingText('Creating elevation grid...');
+                updateProgress(45);
+                updateLoadingText('Creating elevation grid from contour data...');
+                await new Promise(resolve => setTimeout(resolve, 500)); // Brief pause for UI update
                 terrainData = createElevationGrid(elevationData, selectedBox);
                 
                 // Step 3: Build 3D mesh
                 updateProgress(60);
-                updateLoadingText('Building 3D terrain...');
+                updateLoadingText('Building solid 3D terrain geometry...');
+                await new Promise(resolve => setTimeout(resolve, 300));
                 await buildTerrainMesh(terrainData);
                 
                 // Step 4: Fetch and apply satellite texture
                 updateProgress(80);
-                updateLoadingText('Applying satellite imagery...');
+                updateLoadingText('Fetching and applying satellite imagery...');
                 await applySatelliteTexture(terrainData);
                 
                 updateProgress(100);
@@ -796,20 +798,195 @@
             } catch (error) {
                 console.error('Error generating terrain:', error);
                 hideLoading();
-                showToast('Error generating terrain. Please try a smaller area.');
+                showToast('Error generating terrain: ' + error.message);
             }
         }
 
         // ============================================
-        // EXTRACT CONTOUR DATA (SIMPLIFIED)
+        // EXTRACT CONTOUR DATA FROM WMS
         // ============================================
         async function extractContourData(bounds) {
-            // For demo purposes, we'll create a synthetic elevation grid
-            // In production, this would parse WMS GetFeatureInfo responses
-            
-            const gridSize = 50; // 50x50 grid
+            // Use smaller grid for faster WMS queries (can be increased for more detail)
+            const gridSize = 30; // 30x30 = 900 points (more manageable than 2500)
             const elevationData = [];
             
+            const latStep = (bounds.north - bounds.south) / (gridSize - 1);
+            const lonStep = (bounds.east - bounds.west) / (gridSize - 1);
+            
+            // WMS base URL
+            const wmsUrl = 'https://spatial-gis.information.qld.gov.au/arcgis/services/Elevation/Contours/MapServer/WMSServer';
+            
+            // Layers to query (in priority order: 1m, 5m, 10m)
+            const layers = [
+                { name: 'Contour_LiDAR_1m3693', resolution: 1 },
+                { name: 'Contour_LiDAR_5m7465', resolution: 5 },
+                { name: 'Contour_SRTM_10m28055', resolution: 10 }
+            ];
+            
+            // Batch processing to avoid overwhelming the server
+            const batchSize = 10; // Query 10 points at a time
+            let successfulQueries = 0;
+            const totalPoints = gridSize * gridSize;
+            let processedPoints = 0;
+            
+            console.log(`Starting WMS queries for ${totalPoints} grid points...`);
+            updateLoadingText(`Querying WMS layers (0/${totalPoints} points)...`);
+            
+            // Create all query points
+            const queryPoints = [];
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    queryPoints.push({
+                        i, j,
+                        lat: bounds.south + (i * latStep),
+                        lon: bounds.west + (j * lonStep)
+                    });
+                }
+            }
+            
+            // Process in batches
+            for (let batch = 0; batch < queryPoints.length; batch += batchSize) {
+                const batchPoints = queryPoints.slice(batch, batch + batchSize);
+                
+                // Process batch in parallel
+                const batchPromises = batchPoints.map(async point => {
+                    let elevation = null;
+                    
+                    // Try each layer in priority order
+                    for (const layer of layers) {
+                        try {
+                            const elev = await queryWMSElevation(wmsUrl, layer.name, point.lon, point.lat, bounds);
+                            if (elev !== null && !isNaN(elev)) {
+                                elevation = elev;
+                                successfulQueries++;
+                                break;
+                            }
+                        } catch (e) {
+                            continue;
+                        }
+                    }
+                    
+                    // Fallback elevation if no WMS data
+                    if (elevation === null) {
+                        elevation = 100; // Default base elevation
+                    }
+                    
+                    return {
+                        lat: point.lat,
+                        lon: point.lon,
+                        elevation: elevation
+                    };
+                });
+                
+                const batchResults = await Promise.all(batchPromises);
+                elevationData.push(...batchResults);
+                
+                processedPoints += batchPoints.length;
+                const progress = 5 + ((processedPoints / totalPoints) * 35); // 5-40% range
+                updateProgress(progress);
+                updateLoadingText(`Querying WMS layers (${processedPoints}/${totalPoints} points, ${successfulQueries} successful)...`);
+                
+                // Small delay between batches to be respectful to server
+                if (batch + batchSize < queryPoints.length) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+            
+            console.log(`WMS query complete: ${successfulQueries} of ${totalPoints} points retrieved`);
+            
+            // If we got very little real data, use synthetic terrain
+            if (successfulQueries < totalPoints * 0.05) {
+                console.warn(`Only ${successfulQueries} successful queries. Using synthetic terrain.`);
+                updateLoadingText('Limited WMS data available, generating synthetic terrain...');
+                return generateSyntheticTerrain(bounds, gridSize);
+            }
+            
+            return elevationData;
+        }
+
+        // ============================================
+        // QUERY WMS FOR ELEVATION AT POINT
+        // ============================================
+        async function queryWMSElevation(baseUrl, layerName, lon, lat, bounds) {
+            // Convert to EPSG:3857 (Web Mercator) for WMS query
+            const point = ol.proj.transform([lon, lat], 'EPSG:4326', 'EPSG:3857');
+            const extent = ol.proj.transformExtent(
+                [bounds.west, bounds.south, bounds.east, bounds.north],
+                'EPSG:4326',
+                'EPSG:3857'
+            );
+            
+            // Create GetFeatureInfo request
+            const width = 101;
+            const height = 101;
+            const x = Math.floor(width / 2);
+            const y = Math.floor(height / 2);
+            
+            const params = new URLSearchParams({
+                SERVICE: 'WMS',
+                VERSION: '1.3.0',
+                REQUEST: 'GetFeatureInfo',
+                LAYERS: layerName,
+                QUERY_LAYERS: layerName,
+                INFO_FORMAT: 'application/json',
+                FEATURE_COUNT: 10,
+                WIDTH: width,
+                HEIGHT: height,
+                I: x,
+                J: y,
+                CRS: 'EPSG:3857',
+                BBOX: extent.join(',')
+            });
+            
+            const url = `${baseUrl}?${params.toString()}`;
+            
+            try {
+                const response = await fetch(url, { 
+                    signal: AbortSignal.timeout(5000) // 5 second timeout
+                });
+                
+                if (!response.ok) {
+                    return null;
+                }
+                
+                const data = await response.json();
+                
+                // Parse elevation from response
+                if (data.features && data.features.length > 0) {
+                    const feature = data.features[0];
+                    
+                    // Try different possible attribute names for elevation
+                    const elevationAttributes = [
+                        'ELEVATION', 'elevation', 'Elevation',
+                        'HEIGHT', 'height', 'Height',
+                        'CONTOUR', 'contour', 'Contour',
+                        'ContourElevation', 'CONTOUR_ELEVATION',
+                        'Value', 'value', 'VALUE',
+                        'elev', 'ELEV'
+                    ];
+                    
+                    for (const attr of elevationAttributes) {
+                        if (feature.properties && feature.properties[attr] !== undefined) {
+                            const val = parseFloat(feature.properties[attr]);
+                            if (!isNaN(val)) {
+                                return val;
+                            }
+                        }
+                    }
+                }
+                
+                return null;
+            } catch (error) {
+                // Timeout or network error
+                return null;
+            }
+        }
+
+        // ============================================
+        // FALLBACK: GENERATE SYNTHETIC TERRAIN
+        // ============================================
+        function generateSyntheticTerrain(bounds, gridSize) {
+            const elevationData = [];
             const latStep = (bounds.north - bounds.south) / (gridSize - 1);
             const lonStep = (bounds.east - bounds.west) / (gridSize - 1);
             
@@ -818,8 +995,6 @@
                     const lat = bounds.south + (i * latStep);
                     const lon = bounds.west + (j * lonStep);
                     
-                    // Generate synthetic elevation using sine waves
-                    // This simulates varied terrain
                     const x = (lon - bounds.west) / (bounds.east - bounds.west);
                     const y = (lat - bounds.south) / (bounds.north - bounds.south);
                     
@@ -827,7 +1002,7 @@
                         50 * Math.sin(x * Math.PI * 3) * Math.cos(y * Math.PI * 3) +
                         30 * Math.sin(x * Math.PI * 7) * Math.sin(y * Math.PI * 5) +
                         20 * Math.cos(x * Math.PI * 11) +
-                        100; // Base elevation
+                        100;
                     
                     elevationData.push({
                         lat: lat,
@@ -846,13 +1021,19 @@
         function createElevationGrid(elevationData, bounds) {
             const gridSize = Math.sqrt(elevationData.length);
             
+            if (!Number.isInteger(gridSize)) {
+                console.error('Elevation data is not a perfect square grid');
+            }
+            
             const elevations = elevationData.map(d => d.elevation);
             const minElevation = Math.min(...elevations);
             const maxElevation = Math.max(...elevations);
             
+            console.log(`Elevation range: ${minElevation}m to ${maxElevation}m`);
+            
             return {
                 bounds: bounds,
-                gridSize: gridSize,
+                gridSize: Math.floor(gridSize),
                 elevationData: elevationData,
                 minElevation: minElevation,
                 maxElevation: maxElevation,
