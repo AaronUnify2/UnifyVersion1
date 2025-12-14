@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elevation Data Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background: #000;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            max-width: 300px;
+            z-index: 100;
+        }
+        
+        #controls h3 {
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+        
+        #controls p {
+            margin: 5px 0;
+            line-height: 1.4;
+        }
+        
+        #file-input {
+            margin: 15px 0;
+        }
+        
+        #file-input input {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: none;
+            background: white;
+            cursor: pointer;
+        }
+        
+        #info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        
+        .toggle-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .toggle-btn:hover {
+            background: #45a049;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 8px;
+            font-size: 18px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <div id="controls">
+        <h3>🎮 Controls</h3>
+        <p><strong>Move:</strong> W A S D</p>
+        <p><strong>Up:</strong> Space</p>
+        <p><strong>Down:</strong> Shift</p>
+        <p><strong>Look:</strong> Mouse</p>
+        <p><strong>Speed:</strong> Mouse Wheel</p>
+        <p><strong>Toggle Wireframe:</strong> T</p>
+        <div id="file-input">
+            <input type="file" id="jsonFile" accept=".json">
+        </div>
+        <button class="toggle-btn" onclick="toggleControls()">Hide Controls</button>
+    </div>
+    
+    <div id="info">
+        Position: (0, 0, 0)<br>
+        Speed: 1.0<br>
+        Terrain: Not loaded
+    </div>
+    
+    <div id="loading">Loading terrain...</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, terrain, terrainMesh;
+        let moveSpeed = 1.0;
+        let mouseSensitivity = 0.002;
+        let wireframeMode = false;
+        
+        // Movement state
+        const keys = {};
+        const movement = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            up: false,
+            down: false
+        };
+        
+        // Mouse look
+        let pitch = 0;
+        let yaw = 0;
+        let isPointerLocked = false;
+        
+        // Initialize Three.js scene
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 100, 1000);
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                2000
+            );
+            camera.position.set(0, 50, 0);
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(100, 200, 100);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.far = 1000;
+            scene.add(directionalLight);
+            
+            // Grid helper for reference
+            const gridHelper = new THREE.GridHelper(1000, 100, 0x444444, 0x222222);
+            gridHelper.position.y = -0.5;
+            scene.add(gridHelper);
+            
+            // Event listeners
+            setupEventListeners();
+            
+            // Start animation loop
+            animate();
+        }
+        
+        function setupEventListeners() {
+            // Keyboard
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            
+            // Mouse
+            renderer.domElement.addEventListener('click', () => {
+                renderer.domElement.requestPointerLock();
+            });
+            
+            document.addEventListener('pointerlockchange', () => {
+                isPointerLocked = document.pointerLockElement === renderer.domElement;
+            });
+            
+            document.addEventListener('mousemove', onMouseMove);
+            
+            // Mouse wheel for speed
+            renderer.domElement.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                moveSpeed = Math.max(0.1, Math.min(10, moveSpeed + e.deltaY * -0.001));
+                updateInfo();
+            });
+            
+            // Window resize
+            window.addEventListener('resize', onWindowResize);
+            
+            // File input
+            document.getElementById('jsonFile').addEventListener('change', handleFileSelect);
+        }
+        
+        function onKeyDown(event) {
+            keys[event.key.toLowerCase()] = true;
+            
+            if (event.key === 't' || event.key === 'T') {
+                toggleWireframe();
+            }
+        }
+        
+        function onKeyUp(event) {
+            keys[event.key.toLowerCase()] = false;
+        }
+        
+        function onMouseMove(event) {
+            if (!isPointerLocked) return;
+            
+            yaw -= event.movementX * mouseSensitivity;
+            pitch -= event.movementY * mouseSensitivity;
+            
+            // Clamp pitch
+            pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+        }
+        
+        function updateMovement() {
+            // Get camera direction
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            
+            const right = new THREE.Vector3();
+            right.crossVectors(camera.up, direction).normalize();
+            
+            const moveVector = new THREE.Vector3();
+            
+            // Forward/Backward
+            if (keys['w']) {
+                moveVector.add(direction);
+            }
+            if (keys['s']) {
+                moveVector.sub(direction);
+            }
+            
+            // Left/Right
+            if (keys['a']) {
+                moveVector.sub(right);
+            }
+            if (keys['d']) {
+                moveVector.add(right);
+            }
+            
+            // Up/Down
+            if (keys[' ']) {
+                moveVector.y += 1;
+            }
+            if (keys['shift']) {
+                moveVector.y -= 1;
+            }
+            
+            // Normalize and apply speed
+            if (moveVector.length() > 0) {
+                moveVector.normalize();
+                camera.position.addScaledVector(moveVector, moveSpeed);
+            }
+            
+            // Update camera rotation
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = yaw;
+            camera.rotation.x = pitch;
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updateMovement();
+            updateInfo();
+            
+            renderer.render(scene, camera);
+        }
+        
+        function updateInfo() {
+            const pos = camera.position;
+            const infoDiv = document.getElementById('info');
+            let terrainInfo = 'Not loaded';
+            if (terrainMesh) {
+                terrainInfo = `Loaded (${terrain.width}x${terrain.height})`;
+            }
+            infoDiv.innerHTML = `
+                Position: (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)})<br>
+                Speed: ${moveSpeed.toFixed(2)}<br>
+                Terrain: ${terrainInfo}
+            `;
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        function toggleWireframe() {
+            if (terrainMesh) {
+                wireframeMode = !wireframeMode;
+                terrainMesh.material.wireframe = wireframeMode;
+            }
+        }
+        
+        function toggleControls() {
+            const controls = document.getElementById('controls');
+            if (controls.style.display === 'none') {
+                controls.style.display = 'block';
+            } else {
+                controls.style.display = 'none';
+            }
+        }
+        
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('loading').style.display = 'block';
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    loadTerrain(data);
+                    document.getElementById('loading').style.display = 'none';
+                } catch (error) {
+                    alert('Error parsing JSON: ' + error.message);
+                    document.getElementById('loading').style.display = 'none';
+                }
+            };
+            reader.readAsText(file);
+        }
+        
+        function loadTerrain(data) {
+            // Remove existing terrain
+            if (terrainMesh) {
+                scene.remove(terrainMesh);
+                terrainMesh.geometry.dispose();
+                terrainMesh.material.dispose();
+            }
+            
+            // Parse elevation data - handle different formats
+            let elevations = [];
+            let width = 0;
+            let height = 0;
+            
+            // Format 1: Direct 2D array
+            if (Array.isArray(data) && Array.isArray(data[0])) {
+                elevations = data;
+                height = data.length;
+                width = data[0].length;
+            }
+            // Format 2: Object with elevation array
+            else if (data.elevations && Array.isArray(data.elevations)) {
+                elevations = data.elevations;
+                height = data.height || elevations.length;
+                width = data.width || (elevations[0] ? elevations[0].length : 0);
+            }
+            // Format 3: Flat array with dimensions
+            else if (data.data && Array.isArray(data.data)) {
+                width = data.width || Math.sqrt(data.data.length);
+                height = data.height || Math.sqrt(data.data.length);
+                // Convert flat array to 2D
+                elevations = [];
+                for (let i = 0; i < height; i++) {
+                    elevations[i] = data.data.slice(i * width, (i + 1) * width);
+                }
+            }
+            // Format 4: Points array with x, y, z
+            else if (data.points && Array.isArray(data.points)) {
+                createTerrainFromPoints(data.points);
+                return;
+            }
+            
+            if (elevations.length === 0 || width === 0) {
+                alert('Unable to parse elevation data. Please check the JSON format.');
+                return;
+            }
+            
+            terrain = { width, height, elevations };
+            
+            // Create terrain geometry
+            const geometry = new THREE.PlaneGeometry(
+                width * 2,
+                height * 2,
+                width - 1,
+                height - 1
+            );
+            
+            // Apply elevation data
+            const vertices = geometry.attributes.position.array;
+            let minElevation = Infinity;
+            let maxElevation = -Infinity;
+            
+            for (let i = 0; i < height; i++) {
+                for (let j = 0; j < width; j++) {
+                    const index = (i * width + j) * 3;
+                    const elevation = elevations[i][j];
+                    vertices[index + 2] = elevation;
+                    minElevation = Math.min(minElevation, elevation);
+                    maxElevation = Math.max(maxElevation, elevation);
+                }
+            }
+            
+            geometry.computeVertexNormals();
+            geometry.rotateX(-Math.PI / 2);
+            
+            // Create material with vertex colors based on elevation
+            const colors = new Float32Array(vertices.length);
+            for (let i = 0; i < vertices.length; i += 3) {
+                const elevation = vertices[i + 1];
+                const normalizedHeight = (elevation - minElevation) / (maxElevation - minElevation);
+                
+                // Color gradient: blue (low) -> green -> yellow -> red (high)
+                if (normalizedHeight < 0.33) {
+                    colors[i] = 0.2 + normalizedHeight * 0.6;
+                    colors[i + 1] = 0.4 + normalizedHeight * 1.8;
+                    colors[i + 2] = 0.8;
+                } else if (normalizedHeight < 0.66) {
+                    const t = (normalizedHeight - 0.33) / 0.33;
+                    colors[i] = 0.4 + t * 0.4;
+                    colors[i + 1] = 1.0 - t * 0.2;
+                    colors[i + 2] = 0.8 - t * 0.8;
+                } else {
+                    const t = (normalizedHeight - 0.66) / 0.34;
+                    colors[i] = 0.8 + t * 0.2;
+                    colors[i + 1] = 0.8 - t * 0.5;
+                    colors[i + 2] = 0.3 - t * 0.3;
+                }
+            }
+            
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            const material = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                flatShading: false,
+                side: THREE.DoubleSide
+            });
+            
+            terrainMesh = new THREE.Mesh(geometry, material);
+            terrainMesh.receiveShadow = true;
+            terrainMesh.castShadow = true;
+            scene.add(terrainMesh);
+            
+            // Position camera above center of terrain
+            camera.position.set(0, maxElevation + 50, 0);
+            
+            console.log(`Terrain loaded: ${width}x${height}, elevation range: ${minElevation} to ${maxElevation}`);
+        }
+        
+        function createTerrainFromPoints(points) {
+            // Handle point cloud data
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            const colors = [];
+            
+            let minZ = Infinity;
+            let maxZ = -Infinity;
+            
+            points.forEach(p => {
+                positions.push(p.x || 0, p.z || p.y || 0, p.y || p.z || 0);
+                minZ = Math.min(minZ, p.z || p.y || 0);
+                maxZ = Math.max(maxZ, p.z || p.y || 0);
+            });
+            
+            // Color based on height
+            for (let i = 0; i < positions.length; i += 3) {
+                const z = positions[i + 1];
+                const t = (z - minZ) / (maxZ - minZ);
+                colors.push(t, 1 - t, 0.5);
+            }
+            
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            
+            const material = new THREE.PointsMaterial({ size: 2, vertexColors: true });
+            terrainMesh = new THREE.Points(geometry, material);
+            scene.add(terrainMesh);
+            
+            camera.position.set(0, maxZ + 50, 0);
+        }
+        
+        // Initialize the scene
+        init();
+    </script>
+</body>
+</html>
