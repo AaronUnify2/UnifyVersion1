@@ -477,6 +477,20 @@
       color: var(--accent-yellow);
     }
 
+    /* Difficulty Help Text */
+    .difficulty-help {
+      font-size: 12px;
+      color: var(--accent-yellow);
+      min-height: 18px;
+      margin-bottom: 8px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .difficulty-help.visible {
+      opacity: 1;
+    }
+
     /* Cards */
     .card-grid {
       display: grid;
@@ -1675,6 +1689,13 @@
         </div>
 
         <div class="dashboard-card">
+          <h3>Goals by Emotion</h3>
+          <div class="chart-container">
+            <canvas id="goalsEmotionChart"></canvas>
+          </div>
+        </div>
+
+        <div class="dashboard-card">
           <h3>Problems by Emotion</h3>
           <div class="chart-container">
             <canvas id="problemsEmotionChart"></canvas>
@@ -1738,6 +1759,7 @@
           </div>
           <div class="form-group">
             <label>Difficulty</label>
+            <div class="difficulty-help" id="goalDifficultyHelp"></div>
             <div class="star-rating" id="goalDifficulty">
               <i class="fas fa-star star" data-value="1"></i>
               <i class="fas fa-star star" data-value="2"></i>
@@ -1886,6 +1908,7 @@
         </div>
         <div class="form-group" style="margin-bottom: 16px;">
           <label>Difficulty</label>
+          <div class="difficulty-help" id="problemDifficultyHelp"></div>
           <div class="star-rating" id="problemDifficulty">
             <i class="fas fa-star star" data-value="1"></i>
             <i class="fas fa-star star" data-value="2"></i>
@@ -2214,10 +2237,16 @@
       document.getElementById('problemDescription').value = '';
       problemDifficultyRating = 0;
       updateStarRating('problemDifficulty', 0);
+      // Reset difficulty help
+      document.getElementById('problemDifficultyHelp').textContent = '';
+      document.getElementById('problemDifficultyHelp').classList.remove('visible');
     }
 
     function closeProblemModal() {
       document.getElementById('problemModal').classList.remove('visible');
+      // Reset difficulty help
+      document.getElementById('problemDifficultyHelp').textContent = '';
+      document.getElementById('problemDifficultyHelp').classList.remove('visible');
     }
 
     function updateBannerMenu() {
@@ -2299,6 +2328,37 @@
           star.classList.remove('active');
         }
       });
+    }
+
+    function updateDifficultyHelp(type, value) {
+      const helpElement = document.getElementById(`${type}DifficultyHelp`);
+      if (!helpElement) return;
+
+      const problemTexts = {
+        1: 'Fixable now',
+        2: 'Fixable soon',
+        3: 'Fixable with the right resources',
+        4: 'Fixable with the right resources and cooperation from others',
+        5: 'I do not know how to fix this problem'
+      };
+
+      const goalTexts = {
+        1: 'Achievable now',
+        2: 'Achievable soon',
+        3: 'Achievable with the right resources',
+        4: 'Achievable with the right resources and cooperation from others',
+        5: 'I do not know how to achieve this goal'
+      };
+
+      const texts = type === 'problem' ? problemTexts : goalTexts;
+      
+      if (value > 0) {
+        helpElement.textContent = texts[value];
+        helpElement.classList.add('visible');
+      } else {
+        helpElement.textContent = '';
+        helpElement.classList.remove('visible');
+      }
     }
 
     function renderStars(rating) {
@@ -2509,12 +2569,18 @@
       goalDifficultyRating = 0;
       updateStarRating('goalDifficulty', 0);
       document.getElementById('goalDescription').value = '';
+      // Reset difficulty help
+      document.getElementById('goalDifficultyHelp').textContent = '';
+      document.getElementById('goalDifficultyHelp').classList.remove('visible');
       
       modal.classList.add('visible');
     }
 
     function closeGoalModal() {
       document.getElementById('goalModal').classList.remove('visible');
+      // Reset difficulty help
+      document.getElementById('goalDifficultyHelp').textContent = '';
+      document.getElementById('goalDifficultyHelp').classList.remove('visible');
     }
 
     function createGoal() {
@@ -3661,6 +3727,41 @@
         });
       }
 
+      // Goals by Emotion
+      const goalsByEmotion = {};
+      goals.filter(g => !g.finished).forEach(g => {
+        goalsByEmotion[g.emotion] = (goalsByEmotion[g.emotion] || 0) + 1;
+      });
+
+      if (Object.keys(goalsByEmotion).length > 0) {
+        const goalEmotionColors = {
+          'Meaningful': '#3fb950',
+          'Neutral': '#58a6ff',
+          'Difficult': '#f85149'
+        };
+        charts.goalsEmotion = new Chart(document.getElementById('goalsEmotionChart'), {
+          type: 'doughnut',
+          data: {
+            labels: Object.keys(goalsByEmotion),
+            datasets: [{
+              data: Object.values(goalsByEmotion),
+              backgroundColor: Object.keys(goalsByEmotion).map(e => goalEmotionColors[e] || '#666'),
+              borderWidth: 0
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'right',
+                labels: { color: '#8b949e', font: { size: 11 } }
+              }
+            }
+          }
+        });
+      }
+
       // Problems by Emotion
       const problemsByEmotion = {};
       problems.filter(p => !p.finished).forEach(p => {
@@ -3731,11 +3832,35 @@
       loadData();
       
       // Setup star ratings
-      setupStarRating('problemDifficulty', (value) => { problemDifficultyRating = value; });
-      setupStarRating('goalDifficulty', (value) => { goalDifficultyRating = value; });
+      setupStarRating('problemDifficulty', (value) => { 
+        problemDifficultyRating = value; 
+        updateDifficultyHelp('problem', value);
+      });
+      setupStarRating('goalDifficulty', (value) => { 
+        goalDifficultyRating = value; 
+        updateDifficultyHelp('goal', value);
+      });
       
-      // Restore collapsed sections
-      restoreCollapsedState();
+      // Restore collapsed sections or collapse all by default on first visit
+      if (!localStorage.getItem('unify_collapsed')) {
+        // First visit - collapse all sections
+        ['helpSection', 'problemsSection', 'goalsSection', 'tasksSection', 'dashboardSection'].forEach(id => {
+          const section = document.getElementById(id);
+          if (section) {
+            section.classList.add('collapsed');
+          }
+        });
+        // Save collapsed state
+        localStorage.setItem('unify_collapsed', JSON.stringify({
+          helpSection: true,
+          problemsSection: true,
+          goalsSection: true,
+          tasksSection: true,
+          dashboardSection: true
+        }));
+      } else {
+        restoreCollapsedState();
+      }
       
       // Initial render
       renderProblems();
@@ -3745,6 +3870,8 @@
       
       // Show help on first visit
       if (!localStorage.getItem('unify_visited')) {
+        // Expand help section for first-time users
+        document.getElementById('helpSection').classList.remove('collapsed');
         document.getElementById('helpSection').classList.add('visible');
         localStorage.setItem('unify_visited', 'true');
       }
