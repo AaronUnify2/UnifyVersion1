@@ -116,6 +116,16 @@
             color: white;
         }
         
+        .controls button.quad-btn {
+            border-color: #dd6b20;
+            color: #dd6b20;
+        }
+        
+        .controls button.quad-btn:hover {
+            background-color: #dd6b20;
+            color: white;
+        }
+        
         .zoom-info {
             display: flex;
             align-items: center;
@@ -187,6 +197,26 @@
             color: #553c9a;
             font-size: 14px;
             min-width: 200px;
+        }
+        
+        /* Quadrant print status */
+        .quad-status {
+            display: none;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #feebc8;
+            border-radius: 8px;
+            border: 2px solid #dd6b20;
+            flex-wrap: wrap;
+            align-items: center;
+            color: #c05621;
+            font-weight: 500;
+        }
+        
+        .quad-status.show {
+            display: flex;
         }
         
         /* Diagram Container */
@@ -348,7 +378,8 @@
             .controls,
             .instructions,
             .zoom-info,
-            .poster-options {
+            .poster-options,
+            .quad-status {
                 display: none !important;
             }
             
@@ -464,12 +495,17 @@
             <button onclick="resetZoom()">🔄 Reset View</button>
             <button onclick="fitToScreen()">📐 Fit to Screen</button>
             <button onclick="window.print()" class="print-btn">🖨️ Print A3</button>
-            <button onclick="showPosterOptions()" class="poster-btn" id="posterBtn">🖼️ Save as Poster</button>
+            <button onclick="printAs4xA4()" class="quad-btn">📄 Print 4× A4 Poster</button>
+            <button onclick="showPosterOptions()" class="poster-btn">🖼️ Save as Image</button>
             <div class="zoom-info">Zoom: <span id="zoomLevel">100</span>%</div>
         </div>
         
+        <div class="quad-status" id="quadStatus">
+            <span id="quadStatusText">⏳ Generating 4× A4 poster pages...</span>
+        </div>
+        
         <div class="poster-options" id="posterOptions">
-            <label for="posterSize">Poster Size:</label>
+            <label for="posterSize">Image Size:</label>
             <select id="posterSize">
                 <option value="1">Standard (1x) - Fastest</option>
                 <option value="2" selected>Large (2x) - Recommended</option>
@@ -482,10 +518,11 @@
         </div>
         
         <div class="instructions">
-            <h4>🖨️ Printing Instructions (A3) &amp; Poster Export</h4>
+            <h4>🖨️ Printing Options</h4>
             <ul>
-                <li><b>A3 Print:</b> Click "Print A3" → Set paper to A3 Landscape → Enable "Background graphics" → Set margins to Minimum</li>
-                <li><b>Poster Export:</b> Click "Save as Poster" → Select size → Download PNG → Print at any size or send to print shop</li>
+                <li><b>Print A3:</b> Direct print to A3 paper (landscape)</li>
+                <li><b>Print 4× A4 Poster:</b> Splits diagram into 4 A4 pages — print and tape together for a large poster!</li>
+                <li><b>Save as Image:</b> Download as PNG for professional printing</li>
             </ul>
         </div>
 
@@ -585,7 +622,7 @@ flowchart TD
         
         <div class="footer">
             <p>SDRC Customer Service Call Flow Chart | For internal use only</p>
-            <p><i>Tip: Click "Print A3" or use Ctrl+P to print this document</i></p>
+            <p><i>Tip: Use "Print 4× A4 Poster" to print on regular paper and tape together!</i></p>
         </div>
     </div>
 
@@ -644,11 +681,9 @@ flowchart TD
             
             statusEl.textContent = '⏳ Preparing diagram...';
             
-            // Wait for UI update
             await new Promise(resolve => setTimeout(resolve, 100));
             
             try {
-                // Get the mermaid diagram container
                 const mermaidContainer = document.getElementById('mermaidDiagram');
                 
                 if (!mermaidContainer) {
@@ -656,32 +691,24 @@ flowchart TD
                     return;
                 }
                 
-                // Check if dom-to-image is loaded
                 if (typeof domtoimage === 'undefined') {
-                    statusEl.textContent = '❌ Error: Export library not loaded. Please refresh the page.';
+                    statusEl.textContent = '❌ Error: Export library not loaded. Please refresh.';
                     return;
                 }
                 
-                statusEl.textContent = '⏳ Rendering image (this may take a moment)...';
+                statusEl.textContent = '⏳ Rendering image...';
                 
-                // Reset any transform on the mermaid container temporarily
                 const originalTransform = mermaidContainer.style.transform;
                 mermaidContainer.style.transform = 'none';
                 
-                // Use dom-to-image to capture the diagram
                 const dataUrl = await domtoimage.toPng(mermaidContainer, {
                     quality: 1,
                     bgcolor: '#ffffff',
-                    scale: scale,
-                    style: {
-                        'transform': 'none'
-                    }
+                    scale: scale
                 });
                 
-                // Restore original transform
                 mermaidContainer.style.transform = originalTransform;
                 
-                // Create download link
                 const link = document.createElement('a');
                 link.download = `SDRC_CallFlow_Poster_${scale}x.png`;
                 link.href = dataUrl;
@@ -692,12 +719,261 @@ flowchart TD
             } catch (error) {
                 console.error('Export error:', error);
                 statusEl.textContent = '❌ Error: ' + error.message;
-                
-                // Restore transform if error occurred
+            }
+        }
+        
+        // =============================================
+        // 4x A4 QUADRANT POSTER PRINT FUNCTION
+        // =============================================
+        async function printAs4xA4() {
+            const statusEl = document.getElementById('quadStatus');
+            const statusText = document.getElementById('quadStatusText');
+            
+            statusEl.classList.add('show');
+            statusText.textContent = '⏳ Capturing diagram...';
+            
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            try {
                 const mermaidContainer = document.getElementById('mermaidDiagram');
-                if (mermaidContainer) {
-                    mermaidContainer.style.transform = `scale(${currentZoom / 100})`;
+                
+                if (!mermaidContainer) {
+                    statusText.textContent = '❌ Error: Diagram not found.';
+                    return;
                 }
+                
+                if (typeof domtoimage === 'undefined') {
+                    statusText.textContent = '❌ Error: Export library not loaded. Please refresh.';
+                    return;
+                }
+                
+                // Reset transform temporarily
+                const originalTransform = mermaidContainer.style.transform;
+                mermaidContainer.style.transform = 'none';
+                
+                statusText.textContent = '⏳ Rendering high-resolution image...';
+                
+                // Capture at 2x scale for good print quality
+                const dataUrl = await domtoimage.toPng(mermaidContainer, {
+                    quality: 1,
+                    bgcolor: '#ffffff',
+                    scale: 2
+                });
+                
+                mermaidContainer.style.transform = originalTransform;
+                
+                statusText.textContent = '⏳ Splitting into 4 quadrants...';
+                
+                // Load the image to get dimensions
+                const img = new Image();
+                img.onload = function() {
+                    const fullWidth = img.width;
+                    const fullHeight = img.height;
+                    const halfWidth = fullWidth / 2;
+                    const halfHeight = fullHeight / 2;
+                    
+                    // Create 4 canvases for quadrants
+                    const quadrants = [];
+                    const positions = [
+                        { name: 'Top-Left (1/4)', x: 0, y: 0 },
+                        { name: 'Top-Right (2/4)', x: halfWidth, y: 0 },
+                        { name: 'Bottom-Left (3/4)', x: 0, y: halfHeight },
+                        { name: 'Bottom-Right (4/4)', x: halfWidth, y: halfHeight }
+                    ];
+                    
+                    positions.forEach((pos, index) => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = halfWidth;
+                        canvas.height = halfHeight;
+                        const ctx = canvas.getContext('2d');
+                        
+                        // Fill with white background
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, halfWidth, halfHeight);
+                        
+                        // Draw the quadrant
+                        ctx.drawImage(img, pos.x, pos.y, halfWidth, halfHeight, 0, 0, halfWidth, halfHeight);
+                        
+                        quadrants.push({
+                            name: pos.name,
+                            dataUrl: canvas.toDataURL('image/png', 1.0)
+                        });
+                    });
+                    
+                    statusText.textContent = '⏳ Opening print preview...';
+                    
+                    // Create print window with 4 pages
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>SDRC Call Flow - 4x A4 Poster Print</title>
+                            <style>
+                                @page {
+                                    size: A4 portrait;
+                                    margin: 0;
+                                }
+                                * {
+                                    margin: 0;
+                                    padding: 0;
+                                    box-sizing: border-box;
+                                }
+                                body {
+                                    font-family: Arial, sans-serif;
+                                }
+                                .page {
+                                    width: 210mm;
+                                    height: 297mm;
+                                    page-break-after: always;
+                                    position: relative;
+                                    overflow: hidden;
+                                }
+                                .page:last-child {
+                                    page-break-after: auto;
+                                }
+                                .page img {
+                                    width: 100%;
+                                    height: 100%;
+                                    object-fit: contain;
+                                }
+                                .page-label {
+                                    position: absolute;
+                                    bottom: 5mm;
+                                    right: 5mm;
+                                    background: rgba(255,255,255,0.9);
+                                    padding: 2mm 4mm;
+                                    font-size: 10px;
+                                    color: #666;
+                                    border: 1px solid #ccc;
+                                    border-radius: 3px;
+                                }
+                                .alignment-mark {
+                                    position: absolute;
+                                    background: #ccc;
+                                }
+                                .alignment-mark.top {
+                                    top: 0;
+                                    left: 50%;
+                                    width: 1px;
+                                    height: 10mm;
+                                }
+                                .alignment-mark.bottom {
+                                    bottom: 0;
+                                    left: 50%;
+                                    width: 1px;
+                                    height: 10mm;
+                                }
+                                .alignment-mark.left {
+                                    left: 0;
+                                    top: 50%;
+                                    width: 10mm;
+                                    height: 1px;
+                                }
+                                .alignment-mark.right {
+                                    right: 0;
+                                    top: 50%;
+                                    width: 10mm;
+                                    height: 1px;
+                                }
+                                .instructions {
+                                    padding: 20px;
+                                    max-width: 600px;
+                                    margin: 0 auto;
+                                }
+                                .instructions h1 {
+                                    color: #1a365d;
+                                    margin-bottom: 15px;
+                                }
+                                .instructions p {
+                                    margin-bottom: 10px;
+                                    line-height: 1.6;
+                                }
+                                .instructions .grid {
+                                    display: grid;
+                                    grid-template-columns: 1fr 1fr;
+                                    gap: 10px;
+                                    margin: 20px 0;
+                                    border: 2px solid #333;
+                                    padding: 10px;
+                                }
+                                .instructions .grid div {
+                                    padding: 20px;
+                                    text-align: center;
+                                    border: 1px dashed #999;
+                                }
+                                .print-btn {
+                                    display: block;
+                                    width: 100%;
+                                    padding: 15px;
+                                    font-size: 18px;
+                                    background: #38a169;
+                                    color: white;
+                                    border: none;
+                                    border-radius: 8px;
+                                    cursor: pointer;
+                                    margin-top: 20px;
+                                }
+                                .print-btn:hover {
+                                    background: #2f855a;
+                                }
+                                @media print {
+                                    .instructions {
+                                        display: none !important;
+                                    }
+                                    .page-label {
+                                        display: none !important;
+                                    }
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="instructions">
+                                <h1>🖨️ 4× A4 Poster Print</h1>
+                                <p><b>Instructions:</b> Print all 4 pages, then arrange and tape them together like this:</p>
+                                <div class="grid">
+                                    <div>1. Top-Left</div>
+                                    <div>2. Top-Right</div>
+                                    <div>3. Bottom-Left</div>
+                                    <div>4. Bottom-Right</div>
+                                </div>
+                                <p><b>Print settings:</b></p>
+                                <ul style="margin-left: 20px; margin-bottom: 15px;">
+                                    <li>Paper size: <b>A4</b></li>
+                                    <li>Orientation: <b>Portrait</b></li>
+                                    <li>Margins: <b>None</b> or <b>Minimum</b></li>
+                                    <li>Scale: <b>100%</b> or <b>Fit to page</b></li>
+                                </ul>
+                                <button class="print-btn" onclick="window.print()">🖨️ Print All 4 Pages</button>
+                            </div>
+                            
+                            ${quadrants.map((q, i) => `
+                                <div class="page">
+                                    <img src="${q.dataUrl}" alt="${q.name}">
+                                    <div class="page-label">${q.name}</div>
+                                    <div class="alignment-mark top"></div>
+                                    <div class="alignment-mark bottom"></div>
+                                    <div class="alignment-mark left"></div>
+                                    <div class="alignment-mark right"></div>
+                                </div>
+                            `).join('')}
+                        </body>
+                        </html>
+                    `);
+                    printWindow.document.close();
+                    
+                    statusEl.classList.remove('show');
+                };
+                
+                img.onerror = function() {
+                    statusText.textContent = '❌ Error loading image.';
+                };
+                
+                img.src = dataUrl;
+                
+            } catch (error) {
+                console.error('Quadrant print error:', error);
+                statusText.textContent = '❌ Error: ' + error.message;
             }
         }
         
