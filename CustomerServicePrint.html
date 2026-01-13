@@ -89,6 +89,11 @@
             color: white;
         }
         
+        .controls button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
         .controls button.print-btn {
             border-color: #38a169;
             color: #38a169;
@@ -96,6 +101,16 @@
         
         .controls button.print-btn:hover {
             background-color: #38a169;
+            color: white;
+        }
+        
+        .controls button.poster-btn {
+            border-color: #805ad5;
+            color: #805ad5;
+        }
+        
+        .controls button.poster-btn:hover {
+            background-color: #805ad5;
             color: white;
         }
         
@@ -107,6 +122,68 @@
             border-radius: 6px;
             color: #2b6cb0;
             font-weight: 500;
+        }
+        
+        /* Poster Size Selector */
+        .poster-options {
+            display: none;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f3e8ff;
+            border-radius: 8px;
+            border: 2px solid #805ad5;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .poster-options.show {
+            display: flex;
+        }
+        
+        .poster-options label {
+            font-weight: 600;
+            color: #553c9a;
+        }
+        
+        .poster-options select {
+            padding: 8px 12px;
+            font-size: 14px;
+            border: 2px solid #805ad5;
+            border-radius: 6px;
+            background-color: white;
+            color: #553c9a;
+            cursor: pointer;
+        }
+        
+        .poster-options button {
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            border: 2px solid #805ad5;
+            background-color: #805ad5;
+            color: white;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        
+        .poster-options button:hover {
+            background-color: #6b46c1;
+        }
+        
+        .poster-options button.cancel-btn {
+            background-color: white;
+            color: #805ad5;
+        }
+        
+        .poster-options button.cancel-btn:hover {
+            background-color: #f3e8ff;
+        }
+        
+        .poster-status {
+            color: #553c9a;
+            font-size: 14px;
         }
         
         /* Diagram Container */
@@ -267,7 +344,8 @@
             /* Hide interactive elements for print */
             .controls,
             .instructions,
-            .zoom-info {
+            .zoom-info,
+            .poster-options {
                 display: none !important;
             }
             
@@ -383,17 +461,29 @@
             <button onclick="resetZoom()">🔄 Reset View</button>
             <button onclick="fitToScreen()">📐 Fit to Screen</button>
             <button onclick="window.print()" class="print-btn">🖨️ Print A3</button>
+            <button onclick="showPosterOptions()" class="poster-btn" id="posterBtn">🖼️ Save as Poster</button>
             <div class="zoom-info">Zoom: <span id="zoomLevel">100</span>%</div>
         </div>
         
+        <div class="poster-options" id="posterOptions">
+            <label for="posterSize">Poster Size:</label>
+            <select id="posterSize">
+                <option value="2">A3 (2x scale) ~4000px</option>
+                <option value="3" selected>A2 (3x scale) ~6000px</option>
+                <option value="4">A1 (4x scale) ~8000px</option>
+                <option value="5">A0 (5x scale) ~10000px</option>
+                <option value="6">Large Poster (6x scale) ~12000px</option>
+            </select>
+            <button onclick="savePosterImage()">💾 Download PNG</button>
+            <button onclick="hidePosterOptions()" class="cancel-btn">Cancel</button>
+            <span class="poster-status" id="posterStatus"></span>
+        </div>
+        
         <div class="instructions">
-            <h4>🖨️ Printing Instructions (A3)</h4>
+            <h4>🖨️ Printing Instructions (A3) &amp; Poster Export</h4>
             <ul>
-                <li>Click "Print A3" button or press Ctrl+P</li>
-                <li>Set paper size to <b>A3</b> and orientation to <b>Landscape</b></li>
-                <li>Set margins to <b>Minimum</b> or <b>None</b></li>
-                <li>Enable <b>"Background graphics"</b> for colors</li>
-                <li>Set scale to <b>100%</b> or "Fit to page"</li>
+                <li><b>A3 Print:</b> Click "Print A3" → Set paper to A3 Landscape → Enable "Background graphics" → Set margins to Minimum</li>
+                <li><b>Poster Export:</b> Click "Save as Poster" → Select size → Download PNG → Print at any size or send to print shop</li>
             </ul>
         </div>
 
@@ -533,6 +623,113 @@ flowchart TD
             currentZoom = 60;
             updateZoom();
             document.getElementById('diagramContainer').scrollTo(0, 0);
+        }
+        
+        // Poster export functions
+        function showPosterOptions() {
+            document.getElementById('posterOptions').classList.add('show');
+            document.getElementById('posterStatus').textContent = '';
+        }
+        
+        function hidePosterOptions() {
+            document.getElementById('posterOptions').classList.remove('show');
+            document.getElementById('posterStatus').textContent = '';
+        }
+        
+        async function savePosterImage() {
+            const statusEl = document.getElementById('posterStatus');
+            const scale = parseInt(document.getElementById('posterSize').value);
+            
+            statusEl.textContent = 'Generating image... Please wait.';
+            
+            // Wait a moment for status to display
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            try {
+                // Get the SVG element from the mermaid diagram
+                const mermaidContainer = document.getElementById('mermaidDiagram');
+                const svgElement = mermaidContainer.querySelector('svg');
+                
+                if (!svgElement) {
+                    statusEl.textContent = 'Error: Diagram not found. Please wait for it to load.';
+                    return;
+                }
+                
+                // Clone the SVG to avoid modifying the original
+                const svgClone = svgElement.cloneNode(true);
+                
+                // Get original dimensions
+                const bbox = svgElement.getBBox();
+                const originalWidth = bbox.width || svgElement.viewBox?.baseVal?.width || svgElement.width?.baseVal?.value || 2000;
+                const originalHeight = bbox.height || svgElement.viewBox?.baseVal?.height || svgElement.height?.baseVal?.value || 3000;
+                
+                // Calculate scaled dimensions
+                const scaledWidth = originalWidth * scale;
+                const scaledHeight = originalHeight * scale;
+                
+                // Set explicit dimensions on the cloned SVG
+                svgClone.setAttribute('width', scaledWidth);
+                svgClone.setAttribute('height', scaledHeight);
+                svgClone.setAttribute('viewBox', `${bbox.x || 0} ${bbox.y || 0} ${originalWidth} ${originalHeight}`);
+                
+                // Add white background
+                const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                bgRect.setAttribute('x', bbox.x || 0);
+                bgRect.setAttribute('y', bbox.y || 0);
+                bgRect.setAttribute('width', originalWidth);
+                bgRect.setAttribute('height', originalHeight);
+                bgRect.setAttribute('fill', 'white');
+                svgClone.insertBefore(bgRect, svgClone.firstChild);
+                
+                // Convert SVG to string
+                const svgString = new XMLSerializer().serializeToString(svgClone);
+                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const svgUrl = URL.createObjectURL(svgBlob);
+                
+                // Create image from SVG
+                const img = new Image();
+                img.onload = function() {
+                    // Create canvas
+                    const canvas = document.createElement('canvas');
+                    canvas.width = scaledWidth;
+                    canvas.height = scaledHeight;
+                    
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Fill white background
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Draw the image
+                    ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+                    
+                    // Convert to PNG and download
+                    canvas.toBlob(function(blob) {
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.download = `SDRC_CallFlow_Poster_${scale}x_${scaledWidth}x${scaledHeight}.png`;
+                        link.href = url;
+                        link.click();
+                        
+                        // Cleanup
+                        URL.revokeObjectURL(url);
+                        URL.revokeObjectURL(svgUrl);
+                        
+                        statusEl.textContent = `✅ Downloaded! (${Math.round(scaledWidth)} x ${Math.round(scaledHeight)} pixels)`;
+                    }, 'image/png', 1.0);
+                };
+                
+                img.onerror = function() {
+                    statusEl.textContent = 'Error loading image. Try a smaller size.';
+                    URL.revokeObjectURL(svgUrl);
+                };
+                
+                img.src = svgUrl;
+                
+            } catch (error) {
+                console.error('Export error:', error);
+                statusEl.textContent = 'Error: ' + error.message;
+            }
         }
         
         // Mouse wheel zoom with Ctrl key
