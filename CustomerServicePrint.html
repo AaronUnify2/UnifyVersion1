@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SDRC Customer Service Call Flow Chart</title>
+    <!-- dom-to-image library for proper SVG/foreignObject rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
     <script type="module">
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
         mermaid.initialize({ 
@@ -184,6 +186,7 @@
         .poster-status {
             color: #553c9a;
             font-size: 14px;
+            min-width: 200px;
         }
         
         /* Diagram Container */
@@ -468,11 +471,10 @@
         <div class="poster-options" id="posterOptions">
             <label for="posterSize">Poster Size:</label>
             <select id="posterSize">
-                <option value="2">A3 (2x scale) ~4000px</option>
-                <option value="3" selected>A2 (3x scale) ~6000px</option>
-                <option value="4">A1 (4x scale) ~8000px</option>
-                <option value="5">A0 (5x scale) ~10000px</option>
-                <option value="6">Large Poster (6x scale) ~12000px</option>
+                <option value="1">Standard (1x) - Fastest</option>
+                <option value="2" selected>Large (2x) - Recommended</option>
+                <option value="3">Extra Large (3x)</option>
+                <option value="4">Poster (4x) - May be slow</option>
             </select>
             <button onclick="savePosterImage()">💾 Download PNG</button>
             <button onclick="hidePosterOptions()" class="cancel-btn">Cancel</button>
@@ -638,97 +640,64 @@ flowchart TD
         
         async function savePosterImage() {
             const statusEl = document.getElementById('posterStatus');
-            const scale = parseInt(document.getElementById('posterSize').value);
+            const scale = parseFloat(document.getElementById('posterSize').value);
             
-            statusEl.textContent = 'Generating image... Please wait.';
+            statusEl.textContent = '⏳ Preparing diagram...';
             
-            // Wait a moment for status to display
+            // Wait for UI update
             await new Promise(resolve => setTimeout(resolve, 100));
             
             try {
-                // Get the SVG element from the mermaid diagram
+                // Get the mermaid diagram container
                 const mermaidContainer = document.getElementById('mermaidDiagram');
-                const svgElement = mermaidContainer.querySelector('svg');
                 
-                if (!svgElement) {
-                    statusEl.textContent = 'Error: Diagram not found. Please wait for it to load.';
+                if (!mermaidContainer) {
+                    statusEl.textContent = '❌ Error: Diagram not found.';
                     return;
                 }
                 
-                // Clone the SVG to avoid modifying the original
-                const svgClone = svgElement.cloneNode(true);
+                // Check if dom-to-image is loaded
+                if (typeof domtoimage === 'undefined') {
+                    statusEl.textContent = '❌ Error: Export library not loaded. Please refresh the page.';
+                    return;
+                }
                 
-                // Get original dimensions
-                const bbox = svgElement.getBBox();
-                const originalWidth = bbox.width || svgElement.viewBox?.baseVal?.width || svgElement.width?.baseVal?.value || 2000;
-                const originalHeight = bbox.height || svgElement.viewBox?.baseVal?.height || svgElement.height?.baseVal?.value || 3000;
+                statusEl.textContent = '⏳ Rendering image (this may take a moment)...';
                 
-                // Calculate scaled dimensions
-                const scaledWidth = originalWidth * scale;
-                const scaledHeight = originalHeight * scale;
+                // Reset any transform on the mermaid container temporarily
+                const originalTransform = mermaidContainer.style.transform;
+                mermaidContainer.style.transform = 'none';
                 
-                // Set explicit dimensions on the cloned SVG
-                svgClone.setAttribute('width', scaledWidth);
-                svgClone.setAttribute('height', scaledHeight);
-                svgClone.setAttribute('viewBox', `${bbox.x || 0} ${bbox.y || 0} ${originalWidth} ${originalHeight}`);
+                // Use dom-to-image to capture the diagram
+                const dataUrl = await domtoimage.toPng(mermaidContainer, {
+                    quality: 1,
+                    bgcolor: '#ffffff',
+                    scale: scale,
+                    style: {
+                        'transform': 'none'
+                    }
+                });
                 
-                // Add white background
-                const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                bgRect.setAttribute('x', bbox.x || 0);
-                bgRect.setAttribute('y', bbox.y || 0);
-                bgRect.setAttribute('width', originalWidth);
-                bgRect.setAttribute('height', originalHeight);
-                bgRect.setAttribute('fill', 'white');
-                svgClone.insertBefore(bgRect, svgClone.firstChild);
+                // Restore original transform
+                mermaidContainer.style.transform = originalTransform;
                 
-                // Convert SVG to string
-                const svgString = new XMLSerializer().serializeToString(svgClone);
-                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-                const svgUrl = URL.createObjectURL(svgBlob);
+                // Create download link
+                const link = document.createElement('a');
+                link.download = `SDRC_CallFlow_Poster_${scale}x.png`;
+                link.href = dataUrl;
+                link.click();
                 
-                // Create image from SVG
-                const img = new Image();
-                img.onload = function() {
-                    // Create canvas
-                    const canvas = document.createElement('canvas');
-                    canvas.width = scaledWidth;
-                    canvas.height = scaledHeight;
-                    
-                    const ctx = canvas.getContext('2d');
-                    
-                    // Fill white background
-                    ctx.fillStyle = 'white';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Draw the image
-                    ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
-                    
-                    // Convert to PNG and download
-                    canvas.toBlob(function(blob) {
-                        const url = URL.createObjectURL(blob);
-                        const link = document.createElement('a');
-                        link.download = `SDRC_CallFlow_Poster_${scale}x_${scaledWidth}x${scaledHeight}.png`;
-                        link.href = url;
-                        link.click();
-                        
-                        // Cleanup
-                        URL.revokeObjectURL(url);
-                        URL.revokeObjectURL(svgUrl);
-                        
-                        statusEl.textContent = `✅ Downloaded! (${Math.round(scaledWidth)} x ${Math.round(scaledHeight)} pixels)`;
-                    }, 'image/png', 1.0);
-                };
-                
-                img.onerror = function() {
-                    statusEl.textContent = 'Error loading image. Try a smaller size.';
-                    URL.revokeObjectURL(svgUrl);
-                };
-                
-                img.src = svgUrl;
+                statusEl.textContent = '✅ Download started!';
                 
             } catch (error) {
                 console.error('Export error:', error);
-                statusEl.textContent = 'Error: ' + error.message;
+                statusEl.textContent = '❌ Error: ' + error.message;
+                
+                // Restore transform if error occurred
+                const mermaidContainer = document.getElementById('mermaidDiagram');
+                if (mermaidContainer) {
+                    mermaidContainer.style.transform = `scale(${currentZoom / 100})`;
+                }
             }
         }
         
