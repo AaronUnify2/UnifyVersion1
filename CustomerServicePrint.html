@@ -495,13 +495,13 @@
             <button onclick="resetZoom()">🔄 Reset View</button>
             <button onclick="fitToScreen()">📐 Fit to Screen</button>
             <button onclick="window.print()" class="print-btn">🖨️ Print A3</button>
-            <button onclick="printAs4xA4()" class="quad-btn">📄 Print 4× A4 Poster</button>
+            <button onclick="printAs6xA4()" class="quad-btn">📄 Print 6× A4 Poster</button>
             <button onclick="showPosterOptions()" class="poster-btn">🖼️ Save as Image</button>
             <div class="zoom-info">Zoom: <span id="zoomLevel">100</span>%</div>
         </div>
         
         <div class="quad-status" id="quadStatus">
-            <span id="quadStatusText">⏳ Generating 4× A4 poster pages...</span>
+            <span id="quadStatusText">⏳ Generating 6× A4 poster pages...</span>
         </div>
         
         <div class="poster-options" id="posterOptions">
@@ -521,7 +521,7 @@
             <h4>🖨️ Printing Options</h4>
             <ul>
                 <li><b>Print A3:</b> Direct print to A3 paper (landscape)</li>
-                <li><b>Print 4× A4 Poster:</b> Splits diagram into 4 A4 pages — print and tape together for a large poster!</li>
+                <li><b>Print 6× A4 Poster:</b> Splits diagram into 6 A4 pages (3×2) — print and tape together for a large poster!</li>
                 <li><b>Save as Image:</b> Download as PNG for professional printing</li>
             </ul>
         </div>
@@ -622,7 +622,7 @@ flowchart TD
         
         <div class="footer">
             <p>SDRC Customer Service Call Flow Chart | For internal use only</p>
-            <p><i>Tip: Use "Print 4× A4 Poster" to print on regular paper and tape together!</i></p>
+            <p><i>Tip: Use "Print 6× A4 Poster" to print on regular paper and tape together!</i></p>
         </div>
     </div>
 
@@ -723,9 +723,9 @@ flowchart TD
         }
         
         // =============================================
-        // 4x A4 QUADRANT POSTER PRINT FUNCTION
+        // 6x A4 POSTER PRINT FUNCTION (3 cols × 2 rows)
         // =============================================
-        async function printAs4xA4() {
+        async function printAs6xA4() {
             const statusEl = document.getElementById('quadStatus');
             const statusText = document.getElementById('quadStatusText');
             
@@ -753,48 +753,50 @@ flowchart TD
                 
                 statusText.textContent = '⏳ Rendering high-resolution image...';
                 
-                // Capture at 2x scale for good print quality
+                // Capture at 3x scale for good print quality on 6 pages
                 const dataUrl = await domtoimage.toPng(mermaidContainer, {
                     quality: 1,
                     bgcolor: '#ffffff',
-                    scale: 2
+                    scale: 3
                 });
                 
                 mermaidContainer.style.transform = originalTransform;
                 
-                statusText.textContent = '⏳ Splitting into 4 quadrants...';
+                statusText.textContent = '⏳ Splitting into 6 sections (3×2)...';
                 
                 // Load the image to get dimensions
                 const img = new Image();
                 img.onload = function() {
                     const fullWidth = img.width;
                     const fullHeight = img.height;
-                    const halfWidth = fullWidth / 2;
+                    const thirdWidth = fullWidth / 3;
                     const halfHeight = fullHeight / 2;
                     
-                    // Create 4 canvases for quadrants
-                    const quadrants = [];
+                    // Create 6 canvases for sections (3 cols × 2 rows)
+                    const sections = [];
                     const positions = [
-                        { name: 'Top-Left (1/4)', x: 0, y: 0 },
-                        { name: 'Top-Right (2/4)', x: halfWidth, y: 0 },
-                        { name: 'Bottom-Left (3/4)', x: 0, y: halfHeight },
-                        { name: 'Bottom-Right (4/4)', x: halfWidth, y: halfHeight }
+                        { name: 'Top-Left (1/6)', x: 0, y: 0 },
+                        { name: 'Top-Middle (2/6)', x: thirdWidth, y: 0 },
+                        { name: 'Top-Right (3/6)', x: thirdWidth * 2, y: 0 },
+                        { name: 'Bottom-Left (4/6)', x: 0, y: halfHeight },
+                        { name: 'Bottom-Middle (5/6)', x: thirdWidth, y: halfHeight },
+                        { name: 'Bottom-Right (6/6)', x: thirdWidth * 2, y: halfHeight }
                     ];
                     
                     positions.forEach((pos, index) => {
                         const canvas = document.createElement('canvas');
-                        canvas.width = halfWidth;
+                        canvas.width = thirdWidth;
                         canvas.height = halfHeight;
                         const ctx = canvas.getContext('2d');
                         
                         // Fill with white background
                         ctx.fillStyle = '#ffffff';
-                        ctx.fillRect(0, 0, halfWidth, halfHeight);
+                        ctx.fillRect(0, 0, thirdWidth, halfHeight);
                         
-                        // Draw the quadrant
-                        ctx.drawImage(img, pos.x, pos.y, halfWidth, halfHeight, 0, 0, halfWidth, halfHeight);
+                        // Draw the section
+                        ctx.drawImage(img, pos.x, pos.y, thirdWidth, halfHeight, 0, 0, thirdWidth, halfHeight);
                         
-                        quadrants.push({
+                        sections.push({
                             name: pos.name,
                             dataUrl: canvas.toDataURL('image/png', 1.0)
                         });
@@ -802,13 +804,13 @@ flowchart TD
                     
                     statusText.textContent = '⏳ Opening print preview...';
                     
-                    // Create print window with 4 pages
+                    // Create print window with 6 pages
                     const printWindow = window.open('', '_blank');
                     printWindow.document.write(`
                         <!DOCTYPE html>
                         <html>
                         <head>
-                            <title>SDRC Call Flow - 4x A4 Poster Print</title>
+                            <title>SDRC Call Flow - 6x A4 Poster Print</title>
                             <style>
                                 @page {
                                     size: A4 landscape;
@@ -878,7 +880,7 @@ flowchart TD
                                 }
                                 .instructions {
                                     padding: 20px;
-                                    max-width: 600px;
+                                    max-width: 700px;
                                     margin: 0 auto;
                                 }
                                 .instructions h1 {
@@ -891,16 +893,17 @@ flowchart TD
                                 }
                                 .instructions .grid {
                                     display: grid;
-                                    grid-template-columns: 1fr 1fr;
+                                    grid-template-columns: 1fr 1fr 1fr;
                                     gap: 10px;
                                     margin: 20px 0;
                                     border: 2px solid #333;
                                     padding: 10px;
                                 }
                                 .instructions .grid div {
-                                    padding: 20px;
+                                    padding: 15px;
                                     text-align: center;
                                     border: 1px dashed #999;
+                                    font-size: 14px;
                                 }
                                 .print-btn {
                                     display: block;
@@ -929,13 +932,15 @@ flowchart TD
                         </head>
                         <body>
                             <div class="instructions">
-                                <h1>🖨️ 4× A4 Poster Print</h1>
-                                <p><b>Instructions:</b> Print all 4 pages, then arrange and tape them together like this:</p>
+                                <h1>🖨️ 6× A4 Poster Print (3×2)</h1>
+                                <p><b>Instructions:</b> Print all 6 pages, then arrange and tape them together like this:</p>
                                 <div class="grid">
                                     <div>1. Top-Left</div>
-                                    <div>2. Top-Right</div>
-                                    <div>3. Bottom-Left</div>
-                                    <div>4. Bottom-Right</div>
+                                    <div>2. Top-Middle</div>
+                                    <div>3. Top-Right</div>
+                                    <div>4. Bottom-Left</div>
+                                    <div>5. Bottom-Middle</div>
+                                    <div>6. Bottom-Right</div>
                                 </div>
                                 <p><b>Print settings:</b></p>
                                 <ul style="margin-left: 20px; margin-bottom: 15px;">
@@ -944,13 +949,13 @@ flowchart TD
                                     <li>Margins: <b>None</b> or <b>Minimum</b></li>
                                     <li>Scale: <b>100%</b> or <b>Fit to page</b></li>
                                 </ul>
-                                <button class="print-btn" onclick="window.print()">🖨️ Print All 4 Pages</button>
+                                <button class="print-btn" onclick="window.print()">🖨️ Print All 6 Pages</button>
                             </div>
                             
-                            ${quadrants.map((q, i) => `
+                            ${sections.map((s, i) => `
                                 <div class="page">
-                                    <img src="${q.dataUrl}" alt="${q.name}">
-                                    <div class="page-label">${q.name}</div>
+                                    <img src="${s.dataUrl}" alt="${s.name}">
+                                    <div class="page-label">${s.name}</div>
                                     <div class="alignment-mark top"></div>
                                     <div class="alignment-mark bottom"></div>
                                     <div class="alignment-mark left"></div>
@@ -972,7 +977,7 @@ flowchart TD
                 img.src = dataUrl;
                 
             } catch (error) {
-                console.error('Quadrant print error:', error);
+                console.error('6-page print error:', error);
                 statusText.textContent = '❌ Error: ' + error.message;
             }
         }
