@@ -1944,6 +1944,94 @@
             });
         }
 
+        function createTreasureChestTexture() {
+            return createPixelTexture(32, 28, (ctx, w, h) => {
+                // Chest body
+                ctx.fillStyle = '#8b4513';
+                ctx.fillRect(2, 10, 28, 18);
+                
+                // Chest lid
+                ctx.fillStyle = '#a0522d';
+                ctx.fillRect(2, 4, 28, 8);
+                ctx.fillRect(4, 2, 24, 4);
+                
+                // Wood grain
+                ctx.fillStyle = '#6b3510';
+                ctx.fillRect(4, 12, 24, 2);
+                ctx.fillRect(4, 18, 24, 2);
+                ctx.fillRect(4, 24, 24, 2);
+                
+                // Metal bands
+                ctx.fillStyle = '#ffd700';
+                ctx.fillRect(0, 8, 32, 3);
+                ctx.fillRect(0, 20, 32, 3);
+                ctx.fillRect(14, 4, 4, 24);
+                
+                // Lock
+                ctx.fillStyle = '#ffd700';
+                ctx.fillRect(13, 10, 6, 8);
+                ctx.fillStyle = '#000';
+                ctx.fillRect(15, 14, 2, 3);
+                
+                // Shine on metal
+                ctx.fillStyle = '#fff8dc';
+                ctx.fillRect(2, 8, 4, 1);
+                ctx.fillRect(2, 20, 4, 1);
+                
+                // Chest shadow/depth
+                ctx.fillStyle = '#5d3a1a';
+                ctx.fillRect(2, 26, 28, 2);
+            });
+        }
+
+        function createOpenChestTexture() {
+            return createPixelTexture(32, 32, (ctx, w, h) => {
+                // Open lid (tilted back)
+                ctx.fillStyle = '#a0522d';
+                ctx.fillRect(2, 0, 28, 6);
+                ctx.fillRect(4, 4, 24, 8);
+                
+                // Lid inside
+                ctx.fillStyle = '#6b3510';
+                ctx.fillRect(6, 6, 20, 4);
+                
+                // Chest body
+                ctx.fillStyle = '#8b4513';
+                ctx.fillRect(2, 14, 28, 18);
+                
+                // Inside of chest (dark)
+                ctx.fillStyle = '#3d2314';
+                ctx.fillRect(4, 14, 24, 8);
+                
+                // Gold coins inside!
+                ctx.fillStyle = '#ffd700';
+                ctx.beginPath();
+                ctx.arc(10, 17, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(16, 16, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(22, 17, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(13, 19, 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(19, 19, 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Metal bands
+                ctx.fillStyle = '#ffd700';
+                ctx.fillRect(0, 22, 32, 3);
+                ctx.fillRect(14, 14, 4, 18);
+                
+                // Chest shadow
+                ctx.fillStyle = '#5d3a1a';
+                ctx.fillRect(2, 30, 28, 2);
+            });
+        }
+
         function createRockFaceTexture() {
             return createPixelTexture(32, 20, (ctx, w, h) => {
                 // Face on rock (appears after sword removed)
@@ -2000,6 +2088,7 @@
             encounterComplete: false,
             dialogue: null,
             dialogueTimer: 0,
+            treasureChests: [],
             chunks: new Map(),
             isGameOver: false,
             menuOpen: false
@@ -2889,8 +2978,24 @@
             swordInStone: createSwordInStoneTexture(),
             witchHut: createWitchHutTexture(),
             witch: createWitchTexture(),
-            heart: createHeartTexture()
+            heart: createHeartTexture(),
+            treasureChest: createTreasureChestTexture(),
+            openChest: createOpenChestTexture()
         };
+
+        // Fun facts for treasure chests
+        const funFacts = [
+            "The princess in the tower window after rescue? That's actually her sister. She's been waiting for her own hero... or villain, apparently.",
+            "Only a fool laughs at the mighty dragon. The wise simply run screaming in the opposite direction.",
+            "Sir Cowardice the Lame invented the brilliant tactic of standing OUTSIDE the evil tree's range. Historians call it 'common sense.' He called it 'genius.'",
+            "Legend says with 8 orbiting swords, a hero could survive while standing perfectly still. Of course, no one's ever tried it. Standing still in THIS forest? Absolute madness.",
+            "Those 'wizards' are actually Dogmatic Buddhists of the Forest. They're not attacking you—they're aggressively offering enlightenment.",
+            "The forest seems dangerous, but most inhabitants are peaceful and kind. They just absolutely, positively HATE people. Nothing personal.",
+            "Why do monsters carry gold? Legend speaks of an underground monster mall. The slimes love the food court.",
+            "Orbiting swords are great for the forest, terrible for dinner parties. Some heroes stab their swords into stones just to enjoy a meal in peace.",
+            "The skeletons? Fallen heroes who drank lots of milk. The ghosts? Those same heroes' spirits. The milk was a lie.",
+            "The little green forest people are called goblins. But NEVER let them hear you say it. They prefer 'Vertically Challenged Forest Entrepreneurs.'"
+        ];
 
         const bossTypes = [
             { 
@@ -3538,7 +3643,7 @@
             } else if (!enc.rewardGiven) {
                 // Kiss! Show heart and give reward
                 spawnHeartEffect(enc.npc.position.clone());
-                showDialogue('👸 PRINCESS', '"My magnetic rescuer! Please accept this gift of attraction!"');
+                showDialogue('👸 PRINCESS', '"My magnetic rescuer! Finally, I\'m free! Now I can live my dream of practicing EVIL MAGIC in the forest! ...What? Don\'t look at me like that. A girl can have hobbies."');
                 giveEncounterReward();
             }
         }
@@ -3739,6 +3844,95 @@
             }
         }
 
+        // ============================================
+        // TREASURE CHEST SYSTEM
+        // ============================================
+        function spawnTreasureChest() {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 15 + Math.random() * 25;
+            
+            const x = gameState.player.position.x + Math.cos(angle) * dist;
+            const z = gameState.player.position.z + Math.sin(angle) * dist;
+
+            const material = new THREE.SpriteMaterial({
+                map: encounterTextures.treasureChest,
+                transparent: true
+            });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(2.5, 2.2, 1);
+            sprite.position.set(x, 1.1, z);
+            scene.add(sprite);
+
+            const chest = {
+                sprite,
+                position: new THREE.Vector3(x, 0, z),
+                opened: false,
+                goldAmount: 15 + Math.floor(Math.random() * 35), // 15-50 gold
+                factIndex: Math.floor(Math.random() * funFacts.length)
+            };
+
+            gameState.treasureChests.push(chest);
+        }
+
+        function updateTreasureChests() {
+            for (let i = gameState.treasureChests.length - 1; i >= 0; i--) {
+                const chest = gameState.treasureChests[i];
+                
+                // Bob slightly
+                chest.sprite.position.y = 1.1 + Math.sin(Date.now() * 0.002 + i) * 0.1;
+                
+                if (!chest.opened) {
+                    // Check player collision
+                    const dx = gameState.player.position.x - chest.position.x;
+                    const dz = gameState.player.position.z - chest.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (dist < 2) {
+                        openTreasureChest(chest);
+                    }
+                }
+                
+                // Remove if too far and already opened
+                const dx = gameState.player.position.x - chest.position.x;
+                const dz = gameState.player.position.z - chest.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist > CONFIG.renderDistance * 2) {
+                    scene.remove(chest.sprite);
+                    gameState.treasureChests.splice(i, 1);
+                }
+            }
+        }
+
+        function openTreasureChest(chest) {
+            chest.opened = true;
+            
+            // Change to open chest texture
+            chest.sprite.material.map = encounterTextures.openChest;
+            chest.sprite.material.needsUpdate = true;
+            chest.sprite.scale.set(2.5, 2.5, 1);
+            
+            // Give gold
+            gameState.player.gold += chest.goldAmount;
+            document.getElementById('goldNum').textContent = gameState.player.gold;
+            
+            // Show reward
+            showReward(`💰 +${chest.goldAmount} GOLD`);
+            
+            // Show fun fact dialogue
+            setTimeout(() => {
+                showDialogue('📜 ANCIENT WISDOM', funFacts[chest.factIndex]);
+            }, 500);
+        }
+
+        function shouldSpawnChest() {
+            // Limit max chests
+            if (gameState.treasureChests.length >= 5) return false;
+            
+            // Small chance each spawn cycle
+            return Math.random() < 0.08;
+        }
+
         function gainXP(amount) {
             gameState.player.xp += amount;
             const xpNeeded = CONFIG.baseXpToLevel * Math.pow(1.5, gameState.player.level - 1);
@@ -3828,6 +4022,10 @@
             }
             gameState.encounterGuards.forEach(g => scene.remove(g.sprite));
             gameState.encounterGuards = [];
+
+            // Clear treasure chests
+            gameState.treasureChests.forEach(c => scene.remove(c.sprite));
+            gameState.treasureChests = [];
 
             // Reset player
             gameState.player = {
@@ -4225,6 +4423,7 @@
                 updateBoomCooldown();
                 updateBosses();
                 updateEncounter();
+                updateTreasureChests();
                 updateDialogue();
                 updateCompass();
                 updateCameraZoom();
@@ -4241,6 +4440,11 @@
                     // Maybe spawn an encounter
                     else if (shouldSpawnEncounter()) {
                         spawnEncounter();
+                    }
+                    
+                    // Maybe spawn a treasure chest
+                    if (shouldSpawnChest()) {
+                        spawnTreasureChest();
                     }
                     
                     lastSpawnTime = now;
