@@ -687,9 +687,9 @@
         // GAME CONFIGURATION
         // ============================================
         const CONFIG = {
-            renderDistance: 40,
-            fogNear: 15,
-            fogFar: 45,
+            renderDistance: 80,
+            fogNear: 30,
+            fogFar: 90,
             chunkSize: 30,
             treeDensity: 0.0045,
             playerSpeed: 0.12,
@@ -2059,6 +2059,19 @@
         playerSprite.position.y = 2;
         playerGroup.add(playerSprite);
 
+        // Compass/navigation line
+        const compassGeometry = new THREE.BufferGeometry();
+        const compassPositions = new Float32Array([0, 0.1, 0, 0, 0.1, -10]);
+        compassGeometry.setAttribute('position', new THREE.BufferAttribute(compassPositions, 3));
+        const compassMaterial = new THREE.LineBasicMaterial({ 
+            color: 0xffd700, 
+            transparent: true, 
+            opacity: 0.6 
+        });
+        const compassLine = new THREE.Line(compassGeometry, compassMaterial);
+        compassLine.visible = false;
+        scene.add(compassLine);
+
         // ============================================
         // WORLD GENERATION
         // ============================================
@@ -2221,6 +2234,9 @@
         }
 
         function updateEnemies(delta) {
+            // Pause during dialogue
+            if (gameState.dialogueTimer > 0) return;
+            
             for (let i = gameState.enemies.length - 1; i >= 0; i--) {
                 const enemy = gameState.enemies[i];
                 
@@ -2979,6 +2995,9 @@
         }
 
         function updateBosses() {
+            // Pause during dialogue
+            if (gameState.dialogueTimer > 0) return;
+            
             const playerDamage = CONFIG.projectileBaseDamage * (1 + gameState.player.level * 0.25);
             
             for (let i = gameState.bosses.length - 1; i >= 0; i--) {
@@ -3373,31 +3392,33 @@
             const enc = gameState.encounter;
             const type = enc.type;
 
-            // Update guards (they attack the player)
-            for (let i = gameState.encounterGuards.length - 1; i >= 0; i--) {
-                const guard = gameState.encounterGuards[i];
-                
-                const dx = gameState.player.position.x - guard.sprite.position.x;
-                const dz = gameState.player.position.z - guard.sprite.position.z;
-                const dist = Math.sqrt(dx * dx + dz * dz);
+            // Update guards (they attack the player) - but pause during dialogue
+            if (gameState.dialogueTimer <= 0) {
+                for (let i = gameState.encounterGuards.length - 1; i >= 0; i--) {
+                    const guard = gameState.encounterGuards[i];
+                    
+                    const dx = gameState.player.position.x - guard.sprite.position.x;
+                    const dz = gameState.player.position.z - guard.sprite.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
 
-                // Move toward player
-                if (dist > 1.5) {
-                    guard.sprite.position.x += (dx / dist) * guard.speed;
-                    guard.sprite.position.z += (dz / dist) * guard.speed;
-                } else if (guard.attackCooldown <= 0) {
-                    takeDamage(guard.damage);
-                    guard.attackCooldown = 60;
-                }
+                    // Move toward player
+                    if (dist > 1.5) {
+                        guard.sprite.position.x += (dx / dist) * guard.speed;
+                        guard.sprite.position.z += (dz / dist) * guard.speed;
+                    } else if (guard.attackCooldown <= 0) {
+                        takeDamage(guard.damage);
+                        guard.attackCooldown = 60;
+                    }
 
-                guard.attackCooldown = Math.max(0, guard.attackCooldown - 1);
+                    guard.attackCooldown = Math.max(0, guard.attackCooldown - 1);
 
-                // Hit flash
-                if (guard.hitFlash > 0) {
-                    guard.hitFlash--;
-                    guard.sprite.material.color.setHex(guard.hitFlash % 4 < 2 ? 0xffffff : 0xff0000);
-                } else {
-                    guard.sprite.material.color.setHex(0xffffff);
+                    // Hit flash
+                    if (guard.hitFlash > 0) {
+                        guard.hitFlash--;
+                        guard.sprite.material.color.setHex(guard.hitFlash % 4 < 2 ? 0xffffff : 0xff0000);
+                    } else {
+                        guard.sprite.material.color.setHex(0xffffff);
+                    }
                 }
             }
 
@@ -3590,6 +3611,64 @@
                 if (gameState.dialogueTimer <= 0) {
                     hideDialogue();
                 }
+            }
+        }
+
+        function updateCompass() {
+            let target = null;
+            let targetType = null;
+
+            // Priority: active encounter > boss
+            if (gameState.encounter && !gameState.encounter.rewardGiven) {
+                target = gameState.encounter.position;
+                targetType = 'encounter';
+            } else if (gameState.bosses.length > 0) {
+                target = gameState.bosses[0].sprite.position;
+                targetType = 'boss';
+            }
+
+            if (target) {
+                compassLine.visible = true;
+                
+                // Calculate direction to target
+                const dx = target.x - gameState.player.position.x;
+                const dz = target.z - gameState.player.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist > 5) {
+                    // Normalize and scale the line length
+                    const lineLength = Math.min(8, dist * 0.15);
+                    const dirX = (dx / dist) * lineLength;
+                    const dirZ = (dz / dist) * lineLength;
+                    
+                    // Update line positions
+                    const positions = compassLine.geometry.attributes.position.array;
+                    // Start point (near player)
+                    positions[0] = gameState.player.position.x + (dx / dist) * 2;
+                    positions[1] = 0.2;
+                    positions[2] = gameState.player.position.z + (dz / dist) * 2;
+                    // End point (towards target)
+                    positions[3] = gameState.player.position.x + (dx / dist) * (2 + lineLength);
+                    positions[4] = 0.2;
+                    positions[5] = gameState.player.position.z + (dz / dist) * (2 + lineLength);
+                    
+                    compassLine.geometry.attributes.position.needsUpdate = true;
+                    
+                    // Color based on target type
+                    if (targetType === 'encounter') {
+                        compassMaterial.color.setHex(0x2ecc71); // Green for positive
+                    } else {
+                        compassMaterial.color.setHex(0xe74c3c); // Red for boss
+                    }
+                    
+                    // Pulse opacity
+                    const pulse = 0.4 + Math.sin(Date.now() * 0.005) * 0.3;
+                    compassMaterial.opacity = pulse;
+                } else {
+                    compassLine.visible = false;
+                }
+            } else {
+                compassLine.visible = false;
             }
         }
 
@@ -4116,6 +4195,7 @@
                 updateBosses();
                 updateEncounter();
                 updateDialogue();
+                updateCompass();
                 updateCameraZoom();
 
                 // Spawn enemies
