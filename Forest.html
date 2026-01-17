@@ -4420,6 +4420,9 @@
         let savedFogColor = null;
 
         function enterCloudArena() {
+            // Set arena state FIRST to prevent respawning portals if something fails
+            gameState.inCloudArena = true;
+            
             // Save current position
             gameState.savedForestPosition = gameState.player.position.clone();
             
@@ -4433,8 +4436,8 @@
             savedGroundMaterial = ground.material;
             savedFogColor = scene.fog.color.getHex();
             
-            // Create cloud ground
-            const cloudTexture = portalTextures.cloud;
+            // Create fresh cloud ground texture
+            const cloudTexture = createCloudTexture();
             cloudTexture.wrapS = THREE.RepeatWrapping;
             cloudTexture.wrapT = THREE.RepeatWrapping;
             cloudTexture.repeat.set(30, 30);
@@ -4448,7 +4451,6 @@
             gameState.player.position.set(0, 0, 0);
             playerGroup.position.set(0, 0, 0);
             
-            gameState.inCloudArena = true;
             gameState.targetCameraZoom = 2.5;
             
             // Spawn arena enemies
@@ -4468,7 +4470,7 @@
             for (const boss of gameState.bosses) {
                 scene.remove(boss.sprite);
                 if (boss.club) scene.remove(boss.club);
-                boss.projectiles.forEach(p => scene.remove(p.sprite));
+                if (boss.projectiles) boss.projectiles.forEach(p => scene.remove(p.sprite));
             }
             gameState.bosses = [];
             gameState.bossActive = false;
@@ -4484,9 +4486,9 @@
             }
             gameState.treasureChests = [];
             
-            // Clear chunks (trees etc)
+            // Clear chunks (trees etc) - chunks are THREE.Group objects
             for (const [key, chunk] of gameState.chunks) {
-                chunk.objects.forEach(obj => scene.remove(obj));
+                scene.remove(chunk);
             }
             gameState.chunks.clear();
         }
