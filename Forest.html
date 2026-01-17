@@ -2316,7 +2316,8 @@
             arenaEnemies: [],
             arenaBosses: [],
             savedForestPosition: null,
-            arenaCompleted: false
+            arenaCompleted: false,
+            pendingArenaExit: false
         };
 
         // ============================================
@@ -4050,6 +4051,12 @@
         function hideDialogue() {
             document.getElementById('dialogueBox').classList.remove('active');
             gameState.dialogueTimer = 0;
+            
+            // Check if we need to exit cloud arena after this dialogue
+            if (gameState.pendingArenaExit) {
+                gameState.pendingArenaExit = false;
+                exitCloudArena();
+            }
         }
 
         function setupDialogueButton() {
@@ -4524,8 +4531,8 @@
                 gameState.arenaBosses.push(boss);
             }
             
-            // Spawn 30 cloud sprites around the arena
-            for (let i = 0; i < 30; i++) {
+            // Spawn 60 cloud sprites around the arena
+            for (let i = 0; i < 60; i++) {
                 const angle = Math.random() * Math.PI * 2;
                 const dist = 10 + Math.random() * 30;
                 const x = Math.cos(angle) * dist;
@@ -4540,7 +4547,7 @@
                 sprite.position.set(x, 1.5, z);
                 scene.add(sprite);
                 
-                const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2) * 1.5;
+                const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2) * 6; // 4x health
                 const enemy = {
                     sprite,
                     health: baseHealth,
@@ -4676,22 +4683,10 @@
             
             showReward('☁️ CLOUD ARENA COMPLETE! +2000 GOLD');
             
-            showDialogue('🏆 VICTORY!', 'You have defeated the Sky Giants! The clouds part and you descend back to the mystical forest, victorious and wealthy!');
+            // Set flag to exit arena when dialogue closes
+            gameState.pendingArenaExit = true;
             
-            // Return to forest after dialogue closes
-            setTimeout(() => {
-                if (gameState.dialogueTimer <= 0) {
-                    exitCloudArena();
-                } else {
-                    // Wait for dialogue to close
-                    const checkDialogue = setInterval(() => {
-                        if (gameState.dialogueTimer <= 0) {
-                            clearInterval(checkDialogue);
-                            exitCloudArena();
-                        }
-                    }, 100);
-                }
-            }, 500);
+            showDialogue('🏆 VICTORY!', 'You have defeated the Sky Giants! The clouds part and you descend back to the mystical forest, victorious and wealthy!');
         }
 
         function exitCloudArena() {
@@ -4897,6 +4892,7 @@
             gameState.arenaEnemies = [];
             gameState.savedForestPosition = null;
             gameState.arenaCompleted = false;
+            gameState.pendingArenaExit = false;
 
             document.getElementById('gameOver').style.display = 'none';
             document.getElementById('levelNum').textContent = '1';
