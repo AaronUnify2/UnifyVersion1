@@ -3579,11 +3579,21 @@
                 }
             }
 
-            // Clean up if player goes too far
+            // Clean up if player goes too far OR if cleanup timer expired
             const dx = gameState.player.position.x - enc.position.x;
             const dz = gameState.player.position.z - enc.position.z;
             const dist = Math.sqrt(dx * dx + dz * dz);
 
+            // Timer-based cleanup: 30 seconds after reward is claimed
+            if (enc.rewardGiven && enc.cleanupTimer !== undefined) {
+                enc.cleanupTimer--;
+                if (enc.cleanupTimer <= 0) {
+                    cleanupEncounter();
+                    return;
+                }
+            }
+
+            // Distance-based cleanup (only if reward was given)
             if (dist > CONFIG.renderDistance * 3 && enc.rewardGiven) {
                 cleanupEncounter();
             }
@@ -3686,6 +3696,7 @@
 
             const type = enc.type;
             enc.rewardGiven = true;
+            enc.cleanupTimer = 30 * 60; // 30 seconds at 60fps - auto cleanup after reward claimed
 
             // Grant the upgrade
             const upgrade = gameState.upgrades[type.reward];
