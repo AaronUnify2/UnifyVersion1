@@ -261,6 +261,7 @@ function shouldSpawnMonsterStore() {
     if (gameState.encounter) return false;
     if (gameState.bosses.length > 0) return false;
     if (gameState.inCloudArena) return false;
+    if (gameState.cloudPortal) return false; // No store during cloud portal
     
     const level = gameState.player.level;
     if (level < 10) return false;
