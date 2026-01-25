@@ -2,6 +2,232 @@
 // ENEMY SYSTEM
 // ============================================
 
+// Note: Requires createPixelTexture() function from main file
+
+// ============================================
+// ENEMY SPRITE TEXTURES
+// ============================================
+function createSlimeTexture() {
+    return createPixelTexture(32, 32, (ctx, w, h) => {
+        // Body
+        ctx.fillStyle = '#27ae60';
+        ctx.beginPath();
+        ctx.ellipse(16, 20, 14, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Highlight
+        ctx.fillStyle = '#2ecc71';
+        ctx.beginPath();
+        ctx.ellipse(16, 18, 10, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Eyes
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(10, 16, 5, 5);
+        ctx.fillRect(18, 16, 5, 5);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(12, 18, 2, 2);
+        ctx.fillRect(20, 18, 2, 2);
+        
+        // Shine
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillRect(8, 14, 3, 3);
+    });
+}
+
+function createSkeletonTexture() {
+    return createPixelTexture(32, 48, (ctx, w, h) => {
+        // Skull
+        ctx.fillStyle = '#ecf0f1';
+        ctx.fillRect(10, 2, 12, 14);
+        ctx.fillRect(8, 6, 16, 8);
+        
+        // Eyes
+        ctx.fillStyle = '#c0392b';
+        ctx.fillRect(11, 7, 4, 4);
+        ctx.fillRect(17, 7, 4, 4);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(12, 8, 2, 2);
+        ctx.fillRect(18, 8, 2, 2);
+        
+        // Nose
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillRect(15, 11, 2, 3);
+        
+        // Teeth
+        ctx.fillStyle = '#bdc3c7';
+        ctx.fillRect(12, 14, 8, 2);
+        
+        // Spine
+        ctx.fillStyle = '#ecf0f1';
+        ctx.fillRect(14, 16, 4, 20);
+        
+        // Ribs
+        ctx.fillStyle = '#bdc3c7';
+        for (let i = 0; i < 4; i++) {
+            ctx.fillRect(8, 18 + i * 4, 16, 2);
+        }
+        
+        // Arms
+        ctx.fillRect(4, 18, 4, 14);
+        ctx.fillRect(24, 18, 4, 14);
+        
+        // Legs
+        ctx.fillRect(10, 36, 4, 12);
+        ctx.fillRect(18, 36, 4, 12);
+    });
+}
+
+function createGoblinTexture() {
+    return createPixelTexture(32, 40, (ctx, w, h) => {
+        // Body
+        ctx.fillStyle = '#6b8e23';
+        ctx.fillRect(8, 16, 16, 16);
+        
+        // Head
+        ctx.fillStyle = '#7cba3d';
+        ctx.fillRect(6, 4, 20, 14);
+        
+        // Ears
+        ctx.fillStyle = '#6b8e23';
+        ctx.fillRect(2, 6, 6, 8);
+        ctx.fillRect(24, 6, 6, 8);
+        
+        // Eyes
+        ctx.fillStyle = '#ff0';
+        ctx.fillRect(10, 8, 4, 4);
+        ctx.fillRect(18, 8, 4, 4);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(11, 9, 2, 2);
+        ctx.fillRect(19, 9, 2, 2);
+        
+        // Nose
+        ctx.fillStyle = '#5a7a1e';
+        ctx.fillRect(14, 11, 4, 4);
+        
+        // Mouth
+        ctx.fillStyle = '#8b0000';
+        ctx.fillRect(12, 15, 8, 2);
+        
+        // Legs
+        ctx.fillStyle = '#6b8e23';
+        ctx.fillRect(10, 32, 4, 8);
+        ctx.fillRect(18, 32, 4, 8);
+        
+        // Arms
+        ctx.fillRect(4, 18, 4, 10);
+        ctx.fillRect(24, 18, 4, 10);
+    });
+}
+
+function createGhostTexture() {
+    return createPixelTexture(32, 40, (ctx, w, h) => {
+        // Body
+        ctx.fillStyle = 'rgba(200, 220, 255, 0.8)';
+        ctx.beginPath();
+        ctx.ellipse(16, 16, 12, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Tail
+        ctx.fillRect(6, 24, 20, 10);
+        for (let i = 0; i < 4; i++) {
+            ctx.fillRect(6 + i * 6, 34, 4, 6);
+        }
+        
+        // Eyes
+        ctx.fillStyle = '#000';
+        ctx.fillRect(9, 12, 5, 6);
+        ctx.fillRect(18, 12, 5, 6);
+        
+        // Glow
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(10, 8, 4, 3);
+        ctx.fillRect(19, 8, 4, 3);
+    });
+}
+
+function createBatTexture() {
+    return createPixelTexture(40, 24, (ctx, w, h) => {
+        // Body
+        ctx.fillStyle = '#2c2c54';
+        ctx.beginPath();
+        ctx.ellipse(20, 14, 8, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Wings
+        ctx.fillStyle = '#40407a';
+        // Left wing
+        ctx.beginPath();
+        ctx.moveTo(12, 14);
+        ctx.lineTo(2, 6);
+        ctx.lineTo(4, 16);
+        ctx.lineTo(12, 18);
+        ctx.fill();
+        
+        // Right wing
+        ctx.beginPath();
+        ctx.moveTo(28, 14);
+        ctx.lineTo(38, 6);
+        ctx.lineTo(36, 16);
+        ctx.lineTo(28, 18);
+        ctx.fill();
+        
+        // Eyes
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(16, 11, 3, 3);
+        ctx.fillRect(21, 11, 3, 3);
+        
+        // Ears
+        ctx.fillStyle = '#2c2c54';
+        ctx.fillRect(14, 4, 4, 6);
+        ctx.fillRect(22, 4, 4, 6);
+    });
+}
+
+function createWizardTexture() {
+    return createPixelTexture(32, 48, (ctx, w, h) => {
+        // Robe
+        ctx.fillStyle = '#4a235a';
+        ctx.fillRect(8, 20, 16, 22);
+        ctx.fillRect(6, 42, 20, 6);
+        
+        // Face
+        ctx.fillStyle = '#fad7a0';
+        ctx.fillRect(10, 14, 12, 10);
+        
+        // Hat
+        ctx.fillStyle = '#6c3483';
+        ctx.fillRect(6, 10, 20, 6);
+        ctx.fillRect(10, 2, 12, 10);
+        ctx.fillRect(14, 0, 4, 4);
+        
+        // Star on hat
+        ctx.fillStyle = '#f1c40f';
+        ctx.fillRect(14, 4, 4, 4);
+        
+        // Eyes
+        ctx.fillStyle = '#9b59b6';
+        ctx.fillRect(12, 16, 3, 3);
+        ctx.fillRect(17, 16, 3, 3);
+        
+        // Beard
+        ctx.fillStyle = '#bdc3c7';
+        ctx.fillRect(10, 22, 12, 8);
+        ctx.fillRect(12, 30, 8, 4);
+        ctx.fillRect(14, 34, 4, 2);
+        
+        // Staff
+        ctx.fillStyle = '#8b4513';
+        ctx.fillRect(26, 10, 3, 38);
+        ctx.fillStyle = '#9b59b6';
+        ctx.fillRect(24, 6, 7, 6);
+    });
+}
+
+// ============================================
+// ENEMY TYPE DEFINITIONS
+// ============================================
+
 // Enemy type definitions with varied stats
 const enemyTypes = [
     { name: 'slime', texture: createSlimeTexture, scale: [2.5, 2.5], speed: 0.025, healthMult: 0.5, damageMult: 0.5, xp: 10, gold: 0, goldChance: 0.1 },
