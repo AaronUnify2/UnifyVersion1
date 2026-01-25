@@ -965,25 +965,7 @@
         // ============================================
         // GAME STATE
         // ============================================
-        
-        // Fallback encounterState in case encounters.js hasn't loaded yet
-        // This will be overwritten when encounters.js loads properly
-        if (typeof encounterState === 'undefined') {
-            var encounterState = {
-                currentEncounter: null,
-                encounterGuards: [],
-                treasureChests: [],
-                cloudPortal: null,
-                portalParticles: [],
-                inCloudArena: false,
-                arenaEnemies: [],
-                arenaBosses: [],
-                arenaCompleted: false,
-                pendingArenaExit: false,
-                guaranteedEncounterQueue: [],
-                textures: {}
-            };
-        }
+        // NOTE: encounterState is defined in encounters.js (loaded before this script)
         
         let gameState = {
             player: {
@@ -1018,22 +1000,7 @@
             chunks: new Map(),
             isGameOver: false,
             menuOpen: false
-            // NOTE: Encounter state is now managed by encounterState in encounters.js
         };
-
-        // Fallback stub functions - will be overwritten when encounters.js loads
-        // These prevent errors if encounters.js hasn't loaded yet
-        var shouldSpawnEncounter = shouldSpawnEncounter || function() { return false; };
-        var spawnEncounter = spawnEncounter || function() {};
-        var shouldSpawnChest = shouldSpawnChest || function() { return false; };
-        var spawnTreasureChest = spawnTreasureChest || function() {};
-        var shouldSpawnPortal = shouldSpawnPortal || function() { return false; };
-        var spawnCloudPortal = spawnCloudPortal || function() {};
-        var updateEncounterSystem = updateEncounterSystem || function() {};
-        var initEncounterSystem = initEncounterSystem || function() {};
-        var resetEncounterSystem = resetEncounterSystem || function() {};
-        var isEncounterSystemBusy = isEncounterSystemBusy || function() { return false; };
-        var checkPendingArenaExit = checkPendingArenaExit || function() {};
 
         // ============================================
         // THREE.JS SETUP
@@ -1935,40 +1902,7 @@
         // BOSS SYSTEM (now in bosses.js)
         // ============================================
         // bossTextures will be initialized by bosses.js
-
-                function shouldSpawnEncounter() {
-            if (encounterState.currentEncounter) return false; // Only one encounter at a time
-            if (gameState.bosses.length > 0) return false; // No encounter during boss
-            if (encounterState.cloudPortal) return false; // No encounter during cloud portal
-            // Check if monster store is active (slime companion system)
-            if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) return false;
-            
-            const level = gameState.player.level;
-            if (level < 4) return false; // No encounters before level 4
-            
-            // Same chance as reduced boss spawns
-            const baseChance = 0.01;
-            const levelBonus = Math.min((level - 4) * 0.0125, 0.065);
-            const spawnChance = baseChance + levelBonus;
-            
-            // Debug logging every ~5 seconds
-            spawnCheckCounter++;
-            if (spawnCheckCounter >= 5) {
-                spawnCheckCounter = 0;
-                console.log('Spawn check:', {
-                    hasEncounter: !!encounterState.currentEncounter,
-                    bossCount: gameState.bosses.length,
-                    level: level,
-                    spawnChance: spawnChance
-                });
-            }
-            
-            return Math.random() < spawnChance;
-        }
-
-                        // Debug spawn check counter
-        
-
+        // NOTE: shouldSpawnEncounter is now in encounters.js
 
         function gainXP(amount) {
             gameState.player.xp += amount;
@@ -2188,6 +2122,65 @@
         function updateDialogue() {
             // Dialogue is now dismissed by button click
             // This function just keeps the timer active for mob pausing
+        }
+
+        // ============================================
+        // COMPASS SYSTEM
+        // ============================================
+        function updateCompass() {
+            let target = null;
+            let targetType = null;
+
+            // Priority: active encounter > boss
+            if (encounterState.currentEncounter && !encounterState.currentEncounter.rewardGiven) {
+                target = encounterState.currentEncounter.position;
+                targetType = 'encounter';
+            } else if (gameState.bosses.length > 0) {
+                target = gameState.bosses[0].sprite.position;
+                targetType = 'boss';
+            }
+
+            if (target) {
+                compassLine.visible = true;
+                
+                // Calculate direction to target
+                const dx = target.x - gameState.player.position.x;
+                const dz = target.z - gameState.player.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist > 5) {
+                    // Normalize and scale the line length
+                    const lineLength = Math.min(8, dist * 0.15);
+                    
+                    // Update line positions
+                    const positions = compassLine.geometry.attributes.position.array;
+                    // Start point (near player)
+                    positions[0] = gameState.player.position.x + (dx / dist) * 2;
+                    positions[1] = 0.2;
+                    positions[2] = gameState.player.position.z + (dz / dist) * 2;
+                    // End point (towards target)
+                    positions[3] = gameState.player.position.x + (dx / dist) * (2 + lineLength);
+                    positions[4] = 0.2;
+                    positions[5] = gameState.player.position.z + (dz / dist) * (2 + lineLength);
+                    
+                    compassLine.geometry.attributes.position.needsUpdate = true;
+                    
+                    // Color based on target type
+                    if (targetType === 'encounter') {
+                        compassMaterial.color.setHex(0x2ecc71); // Green for positive
+                    } else {
+                        compassMaterial.color.setHex(0xe74c3c); // Red for boss
+                    }
+                    
+                    // Pulse opacity
+                    const pulse = 0.4 + Math.sin(Date.now() * 0.005) * 0.3;
+                    compassMaterial.opacity = pulse;
+                } else {
+                    compassLine.visible = false;
+                }
+            } else {
+                compassLine.visible = false;
+            }
         }
 
         // ============================================
