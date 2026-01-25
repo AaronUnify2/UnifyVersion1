@@ -2095,6 +2095,23 @@
                         }
                     }
                 }
+                
+                // Check collision with monster store slimes (if slime companion system loaded)
+                if (!hitSomething && typeof slimeCompanionState !== 'undefined' && slimeCompanionState.storeSlimes) {
+                    for (const storeSlime of slimeCompanionState.storeSlimes) {
+                        const dx = proj.sprite.position.x - storeSlime.sprite.position.x;
+                        const dz = proj.sprite.position.z - storeSlime.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+
+                        if (dist < 1.5) {
+                            if (typeof damageStoreSlime === 'function') {
+                                damageStoreSlime(storeSlime, proj.damage);
+                            }
+                            hitSomething = true;
+                            break;
+                        }
+                    }
+                }
 
                 // Check collision with bosses
                 if (!hitSomething) {
@@ -3836,6 +3853,11 @@
             // Clear treasure chests
             gameState.treasureChests.forEach(c => scene.remove(c.sprite));
             gameState.treasureChests = [];
+            
+            // Reset slime companion system (if loaded)
+            if (typeof resetSlimeCompanion === 'function') {
+                resetSlimeCompanion();
+            }
 
             // Reset player
             gameState.player = {
@@ -4027,13 +4049,9 @@
             right: false
         };
 
-        // Multi-touch tracking for simultaneous d-pad and camera control
-        let cameraTouch = null; // Track the touch used for camera rotation
-        let cameraTouchStartX = 0;
+        let touchStartX = 0;
+        let touchStartY = 0;
         let isDragging = false;
-
-        // Track which touches are on d-pad buttons
-        const dpadTouches = new Set();
 
         // D-Pad controls
         function setupDPad() {
@@ -4051,28 +4069,17 @@
                     e.preventDefault();
                     controls[dir] = true;
                     btn.classList.add('active');
-                    // Track this touch as a d-pad touch
-                    for (const touch of e.changedTouches) {
-                        dpadTouches.add(touch.identifier);
-                    }
                 });
 
                 btn.addEventListener('touchend', (e) => {
                     e.preventDefault();
                     controls[dir] = false;
                     btn.classList.remove('active');
-                    // Remove from d-pad touches
-                    for (const touch of e.changedTouches) {
-                        dpadTouches.delete(touch.identifier);
-                    }
                 });
 
-                btn.addEventListener('touchcancel', (e) => {
+                btn.addEventListener('touchcancel', () => {
                     controls[dir] = false;
                     btn.classList.remove('active');
-                    for (const touch of e.changedTouches) {
-                        dpadTouches.delete(touch.identifier);
-                    }
                 });
 
                 // Mouse support for desktop
@@ -4109,17 +4116,7 @@
 
             btn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                // Track magic button touches too
-                for (const touch of e.changedTouches) {
-                    dpadTouches.add(touch.identifier);
-                }
                 shoot();
-            });
-
-            btn.addEventListener('touchend', (e) => {
-                for (const touch of e.changedTouches) {
-                    dpadTouches.delete(touch.identifier);
-                }
             });
 
             btn.addEventListener('mousedown', (e) => {
@@ -4128,87 +4125,42 @@
             });
         }
 
-        // View swipe control - now works anywhere on screen with multi-touch
+        // View swipe control
         function setupViewControl() {
             const viewArea = document.getElementById('viewArea');
 
-            // Check if an element is a UI control that shouldn't trigger camera rotation
-            function isUIElement(element) {
-                const uiIds = ['dpad', 'dpad-up', 'dpad-down', 'dpad-left', 'dpad-right', 
-                               'magicBtn', 'menuBtn', 'restartBtn', 'boomBtn'];
-                while (element) {
-                    if (uiIds.includes(element.id) || 
-                        element.classList?.contains('dpad-btn') ||
-                        element.classList?.contains('upgrade-btn') ||
-                        element.classList?.contains('dialogue-btn') ||
-                        element.id === 'upgradeMenu' ||
-                        element.id === 'dialogueBox') {
-                        return true;
-                    }
-                    element = element.parentElement;
-                }
-                return false;
-            }
-
-            // Global touch handlers for camera rotation
-            document.addEventListener('touchstart', (e) => {
-                // Find a touch that's not on a UI element to use for camera
-                for (const touch of e.changedTouches) {
-                    const element = document.elementFromPoint(touch.clientX, touch.clientY);
-                    if (!isUIElement(element) && cameraTouch === null) {
-                        cameraTouch = touch.identifier;
-                        cameraTouchStartX = touch.clientX;
-                        isDragging = true;
-                        break;
-                    }
-                }
-            }, { passive: true });
-
-            document.addEventListener('touchmove', (e) => {
-                if (cameraTouch === null || gameState.dialogueTimer > 0) return;
-                
-                // Find our camera touch
-                for (const touch of e.changedTouches) {
-                    if (touch.identifier === cameraTouch) {
-                        const dx = touch.clientX - cameraTouchStartX;
-                        gameState.player.rotation += dx * 0.005;
-                        cameraTouchStartX = touch.clientX;
-                        break;
-                    }
-                }
-            }, { passive: true });
-
-            document.addEventListener('touchend', (e) => {
-                for (const touch of e.changedTouches) {
-                    if (touch.identifier === cameraTouch) {
-                        cameraTouch = null;
-                        isDragging = false;
-                        break;
-                    }
+            viewArea.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                    isDragging = true;
                 }
             });
 
-            document.addEventListener('touchcancel', (e) => {
-                for (const touch of e.changedTouches) {
-                    if (touch.identifier === cameraTouch) {
-                        cameraTouch = null;
-                        isDragging = false;
-                        break;
-                    }
+            viewArea.addEventListener('touchmove', (e) => {
+                if (isDragging && e.touches.length === 1 && gameState.dialogueTimer <= 0) {
+                    const dx = e.touches[0].clientX - touchStartX;
+                    gameState.player.rotation += dx * 0.005;
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
                 }
             });
 
-            // Mouse support (unchanged - works on viewArea)
+            viewArea.addEventListener('touchend', () => {
+                isDragging = false;
+            });
+
+            // Mouse support
             viewArea.addEventListener('mousedown', (e) => {
-                cameraTouchStartX = e.clientX;
+                touchStartX = e.clientX;
                 isDragging = true;
             });
 
             document.addEventListener('mousemove', (e) => {
                 if (isDragging && gameState.dialogueTimer <= 0) {
-                    const dx = e.clientX - cameraTouchStartX;
+                    const dx = e.clientX - touchStartX;
                     gameState.player.rotation += dx * 0.005;
-                    cameraTouchStartX = e.clientX;
+                    touchStartX = e.clientX;
                 }
             });
 
@@ -4338,6 +4290,11 @@
                 updateDialogue();
                 updateCompass();
                 updateCameraZoom();
+                
+                // Update slime companion system (if loaded)
+                if (typeof updateSlimeCompanion === 'function') {
+                    updateSlimeCompanion();
+                }
 
                 // Spawn enemies (only in forest)
                 if (!gameState.inCloudArena) {
@@ -4391,6 +4348,11 @@
             
             // Initialize UI
             updateUpgradeMenu();
+            
+            // Initialize slime companion system (if loaded)
+            if (typeof initSlimeCompanion === 'function') {
+                initSlimeCompanion();
+            }
 
             // Start animation
             animate();
@@ -4417,5 +4379,6 @@
     <!-- Load modular game systems -->
     <script src="js/enemies.js"></script>
     <script src="js/bosses.js"></script>
+    <script src="js/slime-companion.js"></script>
 </body>
     </html>
