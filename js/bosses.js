@@ -369,9 +369,9 @@ const bossTypes = [
         name: 'dragon', 
         texture: 'dragon',
         scale: [12, 10], 
-        speed: 0.04,
+        speed: 0.1,
         behavior: 'chase_shoot',
-        attackCooldown: 120,
+        attackCooldown: 100,
         xpMultiplier: 0.8,
         goldDrop: 100
     },
@@ -392,7 +392,7 @@ const bossTypes = [
         speed: 0,
         behavior: 'stationary_magic',
         attackCooldown: 90,
-        boomCooldown: 600,
+        boomCooldown: 400,
         xpMultiplier: 0.8,
         goldDrop: 120
     }
