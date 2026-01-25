@@ -258,10 +258,10 @@ function createShopkeeperTexture() {
 
 function shouldSpawnMonsterStore() {
     if (slimeCompanionState.monsterStore) return false;
-    if (gameState.encounter) return false;
+    if (encounterState.currentEncounter) return false;
     if (gameState.bosses.length > 0) return false;
-    if (gameState.inCloudArena) return false;
-    if (gameState.cloudPortal) return false; // No store during cloud portal
+    if (encounterState.inCloudArena) return false;
+    if (encounterState.cloudPortal) return false; // No store during cloud portal
     
     const level = gameState.player.level;
     if (level < 10) return false;
@@ -484,6 +484,7 @@ function createSlimeStoreUI() {
     storeMenu.innerHTML = `
         <div id="slimeStoreContent">
             <h2>🏪 MONSTER STORE</h2>
+            <div id="storeGoldDisplay">💰 <span id="storeGoldAmount">0</span></div>
             <div id="slimeStoreItems">
                 <div class="store-item" id="store-slime">
                     <div class="store-icon">🔵</div>
@@ -580,10 +581,19 @@ function createSlimeStoreUI() {
         #slimeStoreContent h2 {
             color: #2ecc71;
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             font-size: 16px;
             text-shadow: 0 0 10px #27ae60;
             font-family: 'Press Start 2P', cursive;
+        }
+        
+        #storeGoldDisplay {
+            text-align: center;
+            color: #f1c40f;
+            font-size: 14px;
+            font-family: 'Press Start 2P', cursive;
+            margin-bottom: 15px;
+            text-shadow: 0 0 10px rgba(241, 196, 15, 0.5);
         }
         
         .store-item {
@@ -759,6 +769,12 @@ function closeSlimeStore() {
 
 function updateSlimeStoreUI() {
     const state = slimeCompanionState;
+    
+    // Update gold display
+    const goldDisplay = document.getElementById('storeGoldAmount');
+    if (goldDisplay) {
+        goldDisplay.textContent = gameState.player.gold;
+    }
     
     const slimeItem = document.getElementById('store-slime');
     const slimeBtn = document.getElementById('buySlimeBtn');
@@ -1023,7 +1039,7 @@ function updateSlimeSwords() {
         }
         
         // Check encounter guards
-        for (const guard of gameState.encounterGuards) {
+        for (const guard of encounterState.encounterGuards) {
             const dx = sword.sprite.position.x - guard.sprite.position.x;
             const dz = sword.sprite.position.z - guard.sprite.position.z;
             const dist = Math.sqrt(dx * dx + dz * dz);
@@ -1043,8 +1059,8 @@ function updateSlimeSwords() {
                         if (Math.random() < 0.5) {
                             spawnGoldOrb(guard.sprite.position.clone(), 15);
                         }
-                        const idx = gameState.encounterGuards.indexOf(guard);
-                        if (idx > -1) gameState.encounterGuards.splice(idx, 1);
+                        const idx = encounterState.encounterGuards.indexOf(guard);
+                        if (idx > -1) encounterState.encounterGuards.splice(idx, 1);
                         gameState.kills++;
                         document.getElementById('kills').textContent = gameState.kills;
                     }
@@ -1074,7 +1090,7 @@ function updateSlimeSwords() {
         for (const [target, time] of sword.hitCooldowns) {
             if (!gameState.enemies.includes(target) && 
                 !gameState.bosses.includes(target) && 
-                !gameState.encounterGuards.includes(target) &&
+                !encounterState.encounterGuards.includes(target) &&
                 !state.storeSlimes.includes(target)) {
                 sword.hitCooldowns.delete(target);
             }
@@ -1123,7 +1139,7 @@ function updateCompanionSlime() {
         }
     }
     
-    for (const guard of gameState.encounterGuards) {
+    for (const guard of encounterState.encounterGuards) {
         const edx = guard.sprite.position.x - slime.position.x;
         const edz = guard.sprite.position.z - slime.position.z;
         const eDist = Math.sqrt(edx * edx + edz * edz);
@@ -1284,7 +1300,7 @@ function updateSlimeProjectiles() {
         }
         
         if (!hit) {
-            for (const guard of gameState.encounterGuards) {
+            for (const guard of encounterState.encounterGuards) {
                 const dx = guard.sprite.position.x - proj.sprite.position.x;
                 const dz = guard.sprite.position.z - proj.sprite.position.z;
                 const dist = Math.sqrt(dx * dx + dz * dz);
@@ -1299,8 +1315,8 @@ function updateSlimeProjectiles() {
                         if (Math.random() < 0.5) {
                             spawnGoldOrb(guard.sprite.position.clone(), 15);
                         }
-                        const idx = gameState.encounterGuards.indexOf(guard);
-                        if (idx > -1) gameState.encounterGuards.splice(idx, 1);
+                        const idx = encounterState.encounterGuards.indexOf(guard);
+                        if (idx > -1) encounterState.encounterGuards.splice(idx, 1);
                         gameState.kills++;
                         document.getElementById('kills').textContent = gameState.kills;
                     }
