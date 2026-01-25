@@ -275,7 +275,10 @@ function spawnEnemy() {
         damage: baseDamage * damageVariation,
         speed: type.speed * speedVariation,
         attackCooldown: 0,
-        hitFlash: 0
+        hitFlash: 0,
+        // Track current target for slime aggro system
+        currentTarget: null,
+        targetIsSlime: false
     };
 
     scene.add(sprite);
@@ -289,17 +292,41 @@ function updateEnemies(delta) {
     for (let i = gameState.enemies.length - 1; i >= 0; i--) {
         const enemy = gameState.enemies[i];
         
-        // Move towards player using individual speed
-        const dx = gameState.player.position.x - enemy.sprite.position.x;
-        const dz = gameState.player.position.z - enemy.sprite.position.z;
+        // Determine target - use slime aggro system if available
+        let targetPos;
+        let targetingSlime = false;
+        
+        if (typeof getSlimeAggroTarget === 'function') {
+            targetPos = getSlimeAggroTarget(enemy.sprite.position, false);
+            // Check if we're targeting the slime (not player)
+            if (typeof slimeCompanionState !== 'undefined' && 
+                slimeCompanionState.slime && 
+                targetPos === slimeCompanionState.slime.position) {
+                targetingSlime = true;
+            }
+        } else {
+            targetPos = gameState.player.position;
+        }
+        
+        enemy.targetIsSlime = targetingSlime;
+        
+        // Move towards target using individual speed
+        const dx = targetPos.x - enemy.sprite.position.x;
+        const dz = targetPos.z - enemy.sprite.position.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
 
         if (dist > 1.5) {
             enemy.sprite.position.x += (dx / dist) * enemy.speed;
             enemy.sprite.position.z += (dz / dist) * enemy.speed;
         } else if (enemy.attackCooldown <= 0) {
-            // Attack player
-            takeDamage(enemy.damage);
+            // Attack target
+            if (targetingSlime && typeof damageCompanionSlime === 'function') {
+                // Attack the companion slime
+                damageCompanionSlime(enemy.damage);
+            } else {
+                // Attack player
+                takeDamage(enemy.damage);
+            }
             enemy.attackCooldown = 60;
         }
 
@@ -313,8 +340,12 @@ function updateEnemies(delta) {
             enemy.sprite.material.color.setHex(0xffffff);
         }
 
-        // Remove if too far
-        if (dist > CONFIG.renderDistance * 1.5) {
+        // Remove if too far from PLAYER (not target)
+        const playerDx = gameState.player.position.x - enemy.sprite.position.x;
+        const playerDz = gameState.player.position.z - enemy.sprite.position.z;
+        const playerDist = Math.sqrt(playerDx * playerDx + playerDz * playerDz);
+        
+        if (playerDist > CONFIG.renderDistance * 1.5) {
             scene.remove(enemy.sprite);
             gameState.enemies.splice(i, 1);
         }
