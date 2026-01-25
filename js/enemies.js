@@ -232,10 +232,10 @@ function createWizardTexture() {
 const enemyTypes = [
     { name: 'slime', texture: createSlimeTexture, scale: [2.5, 2.5], speed: 0.025, healthMult: 0.5, damageMult: 0.5, xp: 10, gold: 0, goldChance: 0.1 },
     { name: 'goblin', texture: createGoblinTexture, scale: [2.5, 3.2], speed: 0.055, healthMult: 0.9, damageMult: 0.95, xp: 15, gold: 5, goldChance: 0.4 },
-    { name: 'skeleton', texture: createSkeletonTexture, scale: [2.5, 4], speed: 0.038, healthMult: 1.1, damageMult: 1.05, xp: 20, gold: 8, goldChance: 0.5 },
-    { name: 'ghost', texture: createGhostTexture, scale: [2.5, 3.2], speed: 0.05, healthMult: 0.8, damageMult: 1.2, xp: 25, gold: 10, goldChance: 0.3 },
-    { name: 'bat', texture: createBatTexture, scale: [3, 2], speed: 0.07, healthMult: 0.4, damageMult: 0.6, xp: 12, gold: 3, goldChance: 0.2 },
-    { name: 'wizard', texture: createWizardTexture, scale: [2.5, 4], speed: 0.028, healthMult: 1.3, damageMult: 1.4, xp: 35, gold: 20, goldChance: 0.7 }
+    { name: 'skeleton', texture: createSkeletonTexture, scale: [2.5, 4], speed: 0.038, healthMult: 1.8, damageMult: 1.05, xp: 20, gold: 8, goldChance: 0.5 },
+    { name: 'ghost', texture: createGhostTexture, scale: [2.5, 3.2], speed: 0.1, healthMult: 3.4, damageMult: 1.2, xp: 25, gold: 10, goldChance: 0.3 },
+    { name: 'bat', texture: createBatTexture, scale: [3, 2], speed: 0.13, healthMult: 0.4, damageMult: 1.6, xp: 12, gold: 3, goldChance: 0.2 },
+    { name: 'wizard', texture: createWizardTexture, scale: [2.5, 4], speed: 0.028, healthMult: 5.0, damageMult: 3.4, xp: 35, gold: 20, goldChance: 0.7 }
 ];
 
 function spawnEnemy() {
