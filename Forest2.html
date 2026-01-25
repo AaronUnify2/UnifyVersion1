@@ -3240,6 +3240,99 @@
             });
         }
 
+        function showDialogue(speaker, text) {
+            document.getElementById('dialogueSpeaker').textContent = speaker;
+            document.getElementById('dialogueText').textContent = text;
+            document.getElementById('dialogueBox').classList.add('active');
+            
+            gameState.dialogueTimer = 99999; // Keep paused until button clicked
+        }
+
+        function hideDialogue() {
+            document.getElementById('dialogueBox').classList.remove('active');
+            gameState.dialogueTimer = 0;
+            
+            // Check if we need to exit cloud arena after this dialogue
+            if (gameState.pendingArenaExit) {
+                gameState.pendingArenaExit = false;
+                exitCloudArena();
+            }
+        }
+
+        function setupDialogueButton() {
+            const btn = document.getElementById('dialogueContinue');
+            btn.addEventListener('click', hideDialogue);
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                hideDialogue();
+            });
+        }
+
+        function showReward(text) {
+            document.getElementById('rewardText').textContent = text;
+            document.getElementById('rewardNotification').classList.add('active');
+            
+            setTimeout(() => {
+                document.getElementById('rewardNotification').classList.remove('active');
+            }, 3000);
+        }
+
+        function updateDialogue() {
+            // Dialogue is now dismissed by button click
+            // This function just keeps the timer active for mob pausing
+        }
+
+        // Debug counter for compass logging
+        let compassDebugCounter = 0;
+        
+        function updateCompass() {
+            let target = null;
+
+            // Priority: encounter > boss > treasure chest > cloud portal
+            if (gameState.encounter) {
+                target = gameState.encounter.position;
+            } else if (gameState.bosses.length > 0) {
+                target = gameState.bosses[0].sprite.position;
+            } else if (gameState.treasureChests.length > 0) {
+                // Find nearest chest
+                let nearestDist = Infinity;
+                for (const chest of gameState.treasureChests) {
+                    if (chest.opened) continue;
+                    const dx = chest.sprite.position.x - gameState.player.position.x;
+                    const dz = chest.sprite.position.z - gameState.player.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        target = chest.sprite.position;
+                    }
+                }
+            } else if (gameState.cloudPortal) {
+                target = gameState.cloudPortal.position;
+            }
+
+            const compass = document.getElementById('compass');
+            if (target) {
+                compass.style.display = 'block';
+                
+                // Calculate angle to target
+                const dx = target.x - gameState.player.position.x;
+                const dz = target.z - gameState.player.position.z;
+                const angle = Math.atan2(dz, dx);
+                
+                // Convert to degrees and rotate compass
+                const degrees = angle * (180 / Math.PI);
+                compass.style.transform = `translate(-50%, -50%) rotate(${degrees}deg)`;
+                
+                // Debug logging
+                compassDebugCounter++;
+                if (compassDebugCounter >= 60) {
+                    compassDebugCounter = 0;
+                }
+            } else {
+                compass.style.display = 'none';
+            }
+        }
+
         // Restart button
         document.getElementById('restartBtn').addEventListener('click', restartGame);
         document.getElementById('restartBtn').addEventListener('touchstart', (e) => {
