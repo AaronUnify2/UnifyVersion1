@@ -4049,9 +4049,13 @@
             right: false
         };
 
-        let touchStartX = 0;
-        let touchStartY = 0;
+        // Multi-touch tracking for simultaneous d-pad and camera control
+        let cameraTouch = null; // Track the touch used for camera rotation
+        let cameraTouchStartX = 0;
         let isDragging = false;
+
+        // Track which touches are on d-pad buttons
+        const dpadTouches = new Set();
 
         // D-Pad controls
         function setupDPad() {
@@ -4069,17 +4073,28 @@
                     e.preventDefault();
                     controls[dir] = true;
                     btn.classList.add('active');
+                    // Track this touch as a d-pad touch
+                    for (const touch of e.changedTouches) {
+                        dpadTouches.add(touch.identifier);
+                    }
                 });
 
                 btn.addEventListener('touchend', (e) => {
                     e.preventDefault();
                     controls[dir] = false;
                     btn.classList.remove('active');
+                    // Remove from d-pad touches
+                    for (const touch of e.changedTouches) {
+                        dpadTouches.delete(touch.identifier);
+                    }
                 });
 
-                btn.addEventListener('touchcancel', () => {
+                btn.addEventListener('touchcancel', (e) => {
                     controls[dir] = false;
                     btn.classList.remove('active');
+                    for (const touch of e.changedTouches) {
+                        dpadTouches.delete(touch.identifier);
+                    }
                 });
 
                 // Mouse support for desktop
@@ -4116,7 +4131,17 @@
 
             btn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
+                // Track magic button touches too
+                for (const touch of e.changedTouches) {
+                    dpadTouches.add(touch.identifier);
+                }
                 shoot();
+            });
+
+            btn.addEventListener('touchend', (e) => {
+                for (const touch of e.changedTouches) {
+                    dpadTouches.delete(touch.identifier);
+                }
             });
 
             btn.addEventListener('mousedown', (e) => {
@@ -4125,42 +4150,89 @@
             });
         }
 
-        // View swipe control
+        // View swipe control - now works anywhere on screen with multi-touch
         function setupViewControl() {
             const viewArea = document.getElementById('viewArea');
 
-            viewArea.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 1) {
-                    touchStartX = e.touches[0].clientX;
-                    touchStartY = e.touches[0].clientY;
-                    isDragging = true;
+            // Check if an element is a UI control that shouldn't trigger camera rotation
+            function isUIElement(element) {
+                const uiIds = ['dpad', 'dpad-up', 'dpad-down', 'dpad-left', 'dpad-right', 
+                               'magicBtn', 'menuBtn', 'restartBtn', 'boomBtn', 'slimeStoreMenu'];
+                while (element) {
+                    if (uiIds.includes(element.id) || 
+                        element.classList?.contains('dpad-btn') ||
+                        element.classList?.contains('upgrade-btn') ||
+                        element.classList?.contains('dialogue-btn') ||
+                        element.classList?.contains('store-btn') ||
+                        element.id === 'upgradeMenu' ||
+                        element.id === 'dialogueBox' ||
+                        element.id === 'slimeStoreMenu') {
+                        return true;
+                    }
+                    element = element.parentElement;
+                }
+                return false;
+            }
+
+            // Global touch handlers for camera rotation
+            document.addEventListener('touchstart', (e) => {
+                // Find a touch that's not on a UI element to use for camera
+                for (const touch of e.changedTouches) {
+                    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                    if (!isUIElement(element) && cameraTouch === null) {
+                        cameraTouch = touch.identifier;
+                        cameraTouchStartX = touch.clientX;
+                        isDragging = true;
+                        break;
+                    }
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (cameraTouch === null || gameState.dialogueTimer > 0) return;
+                
+                // Find our camera touch
+                for (const touch of e.changedTouches) {
+                    if (touch.identifier === cameraTouch) {
+                        const dx = touch.clientX - cameraTouchStartX;
+                        gameState.player.rotation += dx * 0.005;
+                        cameraTouchStartX = touch.clientX;
+                        break;
+                    }
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchend', (e) => {
+                for (const touch of e.changedTouches) {
+                    if (touch.identifier === cameraTouch) {
+                        cameraTouch = null;
+                        isDragging = false;
+                        break;
+                    }
                 }
             });
 
-            viewArea.addEventListener('touchmove', (e) => {
-                if (isDragging && e.touches.length === 1 && gameState.dialogueTimer <= 0) {
-                    const dx = e.touches[0].clientX - touchStartX;
-                    gameState.player.rotation += dx * 0.005;
-                    touchStartX = e.touches[0].clientX;
-                    touchStartY = e.touches[0].clientY;
+            document.addEventListener('touchcancel', (e) => {
+                for (const touch of e.changedTouches) {
+                    if (touch.identifier === cameraTouch) {
+                        cameraTouch = null;
+                        isDragging = false;
+                        break;
+                    }
                 }
             });
 
-            viewArea.addEventListener('touchend', () => {
-                isDragging = false;
-            });
-
-            // Mouse support
+            // Mouse support (unchanged - works on viewArea)
             viewArea.addEventListener('mousedown', (e) => {
-                touchStartX = e.clientX;
+                cameraTouchStartX = e.clientX;
                 isDragging = true;
             });
 
             document.addEventListener('mousemove', (e) => {
                 if (isDragging && gameState.dialogueTimer <= 0) {
-                    const dx = e.clientX - touchStartX;
+                    const dx = e.clientX - cameraTouchStartX;
                     gameState.player.rotation += dx * 0.005;
-                    touchStartX = e.clientX;
+                    cameraTouchStartX = e.clientX;
                 }
             });
 
