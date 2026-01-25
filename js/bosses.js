@@ -353,15 +353,21 @@ function createTreeMagicTexture() {
 // BOSS TYPE DEFINITIONS
 // ============================================
 
-// Initialize boss textures (must happen after createPixelTexture is available)
-const bossTextures = {
-    dragon: createDragonTexture(),
-    troll: createTrollTexture(),
-    evilTree: createEvilTreeTexture(),
-    trollClub: createTrollClubTexture(),
-    fireball: createBossFireballTexture(),
-    treeMagic: createTreeMagicTexture()
-};
+// Boss textures - initialized lazily to avoid dependency issues
+let bossTextures = null;
+
+function initBossTextures() {
+    if (bossTextures) return; // Already initialized
+    console.log('Initializing boss textures...');
+    bossTextures = {
+        dragon: createDragonTexture(),
+        troll: createTrollTexture(),
+        evilTree: createEvilTreeTexture(),
+        trollClub: createTrollClubTexture(),
+        fireball: createBossFireballTexture(),
+        treeMagic: createTreeMagicTexture()
+    };
+}
 
 // Boss type definitions
 const bossTypes = [
@@ -426,6 +432,9 @@ function shouldSpawnBoss() {
 }
 
 function spawnBoss() {
+    // Ensure textures are initialized
+    initBossTextures();
+    
     console.log('Spawning boss!');
     const angle = Math.random() * Math.PI * 2;
     const dist = CONFIG.enemySpawnRadius * 1.2;
