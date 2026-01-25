@@ -2396,6 +2396,27 @@
                     }
                 }
                 
+                // Check collision with monster store slimes
+                if (typeof slimeCompanionState !== 'undefined' && slimeCompanionState.storeSlimes) {
+                    for (const storeSlime of slimeCompanionState.storeSlimes) {
+                        const dx = sword.sprite.position.x - storeSlime.sprite.position.x;
+                        const dz = sword.sprite.position.z - storeSlime.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist < 1.5) {
+                            const lastHit = sword.hitCooldowns.get(storeSlime) || 0;
+                            const now = Date.now();
+                            
+                            if (now - lastHit > 500) {
+                                if (typeof damageStoreSlime === 'function') {
+                                    damageStoreSlime(storeSlime, swordDamage);
+                                }
+                                sword.hitCooldowns.set(storeSlime, now);
+                            }
+                        }
+                    }
+                }
+                
                 // Check collision with arena bosses
                 if (gameState.inCloudArena) {
                     for (const boss of gameState.arenaBosses) {
@@ -2436,7 +2457,13 @@
                 
                 // Clean up old cooldown entries
                 for (const [target, time] of sword.hitCooldowns) {
-                    if (!gameState.enemies.includes(target) && !gameState.bosses.includes(target) && !gameState.encounterGuards.includes(target) && !gameState.arenaBosses.includes(target) && !gameState.arenaEnemies.includes(target)) {
+                    const isValidTarget = gameState.enemies.includes(target) || 
+                        gameState.bosses.includes(target) || 
+                        gameState.encounterGuards.includes(target) || 
+                        gameState.arenaBosses.includes(target) || 
+                        gameState.arenaEnemies.includes(target) ||
+                        (typeof slimeCompanionState !== 'undefined' && slimeCompanionState.storeSlimes && slimeCompanionState.storeSlimes.includes(target));
+                    if (!isValidTarget) {
                         sword.hitCooldowns.delete(target);
                     }
                 }
@@ -2637,6 +2664,7 @@
         function shouldSpawnEncounter() {
             if (gameState.encounter) return false; // Only one encounter at a time
             if (gameState.bosses.length > 0) return false; // No encounter during boss
+            if (gameState.cloudPortal) return false; // No encounter during cloud portal
             // Check if monster store is active (slime companion system)
             if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) return false;
             
@@ -3321,9 +3349,12 @@
             if (gameState.arenaCompleted) return false;
             if (gameState.bosses.length > 0) return false;
             if (gameState.encounter) return false;
-            if (gameState.player.level < 12) return false;
+            // Check if monster store is active
+            if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) return false;
+            // Portal only spawns at levels 5-9
+            if (gameState.player.level < 5 || gameState.player.level > 9) return false;
             
-            // 3% chance per spawn check once level 12+
+            // 3% chance per spawn check
             return Math.random() < 0.03;
         }
 
@@ -3528,7 +3559,7 @@
                 sprite.position.set(x, 6, z);
                 scene.add(sprite);
                 
-                const bossHealth = getBossHealth() * 0.8;
+                const bossHealth = getBossHealth() * 0.5; // Reduced for early access (levels 5-9)
                 const boss = {
                     sprite,
                     health: bossHealth,
@@ -3558,7 +3589,7 @@
                 sprite.position.set(x, 1.5, z);
                 scene.add(sprite);
                 
-                const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2) * 6; // 4x health
+                const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2) * 3; // 3x health (reduced for early access)
                 const enemy = {
                     sprite,
                     health: baseHealth,
@@ -3689,10 +3720,10 @@
             gameState.arenaCompleted = true;
             
             // Award gold
-            gameState.player.gold += 2000;
+            gameState.player.gold += 1000;
             document.getElementById('goldNum').textContent = gameState.player.gold;
             
-            showReward('☁️ CLOUD ARENA COMPLETE! +2000 GOLD');
+            showReward('☁️ CLOUD ARENA COMPLETE! +1000 GOLD');
             
             // Set flag to exit arena when dialogue closes
             gameState.pendingArenaExit = true;
@@ -4376,8 +4407,8 @@
                     if (now - lastSpawnTime > CONFIG.enemySpawnInterval) {
                         spawnEnemy();
                         
-                        // Maybe spawn a boss
-                        if (shouldSpawnBoss()) {
+                        // Maybe spawn a boss (but not if monster store is active)
+                        if (shouldSpawnBoss() && !(typeof isMonsterStoreActive === 'function' && isMonsterStoreActive())) {
                             spawnBoss();
                         }
                         // Maybe spawn an encounter
@@ -4390,7 +4421,7 @@
                             spawnTreasureChest();
                         }
                         
-                        // Maybe spawn a cloud portal (level 12+)
+                        // Maybe spawn a cloud portal (level 5-9)
                         if (shouldSpawnPortal()) {
                             spawnCloudPortal();
                         }
