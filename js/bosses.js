@@ -373,7 +373,7 @@ const bossTypes = [
         behavior: 'chase_shoot',
         attackCooldown: 100,
         xpMultiplier: 0.8,
-        goldDrop: 100
+        goldDrop: 360
     },
     { 
         name: 'troll', 
@@ -394,14 +394,14 @@ const bossTypes = [
         attackCooldown: 90,
         boomCooldown: 400,
         xpMultiplier: 0.8,
-        goldDrop: 120
+        goldDrop: 220
     }
 ];
 
 function getBossHealth() {
     // 100 hits to kill based on current player damage
     const playerDamage = CONFIG.projectileBaseDamage * (1 + gameState.player.level * 0.5);
-    return playerDamage * 100;
+    return playerDamage * 80;
 }
 
 function getBossDamage() {
