@@ -417,19 +417,14 @@ function getBossDamage() {
 function shouldSpawnBoss() {
     if (gameState.bosses.length > 0) return false; // Only one boss at a time
     if (encounterState.currentEncounter) return false; // No boss during encounters
-    if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) return false; // No boss during monster store
+    if (encounterState.cloudPortal) return false; // No boss during cloud portal
+    if (encounterState.inCloudArena) return false; // No boss in cloud arena
+    if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) return false;
     
     const level = gameState.player.level;
-    if (level < 4) return false; // No bosses before level 4
+    if (level < 5) return false; // Bosses start at level 5
     
-    // Spawn chance increases with level
-    // Level 4: ~1% chance per spawn check
-    // Level 9+: ~7.5% chance per spawn check
-    const baseChance = 0.01;
-    const levelBonus = Math.min((level - 4) * 0.0125, 0.065);
-    const spawnChance = baseChance + levelBonus;
-    
-    return Math.random() < spawnChance;
+    return true; // Probability handled by main spawn logic
 }
 
 function spawnBoss() {
