@@ -6,10 +6,11 @@
     <title>Mystic Forest Walker</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- Load modular game systems before main game code -->
-    <script src="js/enemies.js"></script>
-    <script src="js/bosses.js"></script>
-    <script src="js/encounters.js"></script>
-    <script src="js/slime-companion.js"></script>
+    <script>window.jsLoadErrors = [];</script>
+    <script src="js/enemies.js" onerror="window.jsLoadErrors.push('enemies.js')"></script>
+    <script src="js/bosses.js" onerror="window.jsLoadErrors.push('bosses.js')"></script>
+    <script src="js/encounters.js" onerror="window.jsLoadErrors.push('encounters.js')"></script>
+    <script src="js/slime-companion.js" onerror="window.jsLoadErrors.push('slime-companion.js')"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
         
@@ -32,6 +33,24 @@
         #gameCanvas {
             display: block;
             image-rendering: pixelated;
+        }
+        
+        #debugDisplay {
+            display: none; /* Hidden for now - change to 'block' to debug */
+            position: fixed;
+            bottom: 120px;
+            left: 10px;
+            color: #0f0;
+            font-size: 8px;
+            font-family: monospace;
+            background: rgba(0,0,0,0.7);
+            padding: 5px;
+            max-width: 300px;
+            max-height: 150px;
+            overflow: hidden;
+            z-index: 9999;
+            pointer-events: none;
+            white-space: pre-wrap;
         }
         
         #ui {
@@ -610,6 +629,20 @@
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
+    <div id="debugDisplay">v3 - Loading...</div>
+    <script>
+        // Check for load errors from head scripts
+        var dbg = document.getElementById('debugDisplay');
+        if (window.jsLoadErrors && window.jsLoadErrors.length > 0) {
+            dbg.textContent = 'v3 - LOAD FAILED: ' + window.jsLoadErrors.join(', ');
+        } else {
+            dbg.textContent = 'v3 - Scripts loaded OK';
+        }
+        window.onerror = function(msg, url, line) {
+            dbg.textContent = 'v3 ERROR: ' + msg + ' L' + line;
+            return false;
+        };
+    </script>
     
     <div id="ui">
         <div id="stats">
@@ -731,6 +764,25 @@
             enemyMaxCount: 12,
             enemySpawnInterval: 2000
         };
+        
+        // ============================================
+        // DEBUG LOGGING (on-screen for mobile)
+        // ============================================
+        const debugLog = [];
+        let debugFrameCount = 0;
+        function debug(msg) {
+            try {
+                debugLog.push(msg);
+                if (debugLog.length > 12) debugLog.shift();
+                const el = document.getElementById('debugDisplay');
+                if (el) el.textContent = debugLog.join('\n');
+            } catch(e) {
+                // Silently fail
+            }
+        }
+        debug('Script loaded');
+        debug('THREE: ' + (typeof THREE !== 'undefined'));
+        debug('encounterState: ' + (typeof encounterState !== 'undefined'));
 
         // ============================================
         // PIXEL ART TEXTURE GENERATORS
@@ -999,7 +1051,8 @@
             dialogueTimer: 0,
             chunks: new Map(),
             isGameOver: false,
-            menuOpen: false
+            menuOpen: false,
+            hasDharmaWheel: false // Dharma wheel reward from Dharmachakra encounter
         };
 
         // ============================================
@@ -1327,7 +1380,7 @@
                 }
 
                 // Check collision with encounter guards
-                if (!hitSomething) {
+                if (!hitSomething && typeof encounterState !== 'undefined' && encounterState.encounterGuards) {
                     for (const guard of encounterState.encounterGuards) {
                         const dx = proj.sprite.position.x - guard.sprite.position.x;
                         const dz = proj.sprite.position.z - guard.sprite.position.z;
@@ -2099,6 +2152,7 @@
             gameState.bossActive = false;
             gameState.cameraZoom = 1;
             gameState.targetCameraZoom = 1;
+            gameState.hasDharmaWheel = false;
             encounterState.currentEncounter = null;
             encounterState.currentEncounterComplete = false;
             gameState.dialogue = null;
@@ -2122,7 +2176,8 @@
             encounterState.arenaEnemies.forEach(e => scene.remove(e.sprite));
             encounterState.arenaEnemies = [];
             gameState.savedForestPosition = null;
-            encounterState.arenaCompleted = false;
+            encounterState.arenaStage = 0;
+            encounterState.storyEncounterStage = 0;
             encounterState.pendingArenaExit = false;
 
             document.getElementById('gameOver').style.display = 'none';
@@ -2655,70 +2710,81 @@
 
         function animate() {
             requestAnimationFrame(animate);
+            debugFrameCount++;
+            
+            // Show frame count every frame for first 5 frames, then every 60
+            if (debugFrameCount <= 5 || debugFrameCount % 60 === 0) {
+                debug('F' + debugFrameCount + ' menu:' + gameState.menuOpen + ' over:' + gameState.isGameOver);
+            }
 
-            if (!gameState.isGameOver && !gameState.menuOpen) {
-                updatePlayer();
-                
-                // Only update forest systems when not in cloud arena
-                if (!encounterState.inCloudArena) {
-                    updateChunks();
-                    updateEnemies();
-                    updateBosses();
-                    // Use new modular encounter system
-                    if (typeof updateEncounterSystem === 'function') {
-                        updateEncounterSystem();
+            try {
+                if (!gameState.isGameOver && !gameState.menuOpen) {
+                    updatePlayer();
+                    
+                    // Only update forest systems when not in cloud arena
+                    const inArena = typeof encounterState !== 'undefined' && encounterState && encounterState.inCloudArena;
+                    if (!inArena) {
+                        updateChunks();
+                        updateEnemies();
+                        updateBosses();
+                        // Use new modular encounter system
+                        if (typeof updateEncounterSystem === 'function') {
+                            updateEncounterSystem();
+                        }
+                    } else {
+                        // Update cloud arena (handled by encounter system)
+                        if (typeof updateEncounterSystem === 'function') {
+                            updateEncounterSystem();
+                        }
                     }
-                } else {
-                    // Update cloud arena (handled by encounter system)
-                    if (typeof updateEncounterSystem === 'function') {
-                        updateEncounterSystem();
+                    
+                    // These work in both forest and arena
+                    updateProjectiles();
+                    updateXPOrbs();
+                    updateGoldOrbs();
+                    updateSwords();
+                    updateBoomProjectiles();
+                    updateBoomCooldown();
+                    updateDialogue();
+                    updateCompass();
+                    updateCameraZoom();
+                    
+                    // Update slime companion system (if loaded)
+                    if (typeof updateSlimeCompanion === 'function') {
+                        updateSlimeCompanion();
                     }
-                }
-                
-                // These work in both forest and arena
-                updateProjectiles();
-                updateXPOrbs();
-                updateGoldOrbs();
-                updateSwords();
-                updateBoomProjectiles();
-                updateBoomCooldown();
-                updateDialogue();
-                updateCompass();
-                updateCameraZoom();
-                
-                // Update slime companion system (if loaded)
-                if (typeof updateSlimeCompanion === 'function') {
-                    updateSlimeCompanion();
-                }
 
-                // Spawn enemies (only in forest)
-                if (!encounterState.inCloudArena) {
-                    const now = Date.now();
-                    if (now - lastSpawnTime > CONFIG.enemySpawnInterval) {
-                        spawnEnemy();
-                        
-                        // 10% chance for a major event (boss or encounter)
-                        // Only if no boss/encounter/store currently active and level 5+
-                        if (typeof canSpawnMajorEvent === 'function' && canSpawnMajorEvent() && Math.random() < 0.10) {
-                            if (Math.random() < 0.5) {
-                                // 50% chance: Spawn a boss (equal chance: Dragon, Evil Tree, Troll)
-                                spawnBoss();
-                            } else {
-                                // 50% chance: Spawn an encounter (20% each: Monster Store, Sky Giants, Princess, Witch, Sword)
-                                if (typeof spawnRandomEncounter === 'function') {
-                                    spawnRandomEncounter();
+                    // Spawn enemies (only in forest)
+                    if (!inArena) {
+                        const now = Date.now();
+                        if (now - lastSpawnTime > CONFIG.enemySpawnInterval) {
+                            spawnEnemy();
+                            
+                            // 10% chance for a major event (boss or encounter)
+                            // Only if no boss/encounter/store currently active and level 5+
+                            if (typeof canSpawnMajorEvent === 'function' && canSpawnMajorEvent() && Math.random() < 0.10) {
+                                if (Math.random() < 0.5) {
+                                    // 50% chance: Spawn a boss (equal chance: Dragon, Evil Tree, Troll)
+                                    spawnBoss();
+                                } else {
+                                    // 50% chance: Spawn an encounter (20% each: Monster Store, Sky Giants, Princess, Witch, Sword)
+                                    if (typeof spawnRandomEncounter === 'function') {
+                                        spawnRandomEncounter();
+                                    }
                                 }
                             }
+                            
+                            // Maybe spawn a treasure chest (independent, 8% chance)
+                            if (typeof shouldSpawnChest === 'function' && shouldSpawnChest()) {
+                                if (typeof spawnTreasureChest === 'function') spawnTreasureChest();
+                            }
+                            
+                            lastSpawnTime = now;
                         }
-                        
-                        // Maybe spawn a treasure chest (independent, 8% chance)
-                        if (shouldSpawnChest()) {
-                            spawnTreasureChest();
-                        }
-                        
-                        lastSpawnTime = now;
                     }
                 }
+            } catch (error) {
+                debug('ERR: ' + error.message);
             }
 
             renderer.render(scene, camera);
@@ -2728,38 +2794,52 @@
         // INITIALIZATION
         // ============================================
         function init() {
-            setupDPad();
-            setupMagicButton();
-            setupViewControl();
-            setupKeyboard();
-            setupMenuControls();
-            setupDialogueButton();
-            
-            // Initialize encounter system (includes portal textures)
-            if (typeof initEncounterSystem === 'function') {
-                initEncounterSystem();
-            }
-
-            // Generate initial chunks
-            updateChunks();
-            
-            // Initialize UI
-            updateUpgradeMenu();
-            
-            // Initialize slime companion system (if loaded)
-            if (typeof initSlimeCompanion === 'function') {
-                initSlimeCompanion();
-            }
-
-            // Start animation
-            animate();
-
-            // Start spawning enemies
-            setTimeout(() => {
-                for (let i = 0; i < 3; i++) {
-                    spawnEnemy();
+            debug('init() starting...');
+            try {
+                setupDPad();
+                debug('DPad setup');
+                setupMagicButton();
+                debug('Magic button setup');
+                setupViewControl();
+                setupKeyboard();
+                setupMenuControls();
+                setupDialogueButton();
+                debug('Controls setup');
+                
+                // Initialize encounter system (includes portal textures)
+                debug('encounterState exists: ' + (typeof encounterState !== 'undefined'));
+                debug('initEncounterSystem exists: ' + (typeof initEncounterSystem === 'function'));
+                if (typeof initEncounterSystem === 'function') {
+                    initEncounterSystem();
+                    debug('Encounter system initialized');
                 }
-            }, 1000);
+
+                // Generate initial chunks
+                updateChunks();
+                debug('Chunks generated');
+                
+                // Initialize UI
+                updateUpgradeMenu();
+                
+                // Initialize slime companion system (if loaded)
+                if (typeof initSlimeCompanion === 'function') {
+                    initSlimeCompanion();
+                }
+                debug('Init complete, starting animate');
+
+                // Start animation
+                animate();
+
+                // Start spawning enemies
+                setTimeout(() => {
+                    for (let i = 0; i < 3; i++) {
+                        spawnEnemy();
+                    }
+                    debug('Initial enemies spawned');
+                }, 1000);
+            } catch (error) {
+                debug('INIT ERROR: ' + error.message);
+            }
         }
 
         // Handle resize
