@@ -1,2844 +1,2779 @@
-// ============================================
-// ENCOUNTER SYSTEM
-// ============================================
-// Modular encounter system for Mystic Forest Walker
-// Handles: Princess Tower, Sword in Stone, Witch Hut, Cloud Arena, Treasure Chests
-//
-// REQUIRED: Include this script AFTER enemies.js in Forest2.html
-// Add: <script src="js/encounters.js"></script>
-//
-// INTEGRATION NEEDED in Forest2.html:
-// 1. Call initEncounterSystem() in init()
-// 2. Call updateEncounterSystem() in animate() loop
-// 3. Call resetEncounterSystem() in restartGame()
-// ============================================
-
-// ============================================
-// ENCOUNTER SYSTEM STATE
-// ============================================
-const encounterState = {
-    // Current active encounter
-    currentEncounter: null,
-    encounterGuards: [],
-    
-    // Treasure chests
-    treasureChests: [],
-    
-    // Cloud Arena
-    cloudPortal: null,
-    portalParticles: [],
-    inCloudArena: false,
-    arenaBosses: [],
-    arenaEnemies: [],
-    arenaStage: 0, // 0=Cloud Sprites, 1=Giant Troll, 2=Ghost Trio, 3=completed
-    savedForestPosition: null,
-    pendingArenaExit: false,
-    
-    // Giant Troll specific (stage 1)
-    trollClubs: [],
-    trollProjectiles: [],
-    
-    // Ghost stage tracking (stage 2)
-    ghostDefeated: false,
-    
-    // Forest cloud sprites (spawn when portal appears)
-    forestCloudSprites: [],
-    
-    // Saved environment for arena restoration
-    savedGroundMaterial: null,
-    savedFogColor: null,
-    
-    // Guaranteed encounter queue (level-triggered)
-    guaranteedEncounterQueue: [],
-    
-    // Textures (initialized on load)
-    textures: {}
-};
-
-// ============================================
-// ENCOUNTER TEMPLATE DEFINITIONS
-// ============================================
-const ENCOUNTER_TEMPLATES = {
-    princessTower: {
-        name: 'princessTower',
-        displayName: 'Princess Tower',
-        textureKey: 'princessTower',
-        scale: [8, 16],
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mystic Forest Walker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Load modular game systems before main game code -->
+    <script src="js/enemies.js"></script>
+    <script src="js/bosses.js"></script>
+    <script src="js/encounters.js"></script>
+    <script src="js/slime-companion.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
         
-        // Guard configuration - references enemy types from enemies.js
-        guards: {
-            type: 'goldenSkeleton', // Custom texture, not from enemies.js
-            count: 15,
-            healthMultiplier: 2,
-            customTexture: true // Indicates we use our own texture
-        },
-        
-        cameraZoom: 2.5,
-        
-        // Reward configuration
-        reward: {
-            type: 'upgrade',
-            upgrade: 'magnet',
-            text: '🧲 MAGNET UPGRADED!'
-        },
-        
-        // Level requirements
-        minLevel: 4,
-        maxLevel: 999,
-        
-        // Base spawn weight (higher = more common)
-        spawnWeight: 1,
-        
-        // NPC configuration
-        npc: {
-            textureKey: 'princess',
-            scale: [2.5, 4],
-            walksToPlayer: true,
-            dialogue: null, // Princess shows heart instead
-            rewardOnContact: true
-        },
-        
-        // Completion behavior
-        onComplete: 'spawnNPC'
-    },
-    
-    swordInStone: {
-        name: 'swordInStone',
-        displayName: 'Sword in Stone',
-        textureKey: 'swordInStone',
-        scale: [6, 8],
-        
-        guards: {
-            type: 'goblin', // Uses goblin from enemies.js
-            count: 20,
-            healthMultiplier: 1,
-            customTexture: false
-        },
-        
-        cameraZoom: 2.2,
-        
-        reward: {
-            type: 'upgrade',
-            upgrade: 'swords',
-            text: '⚔️ SWORD ADDED!'
-        },
-        
-        minLevel: 4,
-        maxLevel: 999,
-        spawnWeight: 1,
-        
-        npc: null, // No NPC, interact with structure
-        
-        onComplete: 'interactWithStructure',
-        interactionRange: 3,
-        completionDialogue: {
-            speaker: '🪨 STONE',
-            text: '"Ahh, sweet relief! That sword was such a pain in my side. Take it, please! It\'s all yours!"'
-        }
-    },
-    
-    witchHut: {
-        name: 'witchHut',
-        displayName: 'Witch Hut',
-        textureKey: 'witchHut',
-        scale: [10, 12],
-        
-        guards: {
-            type: 'wizard', // Uses wizard from enemies.js
-            count: 20,
-            healthMultiplier: 1,
-            customTexture: false
-        },
-        
-        cameraZoom: 2.3,
-        
-        reward: {
-            type: 'upgrade',
-            upgrade: 'boom',
-            text: '💥 BOOM UPGRADED!'
-        },
-        
-        minLevel: 4,
-        maxLevel: 999,
-        spawnWeight: 1,
-        
-        npc: {
-            textureKey: 'witch',
-            scale: [2.5, 4.5],
-            walksToPlayer: true,
-            spawnOffset: { x: 8, z: 3 },
-            dialogue: {
-                speaker: '🧙‍♀️ WITCH',
-                text: '"I was trying to summon a handsome wizard for... um... companionship... and instead I summoned twenty dogmatic buddhists!"'
-            },
-            rewardOnContact: true
-        },
-        
-        onComplete: 'spawnNPC'
-    }
-};
-
-// ============================================
-// CLOUD ARENA CONFIGURATION (3 STAGES)
-// ============================================
-const CLOUD_ARENA_CONFIG = {
-    // Stage 0: Cloud Sprites + Sky Giants
-    stage0: {
-        name: 'Cloud Sprites',
-        bossCount: 3,
-        bossHealthMultiplier: 0.5,
-        enemyCount: 60,
-        enemyHealthMultiplier: 3,
-        bossGoldDrop: 100,
-        enemyGoldDrop: 10,
-        goldReward: 200,
-        cameraZoom: 2.5,
-        introDialogue: {
-            title: '⚔️ CLOUD ARENA',
-            text: 'Defeat all the Sky Giants and their minions to claim your reward!'
-        },
-        winDialogue: {
-            title: '🏆 VICTORY!',
-            text: 'You have defeated the Sky Giants! Your surprise slaughter of the clouds was a great success!'
-        },
-        portalColor: 0x87ceeb, // Light blue
-        fogColor: 0x87ceeb
-    },
-    
-    // Stage 1: Giant Troll (revenge for his pets)
-    stage1: {
-        name: 'Giant Troll',
-        trollHealthMultiplier: 2.0, // Really beefy
-        trollGoldDrop: 1000,
-        goldReward: 1000,
-        cameraZoom: 3.5, // Zoom way out for the huge troll
-        clubCount: 4,
-        clubSpeeds: [0.02, 0.035, 0.025, 0.03], // Varying speeds
-        clubDamage: 2.0, // Multiplier
-        projectileCooldown: 120,
-        introDialogue: {
-            title: '😡 GIANT TROLL',
-            text: '"YOU KILLED MY CLOUD PETS! NOW IT\'S TIME TO DIE!"'
-        },
-        winDialogue: {
-            title: '🏆 VICTORY!',
-            text: 'The Giant Troll has been slain! His dying words were mostly just angry grunting.'
-        },
-        portalColor: 0x4a4a4a, // Dark gray
-        fogColor: 0x6b5b4f // Brownish fog
-    },
-    
-    // Stage 2: Ghost Trio (the final reckoning)
-    stage2: {
-        name: 'Ghost Trio',
-        ghostHealthMultiplier: 1.5,
-        skeletonHealthMultiplier: 1.8,
-        slimeHealthMultiplier: 2.0,
-        bossGoldDrop: 500, // Each boss drops 500
-        goldReward: 1500,
-        cameraZoom: 3.0,
-        introDialogue: {
-            title: '👻 THE HAUNTING',
-            text: 'The ghost of the giant has returned for vengeance, alongside his skeleton, and his... slime.'
-        },
-        ghostDeathDialogue: {
-            title: '💀 DYING GHOST',
-            text: '"You have defeated me... now I will never get to enact my evil plans. This was a morally justified slaying."'
-        },
-        winDialogue: {
-            title: '🏆 FINAL VICTORY!',
-            text: 'Congratulations! You have defeated the Giant and thwarted his evil plan. Which you were aware of?'
-        },
-        portalColor: 0x9932cc, // Dark purple
-        fogColor: 0x2d1b4e // Spooky purple fog
-    },
-    
-    // Forest cloud sprites that spawn with portal (stage 0 only)
-    forestCloudSpriteCount: 20
-};
-
-// ============================================
-// TREASURE CHEST CONFIGURATION
-// ============================================
-const TREASURE_CHEST_CONFIG = {
-    maxChests: 5,
-    spawnChance: 0.08,
-    goldMin: 15,
-    goldMax: 50
-};
-
-// Fun facts for treasure chests
-const FUN_FACTS = [
-    "The princess in the tower window after rescue? That's actually her sister. She's not into you.",
-    "Only a fool laughs at the mighty dragon.",
-    "Sir Cowardice the Lame invented the brilliant tactic of standing beyond the evil tree's range.",
-    "Legend says with 8 orbiting swords, a hero could survive while standing perfectly still. Of course, no one's ever tried it.",
-    "Those 'wizards' are actually Dogmatic Buddhists.",
-    "The forest seems dangerous, but most inhabitants are peaceful and kind.",
-    "Why do monsters carry gold? Legend speaks of an underground monster only shop.",
-    "Orbiting swords are great for the forest, impractical for bathing. Some heroes stab their swords into stones just to wash in peace.",
-    "The skeletons? Fallen heroes who drank lots of milk. The ghosts? Heroes' who didn't drink enough milk.",
-    "The little green forest people are called goblins. But NEVER let them hear you call them that.",
-    "In a pinch, slimes can be used as a tasty food source or a surprisingly effective girlfriend.",
-    "In a pinch, slimes can be used as a tasty food source or a surprisingly effective hat.",
-    "While trolls may seem dangerous there have been zero recorded deaths.",
-    "The evil tree may be dangerous but at least he makes oxygen.",
-    "The most important thing in the forest is to have a goal otherwise you just run around fighting enemies."
-];
-
-// ============================================
-// LEVEL-BASED SPAWN PROBABILITY
-// ============================================
-function getEncounterSpawnChance(playerLevel) {
-    if (playerLevel < 4) return 0;
-    
-    const baseChance = 0.01;
-    const levelBonus = Math.min((playerLevel - 4) * 0.0125, 0.065);
-    return baseChance + levelBonus;
-}
-
-function getAvailableEncounters(playerLevel) {
-    const available = [];
-    for (const key in ENCOUNTER_TEMPLATES) {
-        const template = ENCOUNTER_TEMPLATES[key];
-        if (playerLevel >= template.minLevel && playerLevel <= template.maxLevel) {
-            // Add multiple times based on spawn weight
-            for (let i = 0; i < template.spawnWeight; i++) {
-                available.push(template);
-            }
-        }
-    }
-    return available;
-}
-
-// ============================================
-// GUARANTEED ENCOUNTER SYSTEM
-// ============================================
-function queueGuaranteedEncounter(encounterKey) {
-    if (ENCOUNTER_TEMPLATES[encounterKey]) {
-        encounterState.guaranteedEncounterQueue.push(encounterKey);
-        console.log('Queued guaranteed encounter:', encounterKey);
-    }
-}
-
-function hasGuaranteedEncounter() {
-    return encounterState.guaranteedEncounterQueue.length > 0;
-}
-
-function getNextGuaranteedEncounter() {
-    return encounterState.guaranteedEncounterQueue.shift();
-}
-
-// ============================================
-// ENCOUNTER TEXTURE GENERATORS
-// ============================================
-function createPrincessTowerTexture() {
-    return createPixelTexture(64, 128, (ctx, w, h) => {
-        // Tower base
-        ctx.fillStyle = '#5d6d7e';
-        ctx.fillRect(12, 40, 40, 88);
-        
-        // Stone texture
-        ctx.fillStyle = '#4a5568';
-        for (let y = 0; y < 11; y++) {
-            for (let x = 0; x < 5; x++) {
-                const offset = y % 2 === 0 ? 0 : 4;
-                ctx.fillRect(12 + x * 8 + offset, 40 + y * 8, 7, 7);
-            }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
         
-        // Tower top / battlements
-        ctx.fillStyle = '#5d6d7e';
-        ctx.fillRect(8, 32, 48, 12);
-        for (let i = 0; i < 6; i++) {
-            ctx.fillRect(8 + i * 8, 24, 6, 10);
+        body {
+            overflow: hidden;
+            background: #0a0a12;
+            font-family: 'Press Start 2P', cursive;
         }
         
-        // Window
-        ctx.fillStyle = '#2c3e50';
-        ctx.fillRect(24, 50, 16, 24);
-        ctx.fillStyle = '#85c1e9';
-        ctx.fillRect(26, 52, 12, 20);
-        
-        // Window bars
-        ctx.fillStyle = '#2c3e50';
-        ctx.fillRect(31, 52, 2, 20);
-        ctx.fillRect(26, 60, 12, 2);
-        
-        // Princess in window
-        ctx.fillStyle = '#fad7a0';
-        ctx.fillRect(28, 56, 8, 8);
-        ctx.fillStyle = '#f4d03f';
-        ctx.fillRect(27, 53, 10, 5);
-        ctx.fillRect(26, 56, 3, 8);
-        ctx.fillRect(35, 56, 3, 8);
-        ctx.fillStyle = '#ffd700';
-        ctx.fillRect(28, 51, 8, 3);
-        ctx.fillRect(29, 49, 2, 3);
-        ctx.fillRect(33, 49, 2, 3);
-        ctx.fillStyle = '#3498db';
-        ctx.fillRect(29, 58, 2, 2);
-        ctx.fillRect(33, 58, 2, 2);
-        
-        // Door
-        ctx.fillStyle = '#8b4513';
-        ctx.fillRect(24, 100, 16, 28);
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(26, 102, 12, 24);
-        ctx.fillStyle = '#ffd700';
-        ctx.fillRect(34, 114, 3, 3);
-        
-        // Flag pole
-        ctx.fillStyle = '#8b4513';
-        ctx.fillRect(30, 0, 4, 28);
-        
-        // Flag
-        ctx.fillStyle = '#e91e63';
-        ctx.fillRect(34, 2, 20, 14);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(38, 6, 4, 6);
-        ctx.fillRect(44, 6, 4, 6);
-    });
-}
-
-function createPrincessTexture() {
-    return createPixelTexture(32, 48, (ctx, w, h) => {
-        // Dress
-        ctx.fillStyle = '#e91e63';
-        ctx.fillRect(8, 20, 16, 24);
-        ctx.fillRect(4, 40, 24, 8);
-        
-        ctx.fillStyle = '#c2185b';
-        ctx.fillRect(10, 24, 4, 16);
-        ctx.fillRect(18, 24, 4, 16);
-        
-        // Face
-        ctx.fillStyle = '#fad7a0';
-        ctx.fillRect(10, 8, 12, 14);
-        
-        // Hair
-        ctx.fillStyle = '#f4d03f';
-        ctx.fillRect(8, 4, 16, 8);
-        ctx.fillRect(6, 8, 4, 16);
-        ctx.fillRect(22, 8, 4, 16);
-        
-        // Crown
-        ctx.fillStyle = '#ffd700';
-        ctx.fillRect(10, 2, 12, 4);
-        ctx.fillRect(11, 0, 3, 3);
-        ctx.fillRect(15, -1, 2, 4);
-        ctx.fillRect(18, 0, 3, 3);
-        
-        ctx.fillStyle = '#e91e63';
-        ctx.fillRect(15, 0, 2, 2);
-        
-        // Eyes
-        ctx.fillStyle = '#3498db';
-        ctx.fillRect(12, 12, 3, 3);
-        ctx.fillRect(17, 12, 3, 3);
-        
-        // Smile
-        ctx.fillStyle = '#c2185b';
-        ctx.fillRect(14, 18, 4, 2);
-        
-        // Arms
-        ctx.fillStyle = '#fad7a0';
-        ctx.fillRect(4, 22, 4, 10);
-        ctx.fillRect(24, 22, 4, 10);
-    });
-}
-
-function createGoldenSkeletonTexture() {
-    return createPixelTexture(32, 48, (ctx, w, h) => {
-        // Skull
-        ctx.fillStyle = '#ffd700';
-        ctx.fillRect(10, 2, 12, 14);
-        ctx.fillRect(8, 6, 16, 8);
-        
-        // Eyes
-        ctx.fillStyle = '#e74c3c';
-        ctx.fillRect(11, 7, 4, 4);
-        ctx.fillRect(17, 7, 4, 4);
-        ctx.fillStyle = '#000';
-        ctx.fillRect(12, 8, 2, 2);
-        ctx.fillRect(18, 8, 2, 2);
-        
-        // Nose
-        ctx.fillStyle = '#b8860b';
-        ctx.fillRect(15, 11, 2, 3);
-        
-        // Teeth
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(12, 14, 8, 2);
-        
-        // Spine
-        ctx.fillStyle = '#ffd700';
-        ctx.fillRect(14, 16, 4, 20);
-        
-        // Ribs
-        ctx.fillStyle = '#daa520';
-        for (let i = 0; i < 4; i++) {
-            ctx.fillRect(8, 18 + i * 4, 16, 2);
+        #gameCanvas {
+            display: block;
+            image-rendering: pixelated;
         }
         
-        // Arms
-        ctx.fillRect(4, 18, 4, 14);
-        ctx.fillRect(24, 18, 4, 14);
-        
-        // Legs
-        ctx.fillRect(10, 36, 4, 12);
-        ctx.fillRect(18, 36, 4, 12);
-        
-        // Crown
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(10, 0, 12, 3);
-        ctx.fillRect(12, -2, 2, 3);
-        ctx.fillRect(18, -2, 2, 3);
-    });
-}
-
-function createSwordInStoneTexture() {
-    return createPixelTexture(48, 64, (ctx, w, h) => {
-        // Stone base
-        ctx.fillStyle = '#5d6d7e';
-        ctx.beginPath();
-        ctx.ellipse(24, 50, 22, 14, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Stone top
-        ctx.fillStyle = '#6c7a89';
-        ctx.beginPath();
-        ctx.ellipse(24, 45, 18, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Stone texture
-        ctx.fillStyle = '#4a5568';
-        ctx.fillRect(12, 44, 6, 8);
-        ctx.fillRect(28, 46, 8, 6);
-        ctx.fillRect(18, 50, 5, 5);
-        
-        // Crack in stone
-        ctx.fillStyle = '#2c3e50';
-        ctx.fillRect(22, 40, 4, 20);
-        
-        // Sword blade
-        ctx.fillStyle = '#bdc3c7';
-        ctx.fillRect(21, 8, 6, 36);
-        
-        // Blade shine
-        ctx.fillStyle = '#ecf0f1';
-        ctx.fillRect(22, 10, 2, 32);
-        
-        // Blade edge
-        ctx.fillStyle = '#95a5a6';
-        ctx.fillRect(26, 10, 1, 32);
-        
-        // Sword tip
-        ctx.fillStyle = '#bdc3c7';
-        ctx.beginPath();
-        ctx.moveTo(21, 8);
-        ctx.lineTo(27, 8);
-        ctx.lineTo(24, 0);
-        ctx.fill();
-        
-        // Guard
-        ctx.fillStyle = '#f1c40f';
-        ctx.fillRect(14, 42, 20, 4);
-        ctx.fillStyle = '#d4ac0d';
-        ctx.fillRect(12, 43, 4, 2);
-        ctx.fillRect(32, 43, 4, 2);
-        
-        // Handle
-        ctx.fillStyle = '#8b4513';
-        ctx.fillRect(21, 46, 6, 10);
-        
-        // Handle wrap
-        ctx.fillStyle = '#654321';
-        ctx.fillRect(21, 48, 6, 2);
-        ctx.fillRect(21, 52, 6, 2);
-        
-        // Pommel
-        ctx.fillStyle = '#f1c40f';
-        ctx.fillRect(20, 55, 8, 5);
-        ctx.fillStyle = '#e74c3c';
-        ctx.fillRect(22, 56, 4, 3);
-        
-        // Glow effect
-        ctx.fillStyle = 'rgba(241, 196, 15, 0.3)';
-        ctx.beginPath();
-        ctx.arc(24, 30, 15, 0, Math.PI * 2);
-        ctx.fill();
-    });
-}
-
-function createWitchHutTexture() {
-    return createPixelTexture(80, 96, (ctx, w, h) => {
-        // Hut base
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(15, 50, 50, 46);
-        
-        // Wood planks
-        ctx.fillStyle = '#4e342e';
-        for (let i = 0; i < 5; i++) {
-            ctx.fillRect(15, 50 + i * 10, 50, 2);
+        #ui {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
         }
         
-        // Roof
-        ctx.fillStyle = '#2c2c54';
-        ctx.beginPath();
-        ctx.moveTo(40, 5);
-        ctx.lineTo(5, 55);
-        ctx.lineTo(75, 55);
-        ctx.closePath();
-        ctx.fill();
-        
-        // Roof shingles
-        ctx.fillStyle = '#1a1a3a';
-        for (let row = 0; row < 5; row++) {
-            for (let i = 0; i < 8 + row; i++) {
-                const y = 15 + row * 10;
-                const xStart = 15 - row * 5;
-                ctx.fillRect(xStart + i * 8, y, 7, 8);
-            }
+        #stats {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #fff;
+            font-size: 10px;
+            text-shadow: 2px 2px 0 #000, -1px -1px 0 #000;
+            line-height: 1.8;
+            z-index: 100;
         }
         
-        // Chimney
-        ctx.fillStyle = '#4a3728';
-        ctx.fillRect(55, 15, 10, 30);
-        // Smoke
-        ctx.fillStyle = 'rgba(150, 150, 150, 0.6)';
-        ctx.beginPath();
-        ctx.arc(60, 10, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(58, 3, 4, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Door
-        ctx.fillStyle = '#3e2723';
-        ctx.fillRect(32, 65, 16, 31);
-        ctx.fillStyle = '#5d4037';
-        ctx.fillRect(34, 67, 12, 27);
-        ctx.fillStyle = '#9b59b6';
-        ctx.fillRect(42, 80, 3, 3);
-        
-        // Window
-        ctx.fillStyle = '#1a1a3a';
-        ctx.fillRect(20, 60, 10, 12);
-        ctx.fillStyle = '#9b59b6';
-        ctx.fillRect(21, 61, 8, 10);
-        ctx.fillStyle = '#bb8fce';
-        ctx.fillRect(23, 63, 4, 6);
-        
-        // Cauldron outside
-        ctx.fillStyle = '#2c2c2c';
-        ctx.beginPath();
-        ctx.ellipse(70, 90, 8, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#27ae60';
-        ctx.beginPath();
-        ctx.arc(68, 86, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(72, 84, 2, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Mushrooms
-        ctx.fillStyle = '#e74c3c';
-        ctx.beginPath();
-        ctx.ellipse(10, 92, 5, 4, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#faf0e6';
-        ctx.fillRect(9, 92, 3, 4);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(8, 90, 2, 2);
-        ctx.fillRect(12, 89, 2, 2);
-    });
-}
-
-function createWitchTexture() {
-    return createPixelTexture(32, 56, (ctx, w, h) => {
-        // Robe
-        ctx.fillStyle = '#2c2c54';
-        ctx.fillRect(8, 24, 16, 26);
-        ctx.fillRect(4, 46, 24, 10);
-        
-        ctx.fillStyle = '#9b59b6';
-        ctx.fillRect(8, 24, 16, 3);
-        ctx.fillRect(4, 46, 24, 2);
-        
-        // Face
-        ctx.fillStyle = '#a8e6cf';
-        ctx.fillRect(10, 14, 12, 12);
-        
-        // Nose (pointy)
-        ctx.fillStyle = '#7bc89c';
-        ctx.fillRect(14, 18, 4, 6);
-        ctx.fillRect(15, 24, 2, 2);
-        
-        // Eyes
-        ctx.fillStyle = '#9b59b6';
-        ctx.fillRect(11, 16, 4, 4);
-        ctx.fillRect(17, 16, 4, 4);
-        ctx.fillStyle = '#000';
-        ctx.fillRect(12, 17, 2, 2);
-        ctx.fillRect(18, 17, 2, 2);
-        
-        // Smile
-        ctx.fillStyle = '#2c2c54';
-        ctx.fillRect(12, 22, 8, 2);
-        
-        // Hat
-        ctx.fillStyle = '#2c2c54';
-        ctx.fillRect(6, 10, 20, 6);
-        ctx.fillRect(10, 2, 12, 10);
-        ctx.fillRect(13, -2, 6, 6);
-        
-        ctx.fillStyle = '#9b59b6';
-        ctx.fillRect(10, 10, 12, 2);
-        
-        ctx.fillStyle = '#f1c40f';
-        ctx.fillRect(14, 9, 4, 4);
-        
-        // Arms
-        ctx.fillStyle = '#a8e6cf';
-        ctx.fillRect(4, 26, 4, 12);
-        ctx.fillRect(24, 26, 4, 12);
-        
-        // Broom
-        ctx.fillStyle = '#8b4513';
-        ctx.fillRect(26, 20, 3, 36);
-        ctx.fillStyle = '#d4a574';
-        ctx.fillRect(24, 50, 7, 6);
-        ctx.fillStyle = '#c9a86c';
-        for (let i = 0; i < 4; i++) {
-            ctx.fillRect(24 + i * 2, 52, 1, 4);
-        }
-    });
-}
-
-function createHeartTexture() {
-    return createPixelTexture(24, 24, (ctx, w, h) => {
-        ctx.fillStyle = '#e91e63';
-        ctx.beginPath();
-        ctx.arc(8, 9, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(16, 9, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(2, 10);
-        ctx.lineTo(12, 22);
-        ctx.lineTo(22, 10);
-        ctx.fill();
-        
-        ctx.fillStyle = '#f48fb1';
-        ctx.beginPath();
-        ctx.arc(7, 7, 2, 0, Math.PI * 2);
-        ctx.fill();
-    });
-}
-
-function createTreasureChestTexture() {
-    return createPixelTexture(32, 28, (ctx, w, h) => {
-        // Chest body
-        ctx.fillStyle = '#8b4513';
-        ctx.fillRect(2, 10, 28, 18);
-        
-        // Chest lid
-        ctx.fillStyle = '#a0522d';
-        ctx.fillRect(2, 4, 28, 8);
-        ctx.fillRect(4, 2, 24, 4);
-        
-        // Wood grain
-        ctx.fillStyle = '#6b3510';
-        ctx.fillRect(4, 12, 24, 2);
-        ctx.fillRect(4, 18, 24, 2);
-        ctx.fillRect(4, 24, 24, 2);
-        
-        // Metal bands
-        ctx.fillStyle = '#ffd700';
-        ctx.fillRect(0, 8, 32, 3);
-        ctx.fillRect(0, 20, 32, 3);
-        ctx.fillRect(14, 4, 4, 24);
-        
-        // Lock
-        ctx.fillStyle = '#ffd700';
-        ctx.fillRect(13, 10, 6, 8);
-        ctx.fillStyle = '#000';
-        ctx.fillRect(15, 14, 2, 3);
-        
-        // Shine
-        ctx.fillStyle = '#fff8dc';
-        ctx.fillRect(2, 8, 4, 1);
-        ctx.fillRect(2, 20, 4, 1);
-        
-        // Shadow
-        ctx.fillStyle = '#5d3a1a';
-        ctx.fillRect(2, 26, 28, 2);
-    });
-}
-
-function createOpenChestTexture() {
-    return createPixelTexture(32, 32, (ctx, w, h) => {
-        // Open lid
-        ctx.fillStyle = '#a0522d';
-        ctx.fillRect(2, 0, 28, 6);
-        ctx.fillRect(4, 4, 24, 8);
-        
-        ctx.fillStyle = '#6b3510';
-        ctx.fillRect(6, 6, 20, 4);
-        
-        // Chest body
-        ctx.fillStyle = '#8b4513';
-        ctx.fillRect(2, 14, 28, 18);
-        
-        // Inside of chest
-        ctx.fillStyle = '#3d2314';
-        ctx.fillRect(4, 14, 24, 8);
-        
-        // Gold coins inside
-        ctx.fillStyle = '#ffd700';
-        ctx.beginPath();
-        ctx.arc(10, 17, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(16, 16, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(22, 17, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(13, 19, 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(19, 19, 2, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Metal bands
-        ctx.fillStyle = '#ffd700';
-        ctx.fillRect(0, 22, 32, 3);
-        ctx.fillRect(14, 14, 4, 18);
-        
-        // Shadow
-        ctx.fillStyle = '#5d3a1a';
-        ctx.fillRect(2, 30, 28, 2);
-    });
-}
-
-// ============================================
-// CLOUD ARENA TEXTURES
-// ============================================
-function createBeanstalkPortalTexture() {
-    return createPixelTexture(64, 96, (ctx, w, h) => {
-        // Blue swirling portal background
-        const gradient = ctx.createRadialGradient(32, 60, 5, 32, 60, 30);
-        gradient.addColorStop(0, '#00ffff');
-        gradient.addColorStop(0.3, '#0088ff');
-        gradient.addColorStop(0.6, '#0044aa');
-        gradient.addColorStop(1, 'rgba(0, 20, 60, 0.8)');
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.ellipse(32, 60, 28, 35, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Portal ring glow
-        ctx.strokeStyle = '#00ffff';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.ellipse(32, 60, 28, 35, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Inner glow ring
-        ctx.strokeStyle = 'rgba(100, 200, 255, 0.6)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.ellipse(32, 60, 22, 28, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Beanstalk main stem
-        ctx.fillStyle = '#228B22';
-        ctx.fillRect(28, 20, 8, 76);
-        
-        ctx.fillStyle = '#32CD32';
-        ctx.fillRect(30, 20, 3, 76);
-        
-        ctx.fillStyle = '#006400';
-        ctx.fillRect(34, 20, 2, 76);
-        
-        // Spiral vines
-        ctx.fillStyle = '#228B22';
-        for (let i = 0; i < 6; i++) {
-            const y = 25 + i * 12;
-            ctx.fillRect(20, y, 10, 4);
-            ctx.fillRect(34, y + 6, 10, 4);
+        #stats .level {
+            color: #ffd700;
+            font-size: 14px;
         }
         
-        // Leaves
-        ctx.fillStyle = '#32CD32';
-        for (let i = 0; i < 6; i++) {
-            const y = 22 + i * 12;
-            ctx.beginPath();
-            ctx.ellipse(16, y + 2, 6, 4, -0.3, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.ellipse(48, y + 8, 6, 4, 0.3, 0, Math.PI * 2);
-            ctx.fill();
+        #healthBar {
+            width: 150px;
+            height: 16px;
+            background: #333;
+            border: 3px solid #222;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 5px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
         }
         
-        // Top clouds
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.beginPath();
-        ctx.ellipse(32, 8, 18, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(22, 12, 10, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(42, 12, 10, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Magic sparkles
-        ctx.fillStyle = '#00ffff';
-        ctx.fillRect(15, 40, 3, 3);
-        ctx.fillRect(46, 55, 3, 3);
-        ctx.fillRect(12, 70, 3, 3);
-        ctx.fillRect(50, 45, 3, 3);
-        ctx.fillRect(20, 80, 2, 2);
-        ctx.fillRect(44, 75, 2, 2);
-    });
-}
-
-function createPortalParticleTexture() {
-    return createPixelTexture(8, 8, (ctx, w, h) => {
-        const gradient = ctx.createRadialGradient(4, 4, 0, 4, 4, 4);
-        gradient.addColorStop(0, 'rgba(100, 200, 255, 1)');
-        gradient.addColorStop(0.5, 'rgba(0, 150, 255, 0.8)');
-        gradient.addColorStop(1, 'rgba(0, 100, 200, 0)');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 8, 8);
-    });
-}
-
-function createCloudGroundTexture() {
-    return createPixelTexture(128, 128, (ctx, w, h) => {
-        ctx.fillStyle = '#e8f4ff';
-        ctx.fillRect(0, 0, 128, 128);
-        
-        ctx.fillStyle = '#ffffff';
-        for (let i = 0; i < 20; i++) {
-            const x = (i * 37) % 128;
-            const y = (i * 53) % 128;
-            const r = 15 + (i % 3) * 5;
-            ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI * 2);
-            ctx.fill();
+        #healthFill {
+            height: 100%;
+            background: linear-gradient(180deg, #ff6b6b, #c0392b);
+            transition: width 0.3s;
+            box-shadow: inset 0 -2px 4px rgba(0,0,0,0.3);
         }
         
-        ctx.fillStyle = 'rgba(180, 200, 220, 0.3)';
-        for (let i = 0; i < 15; i++) {
-            const x = (i * 47 + 20) % 128;
-            const y = (i * 61 + 30) % 128;
-            ctx.beginPath();
-            ctx.arc(x, y, 10, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    });
-}
-
-function createCloudSpriteTexture() {
-    return createPixelTexture(48, 24, (ctx, w, h) => {
-        ctx.fillStyle = '#b0c4de';
-        ctx.beginPath();
-        ctx.ellipse(24, 14, 20, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(12, 12, 10, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(36, 12, 10, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(24, 8, 12, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Angry eyes
-        ctx.fillStyle = '#4a4a6a';
-        ctx.fillRect(16, 10, 4, 4);
-        ctx.fillRect(28, 10, 4, 4);
-        
-        // Angry eyebrows
-        ctx.fillStyle = '#2a2a4a';
-        ctx.fillRect(14, 8, 6, 2);
-        ctx.fillRect(28, 8, 6, 2);
-    });
-}
-
-function createSkyGiantTexture() {
-    return createPixelTexture(64, 80, (ctx, w, h) => {
-        // Body
-        ctx.fillStyle = '#6a7b8c';
-        ctx.beginPath();
-        ctx.ellipse(32, 55, 25, 24, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Head
-        ctx.fillStyle = '#7a8b9c';
-        ctx.beginPath();
-        ctx.ellipse(32, 25, 18, 16, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Arms
-        ctx.fillStyle = '#5a6b7c';
-        ctx.beginPath();
-        ctx.ellipse(8, 50, 12, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(56, 50, 12, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Glowing eyes
-        ctx.fillStyle = '#ffff00';
-        ctx.fillRect(22, 20, 6, 6);
-        ctx.fillRect(36, 20, 6, 6);
-        
-        ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
-        ctx.beginPath();
-        ctx.arc(25, 23, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(39, 23, 6, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Mouth
-        ctx.fillStyle = '#3a4a5a';
-        ctx.fillRect(26, 32, 12, 4);
-        
-        // Lightning crown
-        ctx.fillStyle = '#ffff00';
-        ctx.beginPath();
-        ctx.moveTo(20, 12);
-        ctx.lineTo(24, 4);
-        ctx.lineTo(28, 12);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(28, 10);
-        ctx.lineTo(32, 0);
-        ctx.lineTo(36, 10);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(36, 12);
-        ctx.lineTo(40, 4);
-        ctx.lineTo(44, 12);
-        ctx.fill();
-    });
-}
-
-// Giant Troll (Stage 1) - Massive angry troll
-function createGiantTrollTexture() {
-    return createPixelTexture(96, 128, (ctx, w, h) => {
-        // Massive body
-        ctx.fillStyle = '#4a7c4a'; // Dark green
-        ctx.beginPath();
-        ctx.ellipse(48, 85, 40, 38, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Head
-        ctx.fillStyle = '#5a8c5a';
-        ctx.beginPath();
-        ctx.ellipse(48, 35, 28, 26, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Angry eyebrows
-        ctx.fillStyle = '#2a4c2a';
-        ctx.fillRect(28, 22, 16, 6);
-        ctx.fillRect(52, 22, 16, 6);
-        
-        // Glowing red angry eyes
-        ctx.fillStyle = '#ff0000';
-        ctx.fillRect(32, 30, 10, 8);
-        ctx.fillRect(54, 30, 10, 8);
-        
-        // Pupils
-        ctx.fillStyle = '#000';
-        ctx.fillRect(35, 32, 4, 4);
-        ctx.fillRect(57, 32, 4, 4);
-        
-        // Huge tusks
-        ctx.fillStyle = '#f0f0e0';
-        ctx.beginPath();
-        ctx.moveTo(30, 50);
-        ctx.lineTo(24, 70);
-        ctx.lineTo(34, 55);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(66, 50);
-        ctx.lineTo(72, 70);
-        ctx.lineTo(62, 55);
-        ctx.fill();
-        
-        // Angry mouth
-        ctx.fillStyle = '#2a2a2a';
-        ctx.fillRect(36, 48, 24, 10);
-        
-        // Arms
-        ctx.fillStyle = '#4a7c4a';
-        ctx.beginPath();
-        ctx.ellipse(10, 75, 16, 20, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(86, 75, 16, 20, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Legs
-        ctx.fillStyle = '#3a6c3a';
-        ctx.fillRect(28, 110, 16, 18);
-        ctx.fillRect(52, 110, 16, 18);
-    });
-}
-
-// Giant Troll Club
-function createGiantClubTexture() {
-    return createPixelTexture(24, 64, (ctx, w, h) => {
-        // Handle
-        ctx.fillStyle = '#6b4226';
-        ctx.fillRect(9, 30, 6, 34);
-        
-        // Club head
-        ctx.fillStyle = '#5a3a20';
-        ctx.beginPath();
-        ctx.ellipse(12, 16, 12, 18, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Spikes
-        ctx.fillStyle = '#808080';
-        ctx.beginPath();
-        ctx.moveTo(4, 8);
-        ctx.lineTo(0, 0);
-        ctx.lineTo(8, 6);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(20, 8);
-        ctx.lineTo(24, 0);
-        ctx.lineTo(16, 6);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(12, 2);
-        ctx.lineTo(12, -6);
-        ctx.lineTo(14, 2);
-        ctx.fill();
-    });
-}
-
-// Troll projectile (rock)
-function createTrollRockTexture() {
-    return createPixelTexture(16, 16, (ctx, w, h) => {
-        ctx.fillStyle = '#6a6a6a';
-        ctx.beginPath();
-        ctx.ellipse(8, 8, 7, 6, 0.2, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#4a4a4a';
-        ctx.fillRect(4, 5, 3, 3);
-        ctx.fillRect(9, 8, 4, 3);
-    });
-}
-
-// Giant Ghost (Stage 2) - Spirit of the Giant
-function createGiantGhostTexture() {
-    return createPixelTexture(80, 96, (ctx, w, h) => {
-        // Ghostly body - translucent
-        ctx.fillStyle = 'rgba(200, 220, 255, 0.7)';
-        ctx.beginPath();
-        ctx.ellipse(40, 50, 35, 40, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Wavy bottom
-        for (let i = 0; i < 6; i++) {
-            ctx.beginPath();
-            ctx.ellipse(12 + i * 12, 88, 8, 10, 0, 0, Math.PI * 2);
-            ctx.fill();
+        #xpBar {
+            width: 150px;
+            height: 10px;
+            background: #333;
+            border: 2px solid #222;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 5px;
         }
         
-        // Spooky eyes
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.ellipse(28, 40, 8, 12, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(52, 40, 8, 12, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Glowing pupils
-        ctx.fillStyle = '#00ffff';
-        ctx.fillRect(26, 42, 4, 4);
-        ctx.fillRect(50, 42, 4, 4);
-        
-        // Sad/angry mouth
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.ellipse(40, 65, 10, 8, 0, 0, Math.PI);
-        ctx.fill();
-        
-        // Crown remnant (ethereal)
-        ctx.fillStyle = 'rgba(255, 255, 100, 0.5)';
-        ctx.beginPath();
-        ctx.moveTo(24, 12);
-        ctx.lineTo(28, 2);
-        ctx.lineTo(32, 12);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(36, 10);
-        ctx.lineTo(40, 0);
-        ctx.lineTo(44, 10);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(48, 12);
-        ctx.lineTo(52, 2);
-        ctx.lineTo(56, 12);
-        ctx.fill();
-    });
-}
-
-// Giant Skeleton (Stage 2) - Body of the Giant
-function createGiantSkeletonTexture() {
-    return createPixelTexture(72, 96, (ctx, w, h) => {
-        // Skull
-        ctx.fillStyle = '#f5f5dc';
-        ctx.beginPath();
-        ctx.ellipse(36, 22, 22, 20, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Eye sockets
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.ellipse(28, 20, 6, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(44, 20, 6, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Red glowing eyes
-        ctx.fillStyle = '#ff4444';
-        ctx.fillRect(26, 20, 4, 4);
-        ctx.fillRect(42, 20, 4, 4);
-        
-        // Nose hole
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.moveTo(36, 30);
-        ctx.lineTo(32, 36);
-        ctx.lineTo(40, 36);
-        ctx.fill();
-        
-        // Teeth
-        ctx.fillStyle = '#f5f5dc';
-        ctx.fillRect(28, 38, 4, 6);
-        ctx.fillRect(34, 38, 4, 6);
-        ctx.fillRect(40, 38, 4, 6);
-        
-        // Spine/ribcage
-        ctx.fillStyle = '#e8e8d0';
-        ctx.fillRect(34, 46, 4, 30);
-        
-        // Ribs
-        for (let i = 0; i < 4; i++) {
-            ctx.fillRect(20, 50 + i * 7, 32, 3);
+        #xpFill {
+            height: 100%;
+            background: linear-gradient(180deg, #9b59b6, #8e44ad);
+            transition: width 0.3s;
         }
         
-        // Arms (bone)
-        ctx.fillRect(8, 50, 8, 30);
-        ctx.fillRect(56, 50, 8, 30);
-        
-        // Legs (bone)
-        ctx.fillRect(24, 78, 8, 18);
-        ctx.fillRect(40, 78, 8, 18);
-    });
-}
-
-// Giant Slime (Stage 2) - The Giant's... bodily goos
-function createGiantSlimeTexture() {
-    return createPixelTexture(64, 48, (ctx, w, h) => {
-        // Main blob - sick looking color
-        ctx.fillStyle = '#8b0000'; // Dark red/blood
-        ctx.beginPath();
-        ctx.ellipse(32, 34, 30, 18, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Top bumps
-        ctx.beginPath();
-        ctx.ellipse(18, 20, 12, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(46, 22, 10, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Gross highlights
-        ctx.fillStyle = '#a52a2a';
-        ctx.beginPath();
-        ctx.ellipse(24, 30, 8, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Yellow bits (bile?)
-        ctx.fillStyle = '#9acd32';
-        ctx.beginPath();
-        ctx.ellipse(40, 36, 5, 4, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Eyes (still has the giant's eyes somehow)
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.ellipse(22, 26, 5, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(42, 26, 5, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#000';
-        ctx.fillRect(21, 26, 3, 4);
-        ctx.fillRect(41, 26, 3, 4);
-    });
-}
-
-// ============================================
-// TEXTURE INITIALIZATION
-// ============================================
-function initEncounterTextures() {
-    console.log('Initializing encounter textures...');
-    
-    encounterState.textures = {
-        // Encounter structures
-        princessTower: createPrincessTowerTexture(),
-        swordInStone: createSwordInStoneTexture(),
-        witchHut: createWitchHutTexture(),
-        
-        // NPCs
-        princess: createPrincessTexture(),
-        witch: createWitchTexture(),
-        goldenSkeleton: createGoldenSkeletonTexture(),
-        
-        // Effects
-        heart: createHeartTexture(),
-        
-        // Treasure chests
-        treasureChest: createTreasureChestTexture(),
-        openChest: createOpenChestTexture(),
-        
-        // Cloud arena - Stage 0
-        beanstalk: createBeanstalkPortalTexture(),
-        portalParticle: createPortalParticleTexture(),
-        cloudGround: createCloudGroundTexture(),
-        cloudSprite: createCloudSpriteTexture(),
-        skyGiant: createSkyGiantTexture(),
-        
-        // Cloud arena - Stage 1 (Giant Troll)
-        giantTroll: createGiantTrollTexture(),
-        giantClub: createGiantClubTexture(),
-        trollRock: createTrollRockTexture(),
-        
-        // Cloud arena - Stage 2 (Ghost Trio)
-        giantGhost: createGiantGhostTexture(),
-        giantSkeleton: createGiantSkeletonTexture(),
-        giantSlime: createGiantSlimeTexture()
-    };
-    
-    console.log('Encounter textures initialized.');
-}
-
-// ============================================
-// HELPER: CHECK IF ENCOUNTER SYSTEM IS BUSY
-// ============================================
-function isEncounterSystemBusy() {
-    return encounterState.currentEncounter !== null ||
-           encounterState.cloudPortal !== null ||
-           encounterState.inCloudArena ||
-           (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive());
-}
-
-// ============================================
-// SPAWN CHECKS
-// ============================================
-
-// Check if ANY major event (boss or encounter) can spawn
-function canSpawnMajorEvent() {
-    if (encounterState.currentEncounter) return false;
-    if (gameState.bosses.length > 0) return false;
-    if (encounterState.cloudPortal) return false;
-    if (encounterState.inCloudArena) return false;
-    if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) return false;
-    
-    const level = gameState.player.level;
-    if (level < 5) return false; // Major events start at level 5
-    
-    return true;
-}
-
-// Legacy function - now just checks if allowed (probability handled by main loop)
-function shouldSpawnEncounter() {
-    if (!canSpawnMajorEvent()) return false;
-    
-    // Check for guaranteed encounters
-    if (hasGuaranteedEncounter()) {
-        return true;
-    }
-    
-    return true; // Probability handled by main spawn logic
-}
-
-// Check if portal can spawn (uses arenaStage, not level limits)
-function shouldSpawnPortal() {
-    if (encounterState.inCloudArena) return false;
-    if (encounterState.cloudPortal) return false;
-    if (encounterState.arenaStage >= 3) return false; // All 3 stages completed
-    if (gameState.bosses.length > 0) return false;
-    if (encounterState.currentEncounter) return false;
-    if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) return false;
-    
-    return true; // Probability handled by main spawn logic
-}
-
-function shouldSpawnChest() {
-    if (encounterState.treasureChests.length >= TREASURE_CHEST_CONFIG.maxChests) return false;
-    return Math.random() < TREASURE_CHEST_CONFIG.spawnChance;
-}
-
-// Spawn a random encounter from the 5 types (20% each)
-// Types: Monster Store, Sky Giants, Princess Tower, Witch Hut, Sword in Stone
-function spawnRandomEncounter() {
-    const roll = Math.random();
-    
-    if (roll < 0.20) {
-        // Monster Store (20%)
-        if (typeof spawnMonsterStore === 'function') {
-            spawnMonsterStore();
-        } else {
-            // Fallback to regular encounter if monster store not loaded
-            spawnSpecificEncounter('princessTower');
-        }
-    } else if (roll < 0.40) {
-        // Sky Giants Portal (20%)
-        if (shouldSpawnPortal()) {
-            spawnCloudPortal();
-        } else {
-            // If portal can't spawn (all 3 stages completed), spawn another encounter
-            spawnSpecificEncounter('witchHut');
-        }
-    } else if (roll < 0.60) {
-        // Princess Tower (20%)
-        spawnSpecificEncounter('princessTower');
-    } else if (roll < 0.80) {
-        // Witch Hut (20%)
-        spawnSpecificEncounter('witchHut');
-    } else {
-        // Sword in Stone (20%)
-        spawnSpecificEncounter('swordInStone');
-    }
-}
-
-// Spawn a specific encounter by key
-function spawnSpecificEncounter(templateKey) {
-    const template = ENCOUNTER_TEMPLATES[templateKey];
-    if (!template) {
-        console.error('Unknown encounter template:', templateKey);
-        return;
-    }
-    
-    // Calculate spawn position
-    const angle = Math.random() * Math.PI * 2;
-    const dist = CONFIG.enemySpawnRadius * 1.3;
-    const x = gameState.player.position.x + Math.cos(angle) * dist;
-    const z = gameState.player.position.z + Math.sin(angle) * dist;
-    
-    // Create main structure sprite
-    const material = new THREE.SpriteMaterial({
-        map: encounterState.textures[template.textureKey],
-        transparent: true
-    });
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(template.scale[0], template.scale[1], 1);
-    sprite.position.set(x, template.scale[1] / 2, z);
-    scene.add(sprite);
-    
-    // Spawn guards
-    const guards = [];
-    for (let i = 0; i < template.guards.count; i++) {
-        const guardAngle = (i / template.guards.count) * Math.PI * 2;
-        const guardDist = 6 + Math.random() * 4;
-        const gx = x + Math.cos(guardAngle) * guardDist;
-        const gz = z + Math.sin(guardAngle) * guardDist;
-        
-        let guardTexture, guardScale;
-        
-        if (template.guards.customTexture) {
-            guardTexture = encounterState.textures[template.guards.type];
-            guardScale = [2.5, 4];
-        } else {
-            const enemyType = enemyTypes.find(t => t.name === template.guards.type);
-            if (enemyType) {
-                guardTexture = enemyType.texture();
-                guardScale = enemyType.scale;
-            } else {
-                guardTexture = createGoblinTexture();
-                guardScale = [2.5, 3.2];
-            }
+        #dpad {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            width: 140px;
+            height: 140px;
+            pointer-events: auto;
         }
         
-        const guardMaterial = new THREE.SpriteMaterial({
-            map: guardTexture,
-            transparent: true
-        });
-        const guardSprite = new THREE.Sprite(guardMaterial);
-        guardSprite.scale.set(guardScale[0], guardScale[1], 1);
-        guardSprite.position.set(gx, guardScale[1] / 2, gz);
-        scene.add(guardSprite);
-        
-        const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2) * template.guards.healthMultiplier;
-        guards.push({
-            sprite: guardSprite,
-            health: baseHealth,
-            maxHealth: baseHealth,
-            damage: CONFIG.enemyBaseDamage * (1 + gameState.player.level * 0.15),
-            speed: 0.06,
-            attackCooldown: 0,
-            hitFlash: 0
-        });
-    }
-    
-    encounterState.encounterGuards = guards;
-    
-    encounterState.currentEncounter = {
-        template,
-        sprite,
-        position: new THREE.Vector3(x, 0, z),
-        guardsDefeated: false,
-        npcSpawned: false,
-        npc: null,
-        rewardGiven: false
-    };
-    
-    gameState.targetCameraZoom = template.cameraZoom;
-    
-    console.log('Spawned specific encounter:', template.name);
-    showDialogue('⚔️ ' + template.displayName.toUpperCase(), `A ${template.displayName} has appeared! Defeat the guards to claim your reward!`);
-}
-
-// ============================================
-// ENCOUNTER SPAWNING
-// ============================================
-function spawnEncounter() {
-    let template;
-    
-    // Check for guaranteed encounter
-    if (hasGuaranteedEncounter()) {
-        const key = getNextGuaranteedEncounter();
-        template = ENCOUNTER_TEMPLATES[key];
-        console.log('Spawning guaranteed encounter:', key);
-    } else {
-        // Random encounter selection
-        const available = getAvailableEncounters(gameState.player.level);
-        if (available.length === 0) return;
-        
-        const index = Math.floor(Math.random() * available.length);
-        template = available[index];
-        console.log('Spawning random encounter:', template.name);
-    }
-    
-    // Calculate spawn position
-    const angle = Math.random() * Math.PI * 2;
-    const dist = CONFIG.enemySpawnRadius * 1.3;
-    const x = gameState.player.position.x + Math.cos(angle) * dist;
-    const z = gameState.player.position.z + Math.sin(angle) * dist;
-    
-    // Create main structure sprite
-    const material = new THREE.SpriteMaterial({
-        map: encounterState.textures[template.textureKey],
-        transparent: true
-    });
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(template.scale[0], template.scale[1], 1);
-    sprite.position.set(x, template.scale[1] / 2, z);
-    scene.add(sprite);
-    
-    // Spawn guards
-    const guards = [];
-    for (let i = 0; i < template.guards.count; i++) {
-        const guardAngle = (i / template.guards.count) * Math.PI * 2;
-        const guardDist = 6 + Math.random() * 4;
-        const gx = x + Math.cos(guardAngle) * guardDist;
-        const gz = z + Math.sin(guardAngle) * guardDist;
-        
-        let guardTexture, guardScale;
-        
-        if (template.guards.customTexture) {
-            // Use our custom texture (golden skeleton)
-            guardTexture = encounterState.textures[template.guards.type];
-            guardScale = [2.5, 4];
-        } else {
-            // Use enemy texture from enemies.js
-            const enemyType = enemyTypes.find(t => t.name === template.guards.type);
-            if (enemyType) {
-                guardTexture = enemyType.texture();
-                guardScale = enemyType.scale;
-            } else {
-                // Fallback to goblin
-                guardTexture = createGoblinTexture();
-                guardScale = [2.5, 3.2];
-            }
+        .dpad-btn {
+            position: absolute;
+            width: 46px;
+            height: 46px;
+            background: rgba(255,255,255,0.15);
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: rgba(255,255,255,0.7);
+            transition: all 0.1s;
+            backdrop-filter: blur(4px);
         }
         
-        const guardMaterial = new THREE.SpriteMaterial({
-            map: guardTexture,
-            transparent: true
-        });
-        const guardSprite = new THREE.Sprite(guardMaterial);
-        guardSprite.scale.set(guardScale[0], guardScale[1], 1);
-        guardSprite.position.set(gx, guardScale[1] / 2, gz);
-        scene.add(guardSprite);
+        .dpad-btn:active, .dpad-btn.active {
+            background: rgba(255,255,255,0.35);
+            transform: scale(0.95);
+            border-color: rgba(255,255,255,0.6);
+        }
         
-        const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2);
-        const guard = {
-            sprite: guardSprite,
-            health: baseHealth * template.guards.healthMultiplier,
-            maxHealth: baseHealth * template.guards.healthMultiplier,
-            damage: CONFIG.enemyBaseDamage * (1 + gameState.player.level * 0.15),
-            speed: 0.04,
-            attackCooldown: 0,
-            hitFlash: 0,
-            isGuard: true
+        #dpad-up { top: 0; left: 50%; transform: translateX(-50%); }
+        #dpad-down { bottom: 0; left: 50%; transform: translateX(-50%); }
+        #dpad-left { left: 0; top: 50%; transform: translateY(-50%); }
+        #dpad-right { right: 0; top: 50%; transform: translateY(-50%); }
+        
+        #magicBtn {
+            position: absolute;
+            bottom: 50px;
+            right: 30px;
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle at 30% 30%, #9b59b6, #6c3483);
+            border: 4px solid #bb8fce;
+            border-radius: 50%;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            color: #fff;
+            text-shadow: 0 0 10px #fff, 0 0 20px #9b59b6;
+            box-shadow: 0 0 20px rgba(155,89,182,0.5), inset 0 -4px 10px rgba(0,0,0,0.3);
+            transition: all 0.1s;
+        }
+        
+        #magicBtn:active {
+            transform: scale(0.9);
+            box-shadow: 0 0 30px rgba(155,89,182,0.8), inset 0 -4px 10px rgba(0,0,0,0.3);
+        }
+        
+        #viewArea {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 60%;
+            pointer-events: auto;
+        }
+        
+        #damageFlash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255,0,0,0.3);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.1s;
+        }
+        
+        #levelUp {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ffd700;
+            font-size: 24px;
+            text-shadow: 0 0 20px #ffd700, 0 0 40px #ff8c00;
+            opacity: 0;
+            pointer-events: none;
+            animation: none;
+        }
+        
+        @keyframes levelUpAnim {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1) translateY(-50px); }
+        }
+        
+        #killCount {
+            position: absolute;
+            top: 80px;
+            right: 10px;
+            color: #ff6b6b;
+            font-size: 12px;
+            text-shadow: 2px 2px 0 #000;
+        }
+        
+        #stats .gold {
+            color: #ffd700;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+        
+        #menuBtn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(180deg, rgba(108,92,231,0.9), rgba(68,52,191,0.9));
+            border: 3px solid #bb8fce;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            color: #fff;
+            pointer-events: auto;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(108,92,231,0.5);
+            z-index: 100;
+        }
+        
+        #menuBtn .btn-label {
+            font-size: 8px;
+            margin-top: 2px;
+            font-family: 'Press Start 2P', cursive;
+        }
+        
+        #menuBtn:active {
+            background: linear-gradient(180deg, rgba(138,122,255,0.9), rgba(98,82,221,0.9));
+            transform: scale(0.95);
+        }
+        
+        #upgradeMenu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 500;
+            pointer-events: auto;
+        }
+        
+        #menuContent {
+            background: linear-gradient(180deg, #2c2c54, #1a1a2e);
+            border: 4px solid #6c5ce7;
+            border-radius: 16px;
+            padding: 20px;
+            max-width: 340px;
+            width: 90%;
+            box-shadow: 0 0 30px rgba(108,92,231,0.5);
+        }
+        
+        #menuContent h2 {
+            color: #ffd700;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 18px;
+            text-shadow: 0 0 10px #ffd700;
+        }
+        
+        .upgrade-item {
+            display: flex;
+            align-items: center;
+            background: rgba(0,0,0,0.3);
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 12px;
+            gap: 10px;
+        }
+        
+        .upgrade-item.maxed {
+            border-color: #27ae60;
+            opacity: 0.7;
+        }
+        
+        .upgrade-icon {
+            font-size: 28px;
+            width: 40px;
+            text-align: center;
+        }
+        
+        .upgrade-info {
+            flex: 1;
+        }
+        
+        .upgrade-name {
+            color: #fff;
+            font-size: 10px;
+            margin-bottom: 2px;
+        }
+        
+        .upgrade-desc {
+            color: #888;
+            font-size: 7px;
+            margin-bottom: 4px;
+        }
+        
+        .upgrade-level {
+            color: #9b59b6;
+            font-size: 8px;
+        }
+        
+        .upgrade-btn {
+            background: linear-gradient(180deg, #f39c12, #d68910);
+            border: 2px solid #ffd700;
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #fff;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 8px;
+            cursor: pointer;
+            pointer-events: auto;
+            min-width: 70px;
+        }
+        
+        .upgrade-btn:disabled {
+            background: #555;
+            border-color: #666;
+            color: #888;
+            cursor: not-allowed;
+        }
+        
+        .upgrade-btn:not(:disabled):active {
+            transform: scale(0.95);
+        }
+        
+        #closeMenu {
+            width: 100%;
+            margin-top: 15px;
+            padding: 12px;
+            background: linear-gradient(180deg, #c0392b, #96281b);
+            border: 2px solid #e74c3c;
+            border-radius: 8px;
+            color: #fff;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 12px;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+        
+        #closeMenu:active {
+            transform: scale(0.98);
+        }
+        
+        #boomCooldown {
+            display: none;
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 6px;
+        }
+        
+        #boomCooldown.active {
+            display: block;
+        }
+        
+        .cooldown-label {
+            color: #e74c3c;
+            font-size: 8px;
+            margin-bottom: 4px;
+            text-align: center;
+        }
+        
+        .cooldown-bar {
+            width: 100%;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .cooldown-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e74c3c, #f39c12);
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+        
+        #boomIndicator {
+            position: absolute;
+            bottom: 140px;
+            right: 30px;
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle at 30% 30%, #e74c3c, #96281b);
+            border: 3px solid #f39c12;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #fff;
+            pointer-events: auto;
+            opacity: 0.5;
+        }
+        
+        #boomIndicator.ready {
+            opacity: 1;
+            box-shadow: 0 0 15px rgba(231,76,60,0.7);
+            animation: boomPulse 1s ease-in-out infinite;
+        }
+        
+        @keyframes boomPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        #bossHealthBar {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 280px;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            z-index: 100;
+        }
+        
+        #bossHealthBar.active {
+            display: flex;
+        }
+        
+        .boss-name {
+            color: #e74c3c;
+            font-size: 12px;
+            margin-bottom: 5px;
+            text-shadow: 2px 2px 0 #000, 0 0 10px #e74c3c;
+        }
+        
+        .boss-bar {
+            width: 100%;
+            height: 20px;
+            background: #333;
+            border: 3px solid #8b0000;
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 0 15px rgba(139,0,0,0.5);
+        }
+        
+        .boss-fill {
+            height: 100%;
+            background: linear-gradient(180deg, #e74c3c, #8b0000);
+            transition: width 0.2s;
+            box-shadow: inset 0 -3px 6px rgba(0,0,0,0.3);
+        }
+        
+        #dialogueBox {
+            position: absolute;
+            bottom: 200px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.85);
+            border: 3px solid #ffd700;
+            border-radius: 12px;
+            padding: 15px 25px;
+            max-width: 320px;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            z-index: 200;
+            box-shadow: 0 0 20px rgba(255,215,0,0.3);
+            pointer-events: auto;
+        }
+        
+        #dialogueBox.active {
+            display: flex;
+            animation: dialoguePop 0.3s ease-out;
+        }
+        
+        @keyframes dialoguePop {
+            0% { transform: translateX(-50%) scale(0.8); opacity: 0; }
+            100% { transform: translateX(-50%) scale(1); opacity: 1; }
+        }
+        
+        .dialogue-speaker {
+            color: #ffd700;
+            font-size: 10px;
+            margin-bottom: 8px;
+            text-shadow: 0 0 10px #ffd700;
+        }
+        
+        .dialogue-text {
+            color: #fff;
+            font-size: 9px;
+            text-align: center;
+            line-height: 1.6;
+        }
+        
+        .dialogue-continue {
+            margin-top: 12px;
+            padding: 8px 20px;
+            background: linear-gradient(180deg, #f39c12, #d68910);
+            border: 2px solid #ffd700;
+            border-radius: 6px;
+            color: #fff;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 8px;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: all 0.1s;
+        }
+        
+        .dialogue-continue:hover {
+            background: linear-gradient(180deg, #f5b041, #e59400);
+        }
+        
+        .dialogue-continue:active {
+            transform: scale(0.95);
+        }
+        
+        #rewardNotification {
+            position: absolute;
+            top: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(180deg, rgba(39,174,96,0.9), rgba(30,130,76,0.9));
+            border: 3px solid #2ecc71;
+            border-radius: 10px;
+            padding: 12px 24px;
+            display: none;
+            z-index: 200;
+            box-shadow: 0 0 25px rgba(46,204,113,0.5);
+        }
+        
+        #rewardNotification.active {
+            display: block;
+            animation: rewardSlide 0.4s ease-out;
+        }
+        
+        @keyframes rewardSlide {
+            0% { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+            100% { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+        
+        #rewardText {
+            color: #fff;
+            font-size: 11px;
+            text-shadow: 0 0 10px #fff;
+        }
+        
+        #gameOver {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            z-index: 1000;
+        }
+        
+        #gameOver h1 {
+            color: #c0392b;
+            font-size: 32px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px #c0392b;
+        }
+        
+        #gameOver p {
+            font-size: 12px;
+            margin: 10px 0;
+        }
+        
+        #restartBtn {
+            margin-top: 30px;
+            padding: 15px 30px;
+            background: #27ae60;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 14px;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 180px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.5);
+            font-size: 8px;
+            text-align: center;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui">
+        <div id="stats">
+            <div class="level">LVL <span id="levelNum">1</span></div>
+            <div>HP</div>
+            <div id="healthBar"><div id="healthFill" style="width: 100%"></div></div>
+            <div>XP</div>
+            <div id="xpBar"><div id="xpFill" style="width: 0%"></div></div>
+            <div class="gold">💰 <span id="goldNum">0</span></div>
+        </div>
+        
+        <div id="killCount">☠ <span id="kills">0</span></div>
+        
+        <div id="bossHealthBar">
+            <div class="boss-name" id="bossName">BOSS</div>
+            <div class="boss-bar"><div class="boss-fill" id="bossFill"></div></div>
+        </div>
+        
+        <div id="dialogueBox">
+            <div class="dialogue-speaker" id="dialogueSpeaker"></div>
+            <div class="dialogue-text" id="dialogueText"></div>
+            <button class="dialogue-continue" id="dialogueContinue">Continue ▸</button>
+        </div>
+        
+        <div id="rewardNotification">
+            <span id="rewardText"></span>
+        </div>
+        
+        <div id="menuBtn">🛒<span class="btn-label">SHOP</span></div>
+        
+        <div id="upgradeMenu">
+            <div id="menuContent">
+                <h2>UPGRADES</h2>
+                <div class="upgrade-item" id="upgrade-magnet">
+                    <div class="upgrade-icon">🧲</div>
+                    <div class="upgrade-info">
+                        <div class="upgrade-name">Magnet</div>
+                        <div class="upgrade-desc">Increase pickup range</div>
+                        <div class="upgrade-level">Level: <span class="lvl">0</span>/8</div>
+                    </div>
+                    <button class="upgrade-btn" data-upgrade="magnet">
+                        <span class="cost">💰 10</span>
+                    </button>
+                </div>
+                <div class="upgrade-item" id="upgrade-swords">
+                    <div class="upgrade-icon">⚔️</div>
+                    <div class="upgrade-info">
+                        <div class="upgrade-name">Ring of Swords</div>
+                        <div class="upgrade-desc">Orbiting swords (100% magic dmg)</div>
+                        <div class="upgrade-level">Level: <span class="lvl">0</span>/8</div>
+                    </div>
+                    <button class="upgrade-btn" data-upgrade="swords">
+                        <span class="cost">💰 50</span>
+                    </button>
+                </div>
+                <div class="upgrade-item" id="upgrade-boom">
+                    <div class="upgrade-icon">💥</div>
+                    <div class="upgrade-info">
+                        <div class="upgrade-name">Boom</div>
+                        <div class="upgrade-desc">8-way blast (100% magic dmg)</div>
+                        <div class="upgrade-level">Level: <span class="lvl">0</span>/30</div>
+                    </div>
+                    <button class="upgrade-btn" data-upgrade="boom">
+                        <span class="cost">💰 30</span>
+                    </button>
+                </div>
+                <div id="boomCooldown">
+                    <div class="cooldown-label">BOOM</div>
+                    <div class="cooldown-bar"><div class="cooldown-fill" id="boomFill"></div></div>
+                </div>
+                <button id="closeMenu">CLOSE</button>
+            </div>
+        </div>
+        
+        <div id="viewArea"></div>
+        
+        <div id="dpad">
+            <div class="dpad-btn" id="dpad-up">▲</div>
+            <div class="dpad-btn" id="dpad-down">▼</div>
+            <div class="dpad-btn" id="dpad-left">◄</div>
+            <div class="dpad-btn" id="dpad-right">►</div>
+        </div>
+        
+        <div id="magicBtn">✦</div>
+        
+        <div id="boomIndicator">💥</div>
+        
+        <div id="instructions">SWIPE TO LOOK • D-PAD TO MOVE • ✦ ATTACK • 🛒 SHOP</div>
+    </div>
+    
+    <div id="damageFlash"></div>
+    <div id="levelUp">LEVEL UP!</div>
+    
+    <div id="gameOver">
+        <h1>GAME OVER</h1>
+        <p>Level Reached: <span id="finalLevel">1</span></p>
+        <p>Enemies Slain: <span id="finalKills">0</span></p>
+        <p>Gold Collected: <span id="finalGold">0</span></p>
+        <button id="restartBtn">RESTART</button>
+    </div>
+
+    <script>
+        // ============================================
+        // GAME CONFIGURATION
+        // ============================================
+        const CONFIG = {
+            renderDistance: 80,
+            fogNear: 30,
+            fogFar: 90,
+            chunkSize: 30,
+            treeDensity: 0.0045,
+            playerSpeed: 0.12,
+            enemyBaseHealth: 30,
+            enemyBaseDamage: 5,
+            baseXpToLevel: 50,
+            projectileBaseSpeed: 0.5,
+            projectileBaseDamage: 15,
+            enemySpawnRadius: 35,
+            enemyMaxCount: 12,
+            enemySpawnInterval: 2000
         };
-        guards.push(guard);
-    }
-    encounterState.encounterGuards = guards;
-    
-    // Create encounter state
-    encounterState.currentEncounter = {
-        template: template,
-        sprite: sprite,
-        position: new THREE.Vector3(x, 0, z),
-        complete: false,
-        rewardGiven: false,
-        npc: null,
-        heartEffect: null,
-        cleanupTimer: undefined
-    };
-    
-    gameState.targetCameraZoom = template.cameraZoom;
-}
 
-// ============================================
-// ENCOUNTER UPDATE
-// ============================================
-function updateEncounter() {
-    if (!encounterState.currentEncounter) return;
-    
-    const enc = encounterState.currentEncounter;
-    const template = enc.template;
-    
-    // Update guards (pause during dialogue)
-    if (gameState.dialogueTimer <= 0) {
-        for (let i = encounterState.encounterGuards.length - 1; i >= 0; i--) {
-            const guard = encounterState.encounterGuards[i];
-            
-            const dx = gameState.player.position.x - guard.sprite.position.x;
-            const dz = gameState.player.position.z - guard.sprite.position.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-            
-            // Move toward player
-            if (dist > 1.5) {
-                guard.sprite.position.x += (dx / dist) * guard.speed;
-                guard.sprite.position.z += (dz / dist) * guard.speed;
-            } else if (guard.attackCooldown <= 0) {
-                takeDamage(guard.damage);
-                guard.attackCooldown = 60;
-            }
-            
-            guard.attackCooldown = Math.max(0, guard.attackCooldown - 1);
-            
-            // Hit flash
-            if (guard.hitFlash > 0) {
-                guard.hitFlash--;
-                guard.sprite.material.color.setHex(guard.hitFlash % 4 < 2 ? 0xffffff : 0xff0000);
-            } else {
-                guard.sprite.material.color.setHex(0xffffff);
-            }
+        // ============================================
+        // PIXEL ART TEXTURE GENERATORS
+        // ============================================
+        function createPixelTexture(width, height, drawFunc) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+            drawFunc(ctx, width, height);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.magFilter = THREE.NearestFilter;
+            texture.minFilter = THREE.NearestFilter;
+            return texture;
         }
-    }
-    
-    // Check if all guards defeated
-    if (encounterState.encounterGuards.length === 0 && !enc.complete) {
-        enc.complete = true;
-        onEncounterComplete(enc, template);
-    }
-    
-    // Handle post-completion behavior
-    if (enc.complete && !enc.rewardGiven) {
-        updateEncounterPostComplete(enc, template);
-    }
-    
-    // Update heart effect
-    if (enc.heartEffect) {
-        enc.heartEffect.position.y += 0.05;
-        enc.heartEffect.material.opacity -= 0.01;
-        if (enc.heartEffect.material.opacity <= 0) {
-            scene.remove(enc.heartEffect);
-            enc.heartEffect = null;
-        }
-    }
-    
-    // Cleanup logic
-    const dx = gameState.player.position.x - enc.position.x;
-    const dz = gameState.player.position.z - enc.position.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    
-    // Timer-based cleanup
-    if (enc.rewardGiven && enc.cleanupTimer !== undefined) {
-        enc.cleanupTimer--;
-        if (enc.cleanupTimer <= 0) {
-            cleanupEncounter();
-            return;
-        }
-    }
-    
-    // Distance-based cleanup (only if reward was given)
-    if (dist > CONFIG.renderDistance * 3 && enc.rewardGiven) {
-        cleanupEncounter();
-    }
-}
 
-function onEncounterComplete(enc, template) {
-    if (template.onComplete === 'spawnNPC' && template.npc) {
-        // Spawn NPC
-        const npcMaterial = new THREE.SpriteMaterial({
-            map: encounterState.textures[template.npc.textureKey],
-            transparent: true
+        function createTreeTexture(type = 0) {
+            return createPixelTexture(32, 64, (ctx, w, h) => {
+                const colors = [
+                    { trunk: '#5d4037', leaves: ['#2e7d32', '#388e3c', '#43a047'] },
+                    { trunk: '#4e342e', leaves: ['#1b5e20', '#2e7d32', '#388e3c'] },
+                    { trunk: '#6d4c41', leaves: ['#558b2f', '#689f38', '#7cb342'] },
+                    { trunk: '#3e2723', leaves: ['#4a148c', '#6a1b9a', '#7b1fa2'] } // Mystic purple tree
+                ];
+                const c = colors[type % colors.length];
+                
+                // Trunk
+                ctx.fillStyle = c.trunk;
+                ctx.fillRect(13, 30, 6, 34);
+                ctx.fillStyle = '#3e2723';
+                ctx.fillRect(14, 30, 2, 34);
+                
+                // Leaves layers
+                const leafPatterns = [
+                    { y: 5, w: 24, h: 14 },
+                    { y: 15, w: 28, h: 12 },
+                    { y: 24, w: 22, h: 10 }
+                ];
+                
+                leafPatterns.forEach((p, i) => {
+                    ctx.fillStyle = c.leaves[i % c.leaves.length];
+                    ctx.fillRect((w - p.w) / 2, p.y, p.w, p.h);
+                    
+                    // Add pixel details
+                    ctx.fillStyle = c.leaves[(i + 1) % c.leaves.length];
+                    for (let j = 0; j < 6; j++) {
+                        const px = (w - p.w) / 2 + Math.random() * p.w;
+                        const py = p.y + Math.random() * p.h;
+                        ctx.fillRect(Math.floor(px), Math.floor(py), 2, 2);
+                    }
+                });
+                
+                // Top
+                ctx.fillStyle = c.leaves[0];
+                ctx.fillRect(12, 0, 8, 6);
+            });
+        }
+
+        function createGrassTexture() {
+            return createPixelTexture(64, 64, (ctx, w, h) => {
+                // Base
+                ctx.fillStyle = '#1a472a';
+                ctx.fillRect(0, 0, w, h);
+                
+                // Grass variation
+                const colors = ['#2d5a3f', '#1e5631', '#174023', '#236b3f'];
+                for (let i = 0; i < 100; i++) {
+                    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                    ctx.fillRect(
+                        Math.floor(Math.random() * w),
+                        Math.floor(Math.random() * h),
+                        2, 2
+                    );
+                }
+                
+                // Small flowers
+                const flowerColors = ['#e91e63', '#ffeb3b', '#03a9f4', '#ff9800'];
+                for (let i = 0; i < 5; i++) {
+                    ctx.fillStyle = flowerColors[Math.floor(Math.random() * flowerColors.length)];
+                    ctx.fillRect(
+                        Math.floor(Math.random() * w),
+                        Math.floor(Math.random() * h),
+                        2, 2
+                    );
+                }
+            });
+        }
+
+        function createRockTexture() {
+            return createPixelTexture(16, 16, (ctx, w, h) => {
+                ctx.fillStyle = '#5d6d7e';
+                ctx.beginPath();
+                ctx.arc(8, 10, 7, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = '#85929e';
+                ctx.fillRect(4, 6, 4, 3);
+                ctx.fillRect(9, 8, 3, 2);
+                
+                ctx.fillStyle = '#34495e';
+                ctx.fillRect(6, 11, 5, 3);
+            });
+        }
+
+        function createMushroomTexture() {
+            return createPixelTexture(16, 24, (ctx, w, h) => {
+                // Stem
+                ctx.fillStyle = '#faf0e6';
+                ctx.fillRect(6, 12, 4, 12);
+                
+                // Cap
+                ctx.fillStyle = '#c0392b';
+                ctx.beginPath();
+                ctx.ellipse(8, 10, 7, 6, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Spots
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(4, 7, 3, 3);
+                ctx.fillRect(9, 5, 2, 2);
+                ctx.fillRect(10, 10, 2, 2);
+            });
+        }
+
+        function createXPOrbTexture() {
+            return createPixelTexture(16, 16, (ctx, w, h) => {
+                // Outer glow
+                ctx.fillStyle = '#9b59b6';
+                ctx.beginPath();
+                ctx.arc(8, 8, 7, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Inner
+                ctx.fillStyle = '#bb8fce';
+                ctx.beginPath();
+                ctx.arc(8, 8, 5, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Shine
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(5, 5, 3, 3);
+            });
+        }
+
+        function createGoldOrbTexture() {
+            return createPixelTexture(16, 16, (ctx, w, h) => {
+                // Outer glow
+                ctx.fillStyle = '#f39c12';
+                ctx.beginPath();
+                ctx.arc(8, 8, 7, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Inner
+                ctx.fillStyle = '#ffd700';
+                ctx.beginPath();
+                ctx.arc(8, 8, 5, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Shine
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(5, 4, 3, 3);
+                
+                // Coin detail
+                ctx.fillStyle = '#d68910';
+                ctx.fillRect(7, 6, 2, 4);
+            });
+        }
+
+        function createSwordTexture() {
+            return createPixelTexture(16, 32, (ctx, w, h) => {
+                // Blade
+                ctx.fillStyle = '#bdc3c7';
+                ctx.fillRect(6, 0, 4, 20);
+                
+                // Blade shine
+                ctx.fillStyle = '#ecf0f1';
+                ctx.fillRect(7, 0, 2, 18);
+                
+                // Blade tip
+                ctx.fillStyle = '#bdc3c7';
+                ctx.beginPath();
+                ctx.moveTo(6, 0);
+                ctx.lineTo(10, 0);
+                ctx.lineTo(8, -4);
+                ctx.fill();
+                
+                // Guard
+                ctx.fillStyle = '#f39c12';
+                ctx.fillRect(2, 20, 12, 3);
+                
+                // Handle
+                ctx.fillStyle = '#8b4513';
+                ctx.fillRect(6, 23, 4, 8);
+                
+                // Pommel
+                ctx.fillStyle = '#f39c12';
+                ctx.fillRect(5, 30, 6, 2);
+            });
+        }
+
+        function createBoomProjectileTexture() {
+            return createPixelTexture(24, 24, (ctx, w, h) => {
+                // Outer fire
+                ctx.fillStyle = '#e74c3c';
+                ctx.beginPath();
+                ctx.arc(12, 12, 11, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Mid fire
+                ctx.fillStyle = '#f39c12';
+                ctx.beginPath();
+                ctx.arc(12, 12, 8, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Inner fire
+                ctx.fillStyle = '#f1c40f';
+                ctx.beginPath();
+                ctx.arc(12, 12, 5, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Core
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(12, 12, 2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        
+
+        // ============================================
+        // GAME STATE
+        // ============================================
+        // NOTE: encounterState is defined in encounters.js (loaded before this script)
+        
+        let gameState = {
+            player: {
+                level: 1,
+                xp: 0,
+                health: 100,
+                maxHealth: 100,
+                position: new THREE.Vector3(0, 0, 0),
+                rotation: 0,
+                gold: 0
+            },
+            upgrades: {
+                magnet: { level: 0, maxLevel: 8, baseCost: 10, costMult: 1.5 },
+                swords: { level: 0, maxLevel: 8, baseCost: 50, costMult: 1.8 },
+                boom: { level: 0, maxLevel: 30, baseCost: 30, costMult: 1.3 }
+            },
+            kills: 0,
+            enemies: [],
+            projectiles: [],
+            xpOrbs: [],
+            goldOrbs: [],
+            swords: [],
+            boomProjectiles: [],
+            boomCooldown: 0,
+            boomMaxCooldown: 30 * 60, // 30 seconds at 60fps
+            bosses: [],
+            bossActive: false,
+            cameraZoom: 1,
+            targetCameraZoom: 1,
+            dialogue: null,
+            dialogueTimer: 0,
+            chunks: new Map(),
+            isGameOver: false,
+            menuOpen: false,
+            hasDharmaWheel: false // Dharma wheel reward from Dharmachakra encounter
+        };
+
+        // ============================================
+        // THREE.JS SETUP
+        // ============================================
+        const canvas = document.getElementById('gameCanvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setClearColor(0x1a1a2e);
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(0x1a1a2e, CONFIG.fogNear, CONFIG.fogFar);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 8, 12);
+        camera.lookAt(0, 0, 0);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404060, 0.6);
+        scene.add(ambientLight);
+
+        const moonLight = new THREE.DirectionalLight(0x8888ff, 0.4);
+        moonLight.position.set(10, 20, 10);
+        scene.add(moonLight);
+
+        // Ground
+        const groundTexture = createGrassTexture();
+        groundTexture.wrapS = THREE.RepeatWrapping;
+        groundTexture.wrapT = THREE.RepeatWrapping;
+        groundTexture.repeat.set(50, 50);
+
+        const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture });
+        const groundGeometry = new THREE.PlaneGeometry(200, 200);
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -0.5;
+        scene.add(ground);
+
+        // Player visual
+        const playerGroup = new THREE.Group();
+        scene.add(playerGroup);
+
+        // Player body (simple pixel character)
+        function createPlayerTexture() {
+            return createPixelTexture(32, 48, (ctx, w, h) => {
+                // Cloak
+                ctx.fillStyle = '#2980b9';
+                ctx.fillRect(8, 16, 16, 24);
+                ctx.fillRect(6, 40, 20, 8);
+                
+                // Head
+                ctx.fillStyle = '#fad7a0';
+                ctx.fillRect(10, 6, 12, 12);
+                
+                // Hair
+                ctx.fillStyle = '#8b4513';
+                ctx.fillRect(10, 4, 12, 6);
+                ctx.fillRect(8, 6, 4, 4);
+                
+                // Eyes
+                ctx.fillStyle = '#3498db';
+                ctx.fillRect(12, 10, 3, 3);
+                ctx.fillRect(17, 10, 3, 3);
+                
+                // Hood
+                ctx.fillStyle = '#1a5276';
+                ctx.fillRect(6, 2, 20, 6);
+                ctx.fillRect(4, 6, 4, 12);
+                ctx.fillRect(24, 6, 4, 12);
+            });
+        }
+
+        const playerTexture = createPlayerTexture();
+        const playerMaterial = new THREE.SpriteMaterial({ map: playerTexture });
+        const playerSprite = new THREE.Sprite(playerMaterial);
+        playerSprite.scale.set(3, 4.5, 1);
+        playerSprite.position.y = 2;
+        playerGroup.add(playerSprite);
+
+        // Compass/navigation line
+        const compassGeometry = new THREE.BufferGeometry();
+        const compassPositions = new Float32Array([0, 0.1, 0, 0, 0.1, -10]);
+        compassGeometry.setAttribute('position', new THREE.BufferAttribute(compassPositions, 3));
+        const compassMaterial = new THREE.LineBasicMaterial({ 
+            color: 0xffd700, 
+            transparent: true, 
+            opacity: 0.6 
         });
-        const npc = new THREE.Sprite(npcMaterial);
-        npc.scale.set(template.npc.scale[0], template.npc.scale[1], 1);
-        npc.position.copy(enc.position);
-        
-        if (template.npc.spawnOffset) {
-            npc.position.x += template.npc.spawnOffset.x;
-            npc.position.z += template.npc.spawnOffset.z;
-        }
-        
-        npc.position.y = template.npc.scale[1] / 2;
-        scene.add(npc);
-        enc.npc = npc;
-    } else if (template.onComplete === 'interactWithStructure') {
-        // Show dialogue hint
-        showDialogue('✨ MAGICAL SWORD', 'Touch the stone to claim your reward!');
-    }
-}
+        const compassLine = new THREE.Line(compassGeometry, compassMaterial);
+        compassLine.visible = false;
+        scene.add(compassLine);
 
-function updateEncounterPostComplete(enc, template) {
-    if (template.npc && template.npc.walksToPlayer && enc.npc) {
-        // NPC walks toward player
-        const dx = gameState.player.position.x - enc.npc.position.x;
-        const dz = gameState.player.position.z - enc.npc.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        
-        if (dist > 2) {
-            enc.npc.position.x += (dx / dist) * 0.06;
-            enc.npc.position.z += (dz / dist) * 0.06;
-        } else if (template.npc.rewardOnContact) {
-            if (template.name === 'princessTower') {
-                // Special case: princess shows heart
-                spawnHeartEffect(enc.npc.position.clone());
-                showDialogue('💕 PRINCESS', '"My hero! Please accept this gift as thanks for saving me!"');
-            } else if (template.npc.dialogue) {
-                showDialogue(template.npc.dialogue.speaker, template.npc.dialogue.text);
+        // ============================================
+        // WORLD GENERATION
+        // ============================================
+        const treeTextures = [
+            createTreeTexture(0),
+            createTreeTexture(1),
+            createTreeTexture(2),
+            createTreeTexture(3)
+        ];
+
+        const rockTexture = createRockTexture();
+        const mushroomTexture = createMushroomTexture();
+
+        function seededRandom(seed) {
+            const x = Math.sin(seed) * 10000;
+            return x - Math.floor(x);
+        }
+
+        function generateChunk(chunkX, chunkZ) {
+            const key = `${chunkX},${chunkZ}`;
+            if (gameState.chunks.has(key)) return;
+
+            const chunkGroup = new THREE.Group();
+            chunkGroup.userData = { chunkX, chunkZ };
+            
+            const baseX = chunkX * CONFIG.chunkSize;
+            const baseZ = chunkZ * CONFIG.chunkSize;
+
+            // Trees
+            for (let i = 0; i < CONFIG.chunkSize * CONFIG.chunkSize * CONFIG.treeDensity; i++) {
+                const seed = chunkX * 10000 + chunkZ * 100 + i;
+                const rand1 = seededRandom(seed);
+                const rand2 = seededRandom(seed + 1);
+                const rand3 = seededRandom(seed + 2);
+                
+                const x = baseX + rand1 * CONFIG.chunkSize;
+                const z = baseZ + rand2 * CONFIG.chunkSize;
+                
+                const treeType = Math.floor(rand3 * treeTextures.length);
+                const treeMaterial = new THREE.SpriteMaterial({ 
+                    map: treeTextures[treeType],
+                    transparent: true
+                });
+                const tree = new THREE.Sprite(treeMaterial);
+                tree.scale.set(4, 8, 1);
+                tree.position.set(x, 3.5, z);
+                chunkGroup.add(tree);
             }
-            giveEncounterReward(enc, template);
-        }
-    } else if (template.onComplete === 'interactWithStructure') {
-        // Check if player is near structure
-        const dx = gameState.player.position.x - enc.position.x;
-        const dz = gameState.player.position.z - enc.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        
-        if (dist < (template.interactionRange || 3)) {
-            if (template.completionDialogue) {
-                showDialogue(template.completionDialogue.speaker, template.completionDialogue.text);
+
+            // Rocks
+            for (let i = 0; i < 3; i++) {
+                const seed = chunkX * 20000 + chunkZ * 200 + i;
+                const rand1 = seededRandom(seed);
+                const rand2 = seededRandom(seed + 1);
+                
+                const x = baseX + rand1 * CONFIG.chunkSize;
+                const z = baseZ + rand2 * CONFIG.chunkSize;
+                
+                const rockMaterial = new THREE.SpriteMaterial({ 
+                    map: rockTexture,
+                    transparent: true
+                });
+                const rock = new THREE.Sprite(rockMaterial);
+                rock.scale.set(1.5, 1.5, 1);
+                rock.position.set(x, 0.3, z);
+                chunkGroup.add(rock);
             }
-            giveEncounterReward(enc, template);
+
+            // Mushrooms
+            for (let i = 0; i < 2; i++) {
+                const seed = chunkX * 30000 + chunkZ * 300 + i;
+                const rand1 = seededRandom(seed);
+                const rand2 = seededRandom(seed + 1);
+                
+                const x = baseX + rand1 * CONFIG.chunkSize;
+                const z = baseZ + rand2 * CONFIG.chunkSize;
+                
+                const mushMaterial = new THREE.SpriteMaterial({ 
+                    map: mushroomTexture,
+                    transparent: true
+                });
+                const mushroom = new THREE.Sprite(mushMaterial);
+                mushroom.scale.set(1, 1.5, 1);
+                mushroom.position.set(x, 0.5, z);
+                chunkGroup.add(mushroom);
+            }
+
+            scene.add(chunkGroup);
+            gameState.chunks.set(key, chunkGroup);
         }
-    }
-}
 
-function spawnHeartEffect(position) {
-    const material = new THREE.SpriteMaterial({
-        map: encounterState.textures.heart,
-        transparent: true
-    });
-    const heart = new THREE.Sprite(material);
-    heart.scale.set(3, 3, 1);
-    heart.position.copy(position);
-    heart.position.y = 4;
-    scene.add(heart);
-    encounterState.currentEncounter.heartEffect = heart;
-}
+        function updateChunks() {
+            const playerChunkX = Math.floor(gameState.player.position.x / CONFIG.chunkSize);
+            const playerChunkZ = Math.floor(gameState.player.position.z / CONFIG.chunkSize);
+            const viewDist = Math.ceil(CONFIG.renderDistance / CONFIG.chunkSize);
 
-function giveEncounterReward(enc, template) {
-    if (enc.rewardGiven) return;
-    
-    enc.rewardGiven = true;
-    enc.cleanupTimer = 30 * 60; // 30 seconds at 60fps
-    
-    const reward = template.reward;
-    
-    if (reward.type === 'upgrade') {
-        const upgrade = gameState.upgrades[reward.upgrade];
-        if (upgrade.level < upgrade.maxLevel) {
-            upgrade.level++;
+            // Generate nearby chunks
+            for (let x = -viewDist; x <= viewDist; x++) {
+                for (let z = -viewDist; z <= viewDist; z++) {
+                    generateChunk(playerChunkX + x, playerChunkZ + z);
+                }
+            }
+
+            // Remove far chunks
+            for (const [key, chunk] of gameState.chunks) {
+                const [cx, cz] = key.split(',').map(Number);
+                const dx = cx - playerChunkX;
+                const dz = cz - playerChunkZ;
+                if (Math.abs(dx) > viewDist + 1 || Math.abs(dz) > viewDist + 1) {
+                    scene.remove(chunk);
+                    gameState.chunks.delete(key);
+                }
+            }
+        }
+
+        // ============================================
+        // PROJECTILE SYSTEM
+        // ============================================
+        function getRainbowColor(level) {
+            const hue = (level * 30) % 360;
+            const color = new THREE.Color();
+            color.setHSL(hue / 360, 1, 0.5);
+            return color;
+        }
+
+        function createProjectileTexture(level) {
+            const size = Math.min(16 + level * 2, 48);
+            return createPixelTexture(size, size, (ctx, w, h) => {
+                const color = getRainbowColor(level);
+                const hex = '#' + color.getHexString();
+                
+                // Outer glow
+                ctx.fillStyle = hex;
+                ctx.beginPath();
+                ctx.arc(w/2, h/2, w/2 - 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Inner bright
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(w/2, h/2, w/4, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Sparkles
+                ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                for (let i = 0; i < 4; i++) {
+                    const angle = (i / 4) * Math.PI * 2;
+                    const r = w/3;
+                    const px = w/2 + Math.cos(angle) * r;
+                    const py = h/2 + Math.sin(angle) * r;
+                    ctx.fillRect(px - 1, py - 1, 2, 2);
+                }
+            });
+        }
+
+        function shootProjectile() {
+            const level = gameState.player.level;
+            const texture = createProjectileTexture(level);
+            const material = new THREE.SpriteMaterial({ 
+                map: texture, 
+                transparent: true,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const size = 1 + level * 0.15;
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(size, size, 1);
+            
+            const startPos = gameState.player.position.clone();
+            startPos.y = 1.5;
+            sprite.position.copy(startPos);
+
+            // Direction based on player rotation
+            const direction = new THREE.Vector3(
+                -Math.sin(gameState.player.rotation),
+                0,
+                -Math.cos(gameState.player.rotation)
+            );
+
+            const projectile = {
+                sprite,
+                direction,
+                speed: CONFIG.projectileBaseSpeed + level * 0.02,
+                damage: CONFIG.projectileBaseDamage * (1 + level * 0.5),
+                life: 120
+            };
+
+            scene.add(sprite);
+            gameState.projectiles.push(projectile);
+        }
+
+        function updateProjectiles() {
+            for (let i = gameState.projectiles.length - 1; i >= 0; i--) {
+                const proj = gameState.projectiles[i];
+                
+                proj.sprite.position.x += proj.direction.x * proj.speed;
+                proj.sprite.position.z += proj.direction.z * proj.speed;
+                proj.life--;
+
+                // Rotate for effect
+                proj.sprite.material.rotation += 0.1;
+
+                let hitSomething = false;
+
+                // Check collision with enemies
+                for (let j = gameState.enemies.length - 1; j >= 0; j--) {
+                    const enemy = gameState.enemies[j];
+                    const dx = proj.sprite.position.x - enemy.sprite.position.x;
+                    const dz = proj.sprite.position.z - enemy.sprite.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+
+                    if (dist < 1.5) {
+                        enemy.health -= proj.damage;
+                        enemy.hitFlash = 10;
+
+                        if (enemy.health <= 0) {
+                            // Drop XP
+                            spawnXPOrb(enemy.sprite.position.clone(), enemy.type.xp);
+                            // Maybe drop gold
+                            if (Math.random() < enemy.type.goldChance && enemy.type.gold > 0) {
+                                spawnGoldOrb(enemy.sprite.position.clone(), enemy.type.gold);
+                            }
+                            scene.remove(enemy.sprite);
+                            gameState.enemies.splice(j, 1);
+                            gameState.kills++;
+                            document.getElementById('kills').textContent = gameState.kills;
+                        }
+
+                        hitSomething = true;
+                        break;
+                    }
+                }
+
+                // Check collision with encounter guards
+                if (!hitSomething) {
+                    for (const guard of encounterState.encounterGuards) {
+                        const dx = proj.sprite.position.x - guard.sprite.position.x;
+                        const dz = proj.sprite.position.z - guard.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+
+                        if (dist < 1.5) {
+                            damageEncounterGuard(guard, proj.damage);
+                            hitSomething = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // Check collision with forest cloud sprites (near portal)
+                if (!hitSomething && encounterState.forestCloudSprites) {
+                    for (const cloudSprite of encounterState.forestCloudSprites) {
+                        const dx = proj.sprite.position.x - cloudSprite.sprite.position.x;
+                        const dz = proj.sprite.position.z - cloudSprite.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+
+                        if (dist < 1.5) {
+                            cloudSprite.health -= proj.damage;
+                            cloudSprite.hitFlash = 10;
+                            hitSomething = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // Check collision with monster store slimes (if slime companion system loaded)
+                if (!hitSomething && typeof slimeCompanionState !== 'undefined' && slimeCompanionState.storeSlimes) {
+                    for (const storeSlime of slimeCompanionState.storeSlimes) {
+                        const dx = proj.sprite.position.x - storeSlime.sprite.position.x;
+                        const dz = proj.sprite.position.z - storeSlime.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+
+                        if (dist < 1.5) {
+                            if (typeof damageStoreSlime === 'function') {
+                                damageStoreSlime(storeSlime, proj.damage);
+                            }
+                            hitSomething = true;
+                            break;
+                        }
+                    }
+                }
+
+                // Check collision with bosses
+                if (!hitSomething) {
+                    for (const boss of gameState.bosses) {
+                        const dx = proj.sprite.position.x - boss.sprite.position.x;
+                        const dz = proj.sprite.position.z - boss.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+
+                        if (dist < 4) {
+                            boss.health -= proj.damage;
+                            boss.hitFlash = 10;
+                            hitSomething = true;
+                            break;
+                        }
+                    }
+                }
+
+                // Check collision with cloud arena enemies
+                if (!hitSomething && encounterState.inCloudArena) {
+                    hitSomething = checkArenaProjectileHits(proj.sprite.position, proj.damage);
+                }
+
+                if (hitSomething || proj.life <= 0) {
+                    scene.remove(proj.sprite);
+                    gameState.projectiles.splice(i, 1);
+                }
+            }
+        }
+
+        // ============================================
+        // XP SYSTEM
+        // ============================================
+        const xpOrbTexture = createXPOrbTexture();
+        const goldOrbTexture = createGoldOrbTexture();
+
+        function getPickupRange() {
+            const baseRange = 2;
+            const magnetBonus = gameState.upgrades.magnet.level * 1.5;
+            return baseRange + magnetBonus;
+        }
+
+        function spawnXPOrb(position, amount) {
+            const material = new THREE.SpriteMaterial({ 
+                map: xpOrbTexture, 
+                transparent: true 
+            });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(1, 1, 1);
+            sprite.position.copy(position);
+            sprite.position.y = 0.5;
+
+            const orb = {
+                sprite,
+                amount,
+                bobOffset: Math.random() * Math.PI * 2
+            };
+
+            scene.add(sprite);
+            gameState.xpOrbs.push(orb);
+        }
+
+        function spawnGoldOrb(position, amount) {
+            const material = new THREE.SpriteMaterial({ 
+                map: goldOrbTexture, 
+                transparent: true 
+            });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(1.2, 1.2, 1);
+            sprite.position.copy(position);
+            sprite.position.y = 0.5;
+            // Offset slightly from XP orb
+            sprite.position.x += (Math.random() - 0.5) * 1.5;
+            sprite.position.z += (Math.random() - 0.5) * 1.5;
+
+            const orb = {
+                sprite,
+                amount,
+                bobOffset: Math.random() * Math.PI * 2
+            };
+
+            scene.add(sprite);
+            gameState.goldOrbs.push(orb);
+        }
+
+        function updateXPOrbs() {
+            const time = Date.now() * 0.003;
+            const pickupRange = getPickupRange();
+            
+            for (let i = gameState.xpOrbs.length - 1; i >= 0; i--) {
+                const orb = gameState.xpOrbs[i];
+                
+                // Bob up and down
+                orb.sprite.position.y = 0.5 + Math.sin(time + orb.bobOffset) * 0.2;
+
+                // Check pickup
+                const dx = gameState.player.position.x - orb.sprite.position.x;
+                const dz = gameState.player.position.z - orb.sprite.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+
+                // Magnet pull effect
+                if (dist < pickupRange * 2 && gameState.upgrades.magnet.level > 0) {
+                    const pullSpeed = 0.05 + gameState.upgrades.magnet.level * 0.02;
+                    orb.sprite.position.x += (dx / dist) * pullSpeed;
+                    orb.sprite.position.z += (dz / dist) * pullSpeed;
+                }
+
+                if (dist < pickupRange) {
+                    gainXP(orb.amount);
+                    scene.remove(orb.sprite);
+                    gameState.xpOrbs.splice(i, 1);
+                }
+
+                // Remove if too far
+                if (dist > CONFIG.renderDistance * 2) {
+                    scene.remove(orb.sprite);
+                    gameState.xpOrbs.splice(i, 1);
+                }
+            }
+        }
+
+        function updateGoldOrbs() {
+            const time = Date.now() * 0.003;
+            const pickupRange = getPickupRange();
+            
+            for (let i = gameState.goldOrbs.length - 1; i >= 0; i--) {
+                const orb = gameState.goldOrbs[i];
+                
+                // Bob and spin
+                orb.sprite.position.y = 0.6 + Math.sin(time + orb.bobOffset) * 0.15;
+                orb.sprite.material.rotation = time * 2;
+
+                // Check pickup
+                const dx = gameState.player.position.x - orb.sprite.position.x;
+                const dz = gameState.player.position.z - orb.sprite.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+
+                // Magnet pull effect
+                if (dist < pickupRange * 2 && gameState.upgrades.magnet.level > 0) {
+                    const pullSpeed = 0.05 + gameState.upgrades.magnet.level * 0.02;
+                    orb.sprite.position.x += (dx / dist) * pullSpeed;
+                    orb.sprite.position.z += (dz / dist) * pullSpeed;
+                }
+
+                if (dist < pickupRange) {
+                    gainGold(orb.amount);
+                    scene.remove(orb.sprite);
+                    gameState.goldOrbs.splice(i, 1);
+                }
+
+                // Remove if too far
+                if (dist > CONFIG.renderDistance * 2) {
+                    scene.remove(orb.sprite);
+                    gameState.goldOrbs.splice(i, 1);
+                }
+            }
+        }
+
+        function gainGold(amount) {
+            gameState.player.gold += amount;
+            document.getElementById('goldNum').textContent = gameState.player.gold;
+            updateUpgradeMenu();
+        }
+
+        // ============================================
+        // RING OF SWORDS SYSTEM
+        // ============================================
+        const swordTexture = createSwordTexture();
+
+        function updateSwordCount() {
+            const targetCount = gameState.upgrades.swords.level;
+            
+            // Remove excess swords
+            while (gameState.swords.length > targetCount) {
+                const sword = gameState.swords.pop();
+                scene.remove(sword.sprite);
+            }
+            
+            // Add new swords
+            while (gameState.swords.length < targetCount) {
+                const material = new THREE.SpriteMaterial({ 
+                    map: swordTexture, 
+                    transparent: true 
+                });
+                const sprite = new THREE.Sprite(material);
+                sprite.scale.set(1.2, 2.4, 1);
+                
+                const sword = {
+                    sprite,
+                    angle: (gameState.swords.length / targetCount) * Math.PI * 2,
+                    hitCooldowns: new Map() // Track hit cooldowns per enemy
+                };
+                
+                scene.add(sprite);
+                gameState.swords.push(sword);
+            }
+            
+            // Redistribute angles evenly
+            gameState.swords.forEach((sword, i) => {
+                sword.angle = (i / gameState.swords.length) * Math.PI * 2;
+            });
+        }
+
+        function updateSwords() {
+            if (gameState.swords.length === 0) return;
+            
+            const orbitRadius = 3;
+            const orbitSpeed = 0.03;
+            const swordDamage = CONFIG.projectileBaseDamage * (1 + gameState.player.level * 0.25) * 1.0;
+            
+            gameState.swords.forEach((sword, i) => {
+                sword.angle += orbitSpeed;
+                
+                const x = gameState.player.position.x + Math.cos(sword.angle) * orbitRadius;
+                const z = gameState.player.position.z + Math.sin(sword.angle) * orbitRadius;
+                
+                sword.sprite.position.set(x, 1.5, z);
+                sword.sprite.material.rotation = -sword.angle + Math.PI / 2;
+                
+                // Check collision with enemies
+                for (const enemy of gameState.enemies) {
+                    const dx = sword.sprite.position.x - enemy.sprite.position.x;
+                    const dz = sword.sprite.position.z - enemy.sprite.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (dist < 1.5) {
+                        // Check hit cooldown for this enemy
+                        const lastHit = sword.hitCooldowns.get(enemy) || 0;
+                        const now = Date.now();
+                        
+                        if (now - lastHit > 500) { // 500ms cooldown per enemy
+                            enemy.health -= swordDamage;
+                            enemy.hitFlash = 10;
+                            sword.hitCooldowns.set(enemy, now);
+                            
+                            if (enemy.health <= 0) {
+                                spawnXPOrb(enemy.sprite.position.clone(), enemy.type.xp);
+                                if (Math.random() < enemy.type.goldChance && enemy.type.gold > 0) {
+                                    spawnGoldOrb(enemy.sprite.position.clone(), enemy.type.gold);
+                                }
+                                scene.remove(enemy.sprite);
+                                const idx = gameState.enemies.indexOf(enemy);
+                                if (idx > -1) gameState.enemies.splice(idx, 1);
+                                gameState.kills++;
+                                document.getElementById('kills').textContent = gameState.kills;
+                            }
+                        }
+                    }
+                }
+                
+                // Check collision with bosses
+                for (const boss of gameState.bosses) {
+                    const dx = sword.sprite.position.x - boss.sprite.position.x;
+                    const dz = sword.sprite.position.z - boss.sprite.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (dist < 4) {
+                        const lastHit = sword.hitCooldowns.get(boss) || 0;
+                        const now = Date.now();
+                        
+                        if (now - lastHit > 500) {
+                            boss.health -= swordDamage;
+                            boss.hitFlash = 10;
+                            sword.hitCooldowns.set(boss, now);
+                        }
+                    }
+                }
+                
+                // Check collision with encounter guards
+                for (const guard of encounterState.encounterGuards) {
+                    const dx = sword.sprite.position.x - guard.sprite.position.x;
+                    const dz = sword.sprite.position.z - guard.sprite.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (dist < 1.5) {
+                        const lastHit = sword.hitCooldowns.get(guard) || 0;
+                        const now = Date.now();
+                        
+                        if (now - lastHit > 500) {
+                            damageEncounterGuard(guard, swordDamage);
+                            sword.hitCooldowns.set(guard, now);
+                        }
+                    }
+                }
+                
+                // Check collision with forest cloud sprites
+                if (encounterState.forestCloudSprites) {
+                    for (const cloudSprite of encounterState.forestCloudSprites) {
+                        const dx = sword.sprite.position.x - cloudSprite.sprite.position.x;
+                        const dz = sword.sprite.position.z - cloudSprite.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist < 2) {
+                            const lastHit = sword.hitCooldowns.get(cloudSprite) || 0;
+                            const now = Date.now();
+                            
+                            if (now - lastHit > 500) {
+                                cloudSprite.health -= swordDamage;
+                                cloudSprite.hitFlash = 10;
+                                sword.hitCooldowns.set(cloudSprite, now);
+                            }
+                        }
+                    }
+                }
+                
+                // Check collision with monster store slimes
+                if (typeof slimeCompanionState !== 'undefined' && slimeCompanionState.storeSlimes) {
+                    for (const storeSlime of slimeCompanionState.storeSlimes) {
+                        const dx = sword.sprite.position.x - storeSlime.sprite.position.x;
+                        const dz = sword.sprite.position.z - storeSlime.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist < 1.5) {
+                            const lastHit = sword.hitCooldowns.get(storeSlime) || 0;
+                            const now = Date.now();
+                            
+                            if (now - lastHit > 500) {
+                                if (typeof damageStoreSlime === 'function') {
+                                    damageStoreSlime(storeSlime, swordDamage);
+                                }
+                                sword.hitCooldowns.set(storeSlime, now);
+                            }
+                        }
+                    }
+                }
+                
+                // Check collision with arena bosses
+                if (encounterState.inCloudArena) {
+                    for (const boss of encounterState.arenaBosses) {
+                        const dx = sword.sprite.position.x - boss.sprite.position.x;
+                        const dz = sword.sprite.position.z - boss.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist < 5) {
+                            const lastHit = sword.hitCooldowns.get(boss) || 0;
+                            const now = Date.now();
+                            
+                            if (now - lastHit > 500) {
+                                boss.health -= swordDamage;
+                                boss.hitFlash = 10;
+                                sword.hitCooldowns.set(boss, now);
+                            }
+                        }
+                    }
+                    
+                    // Check collision with arena enemies
+                    for (const enemy of encounterState.arenaEnemies) {
+                        const dx = sword.sprite.position.x - enemy.sprite.position.x;
+                        const dz = sword.sprite.position.z - enemy.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist < 2) {
+                            const lastHit = sword.hitCooldowns.get(enemy) || 0;
+                            const now = Date.now();
+                            
+                            if (now - lastHit > 500) {
+                                enemy.health -= swordDamage;
+                                enemy.hitFlash = 10;
+                                sword.hitCooldowns.set(enemy, now);
+                            }
+                        }
+                    }
+                }
+                
+                // Clean up old cooldown entries
+                for (const [target, time] of sword.hitCooldowns) {
+                    const isValidTarget = gameState.enemies.includes(target) || 
+                        gameState.bosses.includes(target) || 
+                        encounterState.encounterGuards.includes(target) || 
+                        encounterState.arenaBosses.includes(target) || 
+                        encounterState.arenaEnemies.includes(target) ||
+                        (encounterState.forestCloudSprites && encounterState.forestCloudSprites.includes(target)) ||
+                        (typeof slimeCompanionState !== 'undefined' && slimeCompanionState.storeSlimes && slimeCompanionState.storeSlimes.includes(target));
+                    if (!isValidTarget) {
+                        sword.hitCooldowns.delete(target);
+                    }
+                }
+            });
+        }
+
+        // ============================================
+        // BOOM ABILITY SYSTEM
+        // ============================================
+        const boomProjectileTexture = createBoomProjectileTexture();
+
+        function getBoomCooldown() {
+            const baseCooldown = 30 * 60; // 30 seconds at 60fps
+            const reduction = gameState.upgrades.boom.level * 0.025; // 2.5% per level
+            return Math.max(baseCooldown * (1 - reduction), 60 * 3); // Min 3 seconds
+        }
+
+        function getBoomDamage() {
+            const baseDamage = CONFIG.projectileBaseDamage * (1 + gameState.player.level * 0.25) * 1.0;
+            const bonus = 1 + gameState.upgrades.boom.level * 0.05; // 5% per level
+            return baseDamage * bonus;
+        }
+
+        function fireBoom() {
+            if (gameState.upgrades.boom.level === 0) return;
+            if (gameState.boomCooldown > 0) return;
+            if (gameState.dialogueTimer > 0) return; // Disable during dialogue
+            
+            const damage = getBoomDamage();
+            
+            // Fire in 8 directions
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                
+                const material = new THREE.SpriteMaterial({ 
+                    map: boomProjectileTexture, 
+                    transparent: true,
+                    blending: THREE.AdditiveBlending
+                });
+                
+                const sprite = new THREE.Sprite(material);
+                sprite.scale.set(2, 2, 1);
+                sprite.position.copy(gameState.player.position);
+                sprite.position.y = 1.5;
+                
+                const projectile = {
+                    sprite,
+                    direction: new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)),
+                    speed: 0.3,
+                    damage: damage,
+                    life: 180
+                };
+                
+                scene.add(sprite);
+                gameState.boomProjectiles.push(projectile);
+            }
+            
+            gameState.boomCooldown = getBoomCooldown();
+            gameState.boomMaxCooldown = getBoomCooldown();
+            updateBoomIndicator();
+        }
+
+        function updateBoomProjectiles() {
+            for (let i = gameState.boomProjectiles.length - 1; i >= 0; i--) {
+                const proj = gameState.boomProjectiles[i];
+                
+                proj.sprite.position.x += proj.direction.x * proj.speed;
+                proj.sprite.position.z += proj.direction.z * proj.speed;
+                proj.life--;
+                
+                // Pulsing effect
+                const pulse = 1 + Math.sin(Date.now() * 0.01) * 0.2;
+                proj.sprite.scale.set(2 * pulse, 2 * pulse, 1);
+                proj.sprite.material.rotation += 0.05;
+                
+                // Check collision with enemies
+                for (let j = gameState.enemies.length - 1; j >= 0; j--) {
+                    const enemy = gameState.enemies[j];
+                    const dx = proj.sprite.position.x - enemy.sprite.position.x;
+                    const dz = proj.sprite.position.z - enemy.sprite.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (dist < 2) {
+                        enemy.health -= proj.damage;
+                        enemy.hitFlash = 10;
+                        
+                        if (enemy.health <= 0) {
+                            spawnXPOrb(enemy.sprite.position.clone(), enemy.type.xp);
+                            if (Math.random() < enemy.type.goldChance && enemy.type.gold > 0) {
+                                spawnGoldOrb(enemy.sprite.position.clone(), enemy.type.gold);
+                            }
+                            scene.remove(enemy.sprite);
+                            gameState.enemies.splice(j, 1);
+                            gameState.kills++;
+                            document.getElementById('kills').textContent = gameState.kills;
+                        }
+                        
+                        // Boom projectiles pass through enemies
+                    }
+                }
+                
+                // Check collision with encounter guards
+                for (const guard of encounterState.encounterGuards) {
+                    const dx = proj.sprite.position.x - guard.sprite.position.x;
+                    const dz = proj.sprite.position.z - guard.sprite.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (dist < 2) {
+                        damageEncounterGuard(guard, proj.damage);
+                        // Boom passes through
+                    }
+                }
+                
+                // Check collision with forest cloud sprites
+                if (encounterState.forestCloudSprites) {
+                    for (const cloudSprite of encounterState.forestCloudSprites) {
+                        const dx = proj.sprite.position.x - cloudSprite.sprite.position.x;
+                        const dz = proj.sprite.position.z - cloudSprite.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist < 2) {
+                            cloudSprite.health -= proj.damage;
+                            cloudSprite.hitFlash = 10;
+                            // Boom passes through
+                        }
+                    }
+                }
+                
+                // Check collision with monster store slimes
+                if (typeof slimeCompanionState !== 'undefined' && slimeCompanionState.storeSlimes) {
+                    for (const storeSlime of slimeCompanionState.storeSlimes) {
+                        const dx = proj.sprite.position.x - storeSlime.sprite.position.x;
+                        const dz = proj.sprite.position.z - storeSlime.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist < 2) {
+                            if (typeof damageStoreSlime === 'function') {
+                                damageStoreSlime(storeSlime, proj.damage);
+                            }
+                            // Boom passes through
+                        }
+                    }
+                }
+                
+                // Check collision with bosses
+                for (const boss of gameState.bosses) {
+                    const dx = proj.sprite.position.x - boss.sprite.position.x;
+                    const dz = proj.sprite.position.z - boss.sprite.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (dist < 4) {
+                        boss.health -= proj.damage;
+                        boss.hitFlash = 10;
+                        // Boom projectiles pass through
+                    }
+                }
+                
+                // Check collision with arena bosses
+                if (encounterState.inCloudArena) {
+                    for (const boss of encounterState.arenaBosses) {
+                        const dx = proj.sprite.position.x - boss.sprite.position.x;
+                        const dz = proj.sprite.position.z - boss.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist < 5) {
+                            boss.health -= proj.damage;
+                            boss.hitFlash = 10;
+                            // Boom passes through
+                        }
+                    }
+                    
+                    // Check collision with arena enemies
+                    for (const enemy of encounterState.arenaEnemies) {
+                        const dx = proj.sprite.position.x - enemy.sprite.position.x;
+                        const dz = proj.sprite.position.z - enemy.sprite.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist < 2) {
+                            enemy.health -= proj.damage;
+                            enemy.hitFlash = 10;
+                            // Boom passes through
+                        }
+                    }
+                }
+                
+                if (proj.life <= 0) {
+                    scene.remove(proj.sprite);
+                    gameState.boomProjectiles.splice(i, 1);
+                }
+            }
+        }
+
+        function updateBoomCooldown() {
+            if (gameState.boomCooldown > 0) {
+                gameState.boomCooldown--;
+                updateBoomIndicator();
+            }
+        }
+
+        function updateBoomIndicator() {
+            const indicator = document.getElementById('boomIndicator');
+            const fill = document.getElementById('boomFill');
+            
+            if (gameState.upgrades.boom.level === 0) {
+                indicator.style.display = 'none';
+                return;
+            }
+            
+            indicator.style.display = 'flex';
+            
+            if (gameState.boomCooldown <= 0) {
+                indicator.classList.add('ready');
+            } else {
+                indicator.classList.remove('ready');
+            }
+            
+            const cooldownPercent = ((gameState.boomMaxCooldown - gameState.boomCooldown) / gameState.boomMaxCooldown) * 100;
+            fill.style.width = cooldownPercent + '%';
+        }
+
+        // ============================================
+        // BOSS SYSTEM (now in bosses.js)
+        // ============================================
+        // bossTextures will be initialized by bosses.js
+        // NOTE: shouldSpawnEncounter is now in encounters.js
+
+        function gainXP(amount) {
+            gameState.player.xp += amount;
+            const xpNeeded = CONFIG.baseXpToLevel * Math.pow(1.5, gameState.player.level - 1);
+            
+            if (gameState.player.xp >= xpNeeded) {
+                gameState.player.xp -= xpNeeded;
+                gameState.player.level++;
+                gameState.player.maxHealth = 100 + gameState.player.level * 10;
+                gameState.player.health = gameState.player.maxHealth;
+                
+                document.getElementById('levelNum').textContent = gameState.player.level;
+                
+                // Level up animation
+                const levelUpEl = document.getElementById('levelUp');
+                levelUpEl.style.animation = 'none';
+                levelUpEl.offsetHeight; // Trigger reflow
+                levelUpEl.style.animation = 'levelUpAnim 1.5s ease-out forwards';
+            }
+
+            updateUI();
+        }
+
+        // ============================================
+        // PLAYER DAMAGE
+        // ============================================
+        function takeDamage(amount) {
+            if (gameState.isGameOver) return;
+            
+            gameState.player.health -= amount;
+            
+            // Flash effect
+            const flash = document.getElementById('damageFlash');
+            flash.style.opacity = '1';
+            setTimeout(() => flash.style.opacity = '0', 100);
+
+            if (gameState.player.health <= 0) {
+                gameOver();
+            }
+
+            updateUI();
+        }
+
+        function gameOver() {
+            gameState.isGameOver = true;
+            document.getElementById('finalLevel').textContent = gameState.player.level;
+            document.getElementById('finalKills').textContent = gameState.kills;
+            document.getElementById('finalGold').textContent = gameState.player.gold;
+            document.getElementById('gameOver').style.display = 'flex';
+        }
+
+        function restartGame() {
+            // Clear enemies
+            gameState.enemies.forEach(e => scene.remove(e.sprite));
+            gameState.enemies = [];
+
+            // Clear projectiles
+            gameState.projectiles.forEach(p => scene.remove(p.sprite));
+            gameState.projectiles = [];
+
+            // Clear XP orbs
+            gameState.xpOrbs.forEach(o => scene.remove(o.sprite));
+            gameState.xpOrbs = [];
+
+            // Clear gold orbs
+            gameState.goldOrbs.forEach(o => scene.remove(o.sprite));
+            gameState.goldOrbs = [];
+
+            // Clear swords
+            gameState.swords.forEach(s => scene.remove(s.sprite));
+            gameState.swords = [];
+
+            // Clear boom projectiles
+            gameState.boomProjectiles.forEach(p => scene.remove(p.sprite));
+            gameState.boomProjectiles = [];
+
+            // Clear bosses
+            gameState.bosses.forEach(b => {
+                scene.remove(b.sprite);
+                if (b.club) scene.remove(b.club);
+                b.projectiles.forEach(p => scene.remove(p.sprite));
+            });
+            gameState.bosses = [];
+
+            // Clear encounters
+            if (encounterState.currentEncounter) {
+                cleanupEncounter();
+            }
+            encounterState.encounterGuards.forEach(g => scene.remove(g.sprite));
+            encounterState.encounterGuards = [];
+
+            // Clear treasure chests
+            encounterState.treasureChests.forEach(c => scene.remove(c.sprite));
+            encounterState.treasureChests = [];
+            
+            // Reset encounter system (if loaded)
+            if (typeof resetEncounterSystem === 'function') {
+                resetEncounterSystem();
+            }
+            
+            // Reset slime companion system (if loaded)
+            if (typeof resetSlimeCompanion === 'function') {
+                resetSlimeCompanion();
+            }
+
+            // Reset player
+            gameState.player = {
+                level: 1,
+                xp: 0,
+                health: 100,
+                maxHealth: 100,
+                position: new THREE.Vector3(0, 0, 0),
+                rotation: 0,
+                gold: 0
+            };
+
+            // Reset upgrades
+            gameState.upgrades = {
+                magnet: { level: 0, maxLevel: 8, baseCost: 10, costMult: 1.5 },
+                swords: { level: 0, maxLevel: 8, baseCost: 50, costMult: 1.8 },
+                boom: { level: 0, maxLevel: 30, baseCost: 30, costMult: 1.3 }
+            };
+
+            gameState.kills = 0;
+            gameState.boomCooldown = 0;
+            gameState.bossActive = false;
+            gameState.cameraZoom = 1;
+            gameState.targetCameraZoom = 1;
+            gameState.hasDharmaWheel = false;
+            encounterState.currentEncounter = null;
+            encounterState.currentEncounterComplete = false;
+            gameState.dialogue = null;
+            gameState.dialogueTimer = 0;
+            gameState.isGameOver = false;
+            gameState.menuOpen = false;
+            
+            // Reset cloud arena state
+            if (encounterState.inCloudArena) {
+                // Restore forest environment
+                ground.material = savedGroundMaterial;
+                scene.fog.color.setHex(savedFogColor);
+                renderer.setClearColor(savedFogColor);
+            }
+            cleanupPortal();
+            gameState.cloudArena = null;
+            encounterState.cloudPortal = null;
+            encounterState.inCloudArena = false;
+            encounterState.arenaBosses.forEach(b => scene.remove(b.sprite));
+            encounterState.arenaBosses = [];
+            encounterState.arenaEnemies.forEach(e => scene.remove(e.sprite));
+            encounterState.arenaEnemies = [];
+            gameState.savedForestPosition = null;
+            encounterState.arenaStage = 0;
+            encounterState.storyEncounterStage = 0;
+            encounterState.pendingArenaExit = false;
+
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('levelNum').textContent = '1';
+            document.getElementById('kills').textContent = '0';
+            document.getElementById('goldNum').textContent = '0';
+            document.getElementById('boomIndicator').style.display = 'none';
+            document.getElementById('boomCooldown').classList.remove('active');
+            hideDialogue();
+            
+            updateUI();
+            updateUpgradeMenu();
+        }
+
+        function updateUI() {
+            const healthPercent = (gameState.player.health / gameState.player.maxHealth) * 100;
+            document.getElementById('healthFill').style.width = healthPercent + '%';
+
+            const xpNeeded = CONFIG.baseXpToLevel * Math.pow(1.5, gameState.player.level - 1);
+            const xpPercent = (gameState.player.xp / xpNeeded) * 100;
+            document.getElementById('xpFill').style.width = xpPercent + '%';
+            
+            document.getElementById('goldNum').textContent = gameState.player.gold;
+        }
+
+        // ============================================
+        // DIALOGUE SYSTEM
+        // ============================================
+        function showDialogue(speaker, text) {
+            document.getElementById('dialogueSpeaker').textContent = speaker;
+            document.getElementById('dialogueText').textContent = text;
+            document.getElementById('dialogueBox').classList.add('active');
+            
+            gameState.dialogueTimer = 99999; // Keep paused until button clicked
+        }
+
+        function hideDialogue() {
+            document.getElementById('dialogueBox').classList.remove('active');
+            gameState.dialogueTimer = 0;
+            
+            // Check if we need to exit cloud arena after this dialogue
+            if (typeof checkPendingArenaExit === 'function') {
+                checkPendingArenaExit();
+            }
+        }
+
+        function setupDialogueButton() {
+            const btn = document.getElementById('dialogueContinue');
+            btn.addEventListener('click', hideDialogue);
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                hideDialogue();
+            });
+        }
+
+        function showReward(text) {
+            document.getElementById('rewardText').textContent = text;
+            document.getElementById('rewardNotification').classList.add('active');
+            
+            setTimeout(() => {
+                document.getElementById('rewardNotification').classList.remove('active');
+            }, 3000);
+        }
+
+        function updateDialogue() {
+            // Dialogue is now dismissed by button click
+            // This function just keeps the timer active for mob pausing
+        }
+
+        // ============================================
+        // COMPASS SYSTEM
+        // ============================================
+        function updateCompass() {
+            let target = null;
+            let targetType = null;
+
+            // Priority: active encounter > boss
+            if (encounterState.currentEncounter && !encounterState.currentEncounter.rewardGiven) {
+                target = encounterState.currentEncounter.position;
+                targetType = 'encounter';
+            } else if (gameState.bosses.length > 0) {
+                target = gameState.bosses[0].sprite.position;
+                targetType = 'boss';
+            }
+
+            if (target) {
+                compassLine.visible = true;
+                
+                // Calculate direction to target
+                const dx = target.x - gameState.player.position.x;
+                const dz = target.z - gameState.player.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist > 5) {
+                    // Normalize and scale the line length
+                    const lineLength = Math.min(8, dist * 0.15);
+                    
+                    // Update line positions
+                    const positions = compassLine.geometry.attributes.position.array;
+                    // Start point (near player)
+                    positions[0] = gameState.player.position.x + (dx / dist) * 2;
+                    positions[1] = 0.2;
+                    positions[2] = gameState.player.position.z + (dz / dist) * 2;
+                    // End point (towards target)
+                    positions[3] = gameState.player.position.x + (dx / dist) * (2 + lineLength);
+                    positions[4] = 0.2;
+                    positions[5] = gameState.player.position.z + (dz / dist) * (2 + lineLength);
+                    
+                    compassLine.geometry.attributes.position.needsUpdate = true;
+                    
+                    // Color based on target type
+                    if (targetType === 'encounter') {
+                        compassMaterial.color.setHex(0x2ecc71); // Green for positive
+                    } else {
+                        compassMaterial.color.setHex(0xe74c3c); // Red for boss
+                    }
+                    
+                    // Pulse opacity
+                    const pulse = 0.4 + Math.sin(Date.now() * 0.005) * 0.3;
+                    compassMaterial.opacity = pulse;
+                } else {
+                    compassLine.visible = false;
+                }
+            } else {
+                compassLine.visible = false;
+            }
+        }
+
+        // ============================================
+        // UPGRADE MENU SYSTEM
+        // ============================================
+        function getUpgradeCost(upgradeKey) {
+            const upgrade = gameState.upgrades[upgradeKey];
+            return Math.floor(upgrade.baseCost * Math.pow(upgrade.costMult, upgrade.level));
+        }
+
+        function canAffordUpgrade(upgradeKey) {
+            return gameState.player.gold >= getUpgradeCost(upgradeKey);
+        }
+
+        function isUpgradeMaxed(upgradeKey) {
+            const upgrade = gameState.upgrades[upgradeKey];
+            return upgrade.level >= upgrade.maxLevel;
+        }
+
+        function purchaseUpgrade(upgradeKey) {
+            if (isUpgradeMaxed(upgradeKey) || !canAffordUpgrade(upgradeKey)) return;
+            
+            const cost = getUpgradeCost(upgradeKey);
+            gameState.player.gold -= cost;
+            gameState.upgrades[upgradeKey].level++;
             
             // Apply upgrade effects
-            if (reward.upgrade === 'swords') {
+            if (upgradeKey === 'swords') {
                 updateSwordCount();
-            } else if (reward.upgrade === 'boom') {
+            } else if (upgradeKey === 'boom') {
                 updateBoomIndicator();
                 document.getElementById('boomCooldown').classList.add('active');
             }
             
-            showReward(reward.text);
+            updateUI();
             updateUpgradeMenu();
-        } else {
-            // Already maxed - give gold
-            const goldReward = 1000;
-            gameState.player.gold += goldReward;
-            document.getElementById('goldNum').textContent = gameState.player.gold;
-            showReward(`💰 ${goldReward} GOLD (Upgrade already maxed!)`);
         }
-    }
-    
-    gameState.targetCameraZoom = 1;
-}
 
-function cleanupEncounter() {
-    const enc = encounterState.currentEncounter;
-    if (!enc) return;
-    
-    console.log('Cleaning up encounter:', enc.template.name);
-    
-    scene.remove(enc.sprite);
-    if (enc.npc) scene.remove(enc.npc);
-    if (enc.heartEffect) scene.remove(enc.heartEffect);
-    
-    // Clean up guards
-    encounterState.encounterGuards.forEach(g => scene.remove(g.sprite));
-    encounterState.encounterGuards = [];
-    
-    encounterState.currentEncounter = null;
-    gameState.targetCameraZoom = 1;
-    hideDialogue();
-}
-
-// ============================================
-// GUARD DAMAGE (called from main game)
-// ============================================
-function damageEncounterGuard(guard, damage) {
-    guard.health -= damage;
-    guard.hitFlash = 10;
-    
-    if (guard.health <= 0) {
-        // Drop XP and maybe gold
-        spawnXPOrb(guard.sprite.position.clone(), 15);
-        if (Math.random() < 0.3) {
-            spawnGoldOrb(guard.sprite.position.clone(), 8);
-        }
-        scene.remove(guard.sprite);
-        const idx = encounterState.encounterGuards.indexOf(guard);
-        if (idx > -1) encounterState.encounterGuards.splice(idx, 1);
-        gameState.kills++;
-        document.getElementById('kills').textContent = gameState.kills;
-    }
-}
-
-// ============================================
-// TREASURE CHEST SYSTEM
-// ============================================
-function spawnTreasureChest() {
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 15 + Math.random() * 25;
-    
-    const x = gameState.player.position.x + Math.cos(angle) * dist;
-    const z = gameState.player.position.z + Math.sin(angle) * dist;
-    
-    const material = new THREE.SpriteMaterial({
-        map: encounterState.textures.treasureChest,
-        transparent: true
-    });
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(2.5, 2.2, 1);
-    sprite.position.set(x, 1.1, z);
-    scene.add(sprite);
-    
-    const goldRange = TREASURE_CHEST_CONFIG.goldMax - TREASURE_CHEST_CONFIG.goldMin;
-    const chest = {
-        sprite,
-        position: new THREE.Vector3(x, 0, z),
-        opened: false,
-        goldAmount: TREASURE_CHEST_CONFIG.goldMin + Math.floor(Math.random() * goldRange),
-        factIndex: Math.floor(Math.random() * FUN_FACTS.length)
-    };
-    
-    encounterState.treasureChests.push(chest);
-}
-
-function updateTreasureChests() {
-    for (let i = encounterState.treasureChests.length - 1; i >= 0; i--) {
-        const chest = encounterState.treasureChests[i];
-        
-        // Bob slightly
-        chest.sprite.position.y = 1.1 + Math.sin(Date.now() * 0.002 + i) * 0.1;
-        
-        if (!chest.opened) {
-            // Check player collision
-            const dx = gameState.player.position.x - chest.position.x;
-            const dz = gameState.player.position.z - chest.position.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
+        function updateUpgradeMenu() {
+            const upgrades = ['magnet', 'swords', 'boom'];
             
-            if (dist < 2) {
-                openTreasureChest(chest);
-            }
-        }
-        
-        // Remove if too far
-        const dx = gameState.player.position.x - chest.position.x;
-        const dz = gameState.player.position.z - chest.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        
-        if (dist > CONFIG.renderDistance * 2) {
-            scene.remove(chest.sprite);
-            encounterState.treasureChests.splice(i, 1);
-        }
-    }
-}
-
-function openTreasureChest(chest) {
-    chest.opened = true;
-    
-    // Change texture
-    chest.sprite.material.map = encounterState.textures.openChest;
-    chest.sprite.material.needsUpdate = true;
-    chest.sprite.scale.set(2.5, 2.5, 1);
-    
-    // Give gold
-    gameState.player.gold += chest.goldAmount;
-    document.getElementById('goldNum').textContent = gameState.player.gold;
-    
-    showReward(`💰 +${chest.goldAmount} GOLD`);
-    
-    // Show fun fact
-    setTimeout(() => {
-        showDialogue('📜 ANCIENT WISDOM', FUN_FACTS[chest.factIndex]);
-    }, 500);
-}
-
-// ============================================
-// CLOUD ARENA SYSTEM
-// ============================================
-function spawnCloudPortal() {
-    const stage = encounterState.arenaStage;
-    const stageConfig = CLOUD_ARENA_CONFIG['stage' + stage];
-    
-    const angle = Math.random() * Math.PI * 2;
-    const dist = CONFIG.enemySpawnRadius * 1.2;
-    
-    const x = gameState.player.position.x + Math.cos(angle) * dist;
-    const z = gameState.player.position.z + Math.sin(angle) * dist;
-    
-    const material = new THREE.SpriteMaterial({
-        map: encounterState.textures.beanstalk,
-        transparent: true
-    });
-    
-    // Tint portal based on stage
-    if (stage === 1) {
-        material.color.setHex(0x808080); // Dark gray tint
-    } else if (stage === 2) {
-        material.color.setHex(0xaa66cc); // Purple tint
-    }
-    
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(10, 15, 1);
-    sprite.position.set(x, 7.5, z);
-    scene.add(sprite);
-    
-    encounterState.cloudPortal = {
-        sprite,
-        position: new THREE.Vector3(x, 0, z),
-        particleTimer: 0,
-        stage: stage
-    };
-    
-    // Only spawn forest cloud sprites for stage 0
-    if (stage === 0) {
-        spawnForestCloudSprites(x, z);
-        showDialogue('☁️ MYSTERIOUS PORTAL', 'A magical beanstalk has appeared! Cloud sprites have descended from the sky. Walk into the portal if you dare face the Sky Giants!');
-    } else if (stage === 1) {
-        showDialogue('⚠️ DARK PORTAL', 'The beanstalk has returned... darker than before. Something angry awaits above.');
-    } else if (stage === 2) {
-        showDialogue('👻 HAUNTED PORTAL', 'An ethereal beanstalk has materialized. Ghostly wails echo from above...');
-    }
-}
-
-// Spawn cloud sprites in the forest when portal appears
-function spawnForestCloudSprites(portalX, portalZ) {
-    for (let i = 0; i < CLOUD_ARENA_CONFIG.forestCloudSpriteCount; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 8 + Math.random() * 20; // Spread around portal
-        const cx = portalX + Math.cos(angle) * dist;
-        const cz = portalZ + Math.sin(angle) * dist;
-        
-        const material = new THREE.SpriteMaterial({
-            map: encounterState.textures.cloudSprite,
-            transparent: true
-        });
-        const sprite = new THREE.Sprite(material);
-        sprite.scale.set(4, 2, 1);
-        sprite.position.set(cx, 1.5, cz);
-        scene.add(sprite);
-        
-        const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2) * 2;
-        const enemy = {
-            sprite,
-            health: baseHealth,
-            maxHealth: baseHealth,
-            damage: CONFIG.enemyBaseDamage * (1 + gameState.player.level * 0.15),
-            speed: 0.055,
-            attackCooldown: 0,
-            hitFlash: 0,
-            isForestCloudSprite: true
-        };
-        
-        encounterState.forestCloudSprites.push(enemy);
-    }
-}
-
-function updateCloudPortal() {
-    if (!encounterState.cloudPortal) return;
-    if (encounterState.inCloudArena) return;
-    
-    const portal = encounterState.cloudPortal;
-    
-    // Bob
-    portal.sprite.position.y = 7.5 + Math.sin(Date.now() * 0.002) * 0.5;
-    
-    // Spawn particles
-    portal.particleTimer++;
-    if (portal.particleTimer >= 5) {
-        portal.particleTimer = 0;
-        spawnPortalParticle(portal.position);
-    }
-    
-    // Update particles
-    for (let i = encounterState.portalParticles.length - 1; i >= 0; i--) {
-        const p = encounterState.portalParticles[i];
-        p.sprite.position.y += 0.08;
-        p.sprite.position.x += Math.sin(Date.now() * 0.01 + p.offset) * 0.02;
-        p.life--;
-        p.sprite.material.opacity = p.life / 120;
-        
-        if (p.life <= 0) {
-            scene.remove(p.sprite);
-            encounterState.portalParticles.splice(i, 1);
-        }
-    }
-    
-    // Check player entry
-    const dx = gameState.player.position.x - portal.position.x;
-    const dz = gameState.player.position.z - portal.position.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    
-    if (dist < 4 && gameState.dialogueTimer <= 0) {
-        enterCloudArena();
-    }
-    
-    // Remove if too far
-    if (dist > CONFIG.renderDistance * 3) {
-        cleanupPortal();
-    }
-}
-
-function spawnPortalParticle(portalPos) {
-    const material = new THREE.SpriteMaterial({
-        map: encounterState.textures.portalParticle,
-        transparent: true,
-        blending: THREE.AdditiveBlending
-    });
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(1, 1, 1);
-    sprite.position.set(
-        portalPos.x + (Math.random() - 0.5) * 6,
-        1 + Math.random() * 2,
-        portalPos.z + (Math.random() - 0.5) * 6
-    );
-    scene.add(sprite);
-    
-    encounterState.portalParticles.push({
-        sprite,
-        life: 120,
-        offset: Math.random() * Math.PI * 2
-    });
-}
-
-function cleanupPortal() {
-    if (encounterState.cloudPortal) {
-        scene.remove(encounterState.cloudPortal.sprite);
-        encounterState.cloudPortal = null;
-    }
-    
-    for (const p of encounterState.portalParticles) {
-        scene.remove(p.sprite);
-    }
-    encounterState.portalParticles = [];
-    
-    // Clean up forest cloud sprites
-    for (const enemy of encounterState.forestCloudSprites) {
-        scene.remove(enemy.sprite);
-    }
-    encounterState.forestCloudSprites = [];
-}
-
-function enterCloudArena() {
-    const stage = encounterState.arenaStage;
-    const stageConfig = CLOUD_ARENA_CONFIG['stage' + stage];
-    
-    encounterState.inCloudArena = true;
-    encounterState.savedForestPosition = gameState.player.position.clone();
-    
-    cleanupPortal();
-    clearForestEntities();
-    
-    // Save and change environment
-    encounterState.savedGroundMaterial = ground.material;
-    encounterState.savedFogColor = scene.fog.color.getHex();
-    
-    const cloudTexture = createCloudGroundTexture();
-    cloudTexture.wrapS = THREE.RepeatWrapping;
-    cloudTexture.wrapT = THREE.RepeatWrapping;
-    cloudTexture.repeat.set(30, 30);
-    ground.material = new THREE.MeshLambertMaterial({ map: cloudTexture });
-    
-    // Stage-specific fog color
-    scene.fog.color.setHex(stageConfig.fogColor);
-    renderer.setClearColor(stageConfig.fogColor);
-    
-    gameState.player.position.set(0, 0, 0);
-    playerGroup.position.set(0, 0, 0);
-    
-    gameState.targetCameraZoom = stageConfig.cameraZoom;
-    
-    // Stage-specific enemy spawning
-    if (stage === 0) {
-        spawnArenaStage0();
-    } else if (stage === 1) {
-        spawnArenaStage1();
-    } else if (stage === 2) {
-        spawnArenaStage2();
-    }
-    
-    showDialogue(stageConfig.introDialogue.title, stageConfig.introDialogue.text);
-}
-
-function clearForestEntities() {
-    // Clear enemies
-    for (const enemy of gameState.enemies) {
-        scene.remove(enemy.sprite);
-    }
-    gameState.enemies = [];
-    
-    // Clear bosses
-    for (const boss of gameState.bosses) {
-        scene.remove(boss.sprite);
-        if (boss.club) scene.remove(boss.club);
-        if (boss.projectiles) boss.projectiles.forEach(p => scene.remove(p.sprite));
-    }
-    gameState.bosses = [];
-    gameState.bossActive = false;
-    
-    // Clear encounter
-    if (encounterState.currentEncounter) {
-        cleanupEncounter();
-    }
-    
-    // Clear chests
-    for (const chest of encounterState.treasureChests) {
-        scene.remove(chest.sprite);
-    }
-    encounterState.treasureChests = [];
-    
-    // Clear chunks
-    for (const [key, chunk] of gameState.chunks) {
-        scene.remove(chunk);
-    }
-    gameState.chunks.clear();
-}
-
-// ============================================
-// STAGE-SPECIFIC ARENA SPAWNING
-// ============================================
-
-// Stage 0: Cloud Sprites + Sky Giants (original)
-function spawnArenaStage0() {
-    const config = CLOUD_ARENA_CONFIG.stage0;
-    
-    // Spawn Sky Giant bosses
-    for (let i = 0; i < config.bossCount; i++) {
-        const angle = (i / config.bossCount) * Math.PI * 2;
-        const dist = 25;
-        const x = Math.cos(angle) * dist;
-        const z = Math.sin(angle) * dist;
-        
-        const material = new THREE.SpriteMaterial({
-            map: encounterState.textures.skyGiant,
-            transparent: true
-        });
-        const sprite = new THREE.Sprite(material);
-        sprite.scale.set(10, 12, 1);
-        sprite.position.set(x, 6, z);
-        scene.add(sprite);
-        
-        const bossHealth = getBossHealth() * config.bossHealthMultiplier;
-        const boss = {
-            sprite,
-            health: bossHealth,
-            maxHealth: bossHealth,
-            damage: getBossDamage(),
-            speed: 0.03,
-            hitFlash: 0,
-            isArenaBoss: true,
-            bossType: 'skyGiant'
-        };
-        
-        encounterState.arenaBosses.push(boss);
-    }
-    
-    // Spawn cloud sprites
-    for (let i = 0; i < config.enemyCount; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 10 + Math.random() * 30;
-        const x = Math.cos(angle) * dist;
-        const z = Math.sin(angle) * dist;
-        
-        const material = new THREE.SpriteMaterial({
-            map: encounterState.textures.cloudSprite,
-            transparent: true
-        });
-        const sprite = new THREE.Sprite(material);
-        sprite.scale.set(4, 2, 1);
-        sprite.position.set(x, 1.5, z);
-        scene.add(sprite);
-        
-        const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2) * config.enemyHealthMultiplier;
-        const enemy = {
-            sprite,
-            health: baseHealth,
-            maxHealth: baseHealth,
-            damage: CONFIG.enemyBaseDamage * (1 + gameState.player.level * 0.15),
-            speed: 0.06,
-            attackCooldown: 0,
-            hitFlash: 0,
-            isArenaEnemy: true
-        };
-        
-        encounterState.arenaEnemies.push(enemy);
-    }
-}
-
-// Stage 1: Giant Troll with orbiting clubs
-function spawnArenaStage1() {
-    const config = CLOUD_ARENA_CONFIG.stage1;
-    
-    // Spawn the MASSIVE troll at center
-    const material = new THREE.SpriteMaterial({
-        map: encounterState.textures.giantTroll,
-        transparent: true
-    });
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(24, 32, 1); // HUGE
-    sprite.position.set(0, 16, 30); // Start away from player
-    scene.add(sprite);
-    
-    const bossHealth = getBossHealth() * config.trollHealthMultiplier * 2; // Extra beefy
-    const troll = {
-        sprite,
-        health: bossHealth,
-        maxHealth: bossHealth,
-        damage: getBossDamage() * 1.5,
-        speed: 0.025, // Slower but menacing
-        hitFlash: 0,
-        isArenaBoss: true,
-        bossType: 'giantTroll',
-        projectileCooldown: 0
-    };
-    
-    encounterState.arenaBosses.push(troll);
-    
-    // Spawn orbiting clubs
-    encounterState.trollClubs = [];
-    for (let i = 0; i < config.clubCount; i++) {
-        const clubMaterial = new THREE.SpriteMaterial({
-            map: encounterState.textures.giantClub,
-            transparent: true
-        });
-        const clubSprite = new THREE.Sprite(clubMaterial);
-        clubSprite.scale.set(6, 16, 1); // Big clubs
-        scene.add(clubSprite);
-        
-        encounterState.trollClubs.push({
-            sprite: clubSprite,
-            angle: (i / config.clubCount) * Math.PI * 2,
-            speed: config.clubSpeeds[i],
-            radius: 12 + i * 2, // Varying distances
-            damage: getBossDamage() * config.clubDamage
-        });
-    }
-    
-    encounterState.trollProjectiles = [];
-}
-
-// Stage 2: Ghost Trio
-function spawnArenaStage2() {
-    const config = CLOUD_ARENA_CONFIG.stage2;
-    encounterState.ghostDefeated = false;
-    
-    // Giant Ghost (spirit)
-    const ghostMaterial = new THREE.SpriteMaterial({
-        map: encounterState.textures.giantGhost,
-        transparent: true
-    });
-    const ghostSprite = new THREE.Sprite(ghostMaterial);
-    ghostSprite.scale.set(20, 24, 1);
-    ghostSprite.position.set(0, 12, 35);
-    scene.add(ghostSprite);
-    
-    const ghostHealth = getBossHealth() * config.ghostHealthMultiplier;
-    encounterState.arenaBosses.push({
-        sprite: ghostSprite,
-        health: ghostHealth,
-        maxHealth: ghostHealth,
-        damage: getBossDamage(),
-        speed: 0.04, // Floaty
-        hitFlash: 0,
-        isArenaBoss: true,
-        bossType: 'giantGhost'
-    });
-    
-    // Giant Skeleton (body)
-    const skeleMaterial = new THREE.SpriteMaterial({
-        map: encounterState.textures.giantSkeleton,
-        transparent: true
-    });
-    const skeleSprite = new THREE.Sprite(skeleMaterial);
-    skeleSprite.scale.set(18, 24, 1);
-    skeleSprite.position.set(-25, 12, 25);
-    scene.add(skeleSprite);
-    
-    const skeleHealth = getBossHealth() * config.skeletonHealthMultiplier;
-    encounterState.arenaBosses.push({
-        sprite: skeleSprite,
-        health: skeleHealth,
-        maxHealth: skeleHealth,
-        damage: getBossDamage() * 1.2,
-        speed: 0.03,
-        hitFlash: 0,
-        isArenaBoss: true,
-        bossType: 'giantSkeleton'
-    });
-    
-    // Giant Slime (bodily goos)
-    const slimeMaterial = new THREE.SpriteMaterial({
-        map: encounterState.textures.giantSlime,
-        transparent: true
-    });
-    const slimeSprite = new THREE.Sprite(slimeMaterial);
-    slimeSprite.scale.set(16, 12, 1);
-    slimeSprite.position.set(25, 6, 25);
-    scene.add(slimeSprite);
-    
-    const slimeHealth = getBossHealth() * config.slimeHealthMultiplier;
-    encounterState.arenaBosses.push({
-        sprite: slimeSprite,
-        health: slimeHealth,
-        maxHealth: slimeHealth,
-        damage: getBossDamage() * 0.8,
-        speed: 0.035,
-        hitFlash: 0,
-        isArenaBoss: true,
-        bossType: 'giantSlime'
-    });
-}
-
-function updateCloudArena() {
-    if (!encounterState.inCloudArena) return;
-    if (gameState.dialogueTimer > 0) return;
-    
-    const stage = encounterState.arenaStage;
-    const stageConfig = CLOUD_ARENA_CONFIG['stage' + stage];
-    
-    // Update arena bosses
-    for (let i = encounterState.arenaBosses.length - 1; i >= 0; i--) {
-        const boss = encounterState.arenaBosses[i];
-        
-        const dx = gameState.player.position.x - boss.sprite.position.x;
-        const dz = gameState.player.position.z - boss.sprite.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        
-        // Movement
-        if (dist > 4) {
-            boss.sprite.position.x += (dx / dist) * boss.speed;
-            boss.sprite.position.z += (dz / dist) * boss.speed;
-        } else {
-            takeDamage(boss.damage * 0.02);
-        }
-        
-        // Hit flash
-        if (boss.hitFlash > 0) {
-            boss.hitFlash--;
-            boss.sprite.material.color.setHex(boss.hitFlash % 4 < 2 ? 0xffffff : 0xff0000);
-        } else {
-            boss.sprite.material.color.setHex(0xffffff);
-        }
-        
-        // Death handling
-        if (boss.health <= 0) {
-            // Stage-specific gold drops
-            let goldDrop = 0;
-            if (stage === 0) {
-                goldDrop = stageConfig.bossGoldDrop;
-            } else if (stage === 1) {
-                goldDrop = stageConfig.trollGoldDrop;
-            } else if (stage === 2) {
-                goldDrop = stageConfig.bossGoldDrop;
+            upgrades.forEach(key => {
+                const item = document.getElementById(`upgrade-${key}`);
+                const btn = item.querySelector('.upgrade-btn');
+                const lvlSpan = item.querySelector('.lvl');
+                const costSpan = btn.querySelector('.cost');
                 
-                // Special dialogue when ghost dies
-                if (boss.bossType === 'giantGhost' && !encounterState.ghostDefeated) {
-                    encounterState.ghostDefeated = true;
-                    showDialogue(
-                        stageConfig.ghostDeathDialogue.title,
-                        stageConfig.ghostDeathDialogue.text
-                    );
+                const upgrade = gameState.upgrades[key];
+                lvlSpan.textContent = upgrade.level;
+                
+                if (isUpgradeMaxed(key)) {
+                    item.classList.add('maxed');
+                    btn.disabled = true;
+                    costSpan.textContent = 'MAX';
+                } else {
+                    item.classList.remove('maxed');
+                    const cost = getUpgradeCost(key);
+                    costSpan.textContent = `💰 ${cost}`;
+                    btn.disabled = !canAffordUpgrade(key);
                 }
-            }
+            });
             
-            spawnGoldOrb(boss.sprite.position.clone(), goldDrop);
-            scene.remove(boss.sprite);
-            encounterState.arenaBosses.splice(i, 1);
-        }
-    }
-    
-    // Update arena enemies (stage 0 only)
-    for (let i = encounterState.arenaEnemies.length - 1; i >= 0; i--) {
-        const enemy = encounterState.arenaEnemies[i];
-        
-        const dx = gameState.player.position.x - enemy.sprite.position.x;
-        const dz = gameState.player.position.z - enemy.sprite.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        
-        if (dist > 1.5) {
-            enemy.sprite.position.x += (dx / dist) * enemy.speed;
-            enemy.sprite.position.z += (dz / dist) * enemy.speed;
-        } else if (enemy.attackCooldown <= 0) {
-            takeDamage(enemy.damage);
-            enemy.attackCooldown = 60;
-        }
-        
-        enemy.attackCooldown = Math.max(0, enemy.attackCooldown - 1);
-        
-        if (enemy.hitFlash > 0) {
-            enemy.hitFlash--;
-            enemy.sprite.material.color.setHex(enemy.hitFlash % 4 < 2 ? 0xffffff : 0xff0000);
-        } else {
-            enemy.sprite.material.color.setHex(0xffffff);
-        }
-        
-        if (enemy.health <= 0) {
-            spawnGoldOrb(enemy.sprite.position.clone(), stageConfig.enemyGoldDrop || 10);
-            scene.remove(enemy.sprite);
-            encounterState.arenaEnemies.splice(i, 1);
-        }
-    }
-    
-    // Stage 1: Update troll clubs and projectiles
-    if (stage === 1) {
-        updateTrollClubs();
-        updateTrollProjectiles();
-        
-        // Troll shoots rocks
-        if (encounterState.arenaBosses.length > 0) {
-            const troll = encounterState.arenaBosses[0];
-            if (troll.projectileCooldown !== undefined) {
-                troll.projectileCooldown--;
-                if (troll.projectileCooldown <= 0) {
-                    fireTrollProjectile(troll);
-                    troll.projectileCooldown = CLOUD_ARENA_CONFIG.stage1.projectileCooldown;
-                }
+            // Update boom cooldown display
+            if (gameState.upgrades.boom.level > 0) {
+                document.getElementById('boomCooldown').classList.add('active');
             }
         }
-    }
-    
-    // Check victory
-    if (encounterState.arenaBosses.length === 0 && encounterState.arenaEnemies.length === 0) {
-        winCloudArena();
-    }
-    
-    updateArenaBossDisplay();
-}
 
-// Troll's orbiting clubs
-function updateTrollClubs() {
-    if (encounterState.arenaBosses.length === 0) return;
-    const troll = encounterState.arenaBosses[0];
-    
-    for (const club of encounterState.trollClubs) {
-        // Orbit around troll
-        club.angle += club.speed;
-        club.sprite.position.x = troll.sprite.position.x + Math.cos(club.angle) * club.radius;
-        club.sprite.position.z = troll.sprite.position.z + Math.sin(club.angle) * club.radius;
-        club.sprite.position.y = 8 + Math.sin(club.angle * 2) * 2; // Bob up and down
-        
-        // Rotate the club sprite
-        club.sprite.material.rotation = club.angle + Math.PI / 2;
-        
-        // Check collision with player
-        const dx = gameState.player.position.x - club.sprite.position.x;
-        const dz = gameState.player.position.z - club.sprite.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        
-        if (dist < 4) {
-            takeDamage(club.damage * 0.03);
+        function openMenu() {
+            gameState.menuOpen = true;
+            document.getElementById('upgradeMenu').style.display = 'flex';
+            updateUpgradeMenu();
         }
-    }
-}
 
-// Troll throws rocks
-function fireTrollProjectile(troll) {
-    const dx = gameState.player.position.x - troll.sprite.position.x;
-    const dz = gameState.player.position.z - troll.sprite.position.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    
-    const material = new THREE.SpriteMaterial({
-        map: encounterState.textures.trollRock,
-        transparent: true
-    });
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(4, 4, 1);
-    sprite.position.copy(troll.sprite.position);
-    sprite.position.y = 10;
-    scene.add(sprite);
-    
-    encounterState.trollProjectiles.push({
-        sprite,
-        vx: (dx / dist) * 0.3,
-        vz: (dz / dist) * 0.3,
-        damage: troll.damage,
-        life: 300
-    });
-}
-
-function updateTrollProjectiles() {
-    for (let i = encounterState.trollProjectiles.length - 1; i >= 0; i--) {
-        const proj = encounterState.trollProjectiles[i];
-        
-        proj.sprite.position.x += proj.vx;
-        proj.sprite.position.z += proj.vz;
-        proj.life--;
-        
-        // Check collision with player
-        const dx = gameState.player.position.x - proj.sprite.position.x;
-        const dz = gameState.player.position.z - proj.sprite.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        
-        if (dist < 2) {
-            takeDamage(proj.damage);
-            scene.remove(proj.sprite);
-            encounterState.trollProjectiles.splice(i, 1);
-            continue;
+        function closeMenu() {
+            gameState.menuOpen = false;
+            document.getElementById('upgradeMenu').style.display = 'none';
         }
-        
-        if (proj.life <= 0) {
-            scene.remove(proj.sprite);
-            encounterState.trollProjectiles.splice(i, 1);
+
+        function setupMenuControls() {
+            document.getElementById('menuBtn').addEventListener('click', openMenu);
+            document.getElementById('menuBtn').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                openMenu();
+            });
+            
+            document.getElementById('closeMenu').addEventListener('click', closeMenu);
+            document.getElementById('closeMenu').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                closeMenu();
+            });
+            
+            // Upgrade buttons
+            document.querySelectorAll('.upgrade-btn').forEach(btn => {
+                const upgrade = btn.dataset.upgrade;
+                btn.addEventListener('click', () => purchaseUpgrade(upgrade));
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    purchaseUpgrade(upgrade);
+                });
+            });
+            
+            // Boom indicator click
+            document.getElementById('boomIndicator').addEventListener('click', fireBoom);
+            document.getElementById('boomIndicator').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                fireBoom();
+            });
         }
-    }
-}
 
-function updateArenaBossDisplay() {
-    const bossBar = document.getElementById('bossHealthBar');
-    const stage = encounterState.arenaStage;
-    
-    if (encounterState.arenaBosses.length > 0) {
-        bossBar.classList.add('active');
-        
-        // Stage-specific boss names
-        let bossName = '';
-        if (stage === 0) {
-            bossName = '☁️ SKY GIANTS (' + encounterState.arenaBosses.length + ' remaining)';
-        } else if (stage === 1) {
-            bossName = '👹 GIANT TROLL';
-        } else if (stage === 2) {
-            const types = encounterState.arenaBosses.map(b => {
-                if (b.bossType === 'giantGhost') return '👻';
-                if (b.bossType === 'giantSkeleton') return '💀';
-                if (b.bossType === 'giantSlime') return '🩸';
-                return '?';
-            }).join(' ');
-            bossName = types + ' GHOST TRIO (' + encounterState.arenaBosses.length + ' remaining)';
+        // ============================================
+        // CONTROLS
+        // ============================================
+        const controls = {
+            up: false,
+            down: false,
+            left: false,
+            right: false
+        };
+
+        // Multi-touch tracking for simultaneous d-pad and camera control
+        let cameraTouch = null; // Track the touch used for camera rotation
+        let cameraTouchStartX = 0;
+        let isDragging = false;
+
+        // Track which touches are on d-pad buttons
+        const dpadTouches = new Set();
+
+        // D-Pad controls
+        function setupDPad() {
+            const buttons = {
+                'dpad-up': 'up',
+                'dpad-down': 'down',
+                'dpad-left': 'left',
+                'dpad-right': 'right'
+            };
+
+            for (const [id, dir] of Object.entries(buttons)) {
+                const btn = document.getElementById(id);
+                
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    controls[dir] = true;
+                    btn.classList.add('active');
+                    // Track this touch as a d-pad touch
+                    for (const touch of e.changedTouches) {
+                        dpadTouches.add(touch.identifier);
+                    }
+                });
+
+                btn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    controls[dir] = false;
+                    btn.classList.remove('active');
+                    // Remove from d-pad touches
+                    for (const touch of e.changedTouches) {
+                        dpadTouches.delete(touch.identifier);
+                    }
+                });
+
+                btn.addEventListener('touchcancel', (e) => {
+                    controls[dir] = false;
+                    btn.classList.remove('active');
+                    for (const touch of e.changedTouches) {
+                        dpadTouches.delete(touch.identifier);
+                    }
+                });
+
+                // Mouse support for desktop
+                btn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    controls[dir] = true;
+                    btn.classList.add('active');
+                });
+
+                btn.addEventListener('mouseup', () => {
+                    controls[dir] = false;
+                    btn.classList.remove('active');
+                });
+
+                btn.addEventListener('mouseleave', () => {
+                    controls[dir] = false;
+                    btn.classList.remove('active');
+                });
+            }
         }
-        
-        document.getElementById('bossName').textContent = bossName;
-        
-        const totalHealth = encounterState.arenaBosses.reduce((sum, b) => sum + b.health, 0);
-        const totalMaxHealth = encounterState.arenaBosses.reduce((sum, b) => sum + b.maxHealth, 0);
-        const healthPercent = (totalHealth / totalMaxHealth) * 100;
-        document.getElementById('bossFill').style.width = Math.max(0, healthPercent) + '%';
-    } else if (encounterState.inCloudArena && encounterState.arenaEnemies.length > 0) {
-        bossBar.classList.add('active');
-        document.getElementById('bossName').textContent = '☁️ CLOUD SPRITES (' + encounterState.arenaEnemies.length + ' remaining)';
-        document.getElementById('bossFill').style.width = '100%';
-    } else if (!encounterState.inCloudArena) {
-        // Don't hide - let bosses.js handle it when not in arena
-    }
-}
 
-function winCloudArena() {
-    const stage = encounterState.arenaStage;
-    const stageConfig = CLOUD_ARENA_CONFIG['stage' + stage];
-    
-    // Advance to next stage
-    encounterState.arenaStage++;
-    
-    // Give gold reward
-    gameState.player.gold += stageConfig.goldReward;
-    document.getElementById('goldNum').textContent = gameState.player.gold;
-    
-    showReward(`☁️ ${stageConfig.name.toUpperCase()} COMPLETE! +${stageConfig.goldReward} GOLD`);
-    
-    encounterState.pendingArenaExit = true;
-    
-    showDialogue(stageConfig.winDialogue.title, stageConfig.winDialogue.text);
-}
+        // Magic button
+        function setupMagicButton() {
+            const btn = document.getElementById('magicBtn');
+            let canShoot = true;
 
-function exitCloudArena() {
-    encounterState.inCloudArena = false;
-    
-    ground.material = encounterState.savedGroundMaterial;
-    scene.fog.color.setHex(encounterState.savedFogColor);
-    renderer.setClearColor(encounterState.savedFogColor);
-    
-    if (encounterState.savedForestPosition) {
-        gameState.player.position.copy(encounterState.savedForestPosition);
-        playerGroup.position.copy(encounterState.savedForestPosition);
-    }
-    
-    gameState.targetCameraZoom = 1;
-    
-    // Clear arena entities
-    for (const boss of encounterState.arenaBosses) {
-        scene.remove(boss.sprite);
-    }
-    encounterState.arenaBosses = [];
-    
-    for (const enemy of encounterState.arenaEnemies) {
-        scene.remove(enemy.sprite);
-    }
-    encounterState.arenaEnemies = [];
-    
-    // Clear troll-specific entities (stage 1)
-    for (const club of encounterState.trollClubs) {
-        scene.remove(club.sprite);
-    }
-    encounterState.trollClubs = [];
-    
-    for (const proj of encounterState.trollProjectiles) {
-        scene.remove(proj.sprite);
-    }
-    encounterState.trollProjectiles = [];
-    
-    // Regenerate forest
-    updateChunks();
-}
+            function shoot() {
+                if (canShoot && !gameState.isGameOver && gameState.dialogueTimer <= 0) {
+                    shootProjectile();
+                    canShoot = false;
+                    setTimeout(() => canShoot = true, 250);
+                }
+            }
 
-// Check arena projectile hits (called from main game)
-function checkArenaProjectileHits(projPos, damage) {
-    // Check arena bosses
-    for (const boss of encounterState.arenaBosses) {
-        const dx = projPos.x - boss.sprite.position.x;
-        const dz = projPos.z - boss.sprite.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        
-        if (dist < 5) {
-            boss.health -= damage;
-            boss.hitFlash = 10;
-            return true;
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                // Track magic button touches too
+                for (const touch of e.changedTouches) {
+                    dpadTouches.add(touch.identifier);
+                }
+                shoot();
+            });
+
+            btn.addEventListener('touchend', (e) => {
+                for (const touch of e.changedTouches) {
+                    dpadTouches.delete(touch.identifier);
+                }
+            });
+
+            btn.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                shoot();
+            });
         }
-    }
-    
-    // Check arena enemies
-    for (const enemy of encounterState.arenaEnemies) {
-        const dx = projPos.x - enemy.sprite.position.x;
-        const dz = projPos.z - enemy.sprite.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        
-        if (dist < 2) {
-            enemy.health -= damage;
-            enemy.hitFlash = 10;
-            return true;
+
+        // View swipe control - now works anywhere on screen with multi-touch
+        function setupViewControl() {
+            const viewArea = document.getElementById('viewArea');
+
+            // Check if an element is a UI control that shouldn't trigger camera rotation
+            function isUIElement(element) {
+                const uiIds = ['dpad', 'dpad-up', 'dpad-down', 'dpad-left', 'dpad-right', 
+                               'magicBtn', 'menuBtn', 'restartBtn', 'boomBtn', 'slimeStoreMenu'];
+                while (element) {
+                    if (uiIds.includes(element.id) || 
+                        element.classList?.contains('dpad-btn') ||
+                        element.classList?.contains('upgrade-btn') ||
+                        element.classList?.contains('dialogue-btn') ||
+                        element.classList?.contains('store-btn') ||
+                        element.id === 'upgradeMenu' ||
+                        element.id === 'dialogueBox' ||
+                        element.id === 'slimeStoreMenu') {
+                        return true;
+                    }
+                    element = element.parentElement;
+                }
+                return false;
+            }
+
+            // Global touch handlers for camera rotation
+            document.addEventListener('touchstart', (e) => {
+                // Find a touch that's not on a UI element to use for camera
+                for (const touch of e.changedTouches) {
+                    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                    if (!isUIElement(element) && cameraTouch === null) {
+                        cameraTouch = touch.identifier;
+                        cameraTouchStartX = touch.clientX;
+                        isDragging = true;
+                        break;
+                    }
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (cameraTouch === null || gameState.dialogueTimer > 0) return;
+                
+                // Find our camera touch
+                for (const touch of e.changedTouches) {
+                    if (touch.identifier === cameraTouch) {
+                        const dx = touch.clientX - cameraTouchStartX;
+                        gameState.player.rotation += dx * 0.005;
+                        cameraTouchStartX = touch.clientX;
+                        break;
+                    }
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchend', (e) => {
+                for (const touch of e.changedTouches) {
+                    if (touch.identifier === cameraTouch) {
+                        cameraTouch = null;
+                        isDragging = false;
+                        break;
+                    }
+                }
+            });
+
+            document.addEventListener('touchcancel', (e) => {
+                for (const touch of e.changedTouches) {
+                    if (touch.identifier === cameraTouch) {
+                        cameraTouch = null;
+                        isDragging = false;
+                        break;
+                    }
+                }
+            });
+
+            // Mouse support (unchanged - works on viewArea)
+            viewArea.addEventListener('mousedown', (e) => {
+                cameraTouchStartX = e.clientX;
+                isDragging = true;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging && gameState.dialogueTimer <= 0) {
+                    const dx = e.clientX - cameraTouchStartX;
+                    gameState.player.rotation += dx * 0.005;
+                    cameraTouchStartX = e.clientX;
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
         }
-    }
-    
-    return false;
-}
 
-// ============================================
-// INTEGRATION FUNCTIONS
-// ============================================
-function initEncounterSystem() {
-    console.log('Initializing Encounter System...');
-    initEncounterTextures();
-}
+        // Keyboard support
+        function setupKeyboard() {
+            document.addEventListener('keydown', (e) => {
+                if (gameState.menuOpen) {
+                    if (e.key === 'Escape') closeMenu();
+                    return;
+                }
+                if (gameState.dialogueTimer > 0) return; // Disable controls during dialogue
+                switch(e.key.toLowerCase()) {
+                    case 'w': case 'arrowup': controls.up = true; break;
+                    case 's': case 'arrowdown': controls.down = true; break;
+                    case 'a': case 'arrowleft': controls.left = true; break;
+                    case 'd': case 'arrowright': controls.right = true; break;
+                    case ' ': shootProjectile(); break;
+                    case 'q': fireBoom(); break;
+                    case 'e': case 'escape': 
+                        if (gameState.menuOpen) closeMenu();
+                        else openMenu();
+                        break;
+                }
+            });
 
-function updateEncounterSystem() {
-    // Update current encounter
-    updateEncounter();
-    
-    // Update treasure chests
-    updateTreasureChests();
-    
-    // Update cloud portal
-    updateCloudPortal();
-    
-    // Update forest cloud sprites (in forest, near portal)
-    if (!encounterState.inCloudArena) {
-        updateForestCloudSprites();
-    }
-    
-    // Update cloud arena
-    if (encounterState.inCloudArena) {
-        updateCloudArena();
-    }
-}
-
-// Update forest cloud sprites that spawn when portal appears
-function updateForestCloudSprites() {
-    if (encounterState.forestCloudSprites.length === 0) return;
-    if (gameState.dialogueTimer > 0) return;
-    
-    for (let i = encounterState.forestCloudSprites.length - 1; i >= 0; i--) {
-        const enemy = encounterState.forestCloudSprites[i];
-        
-        const dx = gameState.player.position.x - enemy.sprite.position.x;
-        const dz = gameState.player.position.z - enemy.sprite.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        
-        // Move toward player
-        if (dist > 1.5) {
-            enemy.sprite.position.x += (dx / dist) * enemy.speed;
-            enemy.sprite.position.z += (dz / dist) * enemy.speed;
-        } else if (enemy.attackCooldown <= 0) {
-            takeDamage(enemy.damage);
-            enemy.attackCooldown = 60;
+            document.addEventListener('keyup', (e) => {
+                switch(e.key.toLowerCase()) {
+                    case 'w': case 'arrowup': controls.up = false; break;
+                    case 's': case 'arrowdown': controls.down = false; break;
+                    case 'a': case 'arrowleft': controls.left = false; break;
+                    case 'd': case 'arrowright': controls.right = false; break;
+                }
+            });
         }
-        
-        enemy.attackCooldown = Math.max(0, enemy.attackCooldown - 1);
-        
-        // Hit flash
-        if (enemy.hitFlash > 0) {
-            enemy.hitFlash--;
-            enemy.sprite.material.color.setHex(enemy.hitFlash % 4 < 2 ? 0xffffff : 0xff0000);
-        } else {
-            enemy.sprite.material.color.setHex(0xffffff);
+
+        // Restart button
+        document.getElementById('restartBtn').addEventListener('click', restartGame);
+        document.getElementById('restartBtn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            restartGame();
+        });
+
+        // ============================================
+        // GAME LOOP
+        // ============================================
+        let lastSpawnTime = 0;
+
+        function updatePlayer() {
+            if (gameState.isGameOver) return;
+            if (gameState.dialogueTimer > 0) return; // Pause player during dialogue
+
+            const moveSpeed = CONFIG.playerSpeed;
+            let moved = false;
+
+            if (controls.up) {
+                gameState.player.position.x -= Math.sin(gameState.player.rotation) * moveSpeed;
+                gameState.player.position.z -= Math.cos(gameState.player.rotation) * moveSpeed;
+                moved = true;
+            }
+            if (controls.down) {
+                gameState.player.position.x += Math.sin(gameState.player.rotation) * moveSpeed;
+                gameState.player.position.z += Math.cos(gameState.player.rotation) * moveSpeed;
+                moved = true;
+            }
+            if (controls.left) {
+                gameState.player.position.x -= Math.cos(gameState.player.rotation) * moveSpeed;
+                gameState.player.position.z += Math.sin(gameState.player.rotation) * moveSpeed;
+                moved = true;
+            }
+            if (controls.right) {
+                gameState.player.position.x += Math.cos(gameState.player.rotation) * moveSpeed;
+                gameState.player.position.z -= Math.sin(gameState.player.rotation) * moveSpeed;
+                moved = true;
+            }
+
+            // Update player visual position
+            playerGroup.position.copy(gameState.player.position);
+
+            // Update camera with zoom
+            const camDist = 12 * gameState.cameraZoom;
+            const camHeight = 8 * gameState.cameraZoom;
+            camera.position.x = gameState.player.position.x + Math.sin(gameState.player.rotation) * camDist;
+            camera.position.z = gameState.player.position.z + Math.cos(gameState.player.rotation) * camDist;
+            camera.position.y = camHeight;
+            camera.lookAt(
+                gameState.player.position.x,
+                2,
+                gameState.player.position.z
+            );
+
+            // Update ground position to follow player
+            ground.position.x = gameState.player.position.x;
+            ground.position.z = gameState.player.position.z;
         }
-        
-        // Check death
-        if (enemy.health <= 0) {
-            // Drop gold only, no XP (forest sprites are stage 0)
-            spawnGoldOrb(enemy.sprite.position.clone(), CLOUD_ARENA_CONFIG.stage0.enemyGoldDrop);
-            scene.remove(enemy.sprite);
-            encounterState.forestCloudSprites.splice(i, 1);
-            gameState.kills++;
-            document.getElementById('kills').textContent = gameState.kills;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (!gameState.isGameOver && !gameState.menuOpen) {
+                updatePlayer();
+                
+                // Only update forest systems when not in cloud arena
+                if (!encounterState.inCloudArena) {
+                    updateChunks();
+                    updateEnemies();
+                    updateBosses();
+                    // Use new modular encounter system
+                    if (typeof updateEncounterSystem === 'function') {
+                        updateEncounterSystem();
+                    }
+                } else {
+                    // Update cloud arena (handled by encounter system)
+                    if (typeof updateEncounterSystem === 'function') {
+                        updateEncounterSystem();
+                    }
+                }
+                
+                // These work in both forest and arena
+                updateProjectiles();
+                updateXPOrbs();
+                updateGoldOrbs();
+                updateSwords();
+                updateBoomProjectiles();
+                updateBoomCooldown();
+                updateDialogue();
+                updateCompass();
+                updateCameraZoom();
+                
+                // Update slime companion system (if loaded)
+                if (typeof updateSlimeCompanion === 'function') {
+                    updateSlimeCompanion();
+                }
+
+                // Spawn enemies (only in forest)
+                if (!encounterState.inCloudArena) {
+                    const now = Date.now();
+                    if (now - lastSpawnTime > CONFIG.enemySpawnInterval) {
+                        spawnEnemy();
+                        
+                        // 10% chance for a major event (boss or encounter)
+                        // Only if no boss/encounter/store currently active and level 5+
+                        if (typeof canSpawnMajorEvent === 'function' && canSpawnMajorEvent() && Math.random() < 0.10) {
+                            if (Math.random() < 0.5) {
+                                // 50% chance: Spawn a boss (equal chance: Dragon, Evil Tree, Troll)
+                                spawnBoss();
+                            } else {
+                                // 50% chance: Spawn an encounter (20% each: Monster Store, Sky Giants, Princess, Witch, Sword)
+                                if (typeof spawnRandomEncounter === 'function') {
+                                    spawnRandomEncounter();
+                                }
+                            }
+                        }
+                        
+                        // Maybe spawn a treasure chest (independent, 8% chance)
+                        if (shouldSpawnChest()) {
+                            spawnTreasureChest();
+                        }
+                        
+                        lastSpawnTime = now;
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
         }
-        
-        // Remove if too far from player
-        if (dist > CONFIG.renderDistance * 2) {
-            scene.remove(enemy.sprite);
-            encounterState.forestCloudSprites.splice(i, 1);
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        function init() {
+            setupDPad();
+            setupMagicButton();
+            setupViewControl();
+            setupKeyboard();
+            setupMenuControls();
+            setupDialogueButton();
+            
+            // Initialize encounter system (includes portal textures)
+            if (typeof initEncounterSystem === 'function') {
+                initEncounterSystem();
+            }
+
+            // Generate initial chunks
+            updateChunks();
+            
+            // Initialize UI
+            updateUpgradeMenu();
+            
+            // Initialize slime companion system (if loaded)
+            if (typeof initSlimeCompanion === 'function') {
+                initSlimeCompanion();
+            }
+
+            // Start animation
+            animate();
+
+            // Start spawning enemies
+            setTimeout(() => {
+                for (let i = 0; i < 3; i++) {
+                    spawnEnemy();
+                }
+            }, 1000);
         }
-    }
-}
 
-function resetEncounterSystem() {
-    console.log('Resetting Encounter System...');
-    
-    // Cleanup encounter
-    cleanupEncounter();
-    
-    // Cleanup chests
-    for (const chest of encounterState.treasureChests) {
-        scene.remove(chest.sprite);
-    }
-    encounterState.treasureChests = [];
-    
-    // Cleanup portal (this also cleans up forest cloud sprites)
-    cleanupPortal();
-    
-    // Cleanup arena
-    if (encounterState.inCloudArena) {
-        ground.material = encounterState.savedGroundMaterial;
-        scene.fog.color.setHex(encounterState.savedFogColor);
-        renderer.setClearColor(encounterState.savedFogColor);
-    }
-    
-    for (const boss of encounterState.arenaBosses) {
-        scene.remove(boss.sprite);
-    }
-    encounterState.arenaBosses = [];
-    
-    for (const enemy of encounterState.arenaEnemies) {
-        scene.remove(enemy.sprite);
-    }
-    encounterState.arenaEnemies = [];
-    
-    // Cleanup troll entities (stage 1)
-    for (const club of encounterState.trollClubs) {
-        scene.remove(club.sprite);
-    }
-    encounterState.trollClubs = [];
-    
-    for (const proj of encounterState.trollProjectiles) {
-        scene.remove(proj.sprite);
-    }
-    encounterState.trollProjectiles = [];
-    
-    // Reset state
-    encounterState.currentEncounter = null;
-    encounterState.encounterGuards = [];
-    encounterState.cloudPortal = null;
-    encounterState.portalParticles = [];
-    encounterState.forestCloudSprites = [];
-    encounterState.inCloudArena = false;
-    encounterState.arenaStage = 0; // Reset to stage 0
-    encounterState.ghostDefeated = false;
-    encounterState.savedForestPosition = null;
-    encounterState.pendingArenaExit = false;
-    encounterState.guaranteedEncounterQueue = [];
-}
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
 
-// Check for pending arena exit (called when dialogue closes)
-function checkPendingArenaExit() {
-    if (encounterState.pendingArenaExit) {
-        encounterState.pendingArenaExit = false;
-        exitCloudArena();
-        return true;
-    }
-    return false;
-}
-
-// ============================================
-// EXPOSE FUNCTIONS GLOBALLY
-// ============================================
-// These need to be accessible from the main game file
-
-console.log('Encounter System loaded!');
+        // Start game
+        init();
+    </script>
+</body>
+    </html>
