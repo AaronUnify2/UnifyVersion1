@@ -2250,7 +2250,7 @@ function updateEncounterPostComplete(enc, template) {
             if (template.name === 'princessTower') {
                 // Special case: princess shows heart
                 spawnHeartEffect(enc.npc.position.clone());
-                showDialogue('💕 PRINCESS', '"My hero! Please accept this gift... I think I\'ll stay in this forest for a while. Maybe practice some magic... the dark kind looks interesting!"');
+                showDialogue('💕 PRINCESS', '"My attractive hero! Please accept this gift... I think I\'ll stay in this forest for a while. Maybe practice some magic...!"');
                 
                 // Advance story stage
                 encounterState.storyEncounterStage = 1; // Next: Witch
@@ -2339,7 +2339,7 @@ function giveEncounterReward(enc, template) {
             gameState.dharmaWheelAngle = 0;
             spawnPlayerDharmaWheel();
             showReward(reward.text);
-            showDialogue('☸️ ENLIGHTENMENT', '"The Wheel of Dharma now orbits your being. Use it wisely... or don\'t. The Buddha has no strong opinions either way. Wait, that\'s not right..."');
+            showDialogue('☸️ ENLIGHTENMENT', '"The Wheel of Dharma now orbits your being. Use it wisely... or don\'t. The Buddha has no strong opinions either way. "');
             
             // Advance story stage
             encounterState.storyEncounterStage = 3; // Completed
