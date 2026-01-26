@@ -1068,6 +1068,26 @@ function updateSlimeSwords() {
             }
         }
         
+        // Check forest cloud sprites
+        if (encounterState.forestCloudSprites) {
+            for (const cloudSprite of encounterState.forestCloudSprites) {
+                const dx = sword.sprite.position.x - cloudSprite.sprite.position.x;
+                const dz = sword.sprite.position.z - cloudSprite.sprite.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist < 1.5) {
+                    const lastHit = sword.hitCooldowns.get(cloudSprite) || 0;
+                    const now = Date.now();
+                    
+                    if (now - lastHit > 500) {
+                        cloudSprite.health -= swordDamage;
+                        cloudSprite.hitFlash = 10;
+                        sword.hitCooldowns.set(cloudSprite, now);
+                    }
+                }
+            }
+        }
+        
         // Check bosses
         for (const boss of gameState.bosses) {
             const dx = sword.sprite.position.x - boss.sprite.position.x;
@@ -1091,7 +1111,8 @@ function updateSlimeSwords() {
             if (!gameState.enemies.includes(target) && 
                 !gameState.bosses.includes(target) && 
                 !encounterState.encounterGuards.includes(target) &&
-                !state.storeSlimes.includes(target)) {
+                !state.storeSlimes.includes(target) &&
+                !(encounterState.forestCloudSprites && encounterState.forestCloudSprites.includes(target))) {
                 sword.hitCooldowns.delete(target);
             }
         }
@@ -1146,6 +1167,19 @@ function updateCompanionSlime() {
         if (eDist < nearestDist) {
             nearestDist = eDist;
             nearestEnemy = guard;
+        }
+    }
+    
+    // Target forest cloud sprites
+    if (encounterState.forestCloudSprites) {
+        for (const cloudSprite of encounterState.forestCloudSprites) {
+            const edx = cloudSprite.sprite.position.x - slime.position.x;
+            const edz = cloudSprite.sprite.position.z - slime.position.z;
+            const eDist = Math.sqrt(edx * edx + edz * edz);
+            if (eDist < nearestDist) {
+                nearestDist = eDist;
+                nearestEnemy = cloudSprite;
+            }
         }
     }
     
@@ -1321,6 +1355,22 @@ function updateSlimeProjectiles() {
                         document.getElementById('kills').textContent = gameState.kills;
                     }
                     
+                    hit = true;
+                    break;
+                }
+            }
+        }
+        
+        // Check forest cloud sprites
+        if (!hit && encounterState.forestCloudSprites) {
+            for (const cloudSprite of encounterState.forestCloudSprites) {
+                const dx = cloudSprite.sprite.position.x - proj.sprite.position.x;
+                const dz = cloudSprite.sprite.position.z - proj.sprite.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist < 1.5) {
+                    cloudSprite.health -= proj.damage;
+                    cloudSprite.hitFlash = 10;
                     hit = true;
                     break;
                 }
