@@ -261,13 +261,12 @@ function shouldSpawnMonsterStore() {
     if (encounterState.currentEncounter) return false;
     if (gameState.bosses.length > 0) return false;
     if (encounterState.inCloudArena) return false;
-    if (encounterState.cloudPortal) return false; // No store during cloud portal
+    if (encounterState.cloudPortal) return false;
     
     const level = gameState.player.level;
-    if (level < 10) return false;
+    if (level < 5) return false; // Monster store starts at level 5
     
-    // Similar spawn chance to bosses/encounters (~1-2%)
-    return Math.random() < 0.015;
+    return true; // Probability handled by main spawn logic
 }
 
 function spawnMonsterStore() {
