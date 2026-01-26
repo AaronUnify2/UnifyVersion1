@@ -175,9 +175,7 @@ const ENCOUNTER_TEMPLATES = {
 // CLOUD ARENA CONFIGURATION
 // ============================================
 const CLOUD_ARENA_CONFIG = {
-    minLevel: 5,
-    maxLevel: 9,
-    spawnChance: 0.03,
+    // No level limits - handled by main spawn system
     
     // Arena enemies
     bossCount: 3,
@@ -1022,7 +1020,9 @@ function isEncounterSystemBusy() {
 // ============================================
 // SPAWN CHECKS
 // ============================================
-function shouldSpawnEncounter() {
+
+// Check if ANY major event (boss or encounter) can spawn
+function canSpawnMajorEvent() {
     if (encounterState.currentEncounter) return false;
     if (gameState.bosses.length > 0) return false;
     if (encounterState.cloudPortal) return false;
@@ -1030,36 +1030,158 @@ function shouldSpawnEncounter() {
     if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) return false;
     
     const level = gameState.player.level;
+    if (level < 5) return false; // Major events start at level 5
     
-    // Check for guaranteed encounters first
+    return true;
+}
+
+// Legacy function - now just checks if allowed (probability handled by main loop)
+function shouldSpawnEncounter() {
+    if (!canSpawnMajorEvent()) return false;
+    
+    // Check for guaranteed encounters
     if (hasGuaranteedEncounter()) {
         return true;
     }
     
-    // Normal spawn check
-    if (level < 4) return false;
-    
-    const spawnChance = getEncounterSpawnChance(level);
-    return Math.random() < spawnChance;
+    return true; // Probability handled by main spawn logic
 }
 
+// Check if portal can spawn (no level limits now)
 function shouldSpawnPortal() {
     if (encounterState.inCloudArena) return false;
     if (encounterState.cloudPortal) return false;
-    if (encounterState.arenaCompleted) return false;
+    if (encounterState.arenaCompleted) return false; // Only one sky giant fight per game
     if (gameState.bosses.length > 0) return false;
     if (encounterState.currentEncounter) return false;
     if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) return false;
     
-    const level = gameState.player.level;
-    if (level < CLOUD_ARENA_CONFIG.minLevel || level > CLOUD_ARENA_CONFIG.maxLevel) return false;
-    
-    return Math.random() < CLOUD_ARENA_CONFIG.spawnChance;
+    return true; // Probability handled by main spawn logic
 }
 
 function shouldSpawnChest() {
     if (encounterState.treasureChests.length >= TREASURE_CHEST_CONFIG.maxChests) return false;
     return Math.random() < TREASURE_CHEST_CONFIG.spawnChance;
+}
+
+// Spawn a random encounter from the 5 types (20% each)
+// Types: Monster Store, Sky Giants, Princess Tower, Witch Hut, Sword in Stone
+function spawnRandomEncounter() {
+    const roll = Math.random();
+    
+    if (roll < 0.20) {
+        // Monster Store (20%)
+        if (typeof spawnMonsterStore === 'function') {
+            spawnMonsterStore();
+        } else {
+            // Fallback to regular encounter if monster store not loaded
+            spawnSpecificEncounter('princessTower');
+        }
+    } else if (roll < 0.40) {
+        // Sky Giants Portal (20%)
+        if (shouldSpawnPortal()) {
+            spawnCloudPortal();
+        } else {
+            // If portal can't spawn (already completed), spawn another encounter
+            spawnSpecificEncounter('witchHut');
+        }
+    } else if (roll < 0.60) {
+        // Princess Tower (20%)
+        spawnSpecificEncounter('princessTower');
+    } else if (roll < 0.80) {
+        // Witch Hut (20%)
+        spawnSpecificEncounter('witchHut');
+    } else {
+        // Sword in Stone (20%)
+        spawnSpecificEncounter('swordInStone');
+    }
+}
+
+// Spawn a specific encounter by key
+function spawnSpecificEncounter(templateKey) {
+    const template = ENCOUNTER_TEMPLATES[templateKey];
+    if (!template) {
+        console.error('Unknown encounter template:', templateKey);
+        return;
+    }
+    
+    // Calculate spawn position
+    const angle = Math.random() * Math.PI * 2;
+    const dist = CONFIG.enemySpawnRadius * 1.3;
+    const x = gameState.player.position.x + Math.cos(angle) * dist;
+    const z = gameState.player.position.z + Math.sin(angle) * dist;
+    
+    // Create main structure sprite
+    const material = new THREE.SpriteMaterial({
+        map: encounterState.textures[template.textureKey],
+        transparent: true
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(template.scale[0], template.scale[1], 1);
+    sprite.position.set(x, template.scale[1] / 2, z);
+    scene.add(sprite);
+    
+    // Spawn guards
+    const guards = [];
+    for (let i = 0; i < template.guards.count; i++) {
+        const guardAngle = (i / template.guards.count) * Math.PI * 2;
+        const guardDist = 6 + Math.random() * 4;
+        const gx = x + Math.cos(guardAngle) * guardDist;
+        const gz = z + Math.sin(guardAngle) * guardDist;
+        
+        let guardTexture, guardScale;
+        
+        if (template.guards.customTexture) {
+            guardTexture = encounterState.textures[template.guards.type];
+            guardScale = [2.5, 4];
+        } else {
+            const enemyType = enemyTypes.find(t => t.name === template.guards.type);
+            if (enemyType) {
+                guardTexture = enemyType.texture();
+                guardScale = enemyType.scale;
+            } else {
+                guardTexture = createGoblinTexture();
+                guardScale = [2.5, 3.2];
+            }
+        }
+        
+        const guardMaterial = new THREE.SpriteMaterial({
+            map: guardTexture,
+            transparent: true
+        });
+        const guardSprite = new THREE.Sprite(guardMaterial);
+        guardSprite.scale.set(guardScale[0], guardScale[1], 1);
+        guardSprite.position.set(gx, guardScale[1] / 2, gz);
+        scene.add(guardSprite);
+        
+        const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2) * template.guards.healthMultiplier;
+        guards.push({
+            sprite: guardSprite,
+            health: baseHealth,
+            maxHealth: baseHealth,
+            damage: CONFIG.enemyBaseDamage * (1 + gameState.player.level * 0.15),
+            speed: 0.06,
+            attackCooldown: 0,
+            hitFlash: 0
+        });
+    }
+    
+    encounterState.encounterGuards = guards;
+    
+    encounterState.currentEncounter = {
+        template,
+        sprite,
+        position: new THREE.Vector3(x, 0, z),
+        guardsDefeated: false,
+        npcSpawned: false,
+        npc: null,
+        rewardGiven: false
+    };
+    
+    gameState.targetCameraZoom = template.cameraZoom;
+    
+    console.log('Spawned specific encounter:', template.name);
+    showDialogue('⚔️ ' + template.displayName.toUpperCase(), `A ${template.displayName} has appeared! Defeat the guards to claim your reward!`);
 }
 
 // ============================================
