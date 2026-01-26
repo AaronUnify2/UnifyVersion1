@@ -34,6 +34,9 @@ const encounterState = {
     savedForestPosition: null,
     pendingArenaExit: false,
     
+    // Forest cloud sprites (spawn when portal appears)
+    forestCloudSprites: [],
+    
     // Saved environment for arena restoration
     savedGroundMaterial: null,
     savedFogColor: null,
@@ -183,8 +186,13 @@ const CLOUD_ARENA_CONFIG = {
     enemyCount: 60,
     enemyHealthMultiplier: 3,
     
+    // Forest cloud sprites that spawn with portal
+    forestCloudSpriteCount: 20,
+    
     // Rewards
-    goldReward: 1000,
+    goldReward: 200,
+    bossGoldDrop: 100,      // Gold per sky giant killed
+    enemyGoldDrop: 10,      // Gold per cloud sprite killed
     
     cameraZoom: 2.5
 };
@@ -1491,7 +1499,43 @@ function spawnCloudPortal() {
         particleTimer: 0
     };
     
-    showDialogue('☁️ MYSTERIOUS PORTAL', 'A magical beanstalk has appeared! It leads to the clouds above. Walk into the portal if you dare face the Sky Giants!');
+    // Spawn forest cloud sprites around the portal
+    spawnForestCloudSprites(x, z);
+    
+    showDialogue('☁️ MYSTERIOUS PORTAL', 'A magical beanstalk has appeared! Cloud sprites have descended from the sky. Walk into the portal if you dare face the Sky Giants!');
+}
+
+// Spawn cloud sprites in the forest when portal appears
+function spawnForestCloudSprites(portalX, portalZ) {
+    for (let i = 0; i < CLOUD_ARENA_CONFIG.forestCloudSpriteCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 8 + Math.random() * 20; // Spread around portal
+        const cx = portalX + Math.cos(angle) * dist;
+        const cz = portalZ + Math.sin(angle) * dist;
+        
+        const material = new THREE.SpriteMaterial({
+            map: encounterState.textures.cloudSprite,
+            transparent: true
+        });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(4, 2, 1);
+        sprite.position.set(cx, 1.5, cz);
+        scene.add(sprite);
+        
+        const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2) * 2;
+        const enemy = {
+            sprite,
+            health: baseHealth,
+            maxHealth: baseHealth,
+            damage: CONFIG.enemyBaseDamage * (1 + gameState.player.level * 0.15),
+            speed: 0.055,
+            attackCooldown: 0,
+            hitFlash: 0,
+            isForestCloudSprite: true
+        };
+        
+        encounterState.forestCloudSprites.push(enemy);
+    }
 }
 
 function updateCloudPortal() {
@@ -1571,6 +1615,12 @@ function cleanupPortal() {
         scene.remove(p.sprite);
     }
     encounterState.portalParticles = [];
+    
+    // Clean up forest cloud sprites
+    for (const enemy of encounterState.forestCloudSprites) {
+        scene.remove(enemy.sprite);
+    }
+    encounterState.forestCloudSprites = [];
 }
 
 function enterCloudArena() {
@@ -1727,12 +1777,8 @@ function updateCloudArena() {
         }
         
         if (boss.health <= 0) {
-            for (let j = 0; j < 5; j++) {
-                const orbPos = boss.sprite.position.clone();
-                orbPos.x += (Math.random() - 0.5) * 3;
-                orbPos.z += (Math.random() - 0.5) * 3;
-                spawnXPOrb(orbPos, 100);
-            }
+            // Drop gold only, no XP (to prevent over-leveling)
+            spawnGoldOrb(boss.sprite.position.clone(), CLOUD_ARENA_CONFIG.bossGoldDrop);
             
             scene.remove(boss.sprite);
             encounterState.arenaBosses.splice(i, 1);
@@ -1765,7 +1811,8 @@ function updateCloudArena() {
         }
         
         if (enemy.health <= 0) {
-            spawnXPOrb(enemy.sprite.position.clone(), 20);
+            // Drop gold only, no XP (to prevent over-leveling)
+            spawnGoldOrb(enemy.sprite.position.clone(), CLOUD_ARENA_CONFIG.enemyGoldDrop);
             scene.remove(enemy.sprite);
             encounterState.arenaEnemies.splice(i, 1);
         }
@@ -1889,9 +1936,63 @@ function updateEncounterSystem() {
     // Update cloud portal
     updateCloudPortal();
     
+    // Update forest cloud sprites (in forest, near portal)
+    if (!encounterState.inCloudArena) {
+        updateForestCloudSprites();
+    }
+    
     // Update cloud arena
     if (encounterState.inCloudArena) {
         updateCloudArena();
+    }
+}
+
+// Update forest cloud sprites that spawn when portal appears
+function updateForestCloudSprites() {
+    if (encounterState.forestCloudSprites.length === 0) return;
+    if (gameState.dialogueTimer > 0) return;
+    
+    for (let i = encounterState.forestCloudSprites.length - 1; i >= 0; i--) {
+        const enemy = encounterState.forestCloudSprites[i];
+        
+        const dx = gameState.player.position.x - enemy.sprite.position.x;
+        const dz = gameState.player.position.z - enemy.sprite.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        // Move toward player
+        if (dist > 1.5) {
+            enemy.sprite.position.x += (dx / dist) * enemy.speed;
+            enemy.sprite.position.z += (dz / dist) * enemy.speed;
+        } else if (enemy.attackCooldown <= 0) {
+            takeDamage(enemy.damage);
+            enemy.attackCooldown = 60;
+        }
+        
+        enemy.attackCooldown = Math.max(0, enemy.attackCooldown - 1);
+        
+        // Hit flash
+        if (enemy.hitFlash > 0) {
+            enemy.hitFlash--;
+            enemy.sprite.material.color.setHex(enemy.hitFlash % 4 < 2 ? 0xffffff : 0xff0000);
+        } else {
+            enemy.sprite.material.color.setHex(0xffffff);
+        }
+        
+        // Check death
+        if (enemy.health <= 0) {
+            // Drop gold only, no XP
+            spawnGoldOrb(enemy.sprite.position.clone(), CLOUD_ARENA_CONFIG.enemyGoldDrop);
+            scene.remove(enemy.sprite);
+            encounterState.forestCloudSprites.splice(i, 1);
+            gameState.kills++;
+            document.getElementById('kills').textContent = gameState.kills;
+        }
+        
+        // Remove if too far from player
+        if (dist > CONFIG.renderDistance * 2) {
+            scene.remove(enemy.sprite);
+            encounterState.forestCloudSprites.splice(i, 1);
+        }
     }
 }
 
@@ -1907,7 +2008,7 @@ function resetEncounterSystem() {
     }
     encounterState.treasureChests = [];
     
-    // Cleanup portal
+    // Cleanup portal (this also cleans up forest cloud sprites)
     cleanupPortal();
     
     // Cleanup arena
@@ -1932,6 +2033,7 @@ function resetEncounterSystem() {
     encounterState.encounterGuards = [];
     encounterState.cloudPortal = null;
     encounterState.portalParticles = [];
+    encounterState.forestCloudSprites = [];
     encounterState.inCloudArena = false;
     encounterState.arenaCompleted = false;
     encounterState.savedForestPosition = null;
