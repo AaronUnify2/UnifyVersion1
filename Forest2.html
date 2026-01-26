@@ -34,6 +34,23 @@
             image-rendering: pixelated;
         }
         
+        #debugDisplay {
+            position: fixed;
+            bottom: 120px;
+            left: 10px;
+            color: #0f0;
+            font-size: 8px;
+            font-family: monospace;
+            background: rgba(0,0,0,0.7);
+            padding: 5px;
+            max-width: 300px;
+            max-height: 150px;
+            overflow: hidden;
+            z-index: 9999;
+            pointer-events: none;
+            white-space: pre-wrap;
+        }
+        
         #ui {
             position: fixed;
             top: 0;
@@ -610,6 +627,7 @@
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
+    <div id="debugDisplay">Debug loading...</div>
     
     <div id="ui">
         <div id="stats">
@@ -752,6 +770,25 @@
                 textures: {}
             };
         }
+        
+        // ============================================
+        // DEBUG LOGGING (on-screen for mobile)
+        // ============================================
+        const debugLog = [];
+        let debugFrameCount = 0;
+        function debug(msg) {
+            try {
+                debugLog.push(msg);
+                if (debugLog.length > 12) debugLog.shift();
+                const el = document.getElementById('debugDisplay');
+                if (el) el.textContent = debugLog.join('\n');
+            } catch(e) {
+                // Silently fail
+            }
+        }
+        debug('Script loaded');
+        debug('THREE: ' + (typeof THREE !== 'undefined'));
+        debug('encounterState: ' + (typeof encounterState !== 'undefined'));
 
         // ============================================
         // PIXEL ART TEXTURE GENERATORS
@@ -2679,13 +2716,19 @@
 
         function animate() {
             requestAnimationFrame(animate);
+            debugFrameCount++;
+            
+            // Show frame count every frame for first 5 frames, then every 60
+            if (debugFrameCount <= 5 || debugFrameCount % 60 === 0) {
+                debug('F' + debugFrameCount + ' menu:' + gameState.menuOpen + ' over:' + gameState.isGameOver);
+            }
 
             try {
                 if (!gameState.isGameOver && !gameState.menuOpen) {
                     updatePlayer();
                     
                     // Only update forest systems when not in cloud arena
-                    const inArena = typeof encounterState !== 'undefined' && encounterState.inCloudArena;
+                    const inArena = typeof encounterState !== 'undefined' && encounterState && encounterState.inCloudArena;
                     if (!inArena) {
                         updateChunks();
                         updateEnemies();
@@ -2738,8 +2781,8 @@
                             }
                             
                             // Maybe spawn a treasure chest (independent, 8% chance)
-                            if (shouldSpawnChest()) {
-                                spawnTreasureChest();
+                            if (typeof shouldSpawnChest === 'function' && shouldSpawnChest()) {
+                                if (typeof spawnTreasureChest === 'function') spawnTreasureChest();
                             }
                             
                             lastSpawnTime = now;
@@ -2747,7 +2790,7 @@
                     }
                 }
             } catch (error) {
-                console.error('Error in animate loop:', error);
+                debug('ERR: ' + error.message);
             }
 
             renderer.render(scene, camera);
@@ -2757,38 +2800,52 @@
         // INITIALIZATION
         // ============================================
         function init() {
-            setupDPad();
-            setupMagicButton();
-            setupViewControl();
-            setupKeyboard();
-            setupMenuControls();
-            setupDialogueButton();
-            
-            // Initialize encounter system (includes portal textures)
-            if (typeof initEncounterSystem === 'function') {
-                initEncounterSystem();
-            }
-
-            // Generate initial chunks
-            updateChunks();
-            
-            // Initialize UI
-            updateUpgradeMenu();
-            
-            // Initialize slime companion system (if loaded)
-            if (typeof initSlimeCompanion === 'function') {
-                initSlimeCompanion();
-            }
-
-            // Start animation
-            animate();
-
-            // Start spawning enemies
-            setTimeout(() => {
-                for (let i = 0; i < 3; i++) {
-                    spawnEnemy();
+            debug('init() starting...');
+            try {
+                setupDPad();
+                debug('DPad setup');
+                setupMagicButton();
+                debug('Magic button setup');
+                setupViewControl();
+                setupKeyboard();
+                setupMenuControls();
+                setupDialogueButton();
+                debug('Controls setup');
+                
+                // Initialize encounter system (includes portal textures)
+                debug('encounterState exists: ' + (typeof encounterState !== 'undefined'));
+                debug('initEncounterSystem exists: ' + (typeof initEncounterSystem === 'function'));
+                if (typeof initEncounterSystem === 'function') {
+                    initEncounterSystem();
+                    debug('Encounter system initialized');
                 }
-            }, 1000);
+
+                // Generate initial chunks
+                updateChunks();
+                debug('Chunks generated');
+                
+                // Initialize UI
+                updateUpgradeMenu();
+                
+                // Initialize slime companion system (if loaded)
+                if (typeof initSlimeCompanion === 'function') {
+                    initSlimeCompanion();
+                }
+                debug('Init complete, starting animate');
+
+                // Start animation
+                animate();
+
+                // Start spawning enemies
+                setTimeout(() => {
+                    for (let i = 0; i < 3; i++) {
+                        spawnEnemy();
+                    }
+                    debug('Initial enemies spawned');
+                }, 1000);
+            } catch (error) {
+                debug('INIT ERROR: ' + error.message);
+            }
         }
 
         // Handle resize
