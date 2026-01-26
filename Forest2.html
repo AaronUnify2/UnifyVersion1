@@ -731,6 +731,27 @@
             enemyMaxCount: 12,
             enemySpawnInterval: 2000
         };
+        
+        // Fallback encounterState in case encounters.js hasn't loaded yet
+        // This prevents crashes if the external script fails
+        if (typeof encounterState === 'undefined') {
+            var encounterState = {
+                currentEncounter: null,
+                encounterGuards: [],
+                treasureChests: [],
+                cloudPortal: null,
+                portalParticles: [],
+                inCloudArena: false,
+                arenaBosses: [],
+                arenaEnemies: [],
+                arenaStage: 0,
+                forestCloudSprites: [],
+                storyEncounterStage: 0,
+                wizardWheels: [],
+                playerDharmaWheel: null,
+                textures: {}
+            };
+        }
 
         // ============================================
         // PIXEL ART TEXTURE GENERATORS
@@ -999,7 +1020,8 @@
             dialogueTimer: 0,
             chunks: new Map(),
             isGameOver: false,
-            menuOpen: false
+            menuOpen: false,
+            hasDharmaWheel: false // Dharma wheel reward from Dharmachakra encounter
         };
 
         // ============================================
@@ -1327,7 +1349,7 @@
                 }
 
                 // Check collision with encounter guards
-                if (!hitSomething) {
+                if (!hitSomething && typeof encounterState !== 'undefined' && encounterState.encounterGuards) {
                     for (const guard of encounterState.encounterGuards) {
                         const dx = proj.sprite.position.x - guard.sprite.position.x;
                         const dz = proj.sprite.position.z - guard.sprite.position.z;
@@ -2099,6 +2121,7 @@
             gameState.bossActive = false;
             gameState.cameraZoom = 1;
             gameState.targetCameraZoom = 1;
+            gameState.hasDharmaWheel = false;
             encounterState.currentEncounter = null;
             encounterState.currentEncounterComplete = false;
             gameState.dialogue = null;
@@ -2122,7 +2145,8 @@
             encounterState.arenaEnemies.forEach(e => scene.remove(e.sprite));
             encounterState.arenaEnemies = [];
             gameState.savedForestPosition = null;
-            encounterState.arenaCompleted = false;
+            encounterState.arenaStage = 0;
+            encounterState.storyEncounterStage = 0;
             encounterState.pendingArenaExit = false;
 
             document.getElementById('gameOver').style.display = 'none';
@@ -2656,69 +2680,74 @@
         function animate() {
             requestAnimationFrame(animate);
 
-            if (!gameState.isGameOver && !gameState.menuOpen) {
-                updatePlayer();
-                
-                // Only update forest systems when not in cloud arena
-                if (!encounterState.inCloudArena) {
-                    updateChunks();
-                    updateEnemies();
-                    updateBosses();
-                    // Use new modular encounter system
-                    if (typeof updateEncounterSystem === 'function') {
-                        updateEncounterSystem();
+            try {
+                if (!gameState.isGameOver && !gameState.menuOpen) {
+                    updatePlayer();
+                    
+                    // Only update forest systems when not in cloud arena
+                    const inArena = typeof encounterState !== 'undefined' && encounterState.inCloudArena;
+                    if (!inArena) {
+                        updateChunks();
+                        updateEnemies();
+                        updateBosses();
+                        // Use new modular encounter system
+                        if (typeof updateEncounterSystem === 'function') {
+                            updateEncounterSystem();
+                        }
+                    } else {
+                        // Update cloud arena (handled by encounter system)
+                        if (typeof updateEncounterSystem === 'function') {
+                            updateEncounterSystem();
+                        }
                     }
-                } else {
-                    // Update cloud arena (handled by encounter system)
-                    if (typeof updateEncounterSystem === 'function') {
-                        updateEncounterSystem();
+                    
+                    // These work in both forest and arena
+                    updateProjectiles();
+                    updateXPOrbs();
+                    updateGoldOrbs();
+                    updateSwords();
+                    updateBoomProjectiles();
+                    updateBoomCooldown();
+                    updateDialogue();
+                    updateCompass();
+                    updateCameraZoom();
+                    
+                    // Update slime companion system (if loaded)
+                    if (typeof updateSlimeCompanion === 'function') {
+                        updateSlimeCompanion();
                     }
-                }
-                
-                // These work in both forest and arena
-                updateProjectiles();
-                updateXPOrbs();
-                updateGoldOrbs();
-                updateSwords();
-                updateBoomProjectiles();
-                updateBoomCooldown();
-                updateDialogue();
-                updateCompass();
-                updateCameraZoom();
-                
-                // Update slime companion system (if loaded)
-                if (typeof updateSlimeCompanion === 'function') {
-                    updateSlimeCompanion();
-                }
 
-                // Spawn enemies (only in forest)
-                if (!encounterState.inCloudArena) {
-                    const now = Date.now();
-                    if (now - lastSpawnTime > CONFIG.enemySpawnInterval) {
-                        spawnEnemy();
-                        
-                        // 10% chance for a major event (boss or encounter)
-                        // Only if no boss/encounter/store currently active and level 5+
-                        if (typeof canSpawnMajorEvent === 'function' && canSpawnMajorEvent() && Math.random() < 0.10) {
-                            if (Math.random() < 0.5) {
-                                // 50% chance: Spawn a boss (equal chance: Dragon, Evil Tree, Troll)
-                                spawnBoss();
-                            } else {
-                                // 50% chance: Spawn an encounter (20% each: Monster Store, Sky Giants, Princess, Witch, Sword)
-                                if (typeof spawnRandomEncounter === 'function') {
-                                    spawnRandomEncounter();
+                    // Spawn enemies (only in forest)
+                    if (!inArena) {
+                        const now = Date.now();
+                        if (now - lastSpawnTime > CONFIG.enemySpawnInterval) {
+                            spawnEnemy();
+                            
+                            // 10% chance for a major event (boss or encounter)
+                            // Only if no boss/encounter/store currently active and level 5+
+                            if (typeof canSpawnMajorEvent === 'function' && canSpawnMajorEvent() && Math.random() < 0.10) {
+                                if (Math.random() < 0.5) {
+                                    // 50% chance: Spawn a boss (equal chance: Dragon, Evil Tree, Troll)
+                                    spawnBoss();
+                                } else {
+                                    // 50% chance: Spawn an encounter (20% each: Monster Store, Sky Giants, Princess, Witch, Sword)
+                                    if (typeof spawnRandomEncounter === 'function') {
+                                        spawnRandomEncounter();
+                                    }
                                 }
                             }
+                            
+                            // Maybe spawn a treasure chest (independent, 8% chance)
+                            if (shouldSpawnChest()) {
+                                spawnTreasureChest();
+                            }
+                            
+                            lastSpawnTime = now;
                         }
-                        
-                        // Maybe spawn a treasure chest (independent, 8% chance)
-                        if (shouldSpawnChest()) {
-                            spawnTreasureChest();
-                        }
-                        
-                        lastSpawnTime = now;
                     }
                 }
+            } catch (error) {
+                console.error('Error in animate loop:', error);
             }
 
             renderer.render(scene, camera);
