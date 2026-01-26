@@ -417,6 +417,7 @@ function getBossDamage() {
 function shouldSpawnBoss() {
     if (gameState.bosses.length > 0) return false; // Only one boss at a time
     if (encounterState.currentEncounter) return false; // No boss during encounters
+    if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) return false; // No boss during monster store
     
     const level = gameState.player.level;
     if (level < 4) return false; // No bosses before level 4
