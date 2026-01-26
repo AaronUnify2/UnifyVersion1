@@ -266,7 +266,8 @@ function shouldSpawnMonsterStore() {
     const level = gameState.player.level;
     if (level < 10) return false;
     
-    return Math.random() < 0.015;
+    // Low spawn chance - similar to encounters/bosses
+    return Math.random() < 0.005;
 }
 
 function spawnMonsterStore() {
@@ -374,10 +375,20 @@ function updateMonsterStore() {
         updateShopkeeper();
     }
     
+    // Timer-based cleanup after store is closed
+    if (store.rewardGiven && store.cleanupTimer !== undefined) {
+        store.cleanupTimer--;
+        if (store.cleanupTimer <= 0) {
+            cleanupMonsterStore();
+            return;
+        }
+    }
+    
     const dx = gameState.player.position.x - store.position.x;
     const dz = gameState.player.position.z - store.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
     
+    // Distance-based cleanup (only after reward given)
     if (dist > CONFIG.renderDistance * 2 && store.rewardGiven) {
         cleanupMonsterStore();
     }
@@ -430,6 +441,13 @@ function cleanupMonsterStore() {
     if (!store) return;
     
     console.log('Cleaning up Monster Store');
+    
+    // Hide store menu if somehow still open
+    slimeCompanionState.storeMenuOpen = false;
+    const storeMenu = document.getElementById('slimeStoreMenu');
+    if (storeMenu) {
+        storeMenu.style.display = 'none';
+    }
     
     if (store.tree) {
         scene.remove(store.tree);
@@ -763,6 +781,11 @@ function closeSlimeStore() {
     slimeCompanionState.storeMenuOpen = false;
     gameState.menuOpen = false;
     document.getElementById('slimeStoreMenu').style.display = 'none';
+    
+    // Start cleanup timer (30 seconds at 60fps)
+    if (slimeCompanionState.monsterStore) {
+        slimeCompanionState.monsterStore.cleanupTimer = 30 * 60;
+    }
     
     showDialogue('🎩 MERCHANT', '"Come back anytime! ...If you can find me again, that is! Hehehehe!"');
 }
@@ -1407,9 +1430,10 @@ function performHeal() {
 
 function updateSlimeHealthBar() {
     const state = slimeCompanionState;
+    const container = document.getElementById('slimeHealthContainer');
     
-    if (!state.slime || state.slimeHealth <= 0) {
-        document.getElementById('slimeHealthContainer').classList.remove('active');
+    if (!state.slimeOwned || !state.slime || state.slimeHealth <= 0) {
+        container.classList.remove('active');
         return;
     }
     
@@ -1418,16 +1442,17 @@ function updateSlimeHealthBar() {
     
     const screenPos = slimePos.project(camera);
     
-    const container = document.getElementById('slimeHealthContainer');
     const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
     const y = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
     
     if (screenPos.z > 1 || x < 0 || x > window.innerWidth || y < 0 || y > window.innerHeight) {
-        container.style.display = 'none';
+        container.classList.remove('active');
         return;
     }
     
-    container.style.display = 'block';
+    // Clear any inline display style and use class
+    container.style.display = '';
+    container.classList.add('active');
     container.style.left = (x - 30) + 'px';
     container.style.top = y + 'px';
     
@@ -1459,20 +1484,26 @@ function slimeDeath() {
     
     console.log('Companion slime has died!');
     
+    // Remove slime sprite
     if (state.slime) {
         scene.remove(state.slime);
         state.slime = null;
     }
     
+    // Clean up slime projectiles
     state.slimeProjectiles.forEach(p => scene.remove(p.sprite));
     state.slimeProjectiles = [];
     
+    // Clean up slime swords
     state.slimeSwords.forEach(s => scene.remove(s.sprite));
     state.slimeSwords = [];
     
+    // Reset ownership and health
     state.slimeOwned = false;
     state.slimeHealth = 0;
+    state.slimeMaxHealth = 0;
     
+    // Reset all upgrades
     state.upgrades = {
         attackSpeed: { level: 0, maxLevel: 10, baseCost: 20, costMult: 1.2 },
         health: { level: 0, maxLevel: 12, baseCost: 20, costMult: 1.15 },
@@ -1480,9 +1511,17 @@ function slimeDeath() {
         heal: { level: 0, maxLevel: 1, baseCost: 100, costMult: 1 }
     };
     
-    document.getElementById('slimeHealthContainer').classList.remove('active');
-    document.getElementById('healIndicator').classList.remove('active');
-    document.getElementById('healIndicator').classList.remove('ready');
+    // Hide UI elements using class
+    const healthContainer = document.getElementById('slimeHealthContainer');
+    if (healthContainer) {
+        healthContainer.classList.remove('active');
+    }
+    
+    const healIndicator = document.getElementById('healIndicator');
+    if (healIndicator) {
+        healIndicator.classList.remove('active');
+        healIndicator.classList.remove('ready');
+    }
     
     showDialogue('💔 SLIME', 'Your slime companion has fallen in battle... Visit the Monster Store to get a new one.');
 }
