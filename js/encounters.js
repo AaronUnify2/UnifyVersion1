@@ -241,7 +241,8 @@ const ENCOUNTER_TEMPLATES = {
             '"Have you accepted the Four Noble Truths into your heart?!"',
             '"Buddha WILL return, and he will NOT be pleased with you!"',
             '"Your karma is about to get VERY negative!"',
-            '"We didn\'t choose the monastic life, the monastic life chose US!"'
+            '"We didn\'t choose the monastic life, the monastic life chose US!"',
+            '"I\'m not a dog!"'
         ]
     }
 };
