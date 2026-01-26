@@ -1653,6 +1653,11 @@ function initEncounterTextures() {
     };
     
     console.log('Encounter textures initialized:', Object.keys(encounterState.textures).length, 'textures');
+    if (typeof debug === 'function') {
+        debug('Textures: ' + Object.keys(encounterState.textures).length);
+        debug('Has princessTower: ' + !!encounterState.textures.princessTower);
+        debug('Has beanstalk: ' + !!encounterState.textures.beanstalk);
+    }
 }
 
 // ============================================
@@ -1671,7 +1676,10 @@ function isEncounterSystemBusy() {
 
 // Check if ANY major event (boss or encounter) can spawn
 function canSpawnMajorEvent() {
-    if (encounterState.currentEncounter) return false;
+    if (encounterState.currentEncounter) {
+        // Don't spam debug for this common case
+        return false;
+    }
     if (gameState.bosses.length > 0) return false;
     if (encounterState.cloudPortal) return false;
     if (encounterState.inCloudArena) return false;
@@ -1697,14 +1705,33 @@ function shouldSpawnEncounter() {
 
 // Check if portal can spawn (uses arenaStage, not level limits)
 function shouldSpawnPortal() {
-    if (encounterState.inCloudArena) return false;
-    if (encounterState.cloudPortal) return false;
-    if (encounterState.arenaStage >= 3) return false; // All 3 stages completed
-    if (gameState.bosses.length > 0) return false;
-    if (encounterState.currentEncounter) return false;
-    if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) return false;
+    if (encounterState.inCloudArena) {
+        if (typeof debug === 'function') debug('Portal blocked: inArena');
+        return false;
+    }
+    if (encounterState.cloudPortal) {
+        if (typeof debug === 'function') debug('Portal blocked: portalExists');
+        return false;
+    }
+    if (encounterState.arenaStage >= 3) {
+        if (typeof debug === 'function') debug('Portal blocked: stage>=3');
+        return false;
+    }
+    if (gameState.bosses.length > 0) {
+        if (typeof debug === 'function') debug('Portal blocked: bossActive');
+        return false;
+    }
+    if (encounterState.currentEncounter) {
+        if (typeof debug === 'function') debug('Portal blocked: encounter active');
+        return false;
+    }
+    if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) {
+        if (typeof debug === 'function') debug('Portal blocked: store active');
+        return false;
+    }
     
-    return true; // Probability handled by main spawn logic
+    if (typeof debug === 'function') debug('Portal CAN spawn');
+    return true;
 }
 
 function shouldSpawnChest() {
@@ -1717,49 +1744,64 @@ function shouldSpawnChest() {
 // Random encounters: Monster Store, Sword in Stone
 function spawnRandomEncounter() {
     const roll = Math.random();
+    if (typeof debug === 'function') debug('randEnc roll=' + roll.toFixed(2));
     
     if (roll < 0.20) {
         // Monster Store (20%) - random
         if (typeof spawnMonsterStore === 'function' && typeof shouldSpawnMonsterStore === 'function' && shouldSpawnMonsterStore()) {
+            if (typeof debug === 'function') debug('-> MonsterStore');
             spawnMonsterStore();
         } else {
+            if (typeof debug === 'function') debug('-> Story (store fallback)');
             // Fallback to story encounter
             spawnStoryEncounter();
         }
     } else if (roll < 0.40) {
         // Sky Giants Portal (20%) - sequential
         if (shouldSpawnPortal()) {
+            if (typeof debug === 'function') debug('-> SkyGiants');
             spawnCloudPortal();
         } else {
+            if (typeof debug === 'function') debug('-> Story (portal fallback)');
             // If all 3 stages completed, spawn story encounter instead
             spawnStoryEncounter();
         }
     } else if (roll < 0.80) {
         // Story Encounter (40%) - sequential: Princess → Witch → Dharmachakra
+        if (typeof debug === 'function') debug('-> Story');
         spawnStoryEncounter();
     } else {
         // Sword in Stone (20%) - random
+        if (typeof debug === 'function') debug('-> SwordInStone');
         spawnSpecificEncounter('swordInStone');
     }
 }
 
 // Spawn the next story encounter in sequence
 function spawnStoryEncounter() {
-    if (!encounterState) return;
+    if (!encounterState) {
+        if (typeof debug === 'function') debug('storyEnc: no encounterState');
+        return;
+    }
     
     const stage = encounterState.storyEncounterStage || 0;
+    if (typeof debug === 'function') debug('storyEnc stage=' + stage);
     
     if (stage === 0) {
         // Princess Tower
+        if (typeof debug === 'function') debug('Spawning princessTower');
         spawnSpecificEncounter('princessTower');
     } else if (stage === 1) {
         // Witch Hut
+        if (typeof debug === 'function') debug('Spawning witchHut');
         spawnSpecificEncounter('witchHut');
     } else if (stage === 2) {
         // Dharmachakra Shrine
+        if (typeof debug === 'function') debug('Spawning dharmachakra');
         spawnDharmachakraEncounter();
     } else {
         // All story encounters completed - spawn random alternative
+        if (typeof debug === 'function') debug('Story complete, fallback');
         const fallbackRoll = Math.random();
         if (fallbackRoll < 0.5) {
             spawnSpecificEncounter('swordInStone');
@@ -1867,27 +1909,39 @@ function spawnDharmachakraEncounter() {
 
 // Spawn a specific encounter by key
 function spawnSpecificEncounter(templateKey) {
-    const template = ENCOUNTER_TEMPLATES[templateKey];
-    if (!template) {
-        console.error('Unknown encounter template:', templateKey);
-        return;
-    }
+    if (typeof debug === 'function') debug('spawnSpec: ' + templateKey);
     
-    // Calculate spawn position
-    const angle = Math.random() * Math.PI * 2;
-    const dist = CONFIG.enemySpawnRadius * 1.3;
-    const x = gameState.player.position.x + Math.cos(angle) * dist;
-    const z = gameState.player.position.z + Math.sin(angle) * dist;
-    
-    // Create main structure sprite
-    const material = new THREE.SpriteMaterial({
-        map: encounterState.textures[template.textureKey],
-        transparent: true
-    });
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(template.scale[0], template.scale[1], 1);
-    sprite.position.set(x, template.scale[1] / 2, z);
-    scene.add(sprite);
+    try {
+        const template = ENCOUNTER_TEMPLATES[templateKey];
+        if (!template) {
+            if (typeof debug === 'function') debug('NO TEMPLATE: ' + templateKey);
+            console.error('Unknown encounter template:', templateKey);
+            return;
+        }
+        
+        // Check texture exists
+        if (!encounterState.textures[template.textureKey]) {
+            if (typeof debug === 'function') debug('NO TEXTURE: ' + template.textureKey);
+            return;
+        }
+        
+        if (typeof debug === 'function') debug('Template+texture OK');
+        
+        // Calculate spawn position
+        const angle = Math.random() * Math.PI * 2;
+        const dist = CONFIG.enemySpawnRadius * 1.3;
+        const x = gameState.player.position.x + Math.cos(angle) * dist;
+        const z = gameState.player.position.z + Math.sin(angle) * dist;
+        
+        // Create main structure sprite
+        const material = new THREE.SpriteMaterial({
+            map: encounterState.textures[template.textureKey],
+            transparent: true
+        });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(template.scale[0], template.scale[1], 1);
+        sprite.position.set(x, template.scale[1] / 2, z);
+        scene.add(sprite);
     
     // Spawn guards
     const guards = [];
@@ -1950,6 +2004,11 @@ function spawnSpecificEncounter(templateKey) {
     
     console.log('Spawned specific encounter:', template.name);
     showDialogue('⚔️ ' + template.displayName.toUpperCase(), `A ${template.displayName} has appeared! Defeat the guards to claim your reward!`);
+    
+    } catch (error) {
+        if (typeof debug === 'function') debug('spawnSpec ERROR: ' + error.message);
+        console.error('Error in spawnSpecificEncounter:', error);
+    }
 }
 
 // ============================================
@@ -2595,47 +2654,64 @@ function openTreasureChest(chest) {
 // CLOUD ARENA SYSTEM
 // ============================================
 function spawnCloudPortal() {
-    const stage = encounterState.arenaStage;
-    const stageConfig = CLOUD_ARENA_CONFIG['stage' + stage];
+    if (typeof debug === 'function') debug('spawnCloudPortal called');
     
-    const angle = Math.random() * Math.PI * 2;
-    const dist = CONFIG.enemySpawnRadius * 1.2;
-    
-    const x = gameState.player.position.x + Math.cos(angle) * dist;
-    const z = gameState.player.position.z + Math.sin(angle) * dist;
-    
-    const material = new THREE.SpriteMaterial({
-        map: encounterState.textures.beanstalk,
-        transparent: true
-    });
-    
-    // Tint portal based on stage
-    if (stage === 1) {
-        material.color.setHex(0x808080); // Dark gray tint
-    } else if (stage === 2) {
-        material.color.setHex(0xaa66cc); // Purple tint
-    }
-    
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(10, 15, 1);
-    sprite.position.set(x, 7.5, z);
-    scene.add(sprite);
-    
-    encounterState.cloudPortal = {
-        sprite,
-        position: new THREE.Vector3(x, 0, z),
-        particleTimer: 0,
-        stage: stage
-    };
-    
-    // Only spawn forest cloud sprites for stage 0
-    if (stage === 0) {
-        spawnForestCloudSprites(x, z);
-        showDialogue('☁️ MYSTERIOUS PORTAL', 'A magical beanstalk has appeared! Cloud sprites have descended from the sky. Walk into the portal if you dare face the Sky Giants!');
-    } else if (stage === 1) {
-        showDialogue('⚠️ DARK PORTAL', 'The beanstalk has returned... darker than before. Something angry awaits above.');
-    } else if (stage === 2) {
-        showDialogue('👻 HAUNTED PORTAL', 'An ethereal beanstalk has materialized. Ghostly wails echo from above...');
+    try {
+        const stage = encounterState.arenaStage;
+        const stageConfig = CLOUD_ARENA_CONFIG['stage' + stage];
+        
+        if (typeof debug === 'function') debug('Portal stage=' + stage);
+        
+        // Check texture exists
+        if (!encounterState.textures.beanstalk) {
+            if (typeof debug === 'function') debug('NO TEXTURE: beanstalk');
+            return;
+        }
+        
+        const angle = Math.random() * Math.PI * 2;
+        const dist = CONFIG.enemySpawnRadius * 1.2;
+        
+        const x = gameState.player.position.x + Math.cos(angle) * dist;
+        const z = gameState.player.position.z + Math.sin(angle) * dist;
+        
+        const material = new THREE.SpriteMaterial({
+            map: encounterState.textures.beanstalk,
+            transparent: true
+        });
+        
+        // Tint portal based on stage
+        if (stage === 1) {
+            material.color.setHex(0x808080); // Dark gray tint
+        } else if (stage === 2) {
+            material.color.setHex(0xaa66cc); // Purple tint
+        }
+        
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(10, 15, 1);
+        sprite.position.set(x, 7.5, z);
+        scene.add(sprite);
+        
+        encounterState.cloudPortal = {
+            sprite,
+            position: new THREE.Vector3(x, 0, z),
+            particleTimer: 0,
+            stage: stage
+        };
+        
+        // Only spawn forest cloud sprites for stage 0
+        if (stage === 0) {
+            spawnForestCloudSprites(x, z);
+            showDialogue('☁️ MYSTERIOUS PORTAL', 'A magical beanstalk has appeared! Cloud sprites have descended from the sky. Walk into the portal if you dare face the Sky Giants!');
+        } else if (stage === 1) {
+            showDialogue('⚠️ DARK PORTAL', 'The beanstalk has returned... darker than before. Something angry awaits above.');
+        } else if (stage === 2) {
+            showDialogue('👻 HAUNTED PORTAL', 'An ethereal beanstalk has materialized. Ghostly wails echo from above...');
+        }
+        
+        if (typeof debug === 'function') debug('Portal spawned OK');
+    } catch (error) {
+        if (typeof debug === 'function') debug('Portal ERROR: ' + error.message);
+        console.error('Error in spawnCloudPortal:', error);
     }
 }
 
