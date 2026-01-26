@@ -44,6 +44,15 @@ const encounterState = {
     // Forest cloud sprites (spawn when portal appears)
     forestCloudSprites: [],
     
+    // Story encounter sequence: Princess → Witch → Dharmachakra
+    storyEncounterStage: 0, // 0=Princess, 1=Witch, 2=Dharmachakra, 3=completed
+    
+    // Dharma wheel wizards (for Dharmachakra encounter)
+    wizardWheels: [], // Orbiting wheels on wizards
+    
+    // Player's dharma wheel (reward from completing Dharmachakra)
+    playerDharmaWheel: null,
+    
     // Saved environment for arena restoration
     savedGroundMaterial: null,
     savedFogColor: null,
@@ -169,12 +178,55 @@ const ENCOUNTER_TEMPLATES = {
             spawnOffset: { x: 8, z: 3 },
             dialogue: {
                 speaker: '🧙‍♀️ WITCH',
-                text: '"I was trying to summon a handsome wizard for... um... companionship... and instead I summoned twenty dogmatic buddhists!"'
+                text: '"Remember me? The princess you \'rescued\'? Well, I\'ve been practicing dark magic in the forest... I tried to summon a handsome wizard for companionship and instead summoned twenty dogmatic buddhists!"'
             },
             rewardOnContact: true
         },
         
         onComplete: 'spawnNPC'
+    },
+    
+    dharmachakra: {
+        name: 'dharmachakra',
+        displayName: 'Dharmachakra Shrine',
+        textureKey: 'dharmachakraShrine',
+        scale: [12, 14],
+        
+        guards: {
+            type: 'dharmaWizard', // Custom super-powered wizards
+            count: 20,
+            healthMultiplier: 3, // Super powered
+            customTexture: true,
+            hasOrbitingWheel: true // Special property for dharma wheels
+        },
+        
+        cameraZoom: 2.8,
+        
+        reward: {
+            type: 'dharmaWheel', // Special reward type
+            text: '☸️ DHARMA WHEEL ACQUIRED!'
+        },
+        
+        minLevel: 4,
+        maxLevel: 999,
+        spawnWeight: 1,
+        
+        npc: null, // No NPC, just the shrine
+        
+        // Custom completion behavior
+        onComplete: 'grantDharmaWheel',
+        
+        // Dogmatic Buddhist dialogue options (shown randomly during combat)
+        combatDialogues: [
+            '"It is an UNDENIABLE FACT that Buddha has risen!"',
+            '"To be enlightened is to NEVER question Buddha\'s teachings!"',
+            '"ENLIGHTENMENT OR ELSE!"',
+            '"The Eightfold Path is the ONLY path! All other paths lead to SUFFERING!"',
+            '"Have you accepted the Four Noble Truths into your heart?!"',
+            '"Buddha WILL return, and he will NOT be pleased with you!"',
+            '"Your karma is about to get VERY negative!"',
+            '"We didn\'t choose the monastic life, the monastic life chose US!"'
+        ]
     }
 };
 
@@ -1301,6 +1353,242 @@ function createGiantSlimeTexture() {
 }
 
 // ============================================
+// DHARMACHAKRA ENCOUNTER TEXTURES
+// ============================================
+
+// Dharmachakra Shrine - Big golden dharma wheel with lotus flowers
+function createDharmachakraShrineTexture() {
+    return createPixelTexture(80, 96, (ctx, w, h) => {
+        // Base/altar
+        ctx.fillStyle = '#d4af37'; // Gold
+        ctx.fillRect(10, 70, 60, 26);
+        ctx.fillStyle = '#b8960c';
+        ctx.fillRect(15, 75, 50, 16);
+        
+        // Lotus flowers around base
+        const lotusColors = ['#ff69b4', '#ff1493', '#ff69b4'];
+        for (let i = 0; i < 3; i++) {
+            ctx.fillStyle = lotusColors[i];
+            // Left side
+            ctx.beginPath();
+            ctx.ellipse(8 + i * 8, 85, 5, 4, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Right side
+            ctx.beginPath();
+            ctx.ellipse(56 + i * 8, 85, 5, 4, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Dharma wheel (large, centered)
+        const wheelX = 40, wheelY = 38, wheelR = 28;
+        
+        // Outer ring
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(wheelX, wheelY, wheelR, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Inner ring
+        ctx.beginPath();
+        ctx.arc(wheelX, wheelY, wheelR * 0.3, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // 8 spokes
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(wheelX + Math.cos(angle) * wheelR * 0.3, wheelY + Math.sin(angle) * wheelR * 0.3);
+            ctx.lineTo(wheelX + Math.cos(angle) * wheelR, wheelY + Math.sin(angle) * wheelR);
+            ctx.stroke();
+        }
+        
+        // Center hub
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(wheelX, wheelY, 6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Glow effect
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+        ctx.beginPath();
+        ctx.arc(wheelX, wheelY, wheelR + 6, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
+// Dharma Wizard - Super powered wizard with golden robes
+function createDharmaWizardTexture() {
+    return createPixelTexture(32, 48, (ctx, w, h) => {
+        // Golden robes (body)
+        ctx.fillStyle = '#daa520'; // Goldenrod
+        ctx.beginPath();
+        ctx.moveTo(16, 18);
+        ctx.lineTo(6, 46);
+        ctx.lineTo(26, 46);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Robe trim
+        ctx.fillStyle = '#b8860b';
+        ctx.fillRect(8, 40, 16, 6);
+        
+        // Face
+        ctx.fillStyle = '#f5deb3';
+        ctx.beginPath();
+        ctx.ellipse(16, 14, 8, 9, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Stern expression - furrowed brows
+        ctx.fillStyle = '#654321';
+        ctx.fillRect(10, 10, 5, 2);
+        ctx.fillRect(17, 10, 5, 2);
+        
+        // Judgmental eyes
+        ctx.fillStyle = '#000';
+        ctx.fillRect(11, 13, 3, 3);
+        ctx.fillRect(18, 13, 3, 3);
+        
+        // Frowning mouth
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(16, 22, 3, 0.2, Math.PI - 0.2);
+        ctx.stroke();
+        
+        // Shaved head (no hat, Buddhist monk style)
+        ctx.fillStyle = '#f5deb3';
+        ctx.beginPath();
+        ctx.arc(16, 8, 7, Math.PI, 0);
+        ctx.fill();
+        
+        // Prayer beads
+        ctx.fillStyle = '#8b4513';
+        for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            ctx.arc(8 + i * 4, 28, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+}
+
+// Dharma Wheel - 8-spoked wheel (for wizards and player)
+function createDharmaWheelTexture() {
+    return createPixelTexture(32, 32, (ctx, w, h) => {
+        const cx = 16, cy = 16, r = 14;
+        
+        // Glow
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.4)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Outer ring
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Inner ring
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.35, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // 8 spokes with pointed ends
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const innerR = r * 0.35;
+            
+            // Main spoke
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(angle) * innerR, cy + Math.sin(angle) * innerR);
+            ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+            ctx.stroke();
+            
+            // Pointed tip (spike)
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+            ctx.lineTo(cx + Math.cos(angle - 0.2) * (r - 3), cy + Math.sin(angle - 0.2) * (r - 3));
+            ctx.lineTo(cx + Math.cos(angle + 0.2) * (r - 3), cy + Math.sin(angle + 0.2) * (r - 3));
+            ctx.fill();
+        }
+        
+        // Center hub
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
+// Player's Dharma Wheel - Larger, more ornate
+function createPlayerDharmaWheelTexture() {
+    return createPixelTexture(48, 48, (ctx, w, h) => {
+        const cx = 24, cy = 24, r = 20;
+        
+        // Strong glow
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.5)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Outer ring
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Secondary ring
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Inner ring
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.35, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // 8 ornate spokes
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const innerR = r * 0.35;
+            
+            // Main spoke
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(angle) * innerR, cy + Math.sin(angle) * innerR);
+            ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+            ctx.stroke();
+            
+            // Large pointed spike
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(angle) * (r + 4), cy + Math.sin(angle) * (r + 4));
+            ctx.lineTo(cx + Math.cos(angle - 0.25) * (r - 4), cy + Math.sin(angle - 0.25) * (r - 4));
+            ctx.lineTo(cx + Math.cos(angle + 0.25) * (r - 4), cy + Math.sin(angle + 0.25) * (r - 4));
+            ctx.fill();
+        }
+        
+        // Center hub with detail
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#b8860b';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
+// ============================================
 // TEXTURE INITIALIZATION
 // ============================================
 function initEncounterTextures() {
@@ -1339,10 +1627,16 @@ function initEncounterTextures() {
         // Cloud arena - Stage 2 (Ghost Trio)
         giantGhost: createGiantGhostTexture(),
         giantSkeleton: createGiantSkeletonTexture(),
-        giantSlime: createGiantSlimeTexture()
+        giantSlime: createGiantSlimeTexture(),
+        
+        // Dharmachakra encounter
+        dharmachakraShrine: createDharmachakraShrineTexture(),
+        dharmaWizard: createDharmaWizardTexture(),
+        dharmaWheel: createDharmaWheelTexture(),
+        playerDharmaWheel: createPlayerDharmaWheelTexture()
     };
     
-    console.log('Encounter textures initialized.');
+    console.log('Encounter textures initialized:', Object.keys(encounterState.textures).length, 'textures');
 }
 
 // ============================================
@@ -1402,37 +1696,157 @@ function shouldSpawnChest() {
     return Math.random() < TREASURE_CHEST_CONFIG.spawnChance;
 }
 
-// Spawn a random encounter from the 5 types (20% each)
-// Types: Monster Store, Sky Giants, Princess Tower, Witch Hut, Sword in Stone
+// Spawn a random encounter
+// Sequential encounters: Sky Giants (3 stages), Story (Princess → Witch → Dharmachakra)
+// Random encounters: Monster Store, Sword in Stone
 function spawnRandomEncounter() {
     const roll = Math.random();
     
     if (roll < 0.20) {
-        // Monster Store (20%)
-        if (typeof spawnMonsterStore === 'function') {
+        // Monster Store (20%) - random
+        if (typeof spawnMonsterStore === 'function' && typeof shouldSpawnMonsterStore === 'function' && shouldSpawnMonsterStore()) {
             spawnMonsterStore();
         } else {
-            // Fallback to regular encounter if monster store not loaded
-            spawnSpecificEncounter('princessTower');
+            // Fallback to story encounter
+            spawnStoryEncounter();
         }
     } else if (roll < 0.40) {
-        // Sky Giants Portal (20%)
+        // Sky Giants Portal (20%) - sequential
         if (shouldSpawnPortal()) {
             spawnCloudPortal();
         } else {
-            // If portal can't spawn (all 3 stages completed), spawn another encounter
-            spawnSpecificEncounter('witchHut');
+            // If all 3 stages completed, spawn story encounter instead
+            spawnStoryEncounter();
         }
-    } else if (roll < 0.60) {
-        // Princess Tower (20%)
-        spawnSpecificEncounter('princessTower');
     } else if (roll < 0.80) {
-        // Witch Hut (20%)
-        spawnSpecificEncounter('witchHut');
+        // Story Encounter (40%) - sequential: Princess → Witch → Dharmachakra
+        spawnStoryEncounter();
     } else {
-        // Sword in Stone (20%)
+        // Sword in Stone (20%) - random
         spawnSpecificEncounter('swordInStone');
     }
+}
+
+// Spawn the next story encounter in sequence
+function spawnStoryEncounter() {
+    if (!encounterState) return;
+    
+    const stage = encounterState.storyEncounterStage || 0;
+    
+    if (stage === 0) {
+        // Princess Tower
+        spawnSpecificEncounter('princessTower');
+    } else if (stage === 1) {
+        // Witch Hut
+        spawnSpecificEncounter('witchHut');
+    } else if (stage === 2) {
+        // Dharmachakra Shrine
+        spawnDharmachakraEncounter();
+    } else {
+        // All story encounters completed - spawn random alternative
+        const fallbackRoll = Math.random();
+        if (fallbackRoll < 0.5) {
+            spawnSpecificEncounter('swordInStone');
+        } else if (typeof spawnMonsterStore === 'function') {
+            spawnMonsterStore();
+        } else {
+            spawnSpecificEncounter('swordInStone');
+        }
+    }
+}
+
+// Special spawn function for Dharmachakra encounter
+function spawnDharmachakraEncounter() {
+    const template = ENCOUNTER_TEMPLATES.dharmachakra;
+    
+    // Calculate spawn position
+    const angle = Math.random() * Math.PI * 2;
+    const dist = CONFIG.enemySpawnRadius * 1.3;
+    const x = gameState.player.position.x + Math.cos(angle) * dist;
+    const z = gameState.player.position.z + Math.sin(angle) * dist;
+    
+    // Create shrine
+    const material = new THREE.SpriteMaterial({
+        map: encounterState.textures.dharmachakraShrine,
+        transparent: true
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(template.scale[0], template.scale[1], 1);
+    sprite.position.set(x, template.scale[1] / 2, z);
+    scene.add(sprite);
+    
+    // Spawn dharma wizards with orbiting wheels
+    const guards = [];
+    encounterState.wizardWheels = [];
+    
+    for (let i = 0; i < template.guards.count; i++) {
+        const guardAngle = (i / template.guards.count) * Math.PI * 2;
+        const guardDist = 8 + Math.random() * 6;
+        const gx = x + Math.cos(guardAngle) * guardDist;
+        const gz = z + Math.sin(guardAngle) * guardDist;
+        
+        // Wizard sprite
+        const guardMaterial = new THREE.SpriteMaterial({
+            map: encounterState.textures.dharmaWizard,
+            transparent: true
+        });
+        const guardSprite = new THREE.Sprite(guardMaterial);
+        guardSprite.scale.set(3, 4.5, 1);
+        guardSprite.position.set(gx, 2.25, gz);
+        scene.add(guardSprite);
+        
+        const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2) * template.guards.healthMultiplier;
+        const guard = {
+            sprite: guardSprite,
+            health: baseHealth,
+            maxHealth: baseHealth,
+            damage: CONFIG.enemyBaseDamage * (1 + gameState.player.level * 0.15) * 1.5,
+            speed: 0.05,
+            attackCooldown: 0,
+            hitFlash: 0,
+            dialogueCooldown: 0,
+            isDharmaWizard: true
+        };
+        guards.push(guard);
+        
+        // Orbiting dharma wheel for this wizard
+        const wheelMaterial = new THREE.SpriteMaterial({
+            map: encounterState.textures.dharmaWheel,
+            transparent: true
+        });
+        const wheelSprite = new THREE.Sprite(wheelMaterial);
+        wheelSprite.scale.set(3, 3, 1);
+        scene.add(wheelSprite);
+        
+        encounterState.wizardWheels.push({
+            sprite: wheelSprite,
+            owner: guard,
+            angle: Math.random() * Math.PI * 2,
+            speed: 0.04 + Math.random() * 0.02,
+            radius: 4, // Further out than swords
+            damage: CONFIG.enemyBaseDamage * (1 + gameState.player.level * 0.15)
+        });
+    }
+    
+    encounterState.encounterGuards = guards;
+    
+    encounterState.currentEncounter = {
+        template,
+        sprite,
+        position: new THREE.Vector3(x, 0, z),
+        guardsDefeated: false,
+        npcSpawned: false,
+        npc: null,
+        rewardGiven: false
+    };
+    
+    gameState.targetCameraZoom = template.cameraZoom;
+    
+    // Show intro dialogue
+    const randomDialogue = template.combatDialogues[Math.floor(Math.random() * template.combatDialogues.length)];
+    showDialogue('☸️ DHARMACHAKRA SHRINE', `The Dogmatic Buddhists guard the sacred wheel! One of them shouts: ${randomDialogue}`);
+    
+    console.log('Spawned Dharmachakra encounter with', guards.length, 'dharma wizards');
 }
 
 // Spawn a specific encounter by key
@@ -1661,7 +2075,23 @@ function updateEncounter() {
             } else {
                 guard.sprite.material.color.setHex(0xffffff);
             }
+            
+            // Dharma wizard random combat dialogue
+            if (guard.isDharmaWizard && guard.dialogueCooldown !== undefined) {
+                guard.dialogueCooldown = Math.max(0, guard.dialogueCooldown - 1);
+                if (guard.dialogueCooldown <= 0 && Math.random() < 0.001 && gameState.dialogueTimer <= 0) {
+                    const dialogues = template.combatDialogues;
+                    if (dialogues && dialogues.length > 0) {
+                        const randomDialogue = dialogues[Math.floor(Math.random() * dialogues.length)];
+                        showDialogue('☸️ DOGMATIC BUDDHIST', randomDialogue);
+                        guard.dialogueCooldown = 600; // 10 seconds cooldown
+                    }
+                }
+            }
         }
+        
+        // Update wizard dharma wheels (orbit around their owners, damage player)
+        updateWizardDharmaWheels();
     }
     
     // Check if all guards defeated
@@ -1744,7 +2174,16 @@ function updateEncounterPostComplete(enc, template) {
             if (template.name === 'princessTower') {
                 // Special case: princess shows heart
                 spawnHeartEffect(enc.npc.position.clone());
-                showDialogue('💕 PRINCESS', '"My hero! Please accept this gift as thanks for saving me!"');
+                showDialogue('💕 PRINCESS', '"My hero! Please accept this gift... I think I\'ll stay in this forest for a while. Maybe practice some magic... the dark kind looks interesting!"');
+                
+                // Advance story stage
+                encounterState.storyEncounterStage = 1; // Next: Witch
+            } else if (template.name === 'witchHut') {
+                // Advance story stage after witch
+                encounterState.storyEncounterStage = 2; // Next: Dharmachakra
+                if (template.npc.dialogue) {
+                    showDialogue(template.npc.dialogue.speaker, template.npc.dialogue.text);
+                }
             } else if (template.npc.dialogue) {
                 showDialogue(template.npc.dialogue.speaker, template.npc.dialogue.text);
             }
@@ -1760,6 +2199,15 @@ function updateEncounterPostComplete(enc, template) {
             if (template.completionDialogue) {
                 showDialogue(template.completionDialogue.speaker, template.completionDialogue.text);
             }
+            giveEncounterReward(enc, template);
+        }
+    } else if (template.onComplete === 'grantDharmaWheel') {
+        // Dharmachakra: approach shrine after defeating all wizards
+        const dx = gameState.player.position.x - enc.position.x;
+        const dz = gameState.player.position.z - enc.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < 5) {
             giveEncounterReward(enc, template);
         }
     }
@@ -1808,6 +2256,24 @@ function giveEncounterReward(enc, template) {
             document.getElementById('goldNum').textContent = gameState.player.gold;
             showReward(`💰 ${goldReward} GOLD (Upgrade already maxed!)`);
         }
+    } else if (reward.type === 'dharmaWheel') {
+        // Grant the dharma wheel to the player
+        if (!gameState.hasDharmaWheel) {
+            gameState.hasDharmaWheel = true;
+            gameState.dharmaWheelAngle = 0;
+            spawnPlayerDharmaWheel();
+            showReward(reward.text);
+            showDialogue('☸️ ENLIGHTENMENT', '"The Wheel of Dharma now orbits your being. Use it wisely... or don\'t. The Buddha has no strong opinions either way. Wait, that\'s not right..."');
+            
+            // Advance story stage
+            encounterState.storyEncounterStage = 3; // Completed
+        } else {
+            // Already have it - give gold
+            const goldReward = 2000;
+            gameState.player.gold += goldReward;
+            document.getElementById('goldNum').textContent = gameState.player.gold;
+            showReward(`💰 ${goldReward} GOLD (Already enlightened!)`);
+        }
     }
     
     gameState.targetCameraZoom = 1;
@@ -1827,6 +2293,10 @@ function cleanupEncounter() {
     encounterState.encounterGuards.forEach(g => scene.remove(g.sprite));
     encounterState.encounterGuards = [];
     
+    // Clean up wizard dharma wheels
+    encounterState.wizardWheels.forEach(w => scene.remove(w.sprite));
+    encounterState.wizardWheels = [];
+    
     encounterState.currentEncounter = null;
     gameState.targetCameraZoom = 1;
     hideDialogue();
@@ -1845,11 +2315,182 @@ function damageEncounterGuard(guard, damage) {
         if (Math.random() < 0.3) {
             spawnGoldOrb(guard.sprite.position.clone(), 8);
         }
+        
+        // If this is a dharma wizard, remove their orbiting wheel
+        if (guard.isDharmaWizard) {
+            for (let i = encounterState.wizardWheels.length - 1; i >= 0; i--) {
+                if (encounterState.wizardWheels[i].owner === guard) {
+                    scene.remove(encounterState.wizardWheels[i].sprite);
+                    encounterState.wizardWheels.splice(i, 1);
+                    break;
+                }
+            }
+        }
+        
         scene.remove(guard.sprite);
         const idx = encounterState.encounterGuards.indexOf(guard);
         if (idx > -1) encounterState.encounterGuards.splice(idx, 1);
         gameState.kills++;
         document.getElementById('kills').textContent = gameState.kills;
+    }
+}
+
+// ============================================
+// WIZARD DHARMA WHEELS (orbit around dharma wizards)
+// ============================================
+function updateWizardDharmaWheels() {
+    if (!encounterState || !encounterState.wizardWheels) return;
+    
+    for (let i = encounterState.wizardWheels.length - 1; i >= 0; i--) {
+        const wheel = encounterState.wizardWheels[i];
+        if (!wheel || !wheel.sprite) {
+            encounterState.wizardWheels.splice(i, 1);
+            continue;
+        }
+        
+        // Check if owner still exists
+        if (!wheel.owner || !wheel.owner.sprite || encounterState.encounterGuards.indexOf(wheel.owner) === -1) {
+            scene.remove(wheel.sprite);
+            encounterState.wizardWheels.splice(i, 1);
+            continue;
+        }
+        
+        // Orbit around owner
+        wheel.angle += wheel.speed;
+        wheel.sprite.position.x = wheel.owner.sprite.position.x + Math.cos(wheel.angle) * wheel.radius;
+        wheel.sprite.position.z = wheel.owner.sprite.position.z + Math.sin(wheel.angle) * wheel.radius;
+        wheel.sprite.position.y = 2;
+        
+        // Rotate the wheel sprite
+        wheel.sprite.material.rotation = wheel.angle * 2;
+        
+        // Check collision with player
+        const dx = gameState.player.position.x - wheel.sprite.position.x;
+        const dz = gameState.player.position.z - wheel.sprite.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < 2) {
+            takeDamage(wheel.damage * 0.02);
+        }
+    }
+}
+
+// ============================================
+// PLAYER DHARMA WHEEL (reward from Dharmachakra encounter)
+// ============================================
+function spawnPlayerDharmaWheel() {
+    if (encounterState.playerDharmaWheel) return; // Already exists
+    
+    const material = new THREE.SpriteMaterial({
+        map: encounterState.textures.playerDharmaWheel,
+        transparent: true
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(4, 4, 1); // Larger and more impressive
+    scene.add(sprite);
+    
+    encounterState.playerDharmaWheel = {
+        sprite,
+        angle: 0,
+        radius: 5, // Orbits further out than swords
+        speed: 0.03
+    };
+    gameState.hasDharmaWheel = true; // Use gameState for persistence
+    
+    console.log('Player dharma wheel spawned!');
+}
+
+function updatePlayerDharmaWheel() {
+    // Early exit if not applicable
+    if (!gameState || !gameState.hasDharmaWheel) return;
+    if (!encounterState || !encounterState.playerDharmaWheel) return;
+    if (!encounterState.playerDharmaWheel.sprite) return;
+    
+    const wheel = encounterState.playerDharmaWheel;
+    
+    // Orbit around player (further out than swords)
+    wheel.angle += wheel.speed;
+    wheel.sprite.position.x = gameState.player.position.x + Math.cos(wheel.angle) * wheel.radius;
+    wheel.sprite.position.z = gameState.player.position.z + Math.sin(wheel.angle) * wheel.radius;
+    wheel.sprite.position.y = 1.5;
+    
+    // Rotate the wheel sprite for visual effect
+    wheel.sprite.material.rotation = wheel.angle * 3;
+    
+    // Deal damage to enemies (equivalent to 4 swords)
+    const baseSwordDamage = CONFIG.projectileBaseDamage * (1 + gameState.player.level * 0.25);
+    const wheelDamage = baseSwordDamage * 4; // 4x sword damage
+    
+    // Check collision with regular enemies
+    for (const enemy of gameState.enemies) {
+        const dx = enemy.sprite.position.x - wheel.sprite.position.x;
+        const dz = enemy.sprite.position.z - wheel.sprite.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < 2.5) {
+            enemy.health -= wheelDamage * 0.02;
+            enemy.hitFlash = 5;
+        }
+    }
+    
+    // Check collision with bosses
+    for (const boss of gameState.bosses) {
+        const dx = boss.sprite.position.x - wheel.sprite.position.x;
+        const dz = boss.sprite.position.z - wheel.sprite.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < 3) {
+            boss.health -= wheelDamage * 0.02;
+            boss.hitFlash = 5;
+        }
+    }
+    
+    // Check collision with encounter guards
+    for (const guard of encounterState.encounterGuards) {
+        const dx = guard.sprite.position.x - wheel.sprite.position.x;
+        const dz = guard.sprite.position.z - wheel.sprite.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < 2.5) {
+            guard.health -= wheelDamage * 0.02;
+            guard.hitFlash = 5;
+        }
+    }
+    
+    // Check collision with arena enemies
+    for (const enemy of encounterState.arenaEnemies) {
+        const dx = enemy.sprite.position.x - wheel.sprite.position.x;
+        const dz = enemy.sprite.position.z - wheel.sprite.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < 2.5) {
+            enemy.health -= wheelDamage * 0.02;
+            enemy.hitFlash = 5;
+        }
+    }
+    
+    // Check collision with arena bosses
+    for (const boss of encounterState.arenaBosses) {
+        const dx = boss.sprite.position.x - wheel.sprite.position.x;
+        const dz = boss.sprite.position.z - wheel.sprite.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < 3) {
+            boss.health -= wheelDamage * 0.02;
+            boss.hitFlash = 5;
+        }
+    }
+    
+    // Check collision with forest cloud sprites
+    for (const enemy of encounterState.forestCloudSprites) {
+        const dx = enemy.sprite.position.x - wheel.sprite.position.x;
+        const dz = enemy.sprite.position.z - wheel.sprite.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < 2.5) {
+            enemy.health -= wheelDamage * 0.02;
+            enemy.hitFlash = 5;
+        }
     }
 }
 
@@ -2700,23 +3341,30 @@ function initEncounterSystem() {
 }
 
 function updateEncounterSystem() {
-    // Update current encounter
-    updateEncounter();
-    
-    // Update treasure chests
-    updateTreasureChests();
-    
-    // Update cloud portal
-    updateCloudPortal();
-    
-    // Update forest cloud sprites (in forest, near portal)
-    if (!encounterState.inCloudArena) {
-        updateForestCloudSprites();
-    }
-    
-    // Update cloud arena
-    if (encounterState.inCloudArena) {
-        updateCloudArena();
+    try {
+        // Update current encounter
+        updateEncounter();
+        
+        // Update treasure chests
+        updateTreasureChests();
+        
+        // Update cloud portal
+        updateCloudPortal();
+        
+        // Update forest cloud sprites (in forest, near portal)
+        if (!encounterState.inCloudArena) {
+            updateForestCloudSprites();
+        }
+        
+        // Update cloud arena
+        if (encounterState.inCloudArena) {
+            updateCloudArena();
+        }
+        
+        // Update player's dharma wheel (if they have one)
+        updatePlayerDharmaWheel();
+    } catch (error) {
+        console.error('Error in updateEncounterSystem:', error);
     }
 }
 
@@ -2812,6 +3460,18 @@ function resetEncounterSystem() {
     }
     encounterState.trollProjectiles = [];
     
+    // Cleanup wizard dharma wheels
+    for (const wheel of encounterState.wizardWheels) {
+        scene.remove(wheel.sprite);
+    }
+    encounterState.wizardWheels = [];
+    
+    // Cleanup player dharma wheel
+    if (encounterState.playerDharmaWheel) {
+        scene.remove(encounterState.playerDharmaWheel.sprite);
+        encounterState.playerDharmaWheel = null;
+    }
+    
     // Reset state
     encounterState.currentEncounter = null;
     encounterState.encounterGuards = [];
@@ -2820,10 +3480,16 @@ function resetEncounterSystem() {
     encounterState.forestCloudSprites = [];
     encounterState.inCloudArena = false;
     encounterState.arenaStage = 0; // Reset to stage 0
+    encounterState.storyEncounterStage = 0; // Reset story encounters
     encounterState.ghostDefeated = false;
     encounterState.savedForestPosition = null;
     encounterState.pendingArenaExit = false;
     encounterState.guaranteedEncounterQueue = [];
+    
+    // Reset gameState dharma wheel flag
+    if (typeof gameState !== 'undefined') {
+        gameState.hasDharmaWheel = false;
+    }
 }
 
 // Check for pending arena exit (called when dialogue closes)
