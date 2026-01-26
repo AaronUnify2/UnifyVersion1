@@ -14,6 +14,22 @@
 // ============================================
 
 // ============================================
+// PIXEL TEXTURE HELPER (needed for texture creation)
+// ============================================
+function createPixelTexture(width, height, drawFunc) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    drawFunc(ctx, width, height);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    return texture;
+}
+
+// ============================================
 // ENCOUNTER SYSTEM STATE
 // ============================================
 const encounterState = {
