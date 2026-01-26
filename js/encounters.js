@@ -283,7 +283,7 @@ const FUN_FACTS = [
     "In a pinch, slimes can be used as a surprisingly effective sidekick.",
     "While trolls may seem dangerous there have been zero recorded deaths.",
     "The evil tree may be dangerous but at least he makes oxygen.",
-    "Found fragment of parchment in large handwriting, To do: 1. Raise cloud army, 2. Have doctor look at my slime, 3. Take over the world",
+    "Found fragment of parchment in large handwriting, <br> To do: <br>1. Raise cloud army, <br>2. Have doctor look at my slime, <br>3. Take over the world",
     "The forest seems dangerous, but most inhabitants are peaceful and kind.",
     "Why do monsters carry gold? Legend speaks of an underground monster only shop.",
     "Orbiting swords are great for the forest, impractical for bathing. Some heroes stab their swords into stones just to wash in peace.",
