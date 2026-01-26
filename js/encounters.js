@@ -30,9 +30,16 @@ const encounterState = {
     inCloudArena: false,
     arenaBosses: [],
     arenaEnemies: [],
-    arenaCompleted: false,
+    arenaStage: 0, // 0=Cloud Sprites, 1=Giant Troll, 2=Ghost Trio, 3=completed
     savedForestPosition: null,
     pendingArenaExit: false,
+    
+    // Giant Troll specific (stage 1)
+    trollClubs: [],
+    trollProjectiles: [],
+    
+    // Ghost stage tracking (stage 2)
+    ghostDefeated: false,
     
     // Forest cloud sprites (spawn when portal appears)
     forestCloudSprites: [],
@@ -172,27 +179,82 @@ const ENCOUNTER_TEMPLATES = {
 };
 
 // ============================================
-// CLOUD ARENA CONFIGURATION
+// CLOUD ARENA CONFIGURATION (3 STAGES)
 // ============================================
 const CLOUD_ARENA_CONFIG = {
-    // No level limits - handled by main spawn system
+    // Stage 0: Cloud Sprites + Sky Giants
+    stage0: {
+        name: 'Cloud Sprites',
+        bossCount: 3,
+        bossHealthMultiplier: 0.5,
+        enemyCount: 60,
+        enemyHealthMultiplier: 3,
+        bossGoldDrop: 100,
+        enemyGoldDrop: 10,
+        goldReward: 200,
+        cameraZoom: 2.5,
+        introDialogue: {
+            title: '⚔️ CLOUD ARENA',
+            text: 'Defeat all the Sky Giants and their minions to claim your reward!'
+        },
+        winDialogue: {
+            title: '🏆 VICTORY!',
+            text: 'You have defeated the Sky Giants! Your surprise slaughter of the clouds was a great success!'
+        },
+        portalColor: 0x87ceeb, // Light blue
+        fogColor: 0x87ceeb
+    },
     
-    // Arena enemies
-    bossCount: 3,
-    bossHealthMultiplier: 0.5, // Reduced for early access
+    // Stage 1: Giant Troll (revenge for his pets)
+    stage1: {
+        name: 'Giant Troll',
+        trollHealthMultiplier: 2.0, // Really beefy
+        trollGoldDrop: 1000,
+        goldReward: 1000,
+        cameraZoom: 3.5, // Zoom way out for the huge troll
+        clubCount: 4,
+        clubSpeeds: [0.02, 0.035, 0.025, 0.03], // Varying speeds
+        clubDamage: 2.0, // Multiplier
+        projectileCooldown: 120,
+        introDialogue: {
+            title: '😡 GIANT TROLL',
+            text: '"YOU KILLED MY CLOUD PETS! NOW IT\'S TIME TO DIE!"'
+        },
+        winDialogue: {
+            title: '🏆 VICTORY!',
+            text: 'The Giant Troll has been slain! His dying words were mostly just angry grunting.'
+        },
+        portalColor: 0x4a4a4a, // Dark gray
+        fogColor: 0x6b5b4f // Brownish fog
+    },
     
-    enemyCount: 60,
-    enemyHealthMultiplier: 3,
+    // Stage 2: Ghost Trio (the final reckoning)
+    stage2: {
+        name: 'Ghost Trio',
+        ghostHealthMultiplier: 1.5,
+        skeletonHealthMultiplier: 1.8,
+        slimeHealthMultiplier: 2.0,
+        bossGoldDrop: 500, // Each boss drops 500
+        goldReward: 1500,
+        cameraZoom: 3.0,
+        introDialogue: {
+            title: '👻 THE HAUNTING',
+            text: 'The ghost of the giant has returned for vengeance, alongside his skeleton, and his... slime.'
+        },
+        ghostDeathDialogue: {
+            title: '💀 DYING GHOST',
+            text: '"You have defeated me... now I will never get to enact my evil plans. This was a morally justified slaying."'
+        },
+        winDialogue: {
+            title: '🏆 FINAL VICTORY!',
+            text: 'Congratulations! You have defeated the Giant and thwarted his evil plan. Which you were aware of?'
+        },
+        portalColor: 0x9932cc, // Dark purple
+        fogColor: 0x2d1b4e // Spooky purple fog
+    },
     
-    // Forest cloud sprites that spawn with portal
-    forestCloudSpriteCount: 20,
-    
-    // Rewards
-    goldReward: 200,
-    bossGoldDrop: 100,      // Gold per sky giant killed
-    enemyGoldDrop: 10,      // Gold per cloud sprite killed
-    
-    cameraZoom: 2.5
+    // Forest cloud sprites that spawn with portal (stage 0 only)
+    forestCloudSpriteCount: 20
 };
 
 // ============================================
@@ -972,6 +1034,272 @@ function createSkyGiantTexture() {
     });
 }
 
+// Giant Troll (Stage 1) - Massive angry troll
+function createGiantTrollTexture() {
+    return createPixelTexture(96, 128, (ctx, w, h) => {
+        // Massive body
+        ctx.fillStyle = '#4a7c4a'; // Dark green
+        ctx.beginPath();
+        ctx.ellipse(48, 85, 40, 38, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Head
+        ctx.fillStyle = '#5a8c5a';
+        ctx.beginPath();
+        ctx.ellipse(48, 35, 28, 26, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Angry eyebrows
+        ctx.fillStyle = '#2a4c2a';
+        ctx.fillRect(28, 22, 16, 6);
+        ctx.fillRect(52, 22, 16, 6);
+        
+        // Glowing red angry eyes
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(32, 30, 10, 8);
+        ctx.fillRect(54, 30, 10, 8);
+        
+        // Pupils
+        ctx.fillStyle = '#000';
+        ctx.fillRect(35, 32, 4, 4);
+        ctx.fillRect(57, 32, 4, 4);
+        
+        // Huge tusks
+        ctx.fillStyle = '#f0f0e0';
+        ctx.beginPath();
+        ctx.moveTo(30, 50);
+        ctx.lineTo(24, 70);
+        ctx.lineTo(34, 55);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(66, 50);
+        ctx.lineTo(72, 70);
+        ctx.lineTo(62, 55);
+        ctx.fill();
+        
+        // Angry mouth
+        ctx.fillStyle = '#2a2a2a';
+        ctx.fillRect(36, 48, 24, 10);
+        
+        // Arms
+        ctx.fillStyle = '#4a7c4a';
+        ctx.beginPath();
+        ctx.ellipse(10, 75, 16, 20, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(86, 75, 16, 20, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Legs
+        ctx.fillStyle = '#3a6c3a';
+        ctx.fillRect(28, 110, 16, 18);
+        ctx.fillRect(52, 110, 16, 18);
+    });
+}
+
+// Giant Troll Club
+function createGiantClubTexture() {
+    return createPixelTexture(24, 64, (ctx, w, h) => {
+        // Handle
+        ctx.fillStyle = '#6b4226';
+        ctx.fillRect(9, 30, 6, 34);
+        
+        // Club head
+        ctx.fillStyle = '#5a3a20';
+        ctx.beginPath();
+        ctx.ellipse(12, 16, 12, 18, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Spikes
+        ctx.fillStyle = '#808080';
+        ctx.beginPath();
+        ctx.moveTo(4, 8);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(8, 6);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(20, 8);
+        ctx.lineTo(24, 0);
+        ctx.lineTo(16, 6);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(12, 2);
+        ctx.lineTo(12, -6);
+        ctx.lineTo(14, 2);
+        ctx.fill();
+    });
+}
+
+// Troll projectile (rock)
+function createTrollRockTexture() {
+    return createPixelTexture(16, 16, (ctx, w, h) => {
+        ctx.fillStyle = '#6a6a6a';
+        ctx.beginPath();
+        ctx.ellipse(8, 8, 7, 6, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#4a4a4a';
+        ctx.fillRect(4, 5, 3, 3);
+        ctx.fillRect(9, 8, 4, 3);
+    });
+}
+
+// Giant Ghost (Stage 2) - Spirit of the Giant
+function createGiantGhostTexture() {
+    return createPixelTexture(80, 96, (ctx, w, h) => {
+        // Ghostly body - translucent
+        ctx.fillStyle = 'rgba(200, 220, 255, 0.7)';
+        ctx.beginPath();
+        ctx.ellipse(40, 50, 35, 40, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Wavy bottom
+        for (let i = 0; i < 6; i++) {
+            ctx.beginPath();
+            ctx.ellipse(12 + i * 12, 88, 8, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Spooky eyes
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.ellipse(28, 40, 8, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(52, 40, 8, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Glowing pupils
+        ctx.fillStyle = '#00ffff';
+        ctx.fillRect(26, 42, 4, 4);
+        ctx.fillRect(50, 42, 4, 4);
+        
+        // Sad/angry mouth
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.ellipse(40, 65, 10, 8, 0, 0, Math.PI);
+        ctx.fill();
+        
+        // Crown remnant (ethereal)
+        ctx.fillStyle = 'rgba(255, 255, 100, 0.5)';
+        ctx.beginPath();
+        ctx.moveTo(24, 12);
+        ctx.lineTo(28, 2);
+        ctx.lineTo(32, 12);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(36, 10);
+        ctx.lineTo(40, 0);
+        ctx.lineTo(44, 10);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(48, 12);
+        ctx.lineTo(52, 2);
+        ctx.lineTo(56, 12);
+        ctx.fill();
+    });
+}
+
+// Giant Skeleton (Stage 2) - Body of the Giant
+function createGiantSkeletonTexture() {
+    return createPixelTexture(72, 96, (ctx, w, h) => {
+        // Skull
+        ctx.fillStyle = '#f5f5dc';
+        ctx.beginPath();
+        ctx.ellipse(36, 22, 22, 20, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Eye sockets
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.ellipse(28, 20, 6, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(44, 20, 6, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Red glowing eyes
+        ctx.fillStyle = '#ff4444';
+        ctx.fillRect(26, 20, 4, 4);
+        ctx.fillRect(42, 20, 4, 4);
+        
+        // Nose hole
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.moveTo(36, 30);
+        ctx.lineTo(32, 36);
+        ctx.lineTo(40, 36);
+        ctx.fill();
+        
+        // Teeth
+        ctx.fillStyle = '#f5f5dc';
+        ctx.fillRect(28, 38, 4, 6);
+        ctx.fillRect(34, 38, 4, 6);
+        ctx.fillRect(40, 38, 4, 6);
+        
+        // Spine/ribcage
+        ctx.fillStyle = '#e8e8d0';
+        ctx.fillRect(34, 46, 4, 30);
+        
+        // Ribs
+        for (let i = 0; i < 4; i++) {
+            ctx.fillRect(20, 50 + i * 7, 32, 3);
+        }
+        
+        // Arms (bone)
+        ctx.fillRect(8, 50, 8, 30);
+        ctx.fillRect(56, 50, 8, 30);
+        
+        // Legs (bone)
+        ctx.fillRect(24, 78, 8, 18);
+        ctx.fillRect(40, 78, 8, 18);
+    });
+}
+
+// Giant Slime (Stage 2) - The Giant's... bodily goos
+function createGiantSlimeTexture() {
+    return createPixelTexture(64, 48, (ctx, w, h) => {
+        // Main blob - sick looking color
+        ctx.fillStyle = '#8b0000'; // Dark red/blood
+        ctx.beginPath();
+        ctx.ellipse(32, 34, 30, 18, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Top bumps
+        ctx.beginPath();
+        ctx.ellipse(18, 20, 12, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(46, 22, 10, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Gross highlights
+        ctx.fillStyle = '#a52a2a';
+        ctx.beginPath();
+        ctx.ellipse(24, 30, 8, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Yellow bits (bile?)
+        ctx.fillStyle = '#9acd32';
+        ctx.beginPath();
+        ctx.ellipse(40, 36, 5, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Eyes (still has the giant's eyes somehow)
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.ellipse(22, 26, 5, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(42, 26, 5, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#000';
+        ctx.fillRect(21, 26, 3, 4);
+        ctx.fillRect(41, 26, 3, 4);
+    });
+}
+
 // ============================================
 // TEXTURE INITIALIZATION
 // ============================================
@@ -996,12 +1324,22 @@ function initEncounterTextures() {
         treasureChest: createTreasureChestTexture(),
         openChest: createOpenChestTexture(),
         
-        // Cloud arena
+        // Cloud arena - Stage 0
         beanstalk: createBeanstalkPortalTexture(),
         portalParticle: createPortalParticleTexture(),
         cloudGround: createCloudGroundTexture(),
         cloudSprite: createCloudSpriteTexture(),
-        skyGiant: createSkyGiantTexture()
+        skyGiant: createSkyGiantTexture(),
+        
+        // Cloud arena - Stage 1 (Giant Troll)
+        giantTroll: createGiantTrollTexture(),
+        giantClub: createGiantClubTexture(),
+        trollRock: createTrollRockTexture(),
+        
+        // Cloud arena - Stage 2 (Ghost Trio)
+        giantGhost: createGiantGhostTexture(),
+        giantSkeleton: createGiantSkeletonTexture(),
+        giantSlime: createGiantSlimeTexture()
     };
     
     console.log('Encounter textures initialized.');
@@ -1047,11 +1385,11 @@ function shouldSpawnEncounter() {
     return true; // Probability handled by main spawn logic
 }
 
-// Check if portal can spawn (no level limits now)
+// Check if portal can spawn (uses arenaStage, not level limits)
 function shouldSpawnPortal() {
     if (encounterState.inCloudArena) return false;
     if (encounterState.cloudPortal) return false;
-    if (encounterState.arenaCompleted) return false; // Only one sky giant fight per game
+    if (encounterState.arenaStage >= 3) return false; // All 3 stages completed
     if (gameState.bosses.length > 0) return false;
     if (encounterState.currentEncounter) return false;
     if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) return false;
@@ -1082,7 +1420,7 @@ function spawnRandomEncounter() {
         if (shouldSpawnPortal()) {
             spawnCloudPortal();
         } else {
-            // If portal can't spawn (already completed), spawn another encounter
+            // If portal can't spawn (all 3 stages completed), spawn another encounter
             spawnSpecificEncounter('witchHut');
         }
     } else if (roll < 0.60) {
@@ -1600,6 +1938,9 @@ function openTreasureChest(chest) {
 // CLOUD ARENA SYSTEM
 // ============================================
 function spawnCloudPortal() {
+    const stage = encounterState.arenaStage;
+    const stageConfig = CLOUD_ARENA_CONFIG['stage' + stage];
+    
     const angle = Math.random() * Math.PI * 2;
     const dist = CONFIG.enemySpawnRadius * 1.2;
     
@@ -1610,6 +1951,14 @@ function spawnCloudPortal() {
         map: encounterState.textures.beanstalk,
         transparent: true
     });
+    
+    // Tint portal based on stage
+    if (stage === 1) {
+        material.color.setHex(0x808080); // Dark gray tint
+    } else if (stage === 2) {
+        material.color.setHex(0xaa66cc); // Purple tint
+    }
+    
     const sprite = new THREE.Sprite(material);
     sprite.scale.set(10, 15, 1);
     sprite.position.set(x, 7.5, z);
@@ -1618,13 +1967,19 @@ function spawnCloudPortal() {
     encounterState.cloudPortal = {
         sprite,
         position: new THREE.Vector3(x, 0, z),
-        particleTimer: 0
+        particleTimer: 0,
+        stage: stage
     };
     
-    // Spawn forest cloud sprites around the portal
-    spawnForestCloudSprites(x, z);
-    
-    showDialogue('☁️ MYSTERIOUS PORTAL', 'A magical beanstalk has appeared! Cloud sprites have descended from the sky. Walk into the portal if you dare face the Sky Giants!');
+    // Only spawn forest cloud sprites for stage 0
+    if (stage === 0) {
+        spawnForestCloudSprites(x, z);
+        showDialogue('☁️ MYSTERIOUS PORTAL', 'A magical beanstalk has appeared! Cloud sprites have descended from the sky. Walk into the portal if you dare face the Sky Giants!');
+    } else if (stage === 1) {
+        showDialogue('⚠️ DARK PORTAL', 'The beanstalk has returned... darker than before. Something angry awaits above.');
+    } else if (stage === 2) {
+        showDialogue('👻 HAUNTED PORTAL', 'An ethereal beanstalk has materialized. Ghostly wails echo from above...');
+    }
 }
 
 // Spawn cloud sprites in the forest when portal appears
@@ -1746,6 +2101,9 @@ function cleanupPortal() {
 }
 
 function enterCloudArena() {
+    const stage = encounterState.arenaStage;
+    const stageConfig = CLOUD_ARENA_CONFIG['stage' + stage];
+    
     encounterState.inCloudArena = true;
     encounterState.savedForestPosition = gameState.player.position.clone();
     
@@ -1762,17 +2120,25 @@ function enterCloudArena() {
     cloudTexture.repeat.set(30, 30);
     ground.material = new THREE.MeshLambertMaterial({ map: cloudTexture });
     
-    scene.fog.color.setHex(0x87ceeb);
-    renderer.setClearColor(0x87ceeb);
+    // Stage-specific fog color
+    scene.fog.color.setHex(stageConfig.fogColor);
+    renderer.setClearColor(stageConfig.fogColor);
     
     gameState.player.position.set(0, 0, 0);
     playerGroup.position.set(0, 0, 0);
     
-    gameState.targetCameraZoom = CLOUD_ARENA_CONFIG.cameraZoom;
+    gameState.targetCameraZoom = stageConfig.cameraZoom;
     
-    spawnArenaEnemies();
+    // Stage-specific enemy spawning
+    if (stage === 0) {
+        spawnArenaStage0();
+    } else if (stage === 1) {
+        spawnArenaStage1();
+    } else if (stage === 2) {
+        spawnArenaStage2();
+    }
     
-    showDialogue('⚔️ CLOUD ARENA', 'Defeat all the Sky Giants and their minions to claim your reward!');
+    showDialogue(stageConfig.introDialogue.title, stageConfig.introDialogue.text);
 }
 
 function clearForestEntities() {
@@ -1809,10 +2175,17 @@ function clearForestEntities() {
     gameState.chunks.clear();
 }
 
-function spawnArenaEnemies() {
+// ============================================
+// STAGE-SPECIFIC ARENA SPAWNING
+// ============================================
+
+// Stage 0: Cloud Sprites + Sky Giants (original)
+function spawnArenaStage0() {
+    const config = CLOUD_ARENA_CONFIG.stage0;
+    
     // Spawn Sky Giant bosses
-    for (let i = 0; i < CLOUD_ARENA_CONFIG.bossCount; i++) {
-        const angle = (i / CLOUD_ARENA_CONFIG.bossCount) * Math.PI * 2;
+    for (let i = 0; i < config.bossCount; i++) {
+        const angle = (i / config.bossCount) * Math.PI * 2;
         const dist = 25;
         const x = Math.cos(angle) * dist;
         const z = Math.sin(angle) * dist;
@@ -1826,7 +2199,7 @@ function spawnArenaEnemies() {
         sprite.position.set(x, 6, z);
         scene.add(sprite);
         
-        const bossHealth = getBossHealth() * CLOUD_ARENA_CONFIG.bossHealthMultiplier;
+        const bossHealth = getBossHealth() * config.bossHealthMultiplier;
         const boss = {
             sprite,
             health: bossHealth,
@@ -1834,14 +2207,15 @@ function spawnArenaEnemies() {
             damage: getBossDamage(),
             speed: 0.03,
             hitFlash: 0,
-            isArenaBoss: true
+            isArenaBoss: true,
+            bossType: 'skyGiant'
         };
         
         encounterState.arenaBosses.push(boss);
     }
     
     // Spawn cloud sprites
-    for (let i = 0; i < CLOUD_ARENA_CONFIG.enemyCount; i++) {
+    for (let i = 0; i < config.enemyCount; i++) {
         const angle = Math.random() * Math.PI * 2;
         const dist = 10 + Math.random() * 30;
         const x = Math.cos(angle) * dist;
@@ -1856,7 +2230,7 @@ function spawnArenaEnemies() {
         sprite.position.set(x, 1.5, z);
         scene.add(sprite);
         
-        const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2) * CLOUD_ARENA_CONFIG.enemyHealthMultiplier;
+        const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2) * config.enemyHealthMultiplier;
         const enemy = {
             sprite,
             health: baseHealth,
@@ -1872,9 +2246,136 @@ function spawnArenaEnemies() {
     }
 }
 
+// Stage 1: Giant Troll with orbiting clubs
+function spawnArenaStage1() {
+    const config = CLOUD_ARENA_CONFIG.stage1;
+    
+    // Spawn the MASSIVE troll at center
+    const material = new THREE.SpriteMaterial({
+        map: encounterState.textures.giantTroll,
+        transparent: true
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(24, 32, 1); // HUGE
+    sprite.position.set(0, 16, 30); // Start away from player
+    scene.add(sprite);
+    
+    const bossHealth = getBossHealth() * config.trollHealthMultiplier * 2; // Extra beefy
+    const troll = {
+        sprite,
+        health: bossHealth,
+        maxHealth: bossHealth,
+        damage: getBossDamage() * 1.5,
+        speed: 0.025, // Slower but menacing
+        hitFlash: 0,
+        isArenaBoss: true,
+        bossType: 'giantTroll',
+        projectileCooldown: 0
+    };
+    
+    encounterState.arenaBosses.push(troll);
+    
+    // Spawn orbiting clubs
+    encounterState.trollClubs = [];
+    for (let i = 0; i < config.clubCount; i++) {
+        const clubMaterial = new THREE.SpriteMaterial({
+            map: encounterState.textures.giantClub,
+            transparent: true
+        });
+        const clubSprite = new THREE.Sprite(clubMaterial);
+        clubSprite.scale.set(6, 16, 1); // Big clubs
+        scene.add(clubSprite);
+        
+        encounterState.trollClubs.push({
+            sprite: clubSprite,
+            angle: (i / config.clubCount) * Math.PI * 2,
+            speed: config.clubSpeeds[i],
+            radius: 12 + i * 2, // Varying distances
+            damage: getBossDamage() * config.clubDamage
+        });
+    }
+    
+    encounterState.trollProjectiles = [];
+}
+
+// Stage 2: Ghost Trio
+function spawnArenaStage2() {
+    const config = CLOUD_ARENA_CONFIG.stage2;
+    encounterState.ghostDefeated = false;
+    
+    // Giant Ghost (spirit)
+    const ghostMaterial = new THREE.SpriteMaterial({
+        map: encounterState.textures.giantGhost,
+        transparent: true
+    });
+    const ghostSprite = new THREE.Sprite(ghostMaterial);
+    ghostSprite.scale.set(20, 24, 1);
+    ghostSprite.position.set(0, 12, 35);
+    scene.add(ghostSprite);
+    
+    const ghostHealth = getBossHealth() * config.ghostHealthMultiplier;
+    encounterState.arenaBosses.push({
+        sprite: ghostSprite,
+        health: ghostHealth,
+        maxHealth: ghostHealth,
+        damage: getBossDamage(),
+        speed: 0.04, // Floaty
+        hitFlash: 0,
+        isArenaBoss: true,
+        bossType: 'giantGhost'
+    });
+    
+    // Giant Skeleton (body)
+    const skeleMaterial = new THREE.SpriteMaterial({
+        map: encounterState.textures.giantSkeleton,
+        transparent: true
+    });
+    const skeleSprite = new THREE.Sprite(skeleMaterial);
+    skeleSprite.scale.set(18, 24, 1);
+    skeleSprite.position.set(-25, 12, 25);
+    scene.add(skeleSprite);
+    
+    const skeleHealth = getBossHealth() * config.skeletonHealthMultiplier;
+    encounterState.arenaBosses.push({
+        sprite: skeleSprite,
+        health: skeleHealth,
+        maxHealth: skeleHealth,
+        damage: getBossDamage() * 1.2,
+        speed: 0.03,
+        hitFlash: 0,
+        isArenaBoss: true,
+        bossType: 'giantSkeleton'
+    });
+    
+    // Giant Slime (bodily goos)
+    const slimeMaterial = new THREE.SpriteMaterial({
+        map: encounterState.textures.giantSlime,
+        transparent: true
+    });
+    const slimeSprite = new THREE.Sprite(slimeMaterial);
+    slimeSprite.scale.set(16, 12, 1);
+    slimeSprite.position.set(25, 6, 25);
+    scene.add(slimeSprite);
+    
+    const slimeHealth = getBossHealth() * config.slimeHealthMultiplier;
+    encounterState.arenaBosses.push({
+        sprite: slimeSprite,
+        health: slimeHealth,
+        maxHealth: slimeHealth,
+        damage: getBossDamage() * 0.8,
+        speed: 0.035,
+        hitFlash: 0,
+        isArenaBoss: true,
+        bossType: 'giantSlime'
+    });
+}
+
 function updateCloudArena() {
     if (!encounterState.inCloudArena) return;
     if (gameState.dialogueTimer > 0) return;
+    
+    const stage = encounterState.arenaStage;
+    const stageConfig = CLOUD_ARENA_CONFIG['stage' + stage];
     
     // Update arena bosses
     for (let i = encounterState.arenaBosses.length - 1; i >= 0; i--) {
@@ -1884,6 +2385,7 @@ function updateCloudArena() {
         const dz = gameState.player.position.z - boss.sprite.position.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
         
+        // Movement
         if (dist > 4) {
             boss.sprite.position.x += (dx / dist) * boss.speed;
             boss.sprite.position.z += (dz / dist) * boss.speed;
@@ -1891,6 +2393,7 @@ function updateCloudArena() {
             takeDamage(boss.damage * 0.02);
         }
         
+        // Hit flash
         if (boss.hitFlash > 0) {
             boss.hitFlash--;
             boss.sprite.material.color.setHex(boss.hitFlash % 4 < 2 ? 0xffffff : 0xff0000);
@@ -1898,16 +2401,34 @@ function updateCloudArena() {
             boss.sprite.material.color.setHex(0xffffff);
         }
         
+        // Death handling
         if (boss.health <= 0) {
-            // Drop gold only, no XP (to prevent over-leveling)
-            spawnGoldOrb(boss.sprite.position.clone(), CLOUD_ARENA_CONFIG.bossGoldDrop);
+            // Stage-specific gold drops
+            let goldDrop = 0;
+            if (stage === 0) {
+                goldDrop = stageConfig.bossGoldDrop;
+            } else if (stage === 1) {
+                goldDrop = stageConfig.trollGoldDrop;
+            } else if (stage === 2) {
+                goldDrop = stageConfig.bossGoldDrop;
+                
+                // Special dialogue when ghost dies
+                if (boss.bossType === 'giantGhost' && !encounterState.ghostDefeated) {
+                    encounterState.ghostDefeated = true;
+                    showDialogue(
+                        stageConfig.ghostDeathDialogue.title,
+                        stageConfig.ghostDeathDialogue.text
+                    );
+                }
+            }
             
+            spawnGoldOrb(boss.sprite.position.clone(), goldDrop);
             scene.remove(boss.sprite);
             encounterState.arenaBosses.splice(i, 1);
         }
     }
     
-    // Update arena enemies
+    // Update arena enemies (stage 0 only)
     for (let i = encounterState.arenaEnemies.length - 1; i >= 0; i--) {
         const enemy = encounterState.arenaEnemies[i];
         
@@ -1933,10 +2454,27 @@ function updateCloudArena() {
         }
         
         if (enemy.health <= 0) {
-            // Drop gold only, no XP (to prevent over-leveling)
-            spawnGoldOrb(enemy.sprite.position.clone(), CLOUD_ARENA_CONFIG.enemyGoldDrop);
+            spawnGoldOrb(enemy.sprite.position.clone(), stageConfig.enemyGoldDrop || 10);
             scene.remove(enemy.sprite);
             encounterState.arenaEnemies.splice(i, 1);
+        }
+    }
+    
+    // Stage 1: Update troll clubs and projectiles
+    if (stage === 1) {
+        updateTrollClubs();
+        updateTrollProjectiles();
+        
+        // Troll shoots rocks
+        if (encounterState.arenaBosses.length > 0) {
+            const troll = encounterState.arenaBosses[0];
+            if (troll.projectileCooldown !== undefined) {
+                troll.projectileCooldown--;
+                if (troll.projectileCooldown <= 0) {
+                    fireTrollProjectile(troll);
+                    troll.projectileCooldown = CLOUD_ARENA_CONFIG.stage1.projectileCooldown;
+                }
+            }
         }
     }
     
@@ -1948,11 +2486,108 @@ function updateCloudArena() {
     updateArenaBossDisplay();
 }
 
+// Troll's orbiting clubs
+function updateTrollClubs() {
+    if (encounterState.arenaBosses.length === 0) return;
+    const troll = encounterState.arenaBosses[0];
+    
+    for (const club of encounterState.trollClubs) {
+        // Orbit around troll
+        club.angle += club.speed;
+        club.sprite.position.x = troll.sprite.position.x + Math.cos(club.angle) * club.radius;
+        club.sprite.position.z = troll.sprite.position.z + Math.sin(club.angle) * club.radius;
+        club.sprite.position.y = 8 + Math.sin(club.angle * 2) * 2; // Bob up and down
+        
+        // Rotate the club sprite
+        club.sprite.material.rotation = club.angle + Math.PI / 2;
+        
+        // Check collision with player
+        const dx = gameState.player.position.x - club.sprite.position.x;
+        const dz = gameState.player.position.z - club.sprite.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < 4) {
+            takeDamage(club.damage * 0.03);
+        }
+    }
+}
+
+// Troll throws rocks
+function fireTrollProjectile(troll) {
+    const dx = gameState.player.position.x - troll.sprite.position.x;
+    const dz = gameState.player.position.z - troll.sprite.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    
+    const material = new THREE.SpriteMaterial({
+        map: encounterState.textures.trollRock,
+        transparent: true
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(4, 4, 1);
+    sprite.position.copy(troll.sprite.position);
+    sprite.position.y = 10;
+    scene.add(sprite);
+    
+    encounterState.trollProjectiles.push({
+        sprite,
+        vx: (dx / dist) * 0.3,
+        vz: (dz / dist) * 0.3,
+        damage: troll.damage,
+        life: 300
+    });
+}
+
+function updateTrollProjectiles() {
+    for (let i = encounterState.trollProjectiles.length - 1; i >= 0; i--) {
+        const proj = encounterState.trollProjectiles[i];
+        
+        proj.sprite.position.x += proj.vx;
+        proj.sprite.position.z += proj.vz;
+        proj.life--;
+        
+        // Check collision with player
+        const dx = gameState.player.position.x - proj.sprite.position.x;
+        const dz = gameState.player.position.z - proj.sprite.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < 2) {
+            takeDamage(proj.damage);
+            scene.remove(proj.sprite);
+            encounterState.trollProjectiles.splice(i, 1);
+            continue;
+        }
+        
+        if (proj.life <= 0) {
+            scene.remove(proj.sprite);
+            encounterState.trollProjectiles.splice(i, 1);
+        }
+    }
+}
+
 function updateArenaBossDisplay() {
     const bossBar = document.getElementById('bossHealthBar');
+    const stage = encounterState.arenaStage;
+    
     if (encounterState.arenaBosses.length > 0) {
         bossBar.classList.add('active');
-        document.getElementById('bossName').textContent = '☁️ SKY GIANTS (' + encounterState.arenaBosses.length + ' remaining)';
+        
+        // Stage-specific boss names
+        let bossName = '';
+        if (stage === 0) {
+            bossName = '☁️ SKY GIANTS (' + encounterState.arenaBosses.length + ' remaining)';
+        } else if (stage === 1) {
+            bossName = '👹 GIANT TROLL';
+        } else if (stage === 2) {
+            const types = encounterState.arenaBosses.map(b => {
+                if (b.bossType === 'giantGhost') return '👻';
+                if (b.bossType === 'giantSkeleton') return '💀';
+                if (b.bossType === 'giantSlime') return '🩸';
+                return '?';
+            }).join(' ');
+            bossName = types + ' GHOST TRIO (' + encounterState.arenaBosses.length + ' remaining)';
+        }
+        
+        document.getElementById('bossName').textContent = bossName;
         
         const totalHealth = encounterState.arenaBosses.reduce((sum, b) => sum + b.health, 0);
         const totalMaxHealth = encounterState.arenaBosses.reduce((sum, b) => sum + b.maxHealth, 0);
@@ -1968,16 +2603,21 @@ function updateArenaBossDisplay() {
 }
 
 function winCloudArena() {
-    encounterState.arenaCompleted = true;
+    const stage = encounterState.arenaStage;
+    const stageConfig = CLOUD_ARENA_CONFIG['stage' + stage];
     
-    gameState.player.gold += CLOUD_ARENA_CONFIG.goldReward;
+    // Advance to next stage
+    encounterState.arenaStage++;
+    
+    // Give gold reward
+    gameState.player.gold += stageConfig.goldReward;
     document.getElementById('goldNum').textContent = gameState.player.gold;
     
-    showReward(`☁️ CLOUD ARENA COMPLETE! +${CLOUD_ARENA_CONFIG.goldReward} GOLD`);
+    showReward(`☁️ ${stageConfig.name.toUpperCase()} COMPLETE! +${stageConfig.goldReward} GOLD`);
     
     encounterState.pendingArenaExit = true;
     
-    showDialogue('🏆 VICTORY!', 'You have defeated the Sky Giants! Your surprise slaughter of the clouds was a great success, you are victorious and wealthy!');
+    showDialogue(stageConfig.winDialogue.title, stageConfig.winDialogue.text);
 }
 
 function exitCloudArena() {
@@ -2004,6 +2644,17 @@ function exitCloudArena() {
         scene.remove(enemy.sprite);
     }
     encounterState.arenaEnemies = [];
+    
+    // Clear troll-specific entities (stage 1)
+    for (const club of encounterState.trollClubs) {
+        scene.remove(club.sprite);
+    }
+    encounterState.trollClubs = [];
+    
+    for (const proj of encounterState.trollProjectiles) {
+        scene.remove(proj.sprite);
+    }
+    encounterState.trollProjectiles = [];
     
     // Regenerate forest
     updateChunks();
@@ -2150,6 +2801,17 @@ function resetEncounterSystem() {
     }
     encounterState.arenaEnemies = [];
     
+    // Cleanup troll entities (stage 1)
+    for (const club of encounterState.trollClubs) {
+        scene.remove(club.sprite);
+    }
+    encounterState.trollClubs = [];
+    
+    for (const proj of encounterState.trollProjectiles) {
+        scene.remove(proj.sprite);
+    }
+    encounterState.trollProjectiles = [];
+    
     // Reset state
     encounterState.currentEncounter = null;
     encounterState.encounterGuards = [];
@@ -2157,7 +2819,8 @@ function resetEncounterSystem() {
     encounterState.portalParticles = [];
     encounterState.forestCloudSprites = [];
     encounterState.inCloudArena = false;
-    encounterState.arenaCompleted = false;
+    encounterState.arenaStage = 0; // Reset to stage 0
+    encounterState.ghostDefeated = false;
     encounterState.savedForestPosition = null;
     encounterState.pendingArenaExit = false;
     encounterState.guaranteedEncounterQueue = [];
