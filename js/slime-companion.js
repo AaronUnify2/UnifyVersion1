@@ -1522,7 +1522,7 @@ function slimeDeath() {
         healIndicator.classList.remove('ready');
     }
     
-    showDialogue('💔 SLIME', 'Your slime companion has fallen in battle... Visit the Monster Store to get a new one.');
+    showDialogue('💔 SLIME', 'Your slime companion has fallen in battle...oh well. Visit the Monster Store to get a new one.');
 }
 
 // ============================================
