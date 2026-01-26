@@ -3337,7 +3337,14 @@ function checkArenaProjectileHits(projPos, damage) {
 // ============================================
 function initEncounterSystem() {
     console.log('Initializing Encounter System...');
-    initEncounterTextures();
+    if (typeof debug === 'function') debug('initEncounterSystem called');
+    try {
+        initEncounterTextures();
+        if (typeof debug === 'function') debug('Textures initialized OK');
+    } catch (error) {
+        console.error('Error initializing encounter textures:', error);
+        if (typeof debug === 'function') debug('TEXTURE ERROR: ' + error.message);
+    }
 }
 
 function updateEncounterSystem() {
@@ -3352,12 +3359,12 @@ function updateEncounterSystem() {
         updateCloudPortal();
         
         // Update forest cloud sprites (in forest, near portal)
-        if (!encounterState.inCloudArena) {
+        if (encounterState && !encounterState.inCloudArena) {
             updateForestCloudSprites();
         }
         
         // Update cloud arena
-        if (encounterState.inCloudArena) {
+        if (encounterState && encounterState.inCloudArena) {
             updateCloudArena();
         }
         
@@ -3365,6 +3372,7 @@ function updateEncounterSystem() {
         updatePlayerDharmaWheel();
     } catch (error) {
         console.error('Error in updateEncounterSystem:', error);
+        if (typeof debug === 'function') debug('ENC ERROR: ' + error.message);
     }
 }
 
