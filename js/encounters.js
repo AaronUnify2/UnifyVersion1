@@ -194,7 +194,7 @@ const ENCOUNTER_TEMPLATES = {
             spawnOffset: { x: 8, z: 3 },
             dialogue: {
                 speaker: '🧙‍♀️ WITCH',
-                text: '"Remember me? The princess you \'rescued\'? Well, I\'ve been practicing dark magic in the forest... I tried to summon a handsome wizard for companionship and instead summoned twenty dogmatic buddhists!"'
+                text: '"Remember me? The princess you \'rescued\'? ... I tried to summon a handsome wizard for companionship and instead summoned a group of dogmatic buddhists!"'
             },
             rewardOnContact: true
         },
@@ -242,7 +242,7 @@ const ENCOUNTER_TEMPLATES = {
             '"Buddha WILL return, and he will NOT be pleased with you!"',
             '"Your karma is about to get VERY negative!"',
             '"We didn\'t choose the monastic life, the monastic life chose US!"',
-            '"I\'m not a dog!"'
+            '"...but I\'m not a dog!"'
         ]
     }
 };
