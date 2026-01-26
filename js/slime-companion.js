@@ -266,8 +266,8 @@ function shouldSpawnMonsterStore() {
     const level = gameState.player.level;
     if (level < 10) return false;
     
-    // Low spawn chance - similar to encounters/bosses
-    return Math.random() < 0.005;
+    // Similar spawn chance to bosses/encounters (~1-2%)
+    return Math.random() < 0.015;
 }
 
 function spawnMonsterStore() {
@@ -1584,8 +1584,6 @@ function initSlimeCompanion() {
 function updateSlimeCompanion() {
     if (slimeCompanionState.monsterStore) {
         updateMonsterStore();
-    } else if (!gameState.menuOpen && !gameState.isGameOver && shouldSpawnMonsterStore()) {
-        spawnMonsterStore();
     }
     
     updateCompanionSlime();
