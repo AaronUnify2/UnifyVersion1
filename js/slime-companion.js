@@ -1,8 +1,8 @@
 // ============================================
-// SLIME COMPANION SYSTEM
+// SLIME COMPANION SYSTEM (Multi-Companion)
 // ============================================
 // A modular add-on for the Mystic Forest Walker game
-// Adds: Monster Store event, Purchasable Slime Companion, Slime Upgrades
+// Adds: Monster Store event, Multiple Purchasable Slime Companions, Slime Upgrades
 //
 // REQUIRED: Include this script AFTER the main game script in Forest2.html
 // Add: <script src="slime-companion.js"></script> before </body>
@@ -15,33 +15,27 @@
 // ============================================
 
 // ============================================
+// COMPANION COLOR PALETTE
+// ============================================
+const COMPANION_COLORS = [
+    { name: 'Blue', primary: '#3498db', glow: 'rgba(52, 152, 219, 0.3)', icon: '🔵' },
+    { name: 'Green', primary: '#2ecc71', glow: 'rgba(46, 204, 113, 0.3)', icon: '🟢' },
+    { name: 'Purple', primary: '#9b59b6', glow: 'rgba(155, 89, 182, 0.3)', icon: '🟣' },
+    { name: 'Orange', primary: '#e67e22', glow: 'rgba(230, 126, 34, 0.3)', icon: '🟠' },
+    { name: 'Pink', primary: '#e91e63', glow: 'rgba(233, 30, 99, 0.3)', icon: '🩷' },
+    { name: 'Cyan', primary: '#00bcd4', glow: 'rgba(0, 188, 212, 0.3)', icon: '🩵' },
+    { name: 'Yellow', primary: '#f1c40f', glow: 'rgba(241, 196, 15, 0.3)', icon: '🟡' },
+    { name: 'Red', primary: '#e74c3c', glow: 'rgba(231, 76, 60, 0.3)', icon: '🔴' },
+    { name: 'Teal', primary: '#1abc9c', glow: 'rgba(26, 188, 156, 0.3)', icon: '💠' },
+    { name: 'Indigo', primary: '#5c6bc0', glow: 'rgba(92, 107, 192, 0.3)', icon: '🔮' }
+];
+
+// ============================================
 // SLIME COMPANION STATE
 // ============================================
 const slimeCompanionState = {
-    // Companion slime
-    slime: null,
-    slimeOwned: false,
-    slimeHealth: 0,
-    slimeMaxHealth: 0,
-    slimeHealthBar: null,
-    slimeHealthBarBg: null,
-    
-    // Slime upgrades - reduced costs for attack/health, added swords
-    upgrades: {
-        attackSpeed: { level: 0, maxLevel: 10, baseCost: 20, costMult: 1.2 },  // Cheaper!
-        health: { level: 0, maxLevel: 12, baseCost: 20, costMult: 1.15 },       // Cheaper!
-        swords: { level: 0, maxLevel: 8, baseCost: 50, costMult: 1.8 },         // NEW - same as player
-        heal: { level: 0, maxLevel: 1, baseCost: 100, costMult: 1 }             // Slightly cheaper
-    },
-    
-    // Slime behavior
-    slimeTarget: null,
-    slimeWanderAngle: 0,
-    slimeAttackCooldown: 0,
-    slimeProjectiles: [],
-    slimeSwords: [],  // NEW - orbital swords for slime
-    healCooldown: 0,
-    healMaxCooldown: 60 * 60, // 1 minute at 60fps
+    // Array of companion objects
+    companions: [],
     
     // Monster Store
     monsterStore: null,
@@ -49,333 +43,365 @@ const slimeCompanionState = {
     storeShopkeeper: null,
     storeMenuOpen: false,
     
-    // Slime purchase cost
-    slimeCost: 500
+    // Base slime cost (increases with each purchase)
+    baseSlimeCost: 500,
+    
+    // Cached textures
+    slimeSwordTexture: null
 };
 
 // ============================================
-// HELPER FUNCTION - Check if monster store is active
-// Call this from shouldSpawnEncounter() in main game
+// HELPER FUNCTIONS
 // ============================================
 function isMonsterStoreActive() {
     return slimeCompanionState.monsterStore !== null;
+}
+
+function getNextCompanionCost() {
+    const numOwned = slimeCompanionState.companions.length;
+    return Math.floor(slimeCompanionState.baseSlimeCost * Math.pow(1.5, numOwned));
+}
+
+function getNextCompanionColor() {
+    const numOwned = slimeCompanionState.companions.length;
+    return COMPANION_COLORS[numOwned % COMPANION_COLORS.length];
+}
+
+function createDefaultUpgrades() {
+    return {
+        attackSpeed: { level: 0, maxLevel: 10, baseCost: 20, costMult: 1.2 },
+        health: { level: 0, maxLevel: 12, baseCost: 20, costMult: 1.15 },
+        swords: { level: 0, maxLevel: 8, baseCost: 50, costMult: 1.8 },
+        heal: { level: 0, maxLevel: 1, baseCost: 100, costMult: 1 }
+    };
 }
 
 // ============================================
 // TEXTURE GENERATORS
 // ============================================
 
-// Companion Slime - Blue, 50% bigger than enemy slimes, with glow
-function createCompanionSlimeTexture() {
+function createCompanionSlimeTexture(colorInfo) {
     return createPixelTexture(48, 48, (ctx, w, h) => {
         // Outer glow
-        ctx.fillStyle = 'rgba(52, 152, 219, 0.3)';
+        ctx.fillStyle = colorInfo.glow;
         ctx.beginPath();
         ctx.ellipse(24, 30, 22, 16, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        // Body - bright blue
-        ctx.fillStyle = '#3498db';
+        // Body
+        ctx.fillStyle = colorInfo.primary;
         ctx.beginPath();
         ctx.ellipse(24, 30, 18, 13, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        // Highlight - lighter blue
-        ctx.fillStyle = '#5dade2';
+        // Highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
         ctx.beginPath();
-        ctx.ellipse(24, 27, 14, 9, 0, 0, Math.PI * 2);
+        ctx.ellipse(18, 24, 6, 4, -0.3, 0, Math.PI * 2);
         ctx.fill();
         
-        // Top highlight
-        ctx.fillStyle = '#85c1e9';
-        ctx.beginPath();
-        ctx.ellipse(24, 24, 8, 5, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Eyes - friendly look
+        // Eyes
         ctx.fillStyle = '#fff';
-        ctx.fillRect(16, 24, 7, 7);
-        ctx.fillRect(28, 24, 7, 7);
-        ctx.fillStyle = '#2c3e50';
-        ctx.fillRect(19, 27, 3, 3);
-        ctx.fillRect(31, 27, 3, 3);
-        
-        // Happy blush marks
-        ctx.fillStyle = 'rgba(231, 76, 60, 0.4)';
-        ctx.fillRect(12, 30, 4, 3);
-        ctx.fillRect(34, 30, 4, 3);
-        
-        // Shine
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        ctx.fillRect(14, 20, 4, 4);
-    });
-}
-
-// Slime projectile - small blue orb
-function createSlimeProjectileTexture() {
-    return createPixelTexture(12, 12, (ctx, w, h) => {
-        ctx.fillStyle = 'rgba(52, 152, 219, 0.5)';
         ctx.beginPath();
-        ctx.arc(6, 6, 6, 0, Math.PI * 2);
+        ctx.ellipse(18, 30, 5, 5, 0, 0, Math.PI * 2);
+        ctx.ellipse(30, 30, 5, 5, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        ctx.fillStyle = '#3498db';
+        // Pupils
+        ctx.fillStyle = '#000';
         ctx.beginPath();
-        ctx.arc(6, 6, 4, 0, Math.PI * 2);
+        ctx.ellipse(19, 30, 2.5, 2.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(31, 30, 2.5, 2.5, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(3, 3, 2, 2);
-    });
-}
-
-// Slime sword - smaller blue-tinted sword
-function createSlimeSwordTexture() {
-    return createPixelTexture(12, 24, (ctx, w, h) => {
-        // Blade - blue tinted steel
-        ctx.fillStyle = '#a8d8ea';
-        ctx.fillRect(4, 0, 4, 15);
-        
-        // Blade shine
-        ctx.fillStyle = '#d4f1f9';
-        ctx.fillRect(5, 0, 2, 14);
-        
-        // Guard - blue gem
-        ctx.fillStyle = '#3498db';
-        ctx.fillRect(1, 15, 10, 2);
-        
-        // Handle
-        ctx.fillStyle = '#2c3e50';
-        ctx.fillRect(4, 17, 4, 6);
-        
-        // Pommel - blue
-        ctx.fillStyle = '#3498db';
-        ctx.fillRect(3, 22, 6, 2);
-    });
-}
-
-// Dead Tree for Monster Store
-function createDeadTreeTexture() {
-    return createPixelTexture(64, 96, (ctx, w, h) => {
-        ctx.fillStyle = '#3d2817';
-        ctx.fillRect(24, 30, 16, 66);
-        
-        ctx.fillStyle = '#2c1810';
-        ctx.fillRect(28, 35, 3, 60);
-        ctx.fillRect(35, 40, 2, 50);
-        
-        ctx.fillStyle = '#0d0d0d';
-        ctx.beginPath();
-        ctx.ellipse(32, 75, 10, 15, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#2c1810';
-        ctx.strokeStyle = '#2c1810';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.ellipse(32, 75, 11, 16, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        ctx.fillStyle = '#3d2817';
-        ctx.fillRect(10, 20, 18, 5);
-        ctx.fillRect(6, 15, 10, 4);
-        ctx.fillRect(2, 10, 8, 3);
-        ctx.fillRect(36, 25, 20, 5);
-        ctx.fillRect(48, 18, 12, 4);
-        ctx.fillRect(54, 12, 8, 3);
-        ctx.fillRect(20, 8, 24, 6);
-        ctx.fillRect(28, 2, 8, 8);
-        
-        ctx.fillStyle = '#2c1810';
-        ctx.fillRect(22, 28, 6, 4);
-        ctx.fillRect(36, 28, 6, 4);
-        
-        ctx.fillStyle = '#1e5631';
-        ctx.fillRect(24, 88, 4, 4);
-        ctx.fillRect(34, 86, 3, 3);
-        ctx.fillRect(20, 32, 3, 3);
-        
-        ctx.fillStyle = '#9b59b6';
-        ctx.fillRect(28, 70, 3, 3);
-        ctx.fillRect(35, 70, 3, 3);
-    });
-}
-
-// Shopkeeper - purple slime with hat and monocle
-function createShopkeeperTexture() {
-    return createPixelTexture(48, 56, (ctx, w, h) => {
-        ctx.fillStyle = '#8e44ad';
-        ctx.beginPath();
-        ctx.ellipse(24, 38, 20, 16, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#9b59b6';
-        ctx.beginPath();
-        ctx.ellipse(24, 35, 16, 12, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#1a1a2e';
-        ctx.fillRect(14, 8, 20, 16);
-        ctx.fillRect(10, 22, 28, 5);
-        
-        ctx.fillStyle = '#f1c40f';
-        ctx.fillRect(14, 18, 20, 3);
-        
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(16, 30, 8, 8);
-        ctx.fillRect(28, 30, 8, 8);
-        
-        ctx.fillStyle = '#2c3e50';
-        ctx.fillRect(20, 33, 3, 4);
-        ctx.fillRect(32, 33, 3, 4);
-        
-        ctx.strokeStyle = '#f1c40f';
+        // Happy mouth
+        ctx.strokeStyle = '#000';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(32, 34, 6, 0, Math.PI * 2);
+        ctx.arc(24, 34, 5, 0.2, Math.PI - 0.2);
+        ctx.stroke();
+    });
+}
+
+function createSlimeSwordTexture() {
+    return createPixelTexture(24, 24, (ctx, w, h) => {
+        // Blade
+        ctx.fillStyle = '#87CEEB';
+        ctx.beginPath();
+        ctx.moveTo(12, 2);
+        ctx.lineTo(16, 16);
+        ctx.lineTo(12, 14);
+        ctx.lineTo(8, 16);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Blade highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.beginPath();
+        ctx.moveTo(12, 3);
+        ctx.lineTo(13, 12);
+        ctx.lineTo(12, 11);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Guard
+        ctx.fillStyle = '#f1c40f';
+        ctx.fillRect(8, 15, 8, 3);
+        
+        // Handle
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(10, 18, 4, 5);
+    });
+}
+
+function createStoreSlimeTexture() {
+    return createPixelTexture(32, 32, (ctx, w, h) => {
+        ctx.fillStyle = '#27ae60';
+        ctx.beginPath();
+        ctx.ellipse(16, 20, 12, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.beginPath();
+        ctx.ellipse(12, 16, 4, 3, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.ellipse(12, 20, 3, 3, 0, 0, Math.PI * 2);
+        ctx.ellipse(20, 20, 3, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.ellipse(13, 20, 1.5, 1.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(21, 20, 1.5, 1.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
+function createMonsterStoreTexture() {
+    return createPixelTexture(96, 128, (ctx, w, h) => {
+        // Tree trunk
+        ctx.fillStyle = '#5d4e37';
+        ctx.fillRect(38, 40, 20, 88);
+        
+        // Trunk texture
+        ctx.fillStyle = '#4a3f2f';
+        ctx.fillRect(42, 50, 4, 20);
+        ctx.fillRect(50, 70, 4, 25);
+        ctx.fillRect(44, 100, 3, 15);
+        
+        // Roots
+        ctx.fillStyle = '#5d4e37';
+        ctx.beginPath();
+        ctx.moveTo(38, 128);
+        ctx.quadraticCurveTo(25, 125, 20, 128);
+        ctx.lineTo(38, 128);
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(58, 128);
+        ctx.quadraticCurveTo(71, 125, 76, 128);
+        ctx.lineTo(58, 128);
+        ctx.fill();
+        
+        // Foliage layers
+        const foliageColors = ['#1e8449', '#27ae60', '#2ecc71'];
+        let y = 5;
+        let size = 25;
+        
+        for (let i = 0; i < 3; i++) {
+            ctx.fillStyle = foliageColors[i];
+            ctx.beginPath();
+            ctx.moveTo(48, y);
+            ctx.lineTo(48 + size, y + 30);
+            ctx.lineTo(48 - size, y + 30);
+            ctx.closePath();
+            ctx.fill();
+            y += 20;
+            size += 8;
+        }
+        
+        // Store sign
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(25, 70, 46, 25);
+        
+        // Sign border
+        ctx.strokeStyle = '#f1c40f';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(26, 71, 44, 23);
+        
+        // "SHOP" text
+        ctx.fillStyle = '#f1c40f';
+        ctx.font = 'bold 10px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('SHOP', 48, 86);
+        
+        // Hanging lanterns
+        ctx.fillStyle = '#f39c12';
+        ctx.beginPath();
+        ctx.arc(25, 65, 5, 0, Math.PI * 2);
+        ctx.arc(71, 65, 5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Lantern glow
+        ctx.fillStyle = 'rgba(243, 156, 18, 0.4)';
+        ctx.beginPath();
+        ctx.arc(25, 65, 8, 0, Math.PI * 2);
+        ctx.arc(71, 65, 8, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
+function createShopkeeperTexture() {
+    return createPixelTexture(32, 36, (ctx, w, h) => {
+        // Body/robe
+        ctx.fillStyle = '#8e44ad';
+        ctx.beginPath();
+        ctx.moveTo(16, 14);
+        ctx.lineTo(8, 36);
+        ctx.lineTo(24, 36);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Robe details
+        ctx.fillStyle = '#9b59b6';
+        ctx.beginPath();
+        ctx.moveTo(16, 16);
+        ctx.lineTo(12, 36);
+        ctx.lineTo(20, 36);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Face
+        ctx.fillStyle = '#fad7a0';
+        ctx.beginPath();
+        ctx.ellipse(16, 12, 7, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Top hat
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(9, 0, 14, 4);
+        ctx.fillRect(11, 4, 10, 6);
+        
+        // Hat band
+        ctx.fillStyle = '#f1c40f';
+        ctx.fillRect(11, 8, 10, 2);
+        
+        // Eyes
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.ellipse(13, 12, 1.5, 2, 0, 0, Math.PI * 2);
+        ctx.ellipse(19, 12, 1.5, 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Monocle
+        ctx.strokeStyle = '#f1c40f';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(19, 12, 3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(22, 12);
+        ctx.lineTo(26, 16);
         ctx.stroke();
         
-        ctx.fillStyle = '#f1c40f';
-        ctx.fillRect(36, 38, 2, 8);
-        ctx.fillRect(36, 44, 6, 2);
+        // Mustache
+        ctx.fillStyle = '#5d4e37';
+        ctx.beginPath();
+        ctx.ellipse(13, 17, 3, 1.5, 0.3, 0, Math.PI * 2);
+        ctx.ellipse(19, 17, 3, 1.5, -0.3, 0, Math.PI * 2);
+        ctx.fill();
         
-        ctx.fillStyle = '#1a1a2e';
-        ctx.fillRect(18, 42, 6, 3);
-        ctx.fillRect(28, 42, 6, 3);
-        ctx.fillRect(24, 43, 4, 2);
-        
-        ctx.fillStyle = '#6c3483';
-        ctx.fillRect(20, 46, 12, 3);
-        
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.fillRect(14, 28, 4, 4);
+        // Smile
+        ctx.strokeStyle = '#c0392b';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(16, 18, 2, 0.2, Math.PI - 0.2);
+        ctx.stroke();
     });
 }
 
 // ============================================
-// MONSTER STORE SYSTEM
+// MONSTER STORE
 // ============================================
 
 function shouldSpawnMonsterStore() {
     if (slimeCompanionState.monsterStore) return false;
     if (encounterState.currentEncounter) return false;
-    if (gameState.bosses.length > 0) return false;
-    if (encounterState.inCloudArena) return false;
     if (encounterState.cloudPortal) return false;
-    
-    const level = gameState.player.level;
-    if (level < 5) return false; // Monster store starts at level 5
-    
-    return true; // Probability handled by main spawn logic
+    if (encounterState.inCloudArena) return false;
+    if (gameState.bosses.length > 0) return false;
+    if (gameState.player.level < 5) return false;
+    return true;
 }
 
 function spawnMonsterStore() {
-    console.log('Spawning Monster Store!');
-    
     const angle = Math.random() * Math.PI * 2;
-    const dist = CONFIG.enemySpawnRadius * 1.5;
-    
+    const dist = CONFIG.enemySpawnRadius * 1.2;
     const x = gameState.player.position.x + Math.cos(angle) * dist;
     const z = gameState.player.position.z + Math.sin(angle) * dist;
     
-    const treeTexture = createDeadTreeTexture();
+    const treeTexture = createMonsterStoreTexture();
     const treeMaterial = new THREE.SpriteMaterial({
         map: treeTexture,
         transparent: true
     });
-    const treeSprite = new THREE.Sprite(treeMaterial);
-    treeSprite.scale.set(12, 18, 1);
-    treeSprite.position.set(x, 9, z);
-    scene.add(treeSprite);
+    const tree = new THREE.Sprite(treeMaterial);
+    tree.scale.set(12, 16, 1);
+    tree.position.set(x, 8, z);
+    scene.add(tree);
     
-    const slimes = [];
-    for (let i = 0; i < 30; i++) {
-        const slimeAngle = (i / 30) * Math.PI * 2 + Math.random() * 0.3;
-        const slimeDist = 8 + Math.random() * 8;
-        const sx = x + Math.cos(slimeAngle) * slimeDist;
-        const sz = z + Math.sin(slimeAngle) * slimeDist;
+    slimeCompanionState.monsterStore = {
+        tree,
+        position: new THREE.Vector3(x, 0, z),
+        guardsDefeated: false,
+        shopkeeperSpawned: false,
+        rewardGiven: false,
+        cleanupTimer: 0
+    };
+    
+    // Spawn guard slimes
+    const slimeTexture = createStoreSlimeTexture();
+    const numGuards = 5;
+    
+    for (let i = 0; i < numGuards; i++) {
+        const guardAngle = (i / numGuards) * Math.PI * 2;
+        const guardDist = 6 + Math.random() * 3;
+        const gx = x + Math.cos(guardAngle) * guardDist;
+        const gz = z + Math.sin(guardAngle) * guardDist;
         
-        const slimeTexture = createSlimeTexture();
-        const slimeMaterial = new THREE.SpriteMaterial({
+        const material = new THREE.SpriteMaterial({
             map: slimeTexture,
             transparent: true
         });
-        const slimeSprite = new THREE.Sprite(slimeMaterial);
-        slimeSprite.scale.set(2.5, 2.5, 1);
-        slimeSprite.position.set(sx, 1.25, sz);
-        scene.add(slimeSprite);
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(2.5, 2.5, 1);
+        sprite.position.set(gx, 1.25, gz);
+        scene.add(sprite);
         
-        const baseHealth = CONFIG.enemyBaseHealth * 0.5 * (1 + gameState.player.level * 0.2);
-        const slime = {
-            sprite: slimeSprite,
+        const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.2);
+        slimeCompanionState.storeSlimes.push({
+            sprite,
             health: baseHealth,
             maxHealth: baseHealth,
-            damage: CONFIG.enemyBaseDamage * 0.5 * (1 + gameState.player.level * 0.15),
-            speed: 0.025 + Math.random() * 0.01,
+            damage: CONFIG.enemyBaseDamage * (1 + gameState.player.level * 0.15),
+            speed: 0.04,
             attackCooldown: 0,
-            hitFlash: 0,
-            isStoreSlime: true
-        };
-        slimes.push(slime);
+            hitFlash: 0
+        });
     }
     
-    slimeCompanionState.storeSlimes = slimes;
-    slimeCompanionState.monsterStore = {
-        tree: treeSprite,
-        position: new THREE.Vector3(x, 0, z),
-        complete: false,
-        shopkeeperSpawned: false,
-        rewardGiven: false
-    };
-    
-    gameState.targetCameraZoom = 2.0;
+    gameState.targetCameraZoom = 2.5;
+    showDialogue('🌳 MONSTER STORE', 'A peculiar shop has appeared! The slimes seem to be guarding it...');
 }
 
 function updateMonsterStore() {
-    if (!slimeCompanionState.monsterStore) return;
-    
     const store = slimeCompanionState.monsterStore;
+    if (!store) return;
     
-    if (gameState.dialogueTimer <= 0) {
-        for (let i = slimeCompanionState.storeSlimes.length - 1; i >= 0; i--) {
-            const slime = slimeCompanionState.storeSlimes[i];
-            
-            let targetPos = gameState.player.position;
-            
-            const dx = targetPos.x - slime.sprite.position.x;
-            const dz = targetPos.z - slime.sprite.position.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-            
-            if (dist > 1.5) {
-                slime.sprite.position.x += (dx / dist) * slime.speed;
-                slime.sprite.position.z += (dz / dist) * slime.speed;
-            } else if (slime.attackCooldown <= 0) {
-                takeDamage(slime.damage);
-                slime.attackCooldown = 60;
-            }
-            
-            slime.attackCooldown = Math.max(0, slime.attackCooldown - 1);
-            
-            if (slime.hitFlash > 0) {
-                slime.hitFlash--;
-                slime.sprite.material.color.setHex(slime.hitFlash % 4 < 2 ? 0xffffff : 0xff0000);
-            } else {
-                slime.sprite.material.color.setHex(0xffffff);
-            }
-        }
-    }
-    
-    if (slimeCompanionState.storeSlimes.length === 0 && !store.complete) {
-        store.complete = true;
-        onMonsterStoreComplete();
-    }
-    
-    if (store.shopkeeperSpawned && slimeCompanionState.storeShopkeeper && !store.rewardGiven) {
-        updateShopkeeper();
-    }
-    
-    // Timer-based cleanup after store is closed
-    if (store.rewardGiven && store.cleanupTimer !== undefined) {
+    if (store.cleanupTimer > 0) {
         store.cleanupTimer--;
         if (store.cleanupTimer <= 0) {
             cleanupMonsterStore();
@@ -383,19 +409,57 @@ function updateMonsterStore() {
         }
     }
     
+    if (!store.guardsDefeated && slimeCompanionState.storeSlimes.length === 0) {
+        store.guardsDefeated = true;
+        spawnShopkeeper();
+    }
+    
+    if (!store.guardsDefeated && gameState.dialogueTimer <= 0) {
+        updateStoreGuards();
+    }
+    
+    if (store.shopkeeperSpawned && !store.rewardGiven) {
+        updateShopkeeper();
+    }
+    
+    // Cleanup if player walks far away after shopping
     const dx = gameState.player.position.x - store.position.x;
     const dz = gameState.player.position.z - store.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
     
-    // Distance-based cleanup (only after reward given)
     if (dist > CONFIG.renderDistance * 2 && store.rewardGiven) {
         cleanupMonsterStore();
     }
 }
 
-function onMonsterStoreComplete() {
-    console.log('Monster Store slimes defeated!');
+function updateStoreGuards() {
+    const store = slimeCompanionState.monsterStore;
     
+    for (const slime of slimeCompanionState.storeSlimes) {
+        const dx = gameState.player.position.x - slime.sprite.position.x;
+        const dz = gameState.player.position.z - slime.sprite.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist > 2) {
+            slime.sprite.position.x += (dx / dist) * slime.speed;
+            slime.sprite.position.z += (dz / dist) * slime.speed;
+        } else if (slime.attackCooldown <= 0) {
+            takeDamage(slime.damage);
+            slime.attackCooldown = 60;
+        }
+        
+        slime.attackCooldown = Math.max(0, slime.attackCooldown - 1);
+        
+        if (slime.hitFlash > 0) {
+            slime.hitFlash--;
+            slime.sprite.material.color.setHex(slime.hitFlash % 4 < 2 ? 0xffffff : 0xff0000);
+        } else {
+            slime.sprite.material.color.setHex(0xffffff);
+        }
+    }
+}
+
+function spawnShopkeeper() {
     const store = slimeCompanionState.monsterStore;
     
     const shopkeeperTexture = createShopkeeperTexture();
@@ -441,7 +505,6 @@ function cleanupMonsterStore() {
     
     console.log('Cleaning up Monster Store');
     
-    // Hide store menu if somehow still open
     slimeCompanionState.storeMenuOpen = false;
     const storeMenu = document.getElementById('slimeStoreMenu');
     if (storeMenu) {
@@ -491,10 +554,8 @@ function damageStoreSlime(slime, damage) {
 // SLIME STORE UI
 // ============================================
 
-let slimeSwordTexture = null;
-
 function createSlimeStoreUI() {
-    slimeSwordTexture = createSlimeSwordTexture();
+    slimeCompanionState.slimeSwordTexture = createSlimeSwordTexture();
     
     const storeMenu = document.createElement('div');
     storeMenu.id = 'slimeStoreMenu';
@@ -503,65 +564,7 @@ function createSlimeStoreUI() {
             <h2>🏪 MONSTER STORE</h2>
             <div id="storeGoldDisplay">💰 <span id="storeGoldAmount">0</span></div>
             <div id="slimeStoreItems">
-                <div class="store-item" id="store-slime">
-                    <div class="store-icon">🔵</div>
-                    <div class="store-info">
-                        <div class="store-name">Slime Companion</div>
-                        <div class="store-desc">A friendly slime that fights by your side!</div>
-                        <div class="store-status" id="slime-status">Not Owned</div>
-                    </div>
-                    <button class="store-btn" id="buySlimeBtn" data-action="buySlime">
-                        <span class="cost">💰 500</span>
-                    </button>
-                </div>
-                
-                <div class="store-item upgrade-item-store" id="store-attackSpeed">
-                    <div class="store-icon">⚡</div>
-                    <div class="store-info">
-                        <div class="store-name">Attack Speed</div>
-                        <div class="store-desc">Faster slime attacks</div>
-                        <div class="store-level">Level: <span class="lvl">0</span>/10</div>
-                    </div>
-                    <button class="store-btn" data-action="upgradeAttackSpeed">
-                        <span class="cost">💰 20</span>
-                    </button>
-                </div>
-                
-                <div class="store-item upgrade-item-store" id="store-health">
-                    <div class="store-icon">❤️</div>
-                    <div class="store-info">
-                        <div class="store-name">Slime Health</div>
-                        <div class="store-desc">+5% max health per level</div>
-                        <div class="store-level">Level: <span class="lvl">0</span>/12</div>
-                    </div>
-                    <button class="store-btn" data-action="upgradeHealth">
-                        <span class="cost">💰 20</span>
-                    </button>
-                </div>
-                
-                <div class="store-item upgrade-item-store" id="store-swords">
-                    <div class="store-icon">⚔️</div>
-                    <div class="store-info">
-                        <div class="store-name">Slime Swords</div>
-                        <div class="store-desc">Orbiting blades around your slime</div>
-                        <div class="store-level">Level: <span class="lvl">0</span>/8</div>
-                    </div>
-                    <button class="store-btn" data-action="upgradeSwords">
-                        <span class="cost">💰 50</span>
-                    </button>
-                </div>
-                
-                <div class="store-item upgrade-item-store" id="store-heal">
-                    <div class="store-icon">💚</div>
-                    <div class="store-info">
-                        <div class="store-name">Heal Ability</div>
-                        <div class="store-desc">Auto-heal you & slime every minute</div>
-                        <div class="store-level">Level: <span class="lvl">0</span>/1</div>
-                    </div>
-                    <button class="store-btn" data-action="upgradeHeal">
-                        <span class="cost">💰 100</span>
-                    </button>
-                </div>
+                <!-- Dynamic content will be inserted here -->
             </div>
             <button id="closeSlimeStore">CLOSE STORE</button>
         </div>
@@ -590,7 +593,7 @@ function createSlimeStoreUI() {
             padding: 20px;
             max-width: 360px;
             width: 90%;
-            max-height: 80vh;
+            max-height: 85vh;
             overflow-y: auto;
             box-shadow: 0 0 30px rgba(39,174,96,0.5);
         }
@@ -620,103 +623,160 @@ function createSlimeStoreUI() {
             border: 2px solid #1e8449;
             border-radius: 8px;
             padding: 10px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             gap: 10px;
         }
         
-        .store-item.owned { border-color: #3498db; background: rgba(52, 152, 219, 0.2); }
-        .store-item.maxed { border-color: #f39c12; opacity: 0.7; }
-        .store-item.locked { opacity: 0.5; }
+        .store-item.owned {
+            border-color: #27ae60;
+            background: rgba(39,174,96,0.2);
+        }
         
-        .store-icon { font-size: 28px; width: 40px; text-align: center; }
-        .store-info { flex: 1; }
-        .store-name { color: #fff; font-size: 10px; margin-bottom: 2px; font-family: 'Press Start 2P', cursive; }
-        .store-desc { color: #7f8c8d; font-size: 7px; margin-bottom: 4px; font-family: 'Press Start 2P', cursive; }
-        .store-status, .store-level { color: #3498db; font-size: 8px; font-family: 'Press Start 2P', cursive; }
+        .store-item.locked {
+            opacity: 0.5;
+        }
+        
+        .store-item.maxed {
+            border-color: #f1c40f;
+            background: rgba(241,196,15,0.1);
+        }
+        
+        .store-icon {
+            font-size: 24px;
+            width: 40px;
+            text-align: center;
+        }
+        
+        .store-info {
+            flex: 1;
+        }
+        
+        .store-name {
+            color: #fff;
+            font-size: 10px;
+            font-family: 'Press Start 2P', cursive;
+            margin-bottom: 4px;
+        }
+        
+        .store-desc {
+            color: #aaa;
+            font-size: 8px;
+            font-family: 'Press Start 2P', cursive;
+        }
+        
+        .store-status, .store-level {
+            color: #2ecc71;
+            font-size: 8px;
+            font-family: 'Press Start 2P', cursive;
+            margin-top: 4px;
+        }
         
         .store-btn {
             background: linear-gradient(180deg, #27ae60, #1e8449);
             border: 2px solid #2ecc71;
             border-radius: 6px;
-            padding: 8px 12px;
             color: #fff;
+            padding: 8px 12px;
+            font-size: 9px;
             font-family: 'Press Start 2P', cursive;
-            font-size: 8px;
             cursor: pointer;
-            pointer-events: auto;
-            min-width: 70px;
+            min-width: 80px;
         }
         
-        .store-btn:disabled { background: #555; border-color: #666; color: #888; cursor: not-allowed; }
-        .store-btn:not(:disabled):active { transform: scale(0.95); }
+        .store-btn:disabled {
+            background: #333;
+            border-color: #555;
+            color: #666;
+            cursor: not-allowed;
+        }
+        
+        .store-btn:not(:disabled):active {
+            transform: scale(0.95);
+        }
         
         #closeSlimeStore {
             width: 100%;
-            margin-top: 15px;
-            padding: 12px;
-            background: linear-gradient(180deg, #8e44ad, #6c3483);
-            border: 2px solid #9b59b6;
+            background: linear-gradient(180deg, #c0392b, #922b21);
+            border: 2px solid #e74c3c;
             border-radius: 8px;
             color: #fff;
-            font-family: 'Press Start 2P', cursive;
+            padding: 12px;
             font-size: 12px;
+            font-family: 'Press Start 2P', cursive;
             cursor: pointer;
-            pointer-events: auto;
+            margin-top: 15px;
         }
         
-        #closeSlimeStore:active { transform: scale(0.98); }
+        .companion-section {
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 15px;
+            background: rgba(52,152,219,0.1);
+        }
+        
+        .companion-header {
+            color: #3498db;
+            font-size: 10px;
+            font-family: 'Press Start 2P', cursive;
+            margin-bottom: 10px;
+            text-align: center;
+        }
         
         #slimeHealthContainer {
             position: fixed;
-            pointer-events: none;
-            z-index: 50;
+            bottom: 200px;
+            left: 10px;
             display: none;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 100;
         }
         
-        #slimeHealthContainer.active { display: block; }
+        #slimeHealthContainer.active {
+            display: flex;
+        }
         
         .slime-health-bar {
-            width: 60px;
-            height: 8px;
+            width: 100px;
+            height: 10px;
             background: #333;
             border: 2px solid #222;
-            border-radius: 4px;
+            border-radius: 2px;
             overflow: hidden;
         }
         
         .slime-health-fill {
             height: 100%;
             background: linear-gradient(180deg, #3498db, #2980b9);
-            transition: width 0.2s;
+            transition: width 0.3s;
+        }
+        
+        .slime-health-label {
+            color: #fff;
+            font-size: 7px;
+            font-family: 'Press Start 2P', cursive;
         }
         
         #healIndicator {
-            position: absolute;
-            bottom: 200px;
-            right: 30px;
-            width: 40px;
-            height: 40px;
-            background: radial-gradient(circle at 30% 30%, #2ecc71, #1e8449);
-            border: 2px solid #27ae60;
-            border-radius: 50%;
+            position: fixed;
+            bottom: 260px;
+            left: 10px;
+            font-size: 20px;
             display: none;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            color: #fff;
-            pointer-events: none;
             opacity: 0.5;
+        }
+        
+        #healIndicator.active {
+            display: block;
         }
         
         #healIndicator.ready {
             opacity: 1;
-            box-shadow: 0 0 10px rgba(46,204,113,0.7);
-            animation: healPulse 1.5s ease-in-out infinite;
+            animation: pulse 1s infinite;
         }
         
-        #healIndicator.active { display: flex; }
-        
-        @keyframes healPulse {
+        @keyframes pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.1); }
         }
@@ -727,11 +787,6 @@ function createSlimeStoreUI() {
     
     const healthContainer = document.createElement('div');
     healthContainer.id = 'slimeHealthContainer';
-    healthContainer.innerHTML = `
-        <div class="slime-health-bar">
-            <div class="slime-health-fill" id="slimeHealthFill"></div>
-        </div>
-    `;
     document.body.appendChild(healthContainer);
     
     const healIndicator = document.createElement('div');
@@ -748,32 +803,98 @@ function setupSlimeStoreEvents() {
         e.preventDefault();
         closeSlimeStore();
     });
-    
-    document.querySelectorAll('.store-btn').forEach(btn => {
-        const action = btn.dataset.action;
-        btn.addEventListener('click', () => handleStoreAction(action));
-        btn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            handleStoreAction(action);
-        });
-    });
 }
 
-function handleStoreAction(action) {
-    switch(action) {
-        case 'buySlime': purchaseSlime(); break;
-        case 'upgradeAttackSpeed': purchaseSlimeUpgrade('attackSpeed'); break;
-        case 'upgradeHealth': purchaseSlimeUpgrade('health'); break;
-        case 'upgradeSwords': purchaseSlimeUpgrade('swords'); break;
-        case 'upgradeHeal': purchaseSlimeUpgrade('heal'); break;
-    }
+function rebuildStoreUI() {
+    const state = slimeCompanionState;
+    const itemsContainer = document.getElementById('slimeStoreItems');
+    
+    // Clear existing items
+    itemsContainer.innerHTML = '';
+    
+    // Add "Buy New Companion" option
+    const nextColor = getNextCompanionColor();
+    const nextCost = getNextCompanionCost();
+    const companionNum = state.companions.length + 1;
+    
+    const buySection = document.createElement('div');
+    buySection.className = 'store-item';
+    buySection.id = 'store-buyCompanion';
+    buySection.innerHTML = `
+        <div class="store-icon">${nextColor.icon}</div>
+        <div class="store-info">
+            <div class="store-name">${state.companions.length === 0 ? 'Slime Companion' : 'New Companion #' + companionNum}</div>
+            <div class="store-desc">${state.companions.length === 0 ? 'A friendly slime that fights by your side!' : nextColor.name + ' slime to join your team!'}</div>
+        </div>
+        <button class="store-btn" id="buyCompanionBtn">
+            <span class="cost">💰 ${nextCost}</span>
+        </button>
+    `;
+    itemsContainer.appendChild(buySection);
+    
+    // Setup buy button
+    const buyBtn = document.getElementById('buyCompanionBtn');
+    buyBtn.addEventListener('click', purchaseCompanion);
+    buyBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        purchaseCompanion();
+    });
+    
+    // Add upgrade sections for each owned companion
+    state.companions.forEach((companion, index) => {
+        const section = document.createElement('div');
+        section.className = 'companion-section';
+        section.style.borderColor = companion.color.primary;
+        section.innerHTML = `
+            <div class="companion-header" style="color: ${companion.color.primary}">
+                ${companion.color.icon} ${companion.color.name} Slime #${index + 1}
+            </div>
+            <div class="companion-upgrades" id="companion-${index}-upgrades">
+                ${createUpgradeItemHTML(index, 'attackSpeed', '⚡', 'Attack Speed', 'Faster slime attacks')}
+                ${createUpgradeItemHTML(index, 'health', '❤️', 'Slime Health', '+5% max health per level')}
+                ${createUpgradeItemHTML(index, 'swords', '⚔️', 'Slime Swords', 'Orbiting blades around slime')}
+                ${createUpgradeItemHTML(index, 'heal', '💚', 'Heal Ability', 'Auto-heal every minute')}
+            </div>
+        `;
+        itemsContainer.appendChild(section);
+        
+        // Setup upgrade buttons for this companion
+        ['attackSpeed', 'health', 'swords', 'heal'].forEach(upgradeKey => {
+            const btn = document.getElementById(`companion-${index}-${upgradeKey}-btn`);
+            if (btn) {
+                btn.addEventListener('click', () => purchaseCompanionUpgrade(index, upgradeKey));
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    purchaseCompanionUpgrade(index, upgradeKey);
+                });
+            }
+        });
+    });
+    
+    updateSlimeStoreUI();
+}
+
+function createUpgradeItemHTML(companionIndex, upgradeKey, icon, name, desc) {
+    return `
+        <div class="store-item upgrade-item-store" id="companion-${companionIndex}-${upgradeKey}">
+            <div class="store-icon">${icon}</div>
+            <div class="store-info">
+                <div class="store-name">${name}</div>
+                <div class="store-desc">${desc}</div>
+                <div class="store-level">Level: <span class="lvl">0</span>/${upgradeKey === 'heal' ? '1' : (upgradeKey === 'swords' ? '8' : (upgradeKey === 'health' ? '12' : '10'))}</div>
+            </div>
+            <button class="store-btn" id="companion-${companionIndex}-${upgradeKey}-btn">
+                <span class="cost">💰 0</span>
+            </button>
+        </div>
+    `;
 }
 
 function openSlimeStore() {
     slimeCompanionState.storeMenuOpen = true;
     gameState.menuOpen = true;
+    rebuildStoreUI();
     document.getElementById('slimeStoreMenu').style.display = 'flex';
-    updateSlimeStoreUI();
 }
 
 function closeSlimeStore() {
@@ -781,7 +902,6 @@ function closeSlimeStore() {
     gameState.menuOpen = false;
     document.getElementById('slimeStoreMenu').style.display = 'none';
     
-    // Start cleanup timer (30 seconds at 60fps)
     if (slimeCompanionState.monsterStore) {
         slimeCompanionState.monsterStore.cleanupTimer = 30 * 60;
     }
@@ -798,47 +918,36 @@ function updateSlimeStoreUI() {
         goldDisplay.textContent = gameState.player.gold;
     }
     
-    const slimeItem = document.getElementById('store-slime');
-    const slimeBtn = document.getElementById('buySlimeBtn');
-    const slimeStatus = document.getElementById('slime-status');
-    
-    if (state.slimeOwned) {
-        slimeItem.classList.add('owned');
-        slimeStatus.textContent = 'Owned ✓';
-        slimeBtn.disabled = true;
-        slimeBtn.querySelector('.cost').textContent = 'OWNED';
-    } else {
-        slimeItem.classList.remove('owned');
-        slimeStatus.textContent = 'Not Owned';
-        slimeBtn.disabled = gameState.player.gold < state.slimeCost;
-        slimeBtn.querySelector('.cost').textContent = '💰 ' + state.slimeCost;
+    // Update buy button
+    const buyBtn = document.getElementById('buyCompanionBtn');
+    if (buyBtn) {
+        const cost = getNextCompanionCost();
+        buyBtn.disabled = gameState.player.gold < cost;
+        buyBtn.querySelector('.cost').textContent = '💰 ' + cost;
     }
     
-    updateStoreUpgradeItem('attackSpeed', 'store-attackSpeed');
-    updateStoreUpgradeItem('health', 'store-health');
-    updateStoreUpgradeItem('swords', 'store-swords');
-    updateStoreUpgradeItem('heal', 'store-heal');
+    // Update each companion's upgrades
+    state.companions.forEach((companion, index) => {
+        ['attackSpeed', 'health', 'swords', 'heal'].forEach(upgradeKey => {
+            updateCompanionUpgradeItem(index, upgradeKey);
+        });
+    });
 }
 
-function updateStoreUpgradeItem(upgradeKey, elementId) {
+function updateCompanionUpgradeItem(companionIndex, upgradeKey) {
     const state = slimeCompanionState;
-    const upgrade = state.upgrades[upgradeKey];
-    const item = document.getElementById(elementId);
+    const companion = state.companions[companionIndex];
+    if (!companion) return;
+    
+    const upgrade = companion.upgrades[upgradeKey];
+    const item = document.getElementById(`companion-${companionIndex}-${upgradeKey}`);
+    if (!item) return;
+    
     const btn = item.querySelector('.store-btn');
     const lvlSpan = item.querySelector('.lvl');
     const costSpan = btn.querySelector('.cost');
     
     lvlSpan.textContent = upgrade.level;
-    
-    if (!state.slimeOwned) {
-        item.classList.add('locked');
-        item.classList.remove('maxed');
-        btn.disabled = true;
-        costSpan.textContent = 'NEED SLIME';
-        return;
-    }
-    
-    item.classList.remove('locked');
     
     if (upgrade.level >= upgrade.maxLevel) {
         item.classList.add('maxed');
@@ -846,51 +955,75 @@ function updateStoreUpgradeItem(upgradeKey, elementId) {
         costSpan.textContent = 'MAX';
     } else {
         item.classList.remove('maxed');
-        const cost = getSlimeUpgradeCost(upgradeKey);
+        const cost = getCompanionUpgradeCost(companionIndex, upgradeKey);
         costSpan.textContent = '💰 ' + cost;
         btn.disabled = gameState.player.gold < cost;
     }
 }
 
-function getSlimeUpgradeCost(upgradeKey) {
-    const upgrade = slimeCompanionState.upgrades[upgradeKey];
+function getCompanionUpgradeCost(companionIndex, upgradeKey) {
+    const companion = slimeCompanionState.companions[companionIndex];
+    if (!companion) return 999999;
+    const upgrade = companion.upgrades[upgradeKey];
     return Math.floor(upgrade.baseCost * Math.pow(upgrade.costMult, upgrade.level));
 }
 
-function purchaseSlime() {
+function purchaseCompanion() {
     const state = slimeCompanionState;
+    const cost = getNextCompanionCost();
     
-    if (state.slimeOwned || gameState.player.gold < state.slimeCost) return;
+    if (gameState.player.gold < cost) return;
     
-    gameState.player.gold -= state.slimeCost;
-    state.slimeOwned = true;
+    gameState.player.gold -= cost;
     
-    spawnCompanionSlime();
+    const colorInfo = getNextCompanionColor();
+    const companionIndex = state.companions.length;
+    
+    // Create companion object
+    const companion = {
+        id: companionIndex,
+        color: colorInfo,
+        sprite: null,
+        health: 0,
+        maxHealth: 0,
+        upgrades: createDefaultUpgrades(),
+        swords: [],
+        projectiles: [],
+        wanderAngle: Math.random() * Math.PI * 2,
+        attackCooldown: 0,
+        healCooldown: 0,
+        target: null
+    };
+    
+    state.companions.push(companion);
+    
+    spawnCompanionSlime(companionIndex);
     
     updateUI();
-    updateSlimeStoreUI();
-    showReward('🔵 SLIME COMPANION ACQUIRED!');
+    rebuildStoreUI();
+    showReward(`${colorInfo.icon} ${colorInfo.name.toUpperCase()} SLIME ACQUIRED!`);
 }
 
-function purchaseSlimeUpgrade(upgradeKey) {
+function purchaseCompanionUpgrade(companionIndex, upgradeKey) {
     const state = slimeCompanionState;
-    const upgrade = state.upgrades[upgradeKey];
+    const companion = state.companions[companionIndex];
+    if (!companion) return;
     
-    if (!state.slimeOwned) return;
+    const upgrade = companion.upgrades[upgradeKey];
     if (upgrade.level >= upgrade.maxLevel) return;
     
-    const cost = getSlimeUpgradeCost(upgradeKey);
+    const cost = getCompanionUpgradeCost(companionIndex, upgradeKey);
     if (gameState.player.gold < cost) return;
     
     gameState.player.gold -= cost;
     upgrade.level++;
     
-    if (upgradeKey === 'health' && state.slime) {
-        updateSlimeMaxHealth();
+    if (upgradeKey === 'health') {
+        updateCompanionMaxHealth(companionIndex);
     }
     
     if (upgradeKey === 'swords') {
-        updateSlimeSwordCount();
+        updateCompanionSwordCount(companionIndex);
     }
     
     if (upgradeKey === 'heal') {
@@ -906,17 +1039,19 @@ function purchaseSlimeUpgrade(upgradeKey) {
         swords: '⚔️ SLIME SWORDS',
         heal: '💚 HEAL ABILITY'
     };
-    showReward(upgradeNames[upgradeKey] + ' UPGRADED!');
+    showReward(`${companion.color.icon} ${upgradeNames[upgradeKey]} UPGRADED!`);
 }
 
 // ============================================
 // COMPANION SLIME SYSTEM
 // ============================================
 
-function spawnCompanionSlime() {
+function spawnCompanionSlime(companionIndex) {
     const state = slimeCompanionState;
+    const companion = state.companions[companionIndex];
+    if (!companion) return;
     
-    const texture = createCompanionSlimeTexture();
+    const texture = createCompanionSlimeTexture(companion.color);
     const material = new THREE.SpriteMaterial({
         map: texture,
         transparent: true
@@ -925,7 +1060,7 @@ function spawnCompanionSlime() {
     sprite.scale.set(3.75, 3.75, 1);
     
     const angle = Math.random() * Math.PI * 2;
-    const dist = 3;
+    const dist = 3 + companionIndex * 0.5; // Slight offset for each companion
     sprite.position.set(
         gameState.player.position.x + Math.cos(angle) * dist,
         1.875,
@@ -934,86 +1069,113 @@ function spawnCompanionSlime() {
     
     scene.add(sprite);
     
-    state.slime = sprite;
-    state.slimeWanderAngle = Math.random() * Math.PI * 2;
+    companion.sprite = sprite;
     
-    updateSlimeMaxHealth();
-    state.slimeHealth = state.slimeMaxHealth;
+    updateCompanionMaxHealth(companionIndex);
+    companion.health = companion.maxHealth;
     
-    document.getElementById('slimeHealthContainer').classList.add('active');
-    
-    if (state.upgrades.heal.level > 0) {
-        document.getElementById('healIndicator').classList.add('active');
-    }
-    
-    updateSlimeSwordCount();
+    updateCompanionSwordCount(companionIndex);
+    updateHealthBarsUI();
 }
 
-function updateSlimeMaxHealth() {
-    const state = slimeCompanionState;
-    const healthPercent = 0.5 + (state.upgrades.health.level * 0.05);
-    state.slimeMaxHealth = gameState.player.maxHealth * healthPercent;
+function updateCompanionMaxHealth(companionIndex) {
+    const companion = slimeCompanionState.companions[companionIndex];
+    if (!companion) return;
     
-    if (state.slimeHealth > state.slimeMaxHealth) {
-        state.slimeHealth = state.slimeMaxHealth;
+    const healthPercent = 0.5 + (companion.upgrades.health.level * 0.05);
+    companion.maxHealth = gameState.player.maxHealth * healthPercent;
+    
+    if (companion.health > companion.maxHealth) {
+        companion.health = companion.maxHealth;
     }
+}
+
+function updateHealthBarsUI() {
+    const state = slimeCompanionState;
+    const container = document.getElementById('slimeHealthContainer');
+    
+    if (state.companions.length === 0) {
+        container.classList.remove('active');
+        return;
+    }
+    
+    container.classList.add('active');
+    container.innerHTML = '';
+    
+    state.companions.forEach((companion, index) => {
+        if (companion.health <= 0) return;
+        
+        const healthPercent = (companion.health / companion.maxHealth) * 100;
+        const bar = document.createElement('div');
+        bar.innerHTML = `
+            <div class="slime-health-label" style="color: ${companion.color.primary}">${companion.color.icon} #${index + 1}</div>
+            <div class="slime-health-bar">
+                <div class="slime-health-fill" style="width: ${healthPercent}%; background: linear-gradient(180deg, ${companion.color.primary}, ${companion.color.primary}99);"></div>
+            </div>
+        `;
+        container.appendChild(bar);
+    });
 }
 
 // ============================================
 // SLIME SWORDS SYSTEM
 // ============================================
 
-function updateSlimeSwordCount() {
+function updateCompanionSwordCount(companionIndex) {
     const state = slimeCompanionState;
-    const targetCount = state.upgrades.swords.level;
+    const companion = state.companions[companionIndex];
+    if (!companion) return;
     
-    while (state.slimeSwords.length > targetCount) {
-        const sword = state.slimeSwords.pop();
+    const targetCount = companion.upgrades.swords.level;
+    
+    // Remove excess swords
+    while (companion.swords.length > targetCount) {
+        const sword = companion.swords.pop();
         scene.remove(sword.sprite);
     }
     
-    while (state.slimeSwords.length < targetCount) {
-        const material = new THREE.SpriteMaterial({ 
-            map: slimeSwordTexture, 
-            transparent: true 
+    // Add new swords
+    while (companion.swords.length < targetCount) {
+        const material = new THREE.SpriteMaterial({
+            map: state.slimeSwordTexture,
+            transparent: true
         });
         const sprite = new THREE.Sprite(material);
-        sprite.scale.set(0.9, 1.8, 1);
-        
-        const sword = {
-            sprite,
-            angle: (state.slimeSwords.length / targetCount) * Math.PI * 2,
-            hitCooldowns: new Map()
-        };
-        
+        sprite.scale.set(1.8, 1.8, 1);
         scene.add(sprite);
-        state.slimeSwords.push(sword);
+        
+        companion.swords.push({
+            sprite,
+            angle: (companion.swords.length / targetCount) * Math.PI * 2,
+            hitCooldowns: new Map()
+        });
     }
     
-    state.slimeSwords.forEach((sword, i) => {
-        sword.angle = (i / state.slimeSwords.length) * Math.PI * 2;
+    // Redistribute angles
+    companion.swords.forEach((sword, i) => {
+        sword.angle = (i / companion.swords.length) * Math.PI * 2;
     });
 }
 
-function updateSlimeSwords() {
+function updateCompanionSwords(companionIndex) {
     const state = slimeCompanionState;
+    const companion = state.companions[companionIndex];
+    if (!companion || !companion.sprite || companion.health <= 0) return;
     
-    if (state.slimeSwords.length === 0 || !state.slime || state.slimeHealth <= 0) return;
-    
-    const orbitRadius = 2;
+    const orbitRadius = 2.5;
     const orbitSpeed = 0.04;
-    const swordDamage = CONFIG.projectileBaseDamage * (1 + gameState.player.level * 0.25) * 1.0;
+    const swordDamage = CONFIG.projectileBaseDamage * (1 + gameState.player.level * 0.2);
     
-    state.slimeSwords.forEach((sword, i) => {
+    companion.swords.forEach(sword => {
         sword.angle += orbitSpeed;
         
-        const x = state.slime.position.x + Math.cos(sword.angle) * orbitRadius;
-        const z = state.slime.position.z + Math.sin(sword.angle) * orbitRadius;
+        sword.sprite.position.x = companion.sprite.position.x + Math.cos(sword.angle) * orbitRadius;
+        sword.sprite.position.z = companion.sprite.position.z + Math.sin(sword.angle) * orbitRadius;
+        sword.sprite.position.y = companion.sprite.position.y;
         
-        sword.sprite.position.set(x, 1.2, z);
-        sword.sprite.material.rotation = -sword.angle + Math.PI / 2;
+        sword.sprite.material.rotation = sword.angle + Math.PI / 2;
         
-        // Check enemies
+        // Check collisions with enemies
         for (const enemy of gameState.enemies) {
             const dx = sword.sprite.position.x - enemy.sprite.position.x;
             const dz = sword.sprite.position.z - enemy.sprite.position.z;
@@ -1027,85 +1189,6 @@ function updateSlimeSwords() {
                     enemy.health -= swordDamage;
                     enemy.hitFlash = 10;
                     sword.hitCooldowns.set(enemy, now);
-                    
-                    if (enemy.health <= 0) {
-                        spawnXPOrb(enemy.sprite.position.clone(), enemy.type.xp);
-                        if (Math.random() < enemy.type.goldChance && enemy.type.gold > 0) {
-                            spawnGoldOrb(enemy.sprite.position.clone(), enemy.type.gold);
-                        }
-                        scene.remove(enemy.sprite);
-                        const idx = gameState.enemies.indexOf(enemy);
-                        if (idx > -1) gameState.enemies.splice(idx, 1);
-                        gameState.kills++;
-                        document.getElementById('kills').textContent = gameState.kills;
-                    }
-                }
-            }
-        }
-        
-        // Check store slimes
-        for (const storeSlime of state.storeSlimes) {
-            const dx = sword.sprite.position.x - storeSlime.sprite.position.x;
-            const dz = sword.sprite.position.z - storeSlime.sprite.position.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-            
-            if (dist < 1.2) {
-                const lastHit = sword.hitCooldowns.get(storeSlime) || 0;
-                const now = Date.now();
-                
-                if (now - lastHit > 500) {
-                    damageStoreSlime(storeSlime, swordDamage);
-                    sword.hitCooldowns.set(storeSlime, now);
-                }
-            }
-        }
-        
-        // Check encounter guards
-        for (const guard of encounterState.encounterGuards) {
-            const dx = sword.sprite.position.x - guard.sprite.position.x;
-            const dz = sword.sprite.position.z - guard.sprite.position.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-            
-            if (dist < 1.2) {
-                const lastHit = sword.hitCooldowns.get(guard) || 0;
-                const now = Date.now();
-                
-                if (now - lastHit > 500) {
-                    guard.health -= swordDamage;
-                    guard.hitFlash = 10;
-                    sword.hitCooldowns.set(guard, now);
-                    
-                    if (guard.health <= 0) {
-                        scene.remove(guard.sprite);
-                        spawnXPOrb(guard.sprite.position.clone(), 30);
-                        if (Math.random() < 0.5) {
-                            spawnGoldOrb(guard.sprite.position.clone(), 15);
-                        }
-                        const idx = encounterState.encounterGuards.indexOf(guard);
-                        if (idx > -1) encounterState.encounterGuards.splice(idx, 1);
-                        gameState.kills++;
-                        document.getElementById('kills').textContent = gameState.kills;
-                    }
-                }
-            }
-        }
-        
-        // Check forest cloud sprites
-        if (encounterState.forestCloudSprites) {
-            for (const cloudSprite of encounterState.forestCloudSprites) {
-                const dx = sword.sprite.position.x - cloudSprite.sprite.position.x;
-                const dz = sword.sprite.position.z - cloudSprite.sprite.position.z;
-                const dist = Math.sqrt(dx * dx + dz * dz);
-                
-                if (dist < 1.5) {
-                    const lastHit = sword.hitCooldowns.get(cloudSprite) || 0;
-                    const now = Date.now();
-                    
-                    if (now - lastHit > 500) {
-                        cloudSprite.health -= swordDamage;
-                        cloudSprite.hitFlash = 10;
-                        sword.hitCooldowns.set(cloudSprite, now);
-                    }
                 }
             }
         }
@@ -1128,271 +1211,172 @@ function updateSlimeSwords() {
             }
         }
         
-        // Cleanup
+        // Check encounter guards
+        if (encounterState && encounterState.encounterGuards) {
+            for (const guard of encounterState.encounterGuards) {
+                const dx = sword.sprite.position.x - guard.sprite.position.x;
+                const dz = sword.sprite.position.z - guard.sprite.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist < 1.2) {
+                    const lastHit = sword.hitCooldowns.get(guard) || 0;
+                    const now = Date.now();
+                    
+                    if (now - lastHit > 500) {
+                        guard.health -= swordDamage;
+                        guard.hitFlash = 10;
+                        sword.hitCooldowns.set(guard, now);
+                    }
+                }
+            }
+        }
+        
+        // Cleanup dead targets from cooldown map
         for (const [target, time] of sword.hitCooldowns) {
             if (!gameState.enemies.includes(target) && 
                 !gameState.bosses.includes(target) && 
-                !encounterState.encounterGuards.includes(target) &&
-                !state.storeSlimes.includes(target) &&
-                !(encounterState.forestCloudSprites && encounterState.forestCloudSprites.includes(target))) {
+                !(encounterState && encounterState.encounterGuards && encounterState.encounterGuards.includes(target))) {
                 sword.hitCooldowns.delete(target);
             }
         }
     });
 }
 
+// ============================================
+// COMPANION UPDATE LOOP
+// ============================================
+
 function updateCompanionSlime() {
     const state = slimeCompanionState;
     
-    if (!state.slimeOwned || !state.slime) return;
-    if (state.slimeHealth <= 0) return;
+    if (state.companions.length === 0) return;
     if (gameState.dialogueTimer > 0) return;
     
-    const slime = state.slime;
-    const playerPos = gameState.player.position;
+    state.companions.forEach((companion, index) => {
+        if (!companion.sprite || companion.health <= 0) return;
+        
+        // Movement AI
+        updateCompanionMovement(index);
+        
+        // Combat
+        updateCompanionCombat(index);
+        
+        // Swords
+        updateCompanionSwords(index);
+        
+        // Heal ability
+        updateCompanionHeal(index);
+    });
     
-    const dx = playerPos.x - slime.position.x;
-    const dz = playerPos.z - slime.position.z;
+    // Update health bars
+    updateHealthBarsUI();
+}
+
+function updateCompanionMovement(companionIndex) {
+    const companion = slimeCompanionState.companions[companionIndex];
+    if (!companion || !companion.sprite) return;
+    
+    const dx = gameState.player.position.x - companion.sprite.position.x;
+    const dz = gameState.player.position.z - companion.sprite.position.z;
     const distToPlayer = Math.sqrt(dx * dx + dz * dz);
     
-    const maxDist = 7.5;
-    const moveSpeed = CONFIG.playerSpeed * 0.9;
+    const followDist = 4 + companionIndex * 0.5;
+    const speed = 0.08;
     
+    // Find nearest enemy
     let nearestEnemy = null;
-    let nearestDist = Infinity;
-    const attackRange = 8 * 0.6;
+    let nearestDist = 15;
     
     for (const enemy of gameState.enemies) {
-        const edx = enemy.sprite.position.x - slime.position.x;
-        const edz = enemy.sprite.position.z - slime.position.z;
-        const eDist = Math.sqrt(edx * edx + edz * edz);
+        const ex = enemy.sprite.position.x - companion.sprite.position.x;
+        const ez = enemy.sprite.position.z - companion.sprite.position.z;
+        const eDist = Math.sqrt(ex * ex + ez * ez);
+        
         if (eDist < nearestDist) {
             nearestDist = eDist;
             nearestEnemy = enemy;
         }
     }
     
-    for (const storeSlime of state.storeSlimes) {
-        const edx = storeSlime.sprite.position.x - slime.position.x;
-        const edz = storeSlime.sprite.position.z - slime.position.z;
-        const eDist = Math.sqrt(edx * edx + edz * edz);
-        if (eDist < nearestDist) {
-            nearestDist = eDist;
-            nearestEnemy = storeSlime;
-        }
-    }
-    
-    for (const guard of encounterState.encounterGuards) {
-        const edx = guard.sprite.position.x - slime.position.x;
-        const edz = guard.sprite.position.z - slime.position.z;
-        const eDist = Math.sqrt(edx * edx + edz * edz);
-        if (eDist < nearestDist) {
-            nearestDist = eDist;
-            nearestEnemy = guard;
-        }
-    }
-    
-    // Target forest cloud sprites
-    if (encounterState.forestCloudSprites) {
-        for (const cloudSprite of encounterState.forestCloudSprites) {
-            const edx = cloudSprite.sprite.position.x - slime.position.x;
-            const edz = cloudSprite.sprite.position.z - slime.position.z;
-            const eDist = Math.sqrt(edx * edx + edz * edz);
-            if (eDist < nearestDist) {
-                nearestDist = eDist;
-                nearestEnemy = cloudSprite;
-            }
-        }
-    }
-    
-    if (distToPlayer > maxDist) {
-        slime.position.x += (dx / distToPlayer) * moveSpeed;
-        slime.position.z += (dz / distToPlayer) * moveSpeed;
-    } else if (nearestEnemy && nearestDist < attackRange * 1.5) {
-        const edx = nearestEnemy.sprite.position.x - slime.position.x;
-        const edz = nearestEnemy.sprite.position.z - slime.position.z;
-        const eDist = Math.sqrt(edx * edx + edz * edz);
+    // Check bosses too
+    for (const boss of gameState.bosses) {
+        const bx = boss.sprite.position.x - companion.sprite.position.x;
+        const bz = boss.sprite.position.z - companion.sprite.position.z;
+        const bDist = Math.sqrt(bx * bx + bz * bz);
         
-        const newX = slime.position.x + (edx / eDist) * moveSpeed * 0.5;
-        const newZ = slime.position.z + (edz / eDist) * moveSpeed * 0.5;
-        const newDistToPlayer = Math.sqrt(
-            Math.pow(playerPos.x - newX, 2) + 
-            Math.pow(playerPos.z - newZ, 2)
-        );
-        
-        if (newDistToPlayer <= maxDist) {
-            slime.position.x = newX;
-            slime.position.z = newZ;
+        if (bDist < nearestDist) {
+            nearestDist = bDist;
+            nearestEnemy = boss;
         }
+    }
+    
+    companion.target = nearestEnemy;
+    
+    if (distToPlayer > followDist + 5) {
+        // Too far from player - return
+        companion.sprite.position.x += (dx / distToPlayer) * speed * 1.5;
+        companion.sprite.position.z += (dz / distToPlayer) * speed * 1.5;
+    } else if (nearestEnemy && nearestDist < 12) {
+        // Chase enemy
+        const ex = nearestEnemy.sprite.position.x - companion.sprite.position.x;
+        const ez = nearestEnemy.sprite.position.z - companion.sprite.position.z;
+        
+        if (nearestDist > 5) {
+            companion.sprite.position.x += (ex / nearestDist) * speed;
+            companion.sprite.position.z += (ez / nearestDist) * speed;
+        }
+    } else if (distToPlayer > followDist) {
+        // Follow player
+        companion.sprite.position.x += (dx / distToPlayer) * speed * 0.5;
+        companion.sprite.position.z += (dz / distToPlayer) * speed * 0.5;
     } else {
-        state.slimeWanderAngle += (Math.random() - 0.5) * 0.2;
-        
-        const wanderX = slime.position.x + Math.cos(state.slimeWanderAngle) * moveSpeed * 0.3;
-        const wanderZ = slime.position.z + Math.sin(state.slimeWanderAngle) * moveSpeed * 0.3;
-        
-        const wanderDistToPlayer = Math.sqrt(
-            Math.pow(playerPos.x - wanderX, 2) + 
-            Math.pow(playerPos.z - wanderZ, 2)
-        );
-        
-        if (wanderDistToPlayer <= maxDist) {
-            slime.position.x = wanderX;
-            slime.position.z = wanderZ;
-        } else {
-            state.slimeWanderAngle = Math.atan2(dz, dx) + (Math.random() - 0.5) * 1;
-        }
+        // Wander near player
+        companion.wanderAngle += (Math.random() - 0.5) * 0.1;
+        companion.sprite.position.x += Math.cos(companion.wanderAngle) * speed * 0.2;
+        companion.sprite.position.z += Math.sin(companion.wanderAngle) * speed * 0.2;
     }
-    
-    state.slimeAttackCooldown = Math.max(0, state.slimeAttackCooldown - 1);
-    
-    if (nearestEnemy && nearestDist <= attackRange && state.slimeAttackCooldown <= 0) {
-        fireSlimeProjectile(nearestEnemy);
-        
-        const baseCooldown = 90;
-        const speedReduction = 1 - (state.upgrades.attackSpeed.level * 0.07);
-        state.slimeAttackCooldown = Math.floor(baseCooldown * speedReduction);
-    }
-    
-    updateSlimeProjectiles();
-    updateSlimeSwords();
-    
-    if (state.upgrades.heal.level > 0) {
-        state.healCooldown = Math.max(0, state.healCooldown - 1);
-        
-        const indicator = document.getElementById('healIndicator');
-        if (state.healCooldown <= 0) {
-            indicator.classList.add('ready');
-            performHeal();
-            state.healCooldown = state.healMaxCooldown;
-            indicator.classList.remove('ready');
-        }
-    }
-    
-    updateSlimeHealthBar();
 }
 
-function fireSlimeProjectile(target) {
-    const state = slimeCompanionState;
-    const slime = state.slime;
+function updateCompanionCombat(companionIndex) {
+    const companion = slimeCompanionState.companions[companionIndex];
+    if (!companion || !companion.sprite) return;
     
-    const texture = createSlimeProjectileTexture();
-    const material = new THREE.SpriteMaterial({
-        map: texture,
-        transparent: true
-    });
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(1.5, 1.5, 1);
-    sprite.position.copy(slime.position);
-    sprite.position.y = 1.5;
+    companion.attackCooldown = Math.max(0, companion.attackCooldown - 1);
     
-    const dx = target.sprite.position.x - slime.position.x;
-    const dz = target.sprite.position.z - slime.position.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    
-    const projectile = {
-        sprite,
-        velocity: new THREE.Vector3(
-            (dx / dist) * 0.35,
-            0,
-            (dz / dist) * 0.35
-        ),
-        life: 120,
-        damage: CONFIG.projectileBaseDamage * 0.75 * (1 + gameState.player.level * 0.25)
-    };
-    
-    scene.add(sprite);
-    state.slimeProjectiles.push(projectile);
-}
-
-function updateSlimeProjectiles() {
-    const state = slimeCompanionState;
-    
-    for (let i = state.slimeProjectiles.length - 1; i >= 0; i--) {
-        const proj = state.slimeProjectiles[i];
+    // Update projectiles
+    for (let i = companion.projectiles.length - 1; i >= 0; i--) {
+        const proj = companion.projectiles[i];
         
-        proj.sprite.position.add(proj.velocity);
+        proj.sprite.position.x += proj.vx;
+        proj.sprite.position.z += proj.vz;
         proj.life--;
         
         let hit = false;
         
-        for (let j = gameState.enemies.length - 1; j >= 0; j--) {
-            const enemy = gameState.enemies[j];
-            const dx = enemy.sprite.position.x - proj.sprite.position.x;
-            const dz = enemy.sprite.position.z - proj.sprite.position.z;
+        // Check enemies
+        for (const enemy of gameState.enemies) {
+            const dx = proj.sprite.position.x - enemy.sprite.position.x;
+            const dz = proj.sprite.position.z - enemy.sprite.position.z;
             const dist = Math.sqrt(dx * dx + dz * dz);
             
             if (dist < 1.5) {
                 enemy.health -= proj.damage;
                 enemy.hitFlash = 10;
-                
-                if (enemy.health <= 0) {
-                    scene.remove(enemy.sprite);
-                    spawnXPOrb(enemy.sprite.position.clone(), enemy.type.xp);
-                    if (Math.random() < enemy.type.goldChance) {
-                        spawnGoldOrb(enemy.sprite.position.clone(), enemy.type.gold);
-                    }
-                    gameState.enemies.splice(j, 1);
-                    gameState.kills++;
-                    document.getElementById('kills').textContent = gameState.kills;
-                }
-                
                 hit = true;
                 break;
             }
         }
         
+        // Check bosses
         if (!hit) {
-            for (const storeSlime of state.storeSlimes) {
-                const dx = storeSlime.sprite.position.x - proj.sprite.position.x;
-                const dz = storeSlime.sprite.position.z - proj.sprite.position.z;
+            for (const boss of gameState.bosses) {
+                const dx = proj.sprite.position.x - boss.sprite.position.x;
+                const dz = proj.sprite.position.z - boss.sprite.position.z;
                 const dist = Math.sqrt(dx * dx + dz * dz);
                 
-                if (dist < 1.5) {
-                    damageStoreSlime(storeSlime, proj.damage);
-                    hit = true;
-                    break;
-                }
-            }
-        }
-        
-        if (!hit) {
-            for (const guard of encounterState.encounterGuards) {
-                const dx = guard.sprite.position.x - proj.sprite.position.x;
-                const dz = guard.sprite.position.z - proj.sprite.position.z;
-                const dist = Math.sqrt(dx * dx + dz * dz);
-                
-                if (dist < 1.5) {
-                    guard.health -= proj.damage;
-                    guard.hitFlash = 10;
-                    
-                    if (guard.health <= 0) {
-                        scene.remove(guard.sprite);
-                        spawnXPOrb(guard.sprite.position.clone(), 30);
-                        if (Math.random() < 0.5) {
-                            spawnGoldOrb(guard.sprite.position.clone(), 15);
-                        }
-                        const idx = encounterState.encounterGuards.indexOf(guard);
-                        if (idx > -1) encounterState.encounterGuards.splice(idx, 1);
-                        gameState.kills++;
-                        document.getElementById('kills').textContent = gameState.kills;
-                    }
-                    
-                    hit = true;
-                    break;
-                }
-            }
-        }
-        
-        // Check forest cloud sprites
-        if (!hit && encounterState.forestCloudSprites) {
-            for (const cloudSprite of encounterState.forestCloudSprites) {
-                const dx = cloudSprite.sprite.position.x - proj.sprite.position.x;
-                const dz = cloudSprite.sprite.position.z - proj.sprite.position.z;
-                const dist = Math.sqrt(dx * dx + dz * dz);
-                
-                if (dist < 1.5) {
-                    cloudSprite.health -= proj.damage;
-                    cloudSprite.hitFlash = 10;
+                if (dist < 4) {
+                    boss.health -= proj.damage;
+                    boss.hitFlash = 10;
                     hit = true;
                     break;
                 }
@@ -1401,182 +1385,137 @@ function updateSlimeProjectiles() {
         
         if (hit || proj.life <= 0) {
             scene.remove(proj.sprite);
-            state.slimeProjectiles.splice(i, 1);
+            companion.projectiles.splice(i, 1);
+        }
+    }
+    
+    // Shoot at target
+    if (companion.target && companion.attackCooldown <= 0) {
+        const tx = companion.target.sprite.position.x - companion.sprite.position.x;
+        const tz = companion.target.sprite.position.z - companion.sprite.position.z;
+        const dist = Math.sqrt(tx * tx + tz * tz);
+        
+        if (dist < 12) {
+            fireCompanionProjectile(companionIndex, tx / dist, tz / dist);
+            
+            const baseAttackCooldown = 45;
+            const speedBonus = companion.upgrades.attackSpeed.level * 0.08;
+            companion.attackCooldown = Math.floor(baseAttackCooldown * (1 - speedBonus));
         }
     }
 }
 
-function performHeal() {
-    const state = slimeCompanionState;
+function fireCompanionProjectile(companionIndex, dirX, dirZ) {
+    const companion = slimeCompanionState.companions[companionIndex];
+    if (!companion || !companion.sprite) return;
     
-    const playerHealAmount = gameState.player.maxHealth * 0.15;
-    gameState.player.health = Math.min(
-        gameState.player.maxHealth,
-        gameState.player.health + playerHealAmount
+    const projTexture = createPixelTexture(16, 16, (ctx, w, h) => {
+        ctx.fillStyle = companion.color.glow;
+        ctx.beginPath();
+        ctx.arc(8, 8, 7, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = companion.color.primary;
+        ctx.beginPath();
+        ctx.arc(8, 8, 5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.beginPath();
+        ctx.arc(6, 6, 2, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    const material = new THREE.SpriteMaterial({
+        map: projTexture,
+        transparent: true
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(1.2, 1.2, 1);
+    sprite.position.copy(companion.sprite.position);
+    scene.add(sprite);
+    
+    const speed = 0.35;
+    const damage = CONFIG.projectileBaseDamage * (1 + gameState.player.level * 0.15) * 0.6;
+    
+    companion.projectiles.push({
+        sprite,
+        vx: dirX * speed,
+        vz: dirZ * speed,
+        damage,
+        life: 120
+    });
+}
+
+function updateCompanionHeal(companionIndex) {
+    const companion = slimeCompanionState.companions[companionIndex];
+    if (!companion) return;
+    
+    if (companion.upgrades.heal.level === 0) return;
+    
+    companion.healCooldown = Math.max(0, companion.healCooldown - 1);
+    
+    // Check if any companion has heal ready
+    const anyHealReady = slimeCompanionState.companions.some(c => 
+        c.upgrades.heal.level > 0 && c.healCooldown <= 0 && c.health > 0
     );
     
-    if (state.slime && state.slimeHealth > 0) {
-        const slimeHealAmount = state.slimeMaxHealth * 0.40;
-        state.slimeHealth = Math.min(
-            state.slimeMaxHealth,
-            state.slimeHealth + slimeHealAmount
-        );
-    }
-    
-    updateUI();
-    showReward('💚 HEALED!');
-}
-
-function updateSlimeHealthBar() {
-    const state = slimeCompanionState;
-    const container = document.getElementById('slimeHealthContainer');
-    
-    if (!state.slimeOwned || !state.slime || state.slimeHealth <= 0) {
-        container.classList.remove('active');
-        return;
-    }
-    
-    const slimePos = state.slime.position.clone();
-    slimePos.y += 2.5;
-    
-    const screenPos = slimePos.project(camera);
-    
-    const x = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
-    const y = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
-    
-    if (screenPos.z > 1 || x < 0 || x > window.innerWidth || y < 0 || y > window.innerHeight) {
-        container.classList.remove('active');
-        return;
-    }
-    
-    // Clear any inline display style and use class
-    container.style.display = '';
-    container.classList.add('active');
-    container.style.left = (x - 30) + 'px';
-    container.style.top = y + 'px';
-    
-    const healthPercent = (state.slimeHealth / state.slimeMaxHealth) * 100;
-    document.getElementById('slimeHealthFill').style.width = healthPercent + '%';
-}
-
-function damageCompanionSlime(damage) {
-    const state = slimeCompanionState;
-    
-    if (!state.slimeOwned || !state.slime || state.slimeHealth <= 0) return;
-    
-    state.slimeHealth -= damage;
-    
-    state.slime.material.color.setHex(0xff0000);
-    setTimeout(() => {
-        if (state.slime) {
-            state.slime.material.color.setHex(0xffffff);
-        }
-    }, 100);
-    
-    if (state.slimeHealth <= 0) {
-        slimeDeath();
-    }
-}
-
-function slimeDeath() {
-    const state = slimeCompanionState;
-    
-    console.log('Companion slime has died!');
-    
-    // Remove slime sprite
-    if (state.slime) {
-        scene.remove(state.slime);
-        state.slime = null;
-    }
-    
-    // Clean up slime projectiles
-    state.slimeProjectiles.forEach(p => scene.remove(p.sprite));
-    state.slimeProjectiles = [];
-    
-    // Clean up slime swords
-    state.slimeSwords.forEach(s => scene.remove(s.sprite));
-    state.slimeSwords = [];
-    
-    // Reset ownership and health
-    state.slimeOwned = false;
-    state.slimeHealth = 0;
-    state.slimeMaxHealth = 0;
-    
-    // Reset all upgrades
-    state.upgrades = {
-        attackSpeed: { level: 0, maxLevel: 10, baseCost: 20, costMult: 1.2 },
-        health: { level: 0, maxLevel: 12, baseCost: 20, costMult: 1.15 },
-        swords: { level: 0, maxLevel: 8, baseCost: 50, costMult: 1.8 },
-        heal: { level: 0, maxLevel: 1, baseCost: 100, costMult: 1 }
-    };
-    
-    // Hide UI elements using class
-    const healthContainer = document.getElementById('slimeHealthContainer');
-    if (healthContainer) {
-        healthContainer.classList.remove('active');
-    }
-    
     const healIndicator = document.getElementById('healIndicator');
-    if (healIndicator) {
-        healIndicator.classList.remove('active');
+    if (anyHealReady) {
+        healIndicator.classList.add('ready');
+    } else {
         healIndicator.classList.remove('ready');
     }
     
-    showDialogue('💔 SLIME', 'Your slime companion has fallen in battle...oh well. Visit the Monster Store to get a new one.');
+    if (companion.healCooldown <= 0 && companion.health > 0) {
+        // Heal player
+        const healAmount = gameState.player.maxHealth * 0.15;
+        gameState.player.health = Math.min(gameState.player.maxHealth, gameState.player.health + healAmount);
+        updateUI();
+        
+        // Heal this companion
+        companion.health = Math.min(companion.maxHealth, companion.health + companion.maxHealth * 0.2);
+        
+        companion.healCooldown = 60 * 60; // 1 minute
+        
+        showReward(`${companion.color.icon} HEAL! +${Math.floor(healAmount)} HP`);
+    }
+}
+
+function damageCompanion(companionIndex, damage) {
+    const companion = slimeCompanionState.companions[companionIndex];
+    if (!companion || companion.health <= 0) return;
+    
+    companion.health -= damage;
+    
+    if (companion.health <= 0) {
+        companion.health = 0;
+        
+        // Remove sprite
+        if (companion.sprite) {
+            scene.remove(companion.sprite);
+        }
+        
+        // Remove swords
+        companion.swords.forEach(s => scene.remove(s.sprite));
+        companion.swords = [];
+        
+        // Remove projectiles
+        companion.projectiles.forEach(p => scene.remove(p.sprite));
+        companion.projectiles = [];
+        
+        showDialogue('💀 COMPANION LOST', `Your ${companion.color.name} slime has fallen in battle!`);
+    }
+    
+    updateHealthBarsUI();
 }
 
 // ============================================
-// AGGRO SYSTEM
-// ============================================
-
-function getSlimeAggroTarget(enemyPosition, isBoss) {
-    const state = slimeCompanionState;
-    
-    if (!state.slimeOwned || !state.slime || state.slimeHealth <= 0) {
-        return gameState.player.position;
-    }
-    
-    if (isBoss) {
-        return gameState.player.position;
-    }
-    
-    const playerDx = gameState.player.position.x - enemyPosition.x;
-    const playerDz = gameState.player.position.z - enemyPosition.z;
-    const playerDist = Math.sqrt(playerDx * playerDx + playerDz * playerDz);
-    
-    const slimeDx = state.slime.position.x - enemyPosition.x;
-    const slimeDz = state.slime.position.z - enemyPosition.z;
-    const slimeDist = Math.sqrt(slimeDx * slimeDx + slimeDz * slimeDz);
-    
-    if (slimeDist < playerDist && Math.random() < 0.5) {
-        return state.slime.position;
-    }
-    
-    return gameState.player.position;
-}
-
-function checkSlimeCollision(attackerPosition, attackRange) {
-    const state = slimeCompanionState;
-    
-    if (!state.slimeOwned || !state.slime || state.slimeHealth <= 0) {
-        return false;
-    }
-    
-    attackRange = attackRange || 1.5;
-    
-    const dx = state.slime.position.x - attackerPosition.x;
-    const dz = state.slime.position.z - attackerPosition.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    
-    return dist < attackRange;
-}
-
-// ============================================
-// INTEGRATION FUNCTIONS
+// INITIALIZATION
 // ============================================
 
 function initSlimeCompanion() {
-    console.log('Initializing Slime Companion System...');
+    console.log('Initializing Multi-Companion Slime System...');
     createSlimeStoreUI();
 }
 
@@ -1595,34 +1534,20 @@ function resetSlimeCompanion() {
     
     cleanupMonsterStore();
     
-    if (state.slime) {
-        scene.remove(state.slime);
-        state.slime = null;
-    }
+    // Remove all companions
+    state.companions.forEach(companion => {
+        if (companion.sprite) {
+            scene.remove(companion.sprite);
+        }
+        companion.swords.forEach(s => scene.remove(s.sprite));
+        companion.projectiles.forEach(p => scene.remove(p.sprite));
+    });
     
-    state.slimeProjectiles.forEach(p => scene.remove(p.sprite));
-    state.slimeProjectiles = [];
-    
-    state.slimeSwords.forEach(s => scene.remove(s.sprite));
-    state.slimeSwords = [];
-    
-    state.slimeOwned = false;
-    state.slimeHealth = 0;
-    state.slimeMaxHealth = 0;
-    state.slimeTarget = null;
-    state.slimeWanderAngle = 0;
-    state.slimeAttackCooldown = 0;
-    state.healCooldown = 0;
+    state.companions = [];
     state.storeMenuOpen = false;
     
-    state.upgrades = {
-        attackSpeed: { level: 0, maxLevel: 10, baseCost: 20, costMult: 1.2 },
-        health: { level: 0, maxLevel: 12, baseCost: 20, costMult: 1.15 },
-        swords: { level: 0, maxLevel: 8, baseCost: 50, costMult: 1.8 },
-        heal: { level: 0, maxLevel: 1, baseCost: 100, costMult: 1 }
-    };
-    
     document.getElementById('slimeHealthContainer').classList.remove('active');
+    document.getElementById('slimeHealthContainer').innerHTML = '';
     document.getElementById('healIndicator').classList.remove('active');
     document.getElementById('healIndicator').classList.remove('ready');
     document.getElementById('slimeStoreMenu').style.display = 'none';
@@ -1635,4 +1560,4 @@ if (document.readyState === 'loading') {
     initSlimeCompanion();
 }
 
-console.log('Slime Companion System loaded!');
+console.log('Multi-Companion Slime System loaded!');
