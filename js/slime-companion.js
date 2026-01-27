@@ -351,7 +351,7 @@ function spawnMonsterStore() {
     }
     
     gameState.targetCameraZoom = 2.5;
-    showDialogue('🌳 MONSTER STORE', 'A peculiar shop has appeared! The slimes seem to be guarding it...');
+    showDialogue('🌳 MONSTER STORE', 'A peculiar shop has appeared! The slimes seem to be protesting...');
 }
 
 function updateMonsterStore() {
@@ -433,7 +433,7 @@ function spawnShopkeeper() {
     slimeCompanionState.storeShopkeeper = shopkeeper;
     store.shopkeeperSpawned = true;
     
-    showDialogue('🎩 MERCHANT', '"Well well! A customer! Come closer, brave adventurer... I have something SPECIAL for you!"');
+    showDialogue('🎩 MERCHANT', '"Thankyou for slaying those pesky lower slimes! I think a higher man like yourself will appreciate what I have inside. "');
 }
 
 function updateShopkeeper() {
@@ -781,7 +781,7 @@ function rebuildStoreUI() {
         <div class="store-icon">${nextColor.icon}</div>
         <div class="store-info">
             <div class="store-name">${state.companions.length === 0 ? 'Slime Companion' : 'New Companion #' + companionNum}</div>
-            <div class="store-desc">${state.companions.length === 0 ? 'A friendly slime that fights by your side!' : nextColor.name + ' slime to join your team!'}</div>
+            <div class="store-desc">${state.companions.length === 0 ? 'A higher slime that fights by your side!' : nextColor.name + ' slime to join your team!'}</div>
         </div>
         <button class="store-btn" id="buyCompanionBtn">
             <span class="cost">💰 ${nextCost}</span>
