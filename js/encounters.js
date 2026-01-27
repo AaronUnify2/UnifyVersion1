@@ -194,7 +194,7 @@ const ENCOUNTER_TEMPLATES = {
             spawnOffset: { x: 8, z: 3 },
             dialogue: {
                 speaker: '🧙‍♀️ WITCH',
-                text: '"Remember me? The princess you \'rescued\'? ... I tried to summon a handsome wizard for companionship and instead summoned a group of dogmatic buddhists!"'
+                text: '"Remember me? I tried to summon a handsome wizard for companionship and instead summoned a group of dogmatic buddhists!"'
             },
             rewardOnContact: true
         },
@@ -338,7 +338,7 @@ const TREASURE_CHEST_CONFIG = {
 
 // Fun facts for treasure chests
 const FUN_FACTS = [
-    "The princess in the tower window after rescue? That's actually her sister. She's not into you.",
+    "The princess in the tower window after rescue? That's actually her sister. ",
     "Only a fool laughs at the mighty dragon.",
     "Sir Cowardice the Lame invented the brilliant tactic of standing beyond the evil tree's range.",
     "Legend says with 8 orbiting swords, a hero could survive while standing perfectly still. Of course, no one's ever tried it.",
@@ -348,9 +348,16 @@ const FUN_FACTS = [
     "Orbiting swords are great for the forest, impractical for bathing. Some heroes stab their swords into stones just to wash in peace.",
     "The skeletons? Fallen heroes who drank lots of milk. The ghosts? Heroes' who didn't drink enough milk.",
     "The little green forest people are called goblins. But NEVER let them hear you call them that.",
-    "In a pinch, slimes can be used as a tasty food source or a surprisingly effective girlfriend.",
-    "In a pinch, slimes can be used as a tasty food source or a surprisingly effective hat.",
+    "In a pinch, slimes can be used as a surprisingly effective food source.",
+    "In a pinch, slimes can be used as a surprisingly effective hat.",
     "While trolls may seem dangerous there have been zero recorded deaths.",
+    "In a pinch, slimes can be used as a surprisingly effective girlfriend.",
+    "In a pinch, slimes can be used as a surprisingly effective moisturiser.",
+    "What happens in the sky is exempt from standard morality.",
+    "The evil tree may be dangerous but at least he makes oxygen.",
+    "In a pinch, slimes can be used as a surprisingly effective sidekick.",
+    "In a pinch, slimes can be used as a surprisingly effective roommate.",
+    "A person with good kharma can wield Buggha's secret weapon.",
     "The evil tree may be dangerous but at least he makes oxygen.",
     "The most important thing in the forest is to have a goal otherwise you just run around fighting enemies."
 ];
