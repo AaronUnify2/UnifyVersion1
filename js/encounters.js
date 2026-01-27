@@ -345,7 +345,7 @@ const FUN_FACTS = [
     "Those 'wizards' are actually Dogmatic Buddhists.",
     "The forest seems dangerous, but most inhabitants are peaceful and kind.",
     "Why do monsters carry gold? Legend speaks of an underground monster only shop.",
-    "Orbiting swords are great for the forest, impractical for bathing. Some heroes stab their swords into stones just to wash in peace.",
+    "Orbiting swords are great for the forest, impractical for dating.",
     "The skeletons? Fallen heroes who drank lots of milk. The ghosts? Heroes' who didn't drink enough milk.",
     "The little green forest people are called goblins. But NEVER let them hear you call them that.",
     "In a pinch, slimes can be used as a surprisingly effective food source.",
@@ -357,7 +357,7 @@ const FUN_FACTS = [
     "The evil tree may be dangerous but at least he makes oxygen.",
     "In a pinch, slimes can be used as a surprisingly effective sidekick.",
     "In a pinch, slimes can be used as a surprisingly effective roommate.",
-    "A person with good kharma can wield Buggha's secret weapon.",
+    "A person with good kharma can wield Buddha\'s secret weapon.",
     "The evil tree may be dangerous but at least he makes oxygen.",
     "The most important thing in the forest is to have a goal otherwise you just run around fighting enemies."
 ];
