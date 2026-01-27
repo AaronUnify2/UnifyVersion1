@@ -44,7 +44,10 @@ const slimeCompanionState = {
     storeMenuOpen: false,
     
     // Base slime cost (increases with each purchase)
-    baseSlimeCost: 500,
+    baseSlimeCost: 250,
+    
+    // Investment system - gold left with shopkeeper
+    investedGold: 0,
     
     // Cached textures
     slimeSwordTexture: null
@@ -72,7 +75,8 @@ function createDefaultUpgrades() {
         attackSpeed: { level: 0, maxLevel: 10, baseCost: 20, costMult: 1.2 },
         health: { level: 0, maxLevel: 12, baseCost: 20, costMult: 1.15 },
         swords: { level: 0, maxLevel: 8, baseCost: 50, costMult: 1.8 },
-        heal: { level: 0, maxLevel: 1, baseCost: 100, costMult: 1 }
+        heal: { level: 0, maxLevel: 3, baseCost: 100, costMult: 2 }, // 100, 200, 300 (scaled by costMult isn't exact but close)
+        armor: { level: 0, maxLevel: 1, baseCost: 5000, costMult: 1 } // 10x health boost
     };
 }
 
@@ -181,145 +185,98 @@ function createStoreSlimeTexture() {
 }
 
 function createMonsterStoreTexture() {
-    return createPixelTexture(96, 128, (ctx, w, h) => {
-        // Tree trunk
-        ctx.fillStyle = '#5d4e37';
-        ctx.fillRect(38, 40, 20, 88);
+    return createPixelTexture(64, 96, (ctx, w, h) => {
+        ctx.fillStyle = '#3d2817';
+        ctx.fillRect(24, 30, 16, 66);
         
-        // Trunk texture
-        ctx.fillStyle = '#4a3f2f';
-        ctx.fillRect(42, 50, 4, 20);
-        ctx.fillRect(50, 70, 4, 25);
-        ctx.fillRect(44, 100, 3, 15);
+        ctx.fillStyle = '#2c1810';
+        ctx.fillRect(28, 35, 3, 60);
+        ctx.fillRect(35, 40, 2, 50);
         
-        // Roots
-        ctx.fillStyle = '#5d4e37';
+        ctx.fillStyle = '#0d0d0d';
         ctx.beginPath();
-        ctx.moveTo(38, 128);
-        ctx.quadraticCurveTo(25, 125, 20, 128);
-        ctx.lineTo(38, 128);
+        ctx.ellipse(32, 75, 10, 15, 0, 0, Math.PI * 2);
         ctx.fill();
         
+        ctx.fillStyle = '#2c1810';
+        ctx.strokeStyle = '#2c1810';
+        ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(58, 128);
-        ctx.quadraticCurveTo(71, 125, 76, 128);
-        ctx.lineTo(58, 128);
-        ctx.fill();
+        ctx.ellipse(32, 75, 11, 16, 0, 0, Math.PI * 2);
+        ctx.stroke();
         
-        // Foliage layers
-        const foliageColors = ['#1e8449', '#27ae60', '#2ecc71'];
-        let y = 5;
-        let size = 25;
+        ctx.fillStyle = '#3d2817';
+        ctx.fillRect(10, 20, 18, 5);
+        ctx.fillRect(6, 15, 10, 4);
+        ctx.fillRect(2, 10, 8, 3);
+        ctx.fillRect(36, 25, 20, 5);
+        ctx.fillRect(48, 18, 12, 4);
+        ctx.fillRect(54, 12, 8, 3);
+        ctx.fillRect(20, 8, 24, 6);
+        ctx.fillRect(28, 2, 8, 8);
         
-        for (let i = 0; i < 3; i++) {
-            ctx.fillStyle = foliageColors[i];
-            ctx.beginPath();
-            ctx.moveTo(48, y);
-            ctx.lineTo(48 + size, y + 30);
-            ctx.lineTo(48 - size, y + 30);
-            ctx.closePath();
-            ctx.fill();
-            y += 20;
-            size += 8;
-        }
+        ctx.fillStyle = '#2c1810';
+        ctx.fillRect(22, 28, 6, 4);
+        ctx.fillRect(36, 28, 6, 4);
         
-        // Store sign
-        ctx.fillStyle = '#8B4513';
-        ctx.fillRect(25, 70, 46, 25);
+        ctx.fillStyle = '#1e5631';
+        ctx.fillRect(24, 88, 4, 4);
+        ctx.fillRect(34, 86, 3, 3);
+        ctx.fillRect(20, 32, 3, 3);
         
-        // Sign border
-        ctx.strokeStyle = '#f1c40f';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(26, 71, 44, 23);
-        
-        // "SHOP" text
-        ctx.fillStyle = '#f1c40f';
-        ctx.font = 'bold 10px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('SHOP', 48, 86);
-        
-        // Hanging lanterns
-        ctx.fillStyle = '#f39c12';
-        ctx.beginPath();
-        ctx.arc(25, 65, 5, 0, Math.PI * 2);
-        ctx.arc(71, 65, 5, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Lantern glow
-        ctx.fillStyle = 'rgba(243, 156, 18, 0.4)';
-        ctx.beginPath();
-        ctx.arc(25, 65, 8, 0, Math.PI * 2);
-        ctx.arc(71, 65, 8, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillStyle = '#9b59b6';
+        ctx.fillRect(28, 70, 3, 3);
+        ctx.fillRect(35, 70, 3, 3);
     });
 }
 
 function createShopkeeperTexture() {
-    return createPixelTexture(32, 36, (ctx, w, h) => {
-        // Body/robe
+    return createPixelTexture(48, 56, (ctx, w, h) => {
         ctx.fillStyle = '#8e44ad';
         ctx.beginPath();
-        ctx.moveTo(16, 14);
-        ctx.lineTo(8, 36);
-        ctx.lineTo(24, 36);
-        ctx.closePath();
+        ctx.ellipse(24, 38, 20, 16, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        // Robe details
         ctx.fillStyle = '#9b59b6';
         ctx.beginPath();
-        ctx.moveTo(16, 16);
-        ctx.lineTo(12, 36);
-        ctx.lineTo(20, 36);
-        ctx.closePath();
+        ctx.ellipse(24, 35, 16, 12, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        // Face
-        ctx.fillStyle = '#fad7a0';
-        ctx.beginPath();
-        ctx.ellipse(16, 12, 7, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Top hat
         ctx.fillStyle = '#1a1a2e';
-        ctx.fillRect(9, 0, 14, 4);
-        ctx.fillRect(11, 4, 10, 6);
+        ctx.fillRect(14, 8, 20, 16);
+        ctx.fillRect(10, 22, 28, 5);
         
-        // Hat band
         ctx.fillStyle = '#f1c40f';
-        ctx.fillRect(11, 8, 10, 2);
+        ctx.fillRect(14, 18, 20, 3);
         
-        // Eyes
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.ellipse(13, 12, 1.5, 2, 0, 0, Math.PI * 2);
-        ctx.ellipse(19, 12, 1.5, 2, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(16, 30, 8, 8);
+        ctx.fillRect(28, 30, 8, 8);
         
-        // Monocle
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillRect(20, 33, 3, 4);
+        ctx.fillRect(32, 33, 3, 4);
+        
         ctx.strokeStyle = '#f1c40f';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(19, 12, 3, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(22, 12);
-        ctx.lineTo(26, 16);
+        ctx.arc(32, 34, 6, 0, Math.PI * 2);
         ctx.stroke();
         
-        // Mustache
-        ctx.fillStyle = '#5d4e37';
-        ctx.beginPath();
-        ctx.ellipse(13, 17, 3, 1.5, 0.3, 0, Math.PI * 2);
-        ctx.ellipse(19, 17, 3, 1.5, -0.3, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillStyle = '#f1c40f';
+        ctx.fillRect(36, 38, 2, 8);
+        ctx.fillRect(36, 44, 6, 2);
         
-        // Smile
-        ctx.strokeStyle = '#c0392b';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(16, 18, 2, 0.2, Math.PI - 0.2);
-        ctx.stroke();
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(18, 42, 6, 3);
+        ctx.fillRect(28, 42, 6, 3);
+        ctx.fillRect(24, 43, 4, 2);
+        
+        ctx.fillStyle = '#6c3483';
+        ctx.fillRect(20, 46, 12, 3);
+        
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillRect(14, 28, 4, 4);
     });
 }
 
@@ -349,8 +306,8 @@ function spawnMonsterStore() {
         transparent: true
     });
     const tree = new THREE.Sprite(treeMaterial);
-    tree.scale.set(12, 16, 1);
-    tree.position.set(x, 8, z);
+    tree.scale.set(12, 18, 1);
+    tree.position.set(x, 9, z);
     scene.add(tree);
     
     slimeCompanionState.monsterStore = {
@@ -853,13 +810,14 @@ function rebuildStoreUI() {
                 ${createUpgradeItemHTML(index, 'attackSpeed', '⚡', 'Attack Speed', 'Faster slime attacks')}
                 ${createUpgradeItemHTML(index, 'health', '❤️', 'Slime Health', '+5% max health per level')}
                 ${createUpgradeItemHTML(index, 'swords', '⚔️', 'Slime Swords', 'Orbiting blades around slime')}
-                ${createUpgradeItemHTML(index, 'heal', '💚', 'Heal Ability', 'Auto-heal every minute')}
+                ${createUpgradeItemHTML(index, 'heal', '💚', 'Heal Ability', 'Heals faster: 60s→50s→40s')}
+                ${createUpgradeItemHTML(index, 'armor', '🛡️', 'Slime Armor', '10x health boost!')}
             </div>
         `;
         itemsContainer.appendChild(section);
         
         // Setup upgrade buttons for this companion
-        ['attackSpeed', 'health', 'swords', 'heal'].forEach(upgradeKey => {
+        ['attackSpeed', 'health', 'swords', 'heal', 'armor'].forEach(upgradeKey => {
             const btn = document.getElementById(`companion-${index}-${upgradeKey}-btn`);
             if (btn) {
                 btn.addEventListener('click', () => purchaseCompanionUpgrade(index, upgradeKey));
@@ -871,17 +829,55 @@ function rebuildStoreUI() {
         });
     });
     
+    // Add Investment Section
+    const investSection = document.createElement('div');
+    investSection.className = 'companion-section';
+    investSection.style.borderColor = '#f1c40f';
+    const pendingReturn = state.investedGold * 10;
+    investSection.innerHTML = `
+        <div class="companion-header" style="color: #f1c40f">
+            💰 INVEST IN THE STORE 💰
+        </div>
+        <div class="store-item" style="border-color: #f1c40f;">
+            <div class="store-icon">🏦</div>
+            <div class="store-info">
+                <div class="store-name">Leave Gold</div>
+                <div class="store-desc">Get 10x back next visit!</div>
+                <div class="store-level" id="investedDisplay">Invested: 💰 ${state.investedGold}${state.investedGold > 0 ? ' → Returns: 💰 ' + pendingReturn : ''}</div>
+            </div>
+            <button class="store-btn" id="investBtn" style="background: linear-gradient(180deg, #f1c40f, #d4ac0d);">
+                <span class="cost">+ 💰 100</span>
+            </button>
+        </div>
+    `;
+    itemsContainer.appendChild(investSection);
+    
+    // Setup invest button
+    const investBtn = document.getElementById('investBtn');
+    investBtn.addEventListener('click', investGold);
+    investBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        investGold();
+    });
+    
     updateSlimeStoreUI();
 }
 
 function createUpgradeItemHTML(companionIndex, upgradeKey, icon, name, desc) {
+    const maxLevels = {
+        attackSpeed: 10,
+        health: 12,
+        swords: 8,
+        heal: 3,
+        armor: 1
+    };
     return `
         <div class="store-item upgrade-item-store" id="companion-${companionIndex}-${upgradeKey}">
             <div class="store-icon">${icon}</div>
             <div class="store-info">
                 <div class="store-name">${name}</div>
                 <div class="store-desc">${desc}</div>
-                <div class="store-level">Level: <span class="lvl">0</span>/${upgradeKey === 'heal' ? '1' : (upgradeKey === 'swords' ? '8' : (upgradeKey === 'health' ? '12' : '10'))}</div>
+                <div class="store-level">Level: <span class="lvl">0</span>/${maxLevels[upgradeKey] || 1}</div>
             </div>
             <button class="store-btn" id="companion-${companionIndex}-${upgradeKey}-btn">
                 <span class="cost">💰 0</span>
@@ -893,6 +889,16 @@ function createUpgradeItemHTML(companionIndex, upgradeKey, icon, name, desc) {
 function openSlimeStore() {
     slimeCompanionState.storeMenuOpen = true;
     gameState.menuOpen = true;
+    
+    // Pay out investment (10x return!)
+    if (slimeCompanionState.investedGold > 0) {
+        const payout = slimeCompanionState.investedGold * 10;
+        gameState.player.gold += payout;
+        updateUI();
+        showReward(`💰 INVESTMENT RETURN: +${payout} GOLD!`);
+        slimeCompanionState.investedGold = 0;
+    }
+    
     rebuildStoreUI();
     document.getElementById('slimeStoreMenu').style.display = 'flex';
 }
@@ -928,10 +934,27 @@ function updateSlimeStoreUI() {
     
     // Update each companion's upgrades
     state.companions.forEach((companion, index) => {
-        ['attackSpeed', 'health', 'swords', 'heal'].forEach(upgradeKey => {
+        ['attackSpeed', 'health', 'swords', 'heal', 'armor'].forEach(upgradeKey => {
             updateCompanionUpgradeItem(index, upgradeKey);
         });
     });
+    
+    // Update invest button
+    const investBtn = document.getElementById('investBtn');
+    if (investBtn) {
+        investBtn.disabled = gameState.player.gold < 100;
+    }
+    
+    // Update invested display
+    const investedDisplay = document.getElementById('investedDisplay');
+    if (investedDisplay) {
+        const pendingReturn = state.investedGold * 10;
+        if (state.investedGold > 0) {
+            investedDisplay.textContent = 'Invested: 💰 ' + state.investedGold + ' → Returns: 💰 ' + pendingReturn;
+        } else {
+            investedDisplay.textContent = 'Invested: 💰 0';
+        }
+    }
 }
 
 function updateCompanionUpgradeItem(companionIndex, upgradeKey) {
@@ -965,6 +988,13 @@ function getCompanionUpgradeCost(companionIndex, upgradeKey) {
     const companion = slimeCompanionState.companions[companionIndex];
     if (!companion) return 999999;
     const upgrade = companion.upgrades[upgradeKey];
+    
+    // Special pricing for heal: 100, 200, 300
+    if (upgradeKey === 'heal') {
+        const healCosts = [100, 200, 300];
+        return healCosts[Math.min(upgrade.level, 2)];
+    }
+    
     return Math.floor(upgrade.baseCost * Math.pow(upgrade.costMult, upgrade.level));
 }
 
@@ -1018,8 +1048,12 @@ function purchaseCompanionUpgrade(companionIndex, upgradeKey) {
     gameState.player.gold -= cost;
     upgrade.level++;
     
-    if (upgradeKey === 'health') {
+    if (upgradeKey === 'health' || upgradeKey === 'armor') {
         updateCompanionMaxHealth(companionIndex);
+        // If armor purchased, also heal to new max
+        if (upgradeKey === 'armor') {
+            companion.health = companion.maxHealth;
+        }
     }
     
     if (upgradeKey === 'swords') {
@@ -1037,9 +1071,26 @@ function purchaseCompanionUpgrade(companionIndex, upgradeKey) {
         attackSpeed: '⚡ ATTACK SPEED',
         health: '❤️ SLIME HEALTH',
         swords: '⚔️ SLIME SWORDS',
-        heal: '💚 HEAL ABILITY'
+        heal: '💚 HEAL ABILITY',
+        armor: '🛡️ SLIME ARMOR'
     };
     showReward(`${companion.color.icon} ${upgradeNames[upgradeKey]} UPGRADED!`);
+}
+
+function investGold() {
+    const investAmount = 100;
+    
+    if (gameState.player.gold < investAmount) return;
+    
+    gameState.player.gold -= investAmount;
+    slimeCompanionState.investedGold += investAmount;
+    
+    const projectedReturn = slimeCompanionState.investedGold * 10;
+    
+    updateUI();
+    updateSlimeStoreUI();
+    
+    showReward(`💰 TOTAL: ${slimeCompanionState.investedGold} → RETURNS: ${projectedReturn}!`);
 }
 
 // ============================================
@@ -1083,7 +1134,14 @@ function updateCompanionMaxHealth(companionIndex) {
     if (!companion) return;
     
     const healthPercent = 0.5 + (companion.upgrades.health.level * 0.05);
-    companion.maxHealth = gameState.player.maxHealth * healthPercent;
+    let maxHealth = gameState.player.maxHealth * healthPercent;
+    
+    // Armor upgrade gives 10x health
+    if (companion.upgrades.armor && companion.upgrades.armor.level > 0) {
+        maxHealth *= 10;
+    }
+    
+    companion.maxHealth = maxHealth;
     
     if (companion.health > companion.maxHealth) {
         companion.health = companion.maxHealth;
@@ -1476,7 +1534,10 @@ function updateCompanionHeal(companionIndex) {
         // Heal this companion
         companion.health = Math.min(companion.maxHealth, companion.health + companion.maxHealth * 0.2);
         
-        companion.healCooldown = 60 * 60; // 1 minute
+        // Cooldown based on heal level: 60s, 50s, 40s
+        const healCooldowns = [60, 50, 40]; // seconds per level
+        const cooldownSeconds = healCooldowns[Math.min(companion.upgrades.heal.level - 1, 2)];
+        companion.healCooldown = cooldownSeconds * 60; // convert to frames
         
         showReward(`${companion.color.icon} HEAL! +${Math.floor(healAmount)} HP`);
     }
@@ -1545,6 +1606,7 @@ function resetSlimeCompanion() {
     
     state.companions = [];
     state.storeMenuOpen = false;
+    state.investedGold = 0; // Reset investment
     
     document.getElementById('slimeHealthContainer').classList.remove('active');
     document.getElementById('slimeHealthContainer').innerHTML = '';
