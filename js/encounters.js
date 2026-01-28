@@ -358,7 +358,7 @@ const FUN_FACTS = [
     "In a pinch, slimes can be used as a surprisingly effective sidekick.",
     "In a pinch, slimes can be used as a surprisingly effective roommate.",
     "A person with good kharma can wield Buddha\'s secret weapon.",
-    "The evil tree may be dangerous but at least he makes oxygen.",
+    "On occasion a bat will be carrying a huge bag of gold.",
     "The most important thing in the forest is to have a goal otherwise you just run around fighting enemies."
 ];
 
