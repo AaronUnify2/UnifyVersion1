@@ -313,7 +313,7 @@ function shouldSpawnMonsterStore() {
     if (encounterState.cloudPortal) return false;
     if (encounterState.inCloudArena) return false;
     if (gameState.bosses.length > 0) return false;
-    if (gameState.player.level < 2) return false;
+    if (gameState.player.level < 5) return false;
     return true;
 }
 
@@ -856,6 +856,50 @@ function createSlimeStoreUI() {
     healIndicator.id = 'healIndicator';
     healIndicator.textContent = '💚';
     document.getElementById('ui').appendChild(healIndicator);
+    
+    // Debug button for spawning monster store
+    const debugBtn = document.createElement('button');
+    debugBtn.id = 'debugSpawnStore';
+    debugBtn.innerHTML = '🏪<span style="display:block;font-size:6px;margin-top:2px;">DEBUG</span>';
+    debugBtn.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 10px;
+        width: 50px;
+        height: 50px;
+        background: linear-gradient(180deg, rgba(108,92,231,0.9), rgba(68,52,191,0.9));
+        border: 3px solid #bb8fce;
+        border-radius: 10px;
+        color: #fff;
+        font-size: 18px;
+        font-family: 'Press Start 2P', cursive;
+        cursor: pointer;
+        pointer-events: auto;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 10px rgba(108,92,231,0.5);
+    `;
+    debugBtn.addEventListener('click', () => {
+        if (!slimeCompanionState.monsterStore) {
+            spawnMonsterStore();
+            console.log('Debug: Monster Store spawned!');
+        } else {
+            console.log('Debug: Monster Store already active!');
+        }
+    });
+    debugBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (!slimeCompanionState.monsterStore) {
+            spawnMonsterStore();
+            console.log('Debug: Monster Store spawned!');
+        } else {
+            console.log('Debug: Monster Store already active!');
+        }
+    });
+    document.getElementById('ui').appendChild(debugBtn);
     
     setupSlimeStoreEvents();
 }
