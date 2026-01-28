@@ -570,7 +570,7 @@ function createSlimeStoreUI() {
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.9);
+            background: rgba(0,0,0,0.85);
             display: none;
             align-items: center;
             justify-content: center;
@@ -579,21 +579,21 @@ function createSlimeStoreUI() {
         }
         
         #slimeStoreContent {
-            background: linear-gradient(180deg, #1a472a, #0d2818);
-            border: 4px solid #27ae60;
+            background: linear-gradient(180deg, #2c2c54, #1a1a2e);
+            border: 4px solid #6c5ce7;
             border-radius: 16px;
             max-width: 360px;
             width: 90%;
             max-height: 85vh;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 0 30px rgba(39,174,96,0.5);
+            box-shadow: 0 0 30px rgba(108,92,231,0.5);
         }
         
         #storeHeader {
             position: relative;
             padding: 15px 20px 10px 20px;
-            border-bottom: 2px solid #1e8449;
+            border-bottom: 2px solid #6c5ce7;
             flex-shrink: 0;
         }
         
@@ -603,7 +603,7 @@ function createSlimeStoreUI() {
             right: 10px;
             width: 30px;
             height: 30px;
-            background: linear-gradient(180deg, #c0392b, #922b21);
+            background: linear-gradient(180deg, #c0392b, #96281b);
             border: 2px solid #e74c3c;
             border-radius: 50%;
             color: #fff;
@@ -621,11 +621,11 @@ function createSlimeStoreUI() {
         }
         
         #slimeStoreContent h2 {
-            color: #2ecc71;
+            color: #ffd700;
             text-align: center;
             margin-bottom: 10px;
             font-size: 14px;
-            text-shadow: 0 0 10px #27ae60;
+            text-shadow: 0 0 10px #ffd700;
             font-family: 'Press Start 2P', cursive;
         }
         
@@ -645,7 +645,7 @@ function createSlimeStoreUI() {
             -webkit-overflow-scrolling: touch;
             overscroll-behavior: contain;
             scrollbar-width: thin;
-            scrollbar-color: #27ae60 #0d2818;
+            scrollbar-color: #6c5ce7 #1a1a2e;
             touch-action: pan-y;
         }
         
@@ -654,39 +654,39 @@ function createSlimeStoreUI() {
         }
         
         #slimeStoreItems::-webkit-scrollbar-track {
-            background: #0d2818;
+            background: #1a1a2e;
             border-radius: 4px;
         }
         
         #slimeStoreItems::-webkit-scrollbar-thumb {
-            background: #27ae60;
+            background: #6c5ce7;
             border-radius: 4px;
         }
         
         #slimeStoreItems::-webkit-scrollbar-thumb:hover {
-            background: #2ecc71;
+            background: #8b7cf7;
         }
         
         #storeFooter {
             padding: 10px 20px 15px 20px;
-            border-top: 2px solid #1e8449;
+            border-top: 2px solid #6c5ce7;
             flex-shrink: 0;
         }
         
         .store-item {
             display: flex;
             align-items: center;
-            background: rgba(0,0,0,0.4);
-            border: 2px solid #1e8449;
+            background: rgba(0,0,0,0.3);
+            border: 2px solid #444;
             border-radius: 8px;
             padding: 10px;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             gap: 10px;
         }
         
         .store-item.owned {
-            border-color: #27ae60;
-            background: rgba(39,174,96,0.2);
+            border-color: #6c5ce7;
+            background: rgba(108,92,231,0.15);
         }
         
         .store-item.locked {
@@ -694,12 +694,12 @@ function createSlimeStoreUI() {
         }
         
         .store-item.maxed {
-            border-color: #f1c40f;
-            background: rgba(241,196,15,0.1);
+            border-color: #27ae60;
+            opacity: 0.7;
         }
         
         .store-icon {
-            font-size: 24px;
+            font-size: 28px;
             width: 40px;
             text-align: center;
         }
@@ -712,38 +712,39 @@ function createSlimeStoreUI() {
             color: #fff;
             font-size: 10px;
             font-family: 'Press Start 2P', cursive;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
         
         .store-desc {
-            color: #aaa;
-            font-size: 8px;
+            color: #888;
+            font-size: 7px;
             font-family: 'Press Start 2P', cursive;
+            margin-bottom: 4px;
         }
         
         .store-status, .store-level {
-            color: #2ecc71;
+            color: #9b59b6;
             font-size: 8px;
             font-family: 'Press Start 2P', cursive;
-            margin-top: 4px;
         }
         
         .store-btn {
-            background: linear-gradient(180deg, #27ae60, #1e8449);
-            border: 2px solid #2ecc71;
+            background: linear-gradient(180deg, #f39c12, #d68910);
+            border: 2px solid #ffd700;
             border-radius: 6px;
             color: #fff;
             padding: 8px 12px;
-            font-size: 9px;
+            font-size: 8px;
             font-family: 'Press Start 2P', cursive;
             cursor: pointer;
-            min-width: 80px;
+            pointer-events: auto;
+            min-width: 70px;
         }
         
         .store-btn:disabled {
-            background: #333;
-            border-color: #555;
-            color: #666;
+            background: #555;
+            border-color: #666;
+            color: #888;
             cursor: not-allowed;
         }
         
@@ -753,7 +754,8 @@ function createSlimeStoreUI() {
         
         #closeSlimeStore {
             width: 100%;
-            background: linear-gradient(180deg, #c0392b, #922b21);
+            margin-top: 15px;
+            background: linear-gradient(180deg, #c0392b, #96281b);
             border: 2px solid #e74c3c;
             border-radius: 8px;
             color: #fff;
@@ -761,6 +763,7 @@ function createSlimeStoreUI() {
             font-size: 12px;
             font-family: 'Press Start 2P', cursive;
             cursor: pointer;
+            pointer-events: auto;
         }
         
         #closeSlimeStore:active {
@@ -768,15 +771,15 @@ function createSlimeStoreUI() {
         }
         
         .companion-section {
-            border: 2px solid #3498db;
+            border: 2px solid #6c5ce7;
             border-radius: 8px;
             padding: 10px;
             margin-bottom: 15px;
-            background: rgba(52,152,219,0.1);
+            background: rgba(108,92,231,0.1);
         }
         
         .companion-header {
-            color: #3498db;
+            color: #bb8fce;
             font-size: 10px;
             font-family: 'Press Start 2P', cursive;
             margin-bottom: 10px;
