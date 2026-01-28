@@ -576,6 +576,7 @@ function createSlimeStoreUI() {
             justify-content: center;
             z-index: 600;
             pointer-events: auto;
+            touch-action: none !important;
         }
         
         #slimeStoreContent {
@@ -588,6 +589,7 @@ function createSlimeStoreUI() {
             display: flex;
             flex-direction: column;
             box-shadow: 0 0 30px rgba(108,92,231,0.5);
+            touch-action: none !important;
         }
         
         #storeHeader {
@@ -595,6 +597,7 @@ function createSlimeStoreUI() {
             padding: 15px 20px 10px 20px;
             border-bottom: 2px solid #6c5ce7;
             flex-shrink: 0;
+            touch-action: none !important;
         }
         
         #closeSlimeStoreTop {
@@ -639,14 +642,18 @@ function createSlimeStoreUI() {
         
         #slimeStoreItems {
             flex: 1;
-            overflow-y: auto;
+            overflow-y: auto !important;
             overflow-x: hidden;
             padding: 15px 20px;
             -webkit-overflow-scrolling: touch;
             overscroll-behavior: contain;
             scrollbar-width: thin;
             scrollbar-color: #6c5ce7 #1a1a2e;
-            touch-action: pan-y;
+            touch-action: pan-y !important;
+        }
+        
+        #slimeStoreItems * {
+            touch-action: pan-y !important;
         }
         
         #slimeStoreItems::-webkit-scrollbar {
@@ -671,6 +678,7 @@ function createSlimeStoreUI() {
             padding: 10px 20px 15px 20px;
             border-top: 2px solid #6c5ce7;
             flex-shrink: 0;
+            touch-action: none !important;
         }
         
         .store-item {
@@ -916,6 +924,47 @@ function setupSlimeStoreEvents() {
         e.preventDefault();
         closeSlimeStore();
     });
+    
+    // Enable touch scrolling for the store items container
+    const scrollContainer = document.getElementById('slimeStoreItems');
+    let touchStartY = 0;
+    let scrollStartTop = 0;
+    let isScrolling = false;
+    
+    scrollContainer.addEventListener('touchstart', (e) => {
+        touchStartY = e.touches[0].clientY;
+        scrollStartTop = scrollContainer.scrollTop;
+        isScrolling = true;
+    }, { passive: true });
+    
+    scrollContainer.addEventListener('touchmove', (e) => {
+        if (!isScrolling) return;
+        
+        const touchY = e.touches[0].clientY;
+        const deltaY = touchStartY - touchY;
+        scrollContainer.scrollTop = scrollStartTop + deltaY;
+        
+        // Prevent the page from scrolling
+        e.preventDefault();
+        e.stopPropagation();
+    }, { passive: false });
+    
+    scrollContainer.addEventListener('touchend', () => {
+        isScrolling = false;
+    }, { passive: true });
+    
+    scrollContainer.addEventListener('touchcancel', () => {
+        isScrolling = false;
+    }, { passive: true });
+    
+    // Prevent the outer menu from any touch scroll behavior
+    const storeMenu = document.getElementById('slimeStoreMenu');
+    storeMenu.addEventListener('touchmove', (e) => {
+        // Allow scrolling only inside the scroll container
+        if (!scrollContainer.contains(e.target)) {
+            e.preventDefault();
+        }
+    }, { passive: false });
 }
 
 function rebuildStoreUI() {
