@@ -42,6 +42,7 @@ const slimeCompanionState = {
     storeSlimes: [],
     storeShopkeeper: null,
     storeMenuOpen: false,
+    storeVisitCount: 0, // Track how many times player has visited
     
     // Base slime cost (increases with each purchase)
     baseSlimeCost: 250,
@@ -51,6 +52,33 @@ const slimeCompanionState = {
     
     // Cached textures
     slimeSwordTexture: null
+};
+
+// ============================================
+// MONSTER STORE STORY DIALOGUE
+// ============================================
+const STORE_DIALOGUE = {
+    // When the store first appears in the forest
+    storeAppears: [
+        'A peculiar shop has appeared! Wild slimes seem to be protesting around it...',
+        'The strange shop has materialized again... The wild slimes have gathered in even greater numbers, oozing angrily.',
+        'That mysterious tree... it found you again. A mob of feral slimes surrounds it, gurgling what sounds like chants.'
+    ],
+    // When the shopkeeper greets you
+    shopkeeperGreeting: [
+        '"Ah, a visitor of REFINEMENT! Pay no mind to these... peasant slimes. They crawled here from some uncultured slime pool to protest my establishment. Jealousy, I say! Pure jealousy!"',
+        '"You return! I knew you were a person of DISTINGUISHED taste. These rabble outside? Common muck from the bog. MY slimes have PEDIGREE. Seventeen generations of selective breeding! They wouldn\'t understand..."',
+        '"My dear friend! Come, come - away from those... creatures. *shudders* Do you know they don\'t even have PAPERS? No lineage documentation whatsoever! Meanwhile, MY specimens can trace their ancestry back to the Royal Slime Pools of the Old Kingdom. But alas, the masses always resent their betters, don\'t they?"'
+    ],
+    // When leaving the store
+    shopkeeperFarewell: [
+        '"Do visit again! And don\'t let those gutter-slimes touch you on the way out. One never knows what diseases fester in an unrefined slime pool. Hmph!"',
+        '"Until next time, my cultured friend! Remember - a pedigree slime is not merely a companion, it is a STATEMENT. A statement that says \'I refuse to associate with common ooze.\' Toodle-oo!"',
+        '"Farewell, dear patron! Together, we shall show this forest what TRUE slime excellence looks like. Let the bog-dwellers gurgle in protest - they shall never know the joy of a PROPER gelatinous companion. Hehehehe!"'
+    ],
+    // Default for visits 4+
+    defaultGreeting: '"Ah, my most ESTEEMED customer returns! The unwashed slimes outside have been particularly rowdy today. Unionizing, I suspect. How dreadfully common of them."',
+    defaultFarewell: '"Ta-ta for now! Do keep your pedigree slimes away from any wild pools - we wouldn\'t want them picking up any... *whispers* ...lower-class habits."'
 };
 
 // ============================================
@@ -351,7 +379,11 @@ function spawnMonsterStore() {
     }
     
     gameState.targetCameraZoom = 2.5;
-    showDialogue('🌳 MONSTER STORE', 'A peculiar shop has appeared! The slimes seem to be protesting...');
+    
+    // Story dialogue based on visit count
+    const visitNum = slimeCompanionState.storeVisitCount;
+    const storeMessage = visitNum < 3 ? STORE_DIALOGUE.storeAppears[visitNum] : STORE_DIALOGUE.storeAppears[2];
+    showDialogue('🌳 MONSTER STORE', storeMessage);
 }
 
 function updateMonsterStore() {
@@ -433,7 +465,10 @@ function spawnShopkeeper() {
     slimeCompanionState.storeShopkeeper = shopkeeper;
     store.shopkeeperSpawned = true;
     
-    showDialogue('🎩 MERCHANT', '"Thankyou for slaying those pesky lower slimes! I think a higher man like yourself will appreciate what I have inside. "');
+    // Story dialogue based on visit count
+    const visitNum = slimeCompanionState.storeVisitCount;
+    const greeting = visitNum < 3 ? STORE_DIALOGUE.shopkeeperGreeting[visitNum] : STORE_DIALOGUE.defaultGreeting;
+    showDialogue('🎩 MERCHANT', greeting);
 }
 
 function updateShopkeeper() {
@@ -781,7 +816,7 @@ function rebuildStoreUI() {
         <div class="store-icon">${nextColor.icon}</div>
         <div class="store-info">
             <div class="store-name">${state.companions.length === 0 ? 'Slime Companion' : 'New Companion #' + companionNum}</div>
-            <div class="store-desc">${state.companions.length === 0 ? 'A higher slime that fights by your side!' : nextColor.name + ' slime to join your team!'}</div>
+            <div class="store-desc">${state.companions.length === 0 ? 'A friendly slime that fights by your side!' : nextColor.name + ' slime to join your team!'}</div>
         </div>
         <button class="store-btn" id="buyCompanionBtn">
             <span class="cost">💰 ${nextCost}</span>
@@ -912,7 +947,13 @@ function closeSlimeStore() {
         slimeCompanionState.monsterStore.cleanupTimer = 30 * 60;
     }
     
-    showDialogue('🎩 MERCHANT', '"Come back anytime! ...If you can find me again, that is! Hehehehe!"');
+    // Story dialogue based on visit count
+    const visitNum = slimeCompanionState.storeVisitCount;
+    const farewell = visitNum < 3 ? STORE_DIALOGUE.shopkeeperFarewell[visitNum] : STORE_DIALOGUE.defaultFarewell;
+    showDialogue('🎩 MERCHANT', farewell);
+    
+    // Increment visit count after showing dialogue
+    slimeCompanionState.storeVisitCount++;
 }
 
 function updateSlimeStoreUI() {
@@ -1607,6 +1648,7 @@ function resetSlimeCompanion() {
     state.companions = [];
     state.storeMenuOpen = false;
     state.investedGold = 0; // Reset investment
+    state.storeVisitCount = 0; // Reset story progress
     
     document.getElementById('slimeHealthContainer').classList.remove('active');
     document.getElementById('slimeHealthContainer').innerHTML = '';
