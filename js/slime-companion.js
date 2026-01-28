@@ -351,7 +351,7 @@ function spawnMonsterStore() {
     
     // Spawn guard slimes
     const slimeTexture = createStoreSlimeTexture();
-    const numGuards = 5;
+    const numGuards = 30;
     
     for (let i = 0; i < numGuards; i++) {
         const guardAngle = (i / numGuards) * Math.PI * 2;
