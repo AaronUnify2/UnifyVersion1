@@ -1442,58 +1442,99 @@ function createDharmachakraShrineTexture() {
     });
 }
 
-// Dharma Wizard - Super powered wizard with golden robes
+// Dharma Wizard - Golden wizard (same as wizard enemy but with golden robes)
 function createDharmaWizardTexture() {
     return createPixelTexture(32, 48, (ctx, w, h) => {
-        // Golden robes (body)
+        // Golden robes (body) - wizard-style triangular robe
         ctx.fillStyle = '#daa520'; // Goldenrod
         ctx.beginPath();
-        ctx.moveTo(16, 18);
-        ctx.lineTo(6, 46);
-        ctx.lineTo(26, 46);
+        ctx.moveTo(16, 16);
+        ctx.lineTo(4, 46);
+        ctx.lineTo(28, 46);
         ctx.closePath();
         ctx.fill();
         
-        // Robe trim
+        // Robe shading/detail
         ctx.fillStyle = '#b8860b';
-        ctx.fillRect(8, 40, 16, 6);
+        ctx.beginPath();
+        ctx.moveTo(16, 20);
+        ctx.lineTo(8, 46);
+        ctx.lineTo(14, 46);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Robe trim at bottom
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(4, 42, 24, 4);
         
         // Face
-        ctx.fillStyle = '#f5deb3';
+        ctx.fillStyle = '#e8beac';
         ctx.beginPath();
-        ctx.ellipse(16, 14, 8, 9, 0, 0, Math.PI * 2);
+        ctx.ellipse(16, 12, 6, 7, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        // Stern expression - furrowed brows
+        // Wizard hat (pointed, golden)
+        ctx.fillStyle = '#daa520';
+        ctx.beginPath();
+        ctx.moveTo(16, -4);
+        ctx.lineTo(6, 10);
+        ctx.lineTo(26, 10);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Hat brim
+        ctx.fillStyle = '#b8860b';
+        ctx.fillRect(4, 8, 24, 4);
+        
+        // Hat band with dharma symbol
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(6, 6, 20, 3);
+        
+        // Eyes (glowing with enlightenment)
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(12, 10, 3, 4);
+        ctx.fillRect(17, 10, 3, 4);
+        ctx.fillStyle = '#4169e1'; // Blue pupils
+        ctx.fillRect(13, 11, 2, 2);
+        ctx.fillRect(18, 11, 2, 2);
+        
+        // Stern eyebrows
         ctx.fillStyle = '#654321';
-        ctx.fillRect(10, 10, 5, 2);
-        ctx.fillRect(17, 10, 5, 2);
+        ctx.fillRect(11, 8, 4, 2);
+        ctx.fillRect(17, 8, 4, 2);
         
-        // Judgmental eyes
-        ctx.fillStyle = '#000';
-        ctx.fillRect(11, 13, 3, 3);
-        ctx.fillRect(18, 13, 3, 3);
-        
-        // Frowning mouth
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 1;
+        // Beard (wise wizard)
+        ctx.fillStyle = '#808080';
         ctx.beginPath();
-        ctx.arc(16, 22, 3, 0.2, Math.PI - 0.2);
-        ctx.stroke();
-        
-        // Shaved head (no hat, Buddhist monk style)
-        ctx.fillStyle = '#f5deb3';
-        ctx.beginPath();
-        ctx.arc(16, 8, 7, Math.PI, 0);
+        ctx.moveTo(12, 16);
+        ctx.lineTo(16, 24);
+        ctx.lineTo(20, 16);
+        ctx.closePath();
         ctx.fill();
         
-        // Prayer beads
+        // Staff (held to the side)
         ctx.fillStyle = '#8b4513';
-        for (let i = 0; i < 5; i++) {
-            ctx.beginPath();
-            ctx.arc(8 + i * 4, 28, 2, 0, Math.PI * 2);
-            ctx.fill();
-        }
+        ctx.fillRect(26, 10, 3, 36);
+        
+        // Staff orb (golden, glowing)
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(27, 8, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.5)';
+        ctx.beginPath();
+        ctx.arc(27, 8, 6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Sleeves
+        ctx.fillStyle = '#daa520';
+        ctx.fillRect(2, 20, 6, 10);
+        ctx.fillRect(24, 20, 6, 10);
+        
+        // Hands
+        ctx.fillStyle = '#e8beac';
+        ctx.fillRect(3, 28, 4, 4);
+        ctx.fillRect(25, 28, 4, 4);
     });
 }
 
@@ -1903,7 +1944,8 @@ function spawnDharmachakraEncounter() {
         guardsDefeated: false,
         npcSpawned: false,
         npc: null,
-        rewardGiven: false
+        rewardGiven: false,
+        dharmaDialogueCount: 0 // Track number of combat dialogues shown (capped at 3)
     };
     
     gameState.targetCameraZoom = template.cameraZoom;
@@ -2159,15 +2201,18 @@ function updateEncounter() {
                 guard.sprite.material.color.setHex(0xffffff);
             }
             
-            // Dharma wizard random combat dialogue
+            // Dharma wizard random combat dialogue (capped at 3 total)
             if (guard.isDharmaWizard && guard.dialogueCooldown !== undefined) {
                 guard.dialogueCooldown = Math.max(0, guard.dialogueCooldown - 1);
-                if (guard.dialogueCooldown <= 0 && Math.random() < 0.001 && gameState.dialogueTimer <= 0) {
+                const dialogueCap = 3;
+                const currentCount = enc.dharmaDialogueCount || 0;
+                if (guard.dialogueCooldown <= 0 && Math.random() < 0.001 && gameState.dialogueTimer <= 0 && currentCount < dialogueCap) {
                     const dialogues = template.combatDialogues;
                     if (dialogues && dialogues.length > 0) {
                         const randomDialogue = dialogues[Math.floor(Math.random() * dialogues.length)];
                         showDialogue('☸️ DOGMATIC BUDDHIST', randomDialogue);
                         guard.dialogueCooldown = 600; // 10 seconds cooldown
+                        enc.dharmaDialogueCount = currentCount + 1; // Increment dialogue counter
                     }
                 }
             }
