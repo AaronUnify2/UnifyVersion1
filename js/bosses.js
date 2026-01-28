@@ -422,7 +422,7 @@ function shouldSpawnBoss() {
     if (typeof isMonsterStoreActive === 'function' && isMonsterStoreActive()) return false;
     
     const level = gameState.player.level;
-    if (level < 5) return false; // Bosses start at level 5
+    if (level < 50) return false; // Bosses start at level 5
     
     return true; // Probability handled by main spawn logic
 }
