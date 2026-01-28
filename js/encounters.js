@@ -108,7 +108,7 @@ const ENCOUNTER_TEMPLATES = {
         },
         
         // Level requirements
-        minLevel: 30,
+        minLevel: 5,
         maxLevel: 999,
         
         // Base spawn weight (higher = more common)
@@ -148,7 +148,7 @@ const ENCOUNTER_TEMPLATES = {
             text: '⚔️ SWORD ADDED!'
         },
         
-        minLevel: 40,
+        minLevel: 5,
         maxLevel: 999,
         spawnWeight: 1,
         
