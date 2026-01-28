@@ -44,8 +44,7 @@ const slimeCompanionState = {
     storeMenuOpen: false,
     storeVisitCount: 0, // Track how many times player has visited
     
-    // Base slime cost (increases with each purchase)
-    baseSlimeCost: 250,
+    // Base slime cost no longer used - costs are fixed in COMPANION_COSTS array
     
     // Investment system - gold left with shopkeeper
     investedGold: 0,
@@ -84,13 +83,21 @@ const STORE_DIALOGUE = {
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
+const MAX_COMPANIONS = 4;
+const COMPANION_COSTS = [500, 2000, 4000, 10000];
+
 function isMonsterStoreActive() {
     return slimeCompanionState.monsterStore !== null;
 }
 
 function getNextCompanionCost() {
     const numOwned = slimeCompanionState.companions.length;
-    return Math.floor(slimeCompanionState.baseSlimeCost * Math.pow(2, numOwned));
+    if (numOwned >= MAX_COMPANIONS) return Infinity;
+    return COMPANION_COSTS[numOwned];
+}
+
+function canBuyMoreCompanions() {
+    return slimeCompanionState.companions.length < MAX_COMPANIONS;
 }
 
 function getNextCompanionColor() {
@@ -974,33 +981,47 @@ function rebuildStoreUI() {
     // Clear existing items
     itemsContainer.innerHTML = '';
     
-    // Add "Buy New Companion" option
-    const nextColor = getNextCompanionColor();
-    const nextCost = getNextCompanionCost();
-    const companionNum = state.companions.length + 1;
-    
+    // Add "Buy New Companion" option (or max reached message)
     const buySection = document.createElement('div');
     buySection.className = 'store-item';
     buySection.id = 'store-buyCompanion';
-    buySection.innerHTML = `
-        <div class="store-icon">${nextColor.icon}</div>
-        <div class="store-info">
-            <div class="store-name">${state.companions.length === 0 ? 'Slime Companion' : 'New Companion #' + companionNum}</div>
-            <div class="store-desc">${state.companions.length === 0 ? 'A friendly slime that fights by your side!' : nextColor.name + ' slime to join your team!'}</div>
-        </div>
-        <button class="store-btn" id="buyCompanionBtn">
-            <span class="cost">💰 ${nextCost}</span>
-        </button>
-    `;
-    itemsContainer.appendChild(buySection);
     
-    // Setup buy button
-    const buyBtn = document.getElementById('buyCompanionBtn');
-    buyBtn.addEventListener('click', purchaseCompanion);
-    buyBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        purchaseCompanion();
-    });
+    if (canBuyMoreCompanions()) {
+        const nextColor = getNextCompanionColor();
+        const nextCost = getNextCompanionCost();
+        const companionNum = state.companions.length + 1;
+        
+        buySection.innerHTML = `
+            <div class="store-icon">${nextColor.icon}</div>
+            <div class="store-info">
+                <div class="store-name">${state.companions.length === 0 ? 'Slime Companion' : 'New Companion #' + companionNum}</div>
+                <div class="store-desc">${state.companions.length === 0 ? 'A friendly slime that fights by your side!' : nextColor.name + ' slime to join your team!'}</div>
+            </div>
+            <button class="store-btn" id="buyCompanionBtn">
+                <span class="cost">💰 ${nextCost}</span>
+            </button>
+        `;
+        itemsContainer.appendChild(buySection);
+        
+        // Setup buy button
+        const buyBtn = document.getElementById('buyCompanionBtn');
+        buyBtn.addEventListener('click', purchaseCompanion);
+        buyBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            purchaseCompanion();
+        });
+    } else {
+        buySection.className = 'store-item maxed';
+        buySection.innerHTML = `
+            <div class="store-icon">👑</div>
+            <div class="store-info">
+                <div class="store-name">Maximum Slimes!</div>
+                <div class="store-desc">You have all ${MAX_COMPANIONS} companions!</div>
+            </div>
+            <button class="store-btn" disabled>MAXED</button>
+        `;
+        itemsContainer.appendChild(buySection);
+    }
     
     // Add upgrade sections for each owned companion
     state.companions.forEach((companion, index) => {
@@ -1205,6 +1226,10 @@ function getCompanionUpgradeCost(companionIndex, upgradeKey) {
 
 function purchaseCompanion() {
     const state = slimeCompanionState;
+    
+    // Check if we can buy more companions
+    if (!canBuyMoreCompanions()) return;
+    
     const cost = getNextCompanionCost();
     
     if (gameState.player.gold < cost) return;
