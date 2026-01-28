@@ -90,7 +90,7 @@ function isMonsterStoreActive() {
 
 function getNextCompanionCost() {
     const numOwned = slimeCompanionState.companions.length;
-    return Math.floor(slimeCompanionState.baseSlimeCost * Math.pow(1.5, numOwned));
+    return Math.floor(slimeCompanionState.baseSlimeCost * Math.pow(2, numOwned));
 }
 
 function getNextCompanionColor() {
@@ -100,11 +100,11 @@ function getNextCompanionColor() {
 
 function createDefaultUpgrades() {
     return {
-        attackSpeed: { level: 0, maxLevel: 10, baseCost: 20, costMult: 1.2 },
-        health: { level: 0, maxLevel: 12, baseCost: 20, costMult: 1.15 },
-        swords: { level: 0, maxLevel: 8, baseCost: 50, costMult: 1.8 },
-        heal: { level: 0, maxLevel: 3, baseCost: 100, costMult: 2 }, // 100, 200, 300 (scaled by costMult isn't exact but close)
-        armor: { level: 0, maxLevel: 1, baseCost: 5000, costMult: 1 } // 10x health boost
+        attackSpeed: { level: 0, maxLevel: 10, baseCost: 20, costMult: 2 },
+        health: { level: 0, maxLevel: 12, baseCost: 20, costMult: 2 },
+        swords: { level: 0, maxLevel: 8, baseCost: 50, costMult: 2 },
+        heal: { level: 0, maxLevel: 3, baseCost: 100, costMult: 2 },
+        armor: { level: 0, maxLevel: 1, baseCost: 5000, costMult: 1 }
     };
 }
 
@@ -145,13 +145,6 @@ function createCompanionSlimeTexture(colorInfo) {
         ctx.ellipse(19, 30, 2.5, 2.5, 0, 0, Math.PI * 2);
         ctx.ellipse(31, 30, 2.5, 2.5, 0, 0, Math.PI * 2);
         ctx.fill();
-        
-        // Happy mouth
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(24, 34, 5, 0.2, Math.PI - 0.2);
-        ctx.stroke();
     });
 }
 
@@ -188,27 +181,29 @@ function createSlimeSwordTexture() {
 
 function createStoreSlimeTexture() {
     return createPixelTexture(32, 32, (ctx, w, h) => {
+        // Body
         ctx.fillStyle = '#27ae60';
         ctx.beginPath();
-        ctx.ellipse(16, 20, 12, 10, 0, 0, Math.PI * 2);
+        ctx.ellipse(16, 20, 14, 10, 0, 0, Math.PI * 2);
         ctx.fill();
         
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        // Highlight
+        ctx.fillStyle = '#2ecc71';
         ctx.beginPath();
-        ctx.ellipse(12, 16, 4, 3, -0.3, 0, Math.PI * 2);
+        ctx.ellipse(16, 18, 10, 6, 0, 0, Math.PI * 2);
         ctx.fill();
         
+        // Eyes
         ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.ellipse(12, 20, 3, 3, 0, 0, Math.PI * 2);
-        ctx.ellipse(20, 20, 3, 3, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
+        ctx.fillRect(10, 16, 5, 5);
+        ctx.fillRect(18, 16, 5, 5);
         ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.ellipse(13, 20, 1.5, 1.5, 0, 0, Math.PI * 2);
-        ctx.ellipse(21, 20, 1.5, 1.5, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(12, 18, 2, 2);
+        ctx.fillRect(20, 18, 2, 2);
+        
+        // Shine
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillRect(8, 14, 3, 3);
     });
 }
 
@@ -645,9 +640,13 @@ function createSlimeStoreUI() {
         #slimeStoreItems {
             flex: 1;
             overflow-y: auto;
+            overflow-x: hidden;
             padding: 15px 20px;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
             scrollbar-width: thin;
             scrollbar-color: #27ae60 #0d2818;
+            touch-action: pan-y;
         }
         
         #slimeStoreItems::-webkit-scrollbar {
@@ -1104,12 +1103,6 @@ function getCompanionUpgradeCost(companionIndex, upgradeKey) {
     const companion = slimeCompanionState.companions[companionIndex];
     if (!companion) return 999999;
     const upgrade = companion.upgrades[upgradeKey];
-    
-    // Special pricing for heal: 100, 200, 300
-    if (upgradeKey === 'heal') {
-        const healCosts = [100, 200, 300];
-        return healCosts[Math.min(upgrade.level, 2)];
-    }
     
     return Math.floor(upgrade.baseCost * Math.pow(upgrade.costMult, upgrade.level));
 }
