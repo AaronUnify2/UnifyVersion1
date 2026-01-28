@@ -553,12 +553,17 @@ function createSlimeStoreUI() {
     storeMenu.id = 'slimeStoreMenu';
     storeMenu.innerHTML = `
         <div id="slimeStoreContent">
-            <h2>🏪 MONSTER STORE</h2>
-            <div id="storeGoldDisplay">💰 <span id="storeGoldAmount">0</span></div>
+            <div id="storeHeader">
+                <button id="closeSlimeStoreTop">✕</button>
+                <h2>🏪 MONSTER STORE</h2>
+                <div id="storeGoldDisplay">💰 <span id="storeGoldAmount">0</span></div>
+            </div>
             <div id="slimeStoreItems">
                 <!-- Dynamic content will be inserted here -->
             </div>
-            <button id="closeSlimeStore">CLOSE STORE</button>
+            <div id="storeFooter">
+                <button id="closeSlimeStore">CLOSE STORE</button>
+            </div>
         </div>
     `;
     
@@ -582,19 +587,49 @@ function createSlimeStoreUI() {
             background: linear-gradient(180deg, #1a472a, #0d2818);
             border: 4px solid #27ae60;
             border-radius: 16px;
-            padding: 20px;
             max-width: 360px;
             width: 90%;
             max-height: 85vh;
-            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
             box-shadow: 0 0 30px rgba(39,174,96,0.5);
+        }
+        
+        #storeHeader {
+            position: relative;
+            padding: 15px 20px 10px 20px;
+            border-bottom: 2px solid #1e8449;
+            flex-shrink: 0;
+        }
+        
+        #closeSlimeStoreTop {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(180deg, #c0392b, #922b21);
+            border: 2px solid #e74c3c;
+            border-radius: 50%;
+            color: #fff;
+            font-size: 16px;
+            font-family: Arial, sans-serif;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+        
+        #closeSlimeStoreTop:active {
+            transform: scale(0.9);
         }
         
         #slimeStoreContent h2 {
             color: #2ecc71;
             text-align: center;
             margin-bottom: 10px;
-            font-size: 16px;
+            font-size: 14px;
             text-shadow: 0 0 10px #27ae60;
             font-family: 'Press Start 2P', cursive;
         }
@@ -602,10 +637,41 @@ function createSlimeStoreUI() {
         #storeGoldDisplay {
             text-align: center;
             color: #f1c40f;
-            font-size: 14px;
+            font-size: 12px;
             font-family: 'Press Start 2P', cursive;
-            margin-bottom: 15px;
             text-shadow: 0 0 10px rgba(241, 196, 15, 0.5);
+        }
+        
+        #slimeStoreItems {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px 20px;
+            scrollbar-width: thin;
+            scrollbar-color: #27ae60 #0d2818;
+        }
+        
+        #slimeStoreItems::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #slimeStoreItems::-webkit-scrollbar-track {
+            background: #0d2818;
+            border-radius: 4px;
+        }
+        
+        #slimeStoreItems::-webkit-scrollbar-thumb {
+            background: #27ae60;
+            border-radius: 4px;
+        }
+        
+        #slimeStoreItems::-webkit-scrollbar-thumb:hover {
+            background: #2ecc71;
+        }
+        
+        #storeFooter {
+            padding: 10px 20px 15px 20px;
+            border-top: 2px solid #1e8449;
+            flex-shrink: 0;
         }
         
         .store-item {
@@ -696,7 +762,10 @@ function createSlimeStoreUI() {
             font-size: 12px;
             font-family: 'Press Start 2P', cursive;
             cursor: pointer;
-            margin-top: 15px;
+        }
+        
+        #closeSlimeStore:active {
+            transform: scale(0.98);
         }
         
         .companion-section {
@@ -792,6 +861,12 @@ function createSlimeStoreUI() {
 function setupSlimeStoreEvents() {
     document.getElementById('closeSlimeStore').addEventListener('click', closeSlimeStore);
     document.getElementById('closeSlimeStore').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        closeSlimeStore();
+    });
+    
+    document.getElementById('closeSlimeStoreTop').addEventListener('click', closeSlimeStore);
+    document.getElementById('closeSlimeStoreTop').addEventListener('touchstart', (e) => {
         e.preventDefault();
         closeSlimeStore();
     });
