@@ -313,7 +313,7 @@ function shouldSpawnMonsterStore() {
     if (encounterState.cloudPortal) return false;
     if (encounterState.inCloudArena) return false;
     if (gameState.bosses.length > 0) return false;
-    if (gameState.player.level < 5) return false;
+    if (gameState.player.level < 2) return false;
     return true;
 }
 
