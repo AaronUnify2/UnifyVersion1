@@ -26,6 +26,8 @@
                 lineColor: '#546e7a'
             }
         });
+        // Expose mermaid to window so we can access it if needed
+        window.mermaid = mermaid;
     </script>
     <style>
         * { box-sizing: border-box; }
@@ -56,9 +58,11 @@
         
         /* Controls */
         .controls-overlay { position: absolute; bottom: 30px; right: 30px; background: white; padding: 10px; border-radius: 50px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; gap: 10px; z-index: 100; }
-        .btn-zoom { width: 40px; height: 40px; border-radius: 50%; border: none; background: #fff; color: #555; font-size: 18px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .btn-zoom:hover { background: #2980b9; color: white; }
-        
+        .btn-control { width: 40px; height: 40px; border-radius: 50%; border: none; background: #fff; color: #555; font-size: 18px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .btn-control:hover { background: #2980b9; color: white; }
+        .btn-save { background: #e8f5e9; color: #2e7d32; }
+        .btn-save:hover { background: #2e7d32; color: white; }
+
         /* Mermaid Specifics */
         .mermaid { transform-origin: center center; }
         
@@ -115,9 +119,11 @@
 
         <div class="diagram-wrapper">
             <div class="controls-overlay">
-                <button class="btn-zoom" onclick="zoomIn()" title="Zoom In">＋</button>
-                <button class="btn-zoom" onclick="resetZoom()" title="Reset View">⟲</button>
-                <button class="btn-zoom" onclick="zoomOut()" title="Zoom Out">－</button>
+                <button class="btn-control" onclick="zoomIn()" title="Zoom In">＋</button>
+                <button class="btn-control" onclick="resetZoom()" title="Reset View">⟲</button>
+                <button class="btn-control" onclick="zoomOut()" title="Zoom Out">－</button>
+                <div style="width: 1px; background: #eee; height: 25px;"></div>
+                <button class="btn-control btn-save" onclick="saveImage()" title="Save High-Res Image">📷</button>
             </div>
 
             <div class="diagram-container" id="diagramContainer">
@@ -279,6 +285,60 @@ flowchart TD
             panX = 0;
             panY = 0;
             updateTransform();
+        }
+
+        // SAVE IMAGE FUNCTION
+        function saveImage() {
+            const mermaidDiv = document.querySelector('.mermaid');
+            const svg = mermaidDiv.querySelector('svg');
+            
+            if (!svg) {
+                alert('Diagram not loaded yet. Please wait a moment.');
+                return;
+            }
+
+            // Get SVG data
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(svg);
+
+            // Add namespaces if missing (prevents some browser errors)
+            if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+            }
+            if(!source.match(/^<svg[^>]+xmlns:xlink="http\:\/\/www\.w3\.org\/1999\/xlink"/)){
+                source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+            }
+
+            // Prepare Canvas
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const svgSize = svg.getBoundingClientRect();
+            
+            // SCALE FACTOR (increase this for higher resolution)
+            const scaleFactor = 3; 
+
+            canvas.width = svgSize.width * scaleFactor;
+            canvas.height = svgSize.height * scaleFactor;
+
+            const img = new Image();
+            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(source)));
+
+            img.onload = function() {
+                // Fill white background (otherwise it's transparent)
+                context.fillStyle = '#ffffff';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw image scaled
+                context.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                // Trigger Download
+                const a = document.createElement('a');
+                a.download = 'SDRC_Call_Flow.png';
+                a.href = canvas.toDataURL('image/png');
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            };
         }
 
         // Mouse Wheel Zoom
