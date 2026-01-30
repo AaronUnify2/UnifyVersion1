@@ -3,302 +3,263 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SDRC Call Flow - Graphviz Mode</title>
-    <script src="https://d3js.org/d3.v5.min.js"></script>
-    <script src="https://unpkg.com/@hpcc-js/wasm@0.3.11/dist/index.min.js"></script>
-    <script src="https://unpkg.com/d3-graphviz@3.0.5/build/d3-graphviz.js"></script>
-    
+    <title>SDRC Call Flow - Landscape Mode</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            flowchart: {
+                useMaxWidth: false,
+                htmlLabels: true,
+                curve: 'basis',
+                nodeSpacing: 30, // Tighter spacing
+                rankSpacing: 80, // More space between columns
+                padding: 15
+            },
+            themeVariables: {
+                primaryColor: '#e3f2fd',
+                secondaryColor: '#fff3e0',
+                tertiaryColor: '#e8f5e9',
+                fontSize: '14px',
+                fontFamily: 'Segoe UI, Arial, sans-serif',
+                lineColor: '#546e7a'
+            }
+        });
+    </script>
     <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; overflow: hidden; background-color: #f4f6f8; display: flex; flex-direction: column; height: 100vh; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f6f8; height: 100vh; display: flex; flex-direction: column; }
         
         /* Header */
-        header { background: #2c3e50; color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); flex-shrink: 0; z-index: 20;}
-        h1 { margin: 0; font-size: 20px; font-weight: 600; }
+        header { background: #2c3e50; color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 20; }
+        h1 { margin: 0; font-size: 22px; font-weight: 600; }
+        .subtitle { font-size: 13px; opacity: 0.8; }
         
-        /* Main Layout */
-        .main-container { display: flex; flex: 1; overflow: hidden; }
+        /* Layout */
+        .main-layout { display: flex; flex: 1; overflow: hidden; }
         
         /* Sidebar */
-        .sidebar { width: 280px; background: white; border-right: 1px solid #ddd; overflow-y: auto; display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 5px rgba(0,0,0,0.05); }
-        .sidebar-content { padding: 20px; }
-        .sidebar-title { font-size: 13px; font-weight: 700; color: #34495e; text-transform: uppercase; margin-bottom: 15px; letter-spacing: 0.5px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+        .sidebar { width: 260px; background: white; border-right: 1px solid #e0e0e0; overflow-y: auto; display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 5px rgba(0,0,0,0.05); }
+        .sidebar-section { padding: 15px 20px; border-bottom: 1px solid #eee; }
+        .sidebar-title { font-size: 13px; font-weight: 700; color: #34495e; text-transform: uppercase; margin-bottom: 10px; letter-spacing: 0.5px; }
         
-        .system-item { display: flex; align-items: baseline; margin-bottom: 10px; font-size: 13px; }
-        .system-name { font-weight: 700; color: #2980b9; width: 80px; flex-shrink: 0; }
+        .system-item { display: flex; align-items: baseline; margin-bottom: 8px; font-size: 12px; }
+        .system-name { font-weight: 700; color: #2980b9; width: 70px; flex-shrink: 0; }
+        .system-desc { color: #555; }
         
-        /* Graph Area */
-        #graph { flex: 1; height: 100%; width: 100%; background-color: #f4f6f8; position: relative; }
+        /* Diagram Area */
+        .diagram-wrapper { flex: 1; position: relative; background-color: #f4f6f8; overflow: hidden; }
+        .diagram-container { width: 100%; height: 100%; overflow: hidden; cursor: grab; display: flex; align-items: center; justify-content: center; }
+        .diagram-container:active { cursor: grabbing; }
         
         /* Controls */
-        .controls { position: absolute; bottom: 30px; right: 30px; display: flex; gap: 10px; }
-        .btn { width: 45px; height: 45px; border-radius: 50%; border: none; background: white; color: #555; font-size: 20px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.15); display: flex; align-items: center; justify-content: center; transition: transform 0.1s; }
-        .btn:hover { background: #2980b9; color: white; transform: translateY(-2px); }
+        .controls-overlay { position: absolute; bottom: 30px; right: 30px; background: white; padding: 8px; border-radius: 50px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; gap: 8px; z-index: 100; }
+        .btn-control { width: 36px; height: 36px; border-radius: 50%; border: none; background: #fff; color: #555; font-size: 16px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .btn-control:hover { background: #2980b9; color: white; }
         .btn-save { background: #e8f5e9; color: #2e7d32; }
+        .btn-save:hover { background: #2e7d32; color: white; }
+
+        /* Mermaid Specifics */
+        .mermaid { transform-origin: center center; }
         
-        /* Loading Overlay */
-        #loading { position: absolute; top: 50%; left: 60%; transform: translate(-50%, -50%); font-size: 20px; color: #555; pointer-events: none; transition: opacity 0.5s; }
     </style>
 </head>
 <body>
 
-<header>
-    <div>
-        <h1>SDRC Service Flow</h1>
-        <div style="font-size: 12px; opacity: 0.8;">Compact View (Graphviz)</div>
-    </div>
-</header>
-
-<div class="main-container">
-    <aside class="sidebar">
-        <div class="sidebar-content">
-            <div class="sidebar-title">🔑 Key Systems</div>
-            <div class="system-item"><span class="system-name">Merit</span> Request Mgmt</div>
-            <div class="system-item"><span class="system-name">TechOne</span> Finance/Prop</div>
-            <div class="system-item"><span class="system-name">Intramaps</span> GIS/Maps</div>
-            <div class="system-item"><span class="system-name">ECM</span> Documents</div>
-            <div class="system-item"><span class="system-name">Aqualas</span> Water Networks</div>
-            <div class="system-item"><span class="system-name">BPOINT</span> Payments</div>
-            <div class="system-item"><span class="system-name">Eli</span> Knowledge Base</div>
-            
-            <div style="margin-top: 30px;"></div>
-            <div class="sidebar-title">📞 Critical #s</div>
-            <div class="system-item"><span class="system-name">RSPCA</span> 1300 264 625</div>
-            <div class="system-item"><span class="system-name">QLD Rail</span> 13 16 17</div>
-            <div class="system-item"><span class="system-name">TMR</span> 13 20 80</div>
+    <header>
+        <div>
+            <h1>SDRC Service Flow</h1>
+            <div class="subtitle">Landscape Mode (Wide)</div>
         </div>
-        
-        <div style="background: #fff8e1; padding: 15px; margin: 10px; border-radius: 6px; border-left: 4px solid #ffb300; font-size: 12px;">
-            <b>💡 Tips:</b><br/>Double-click any box to zoom into it (Mouse wheel to zoom out).
+        <div style="font-size: 12px; background: rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 20px;">
+            Zoom: <span id="zoomLevel">100</span>%
         </div>
-    </aside>
+    </header>
 
-    <div id="graph">
-        <div id="loading">Generating optimized layout...</div>
-    </div>
+    <div class="main-layout">
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Key Systems</div>
+                <div class="system-item"><span class="system-name">Merit</span> Request Mgmt</div>
+                <div class="system-item"><span class="system-name">TechOne</span> Finance/Prop</div>
+                <div class="system-item"><span class="system-name">Intramaps</span> GIS / Maps</div>
+                <div class="system-item"><span class="system-name">ECM</span> Documents</div>
+                <div class="system-item"><span class="system-name">Aqualas</span> Water Networks</div>
+                <div class="system-item"><span class="system-name">BPOINT</span> Payments</div>
+                <div class="system-item"><span class="system-name">Payreq</span> Rates Notices</div>
+                <div class="system-item"><span class="system-name">Eli</span> Knowledge Base</div>
+            </div>
 
-    <div class="controls">
-        <button class="btn btn-save" onclick="saveImage()" title="Save Image">📷</button>
-    </div>
-</div>
-
-<script>
-    // THE DATA (Graphviz DOT Syntax)
-    // HTML-like labels are used (enclosed in <...>) for rich formatting
-    const dotSrc = `
-    digraph SDRC_Flow {
-        // --- GLOBAL SETTINGS ---
-        rankdir=TB;             // Top to Bottom flow
-        splines=ortho;          // Orthogonal (squared) lines
-        nodesep=0.4;            // Space between nodes
-        ranksep=0.5;            // Space between rows
-        newrank=true;           // Better alignment across clusters
-        bgcolor="#f4f6f8";      // Match background
-        
-        // --- DEFAULT STYLES ---
-        node [shape=box, style="filled,rounded", fontname="Segoe UI, Arial", fontsize=11, margin="0.2,0.1", penwidth=1, color="#b0bec5", fillcolor="white"];
-        edge [fontname="Segoe UI", fontsize=9, color="#546e7a", arrowsize=0.8];
-
-        // --- NODES ---
-        
-        // Start & Greeting
-        Start [label="Incoming Call", shape=oval, fillcolor="#2e7d32", fontcolor="white", penwidth=0];
-        Greeting [label=<<b>🗣️ GREETING</b><br/><i>"SDRC, this is [Name]...<br/>How can I help you?"</i>>];
-        Verify [label=<<b>🕵️ VERIFY & IDENTIFY</b><br align="left"/>1. Listen to reason<br align="left"/>2. <b>Verify Identity</b>>];
-        
-        // The Main Router
-        MainRoute [shape=diamond, style=filled, fillcolor="#ff9800", fontcolor="white", label="CATEGORY?", penwidth=0];
-
-        // --- CLUSTERS (Groups) ---
-
-        // GROUP 1: ANIMALS
-        subgraph cluster_animals {
-            label = "🐕 ANIMAL SERVICES";
-            style = filled; color = "#e3f2fd"; fontsize=12; fontcolor="#0277bd";
-            node [fillcolor="white"];
+            <div class="sidebar-section">
+                <div class="sidebar-title">Critical Numbers</div>
+                <div class="system-item"><span class="system-name">RSPCA</span> 1300 264 625</div>
+                <div class="system-item"><span class="system-name">QLD Rail</span> 13 16 17</div>
+                <div class="system-item"><span class="system-name">TMR</span> 13 20 80</div>
+            </div>
             
-            AnimalSplit [shape=diamond, fillcolor="#ffcc80", label="Issue?", fontcolor="black", penwidth=0, height=0.5];
-            
-            Anim_Lost [label=<<b>Lost & Found</b><br align="left"/>1. Add to <i>S:\...Found Register</i><br align="left"/>2. Notify CS Group + Local Laws<br align="left"/><br align="left"/><b>Impounded</b><br align="left"/>1. Check <i>S:\...Impoundments</i><br align="left"/>2. Contact Local Laws>];
-            Anim_Reg [label=<<b>Dog Registration</b><br align="left"/>• Email: <i>App for Dog Reg</i><br align="left"/>• Request: Proof of Desexing>];
-            Anim_Bark [label=<<b>Barking Dogs</b><br align="left"/><b>New:</b> Letter + Diary + Factsheet<br align="left"/><b>Ongoing:</b> Merit Note + Return #>];
-            Anim_RSPCA [label=<<b>Cruelty & Welfare</b><br/>🚨 Direct to RSPCA<br/><b>1300 264 625</b>>, color="#e57373", penwidth=2];
-            Anim_Attack [label=<<b>⚠️ DOG ATTACK</b><br align="left"/> Merid 'Attack' - Record:<br align="left"/>• Danger? Location?<br align="left"/>• Medical needed?<br align="left"/>📧 Email: <i>Statement Form</i>>, color="#d32f2f", penwidth=2];
-            Anim_Gen [label=<<b>Other</b><br align="left"/>• Straying: Merit 'Stray'<br align="left"/>• Pests: Factsheets<br align="left"/>• Surrender: 'Consent' form>];
-        }
+            <div style="padding: 20px; font-size: 12px; background: #fff8e1; border-top: 1px solid #ffe0b2;">
+                <b>💡 Tip:</b><br/>This layout flows Left-to-Right.<br/>Scroll wheel to zoom.
+            </div>
+        </aside>
 
-        // GROUP 2: PROPERTY
-        subgraph cluster_property {
-            label = "🏗️ PROPERTY & PLANNING";
-            style = filled; color = "#e0f2f1"; fontsize=12; fontcolor="#00695c";
-            
-            PropSplit [shape=diamond, fillcolor="#ffcc80", label="Issue?", fontcolor="black", penwidth=0, height=0.5];
-            
-            Prop_Build [label=<<b>BUILDING</b><br align="left"/><b>New:</b> Factsheets + Callback<br align="left"/><b>Exist:</b> Transfer OR Merit<br align="left"/><b>Insp:</b> Email <i>buildinginspections@</i>>];
-            Prop_Plumb [label=<<b>PLUMBING</b><br align="left"/><b>New:</b> FAQ + Callback<br align="left"/><b>Exist:</b> Transfer OR Merit<br align="left"/><b>Insp:</b> Add to Calendar>];
-            Prop_Conn [label=<<b>CONNECT WATER/SEWER</b><br align="left"/>Check <b>Intramaps</b><br align="left"/>✅ Std: Email 'App for Water'<br align="left"/>❌ Non-Std: Email 'Private Works'>];
-            Prop_Leak [label=<<b>💧 WATER LEAK</b><br align="left"/>Check <b>Aqualas</b><br align="left"/><b>Council:</b> Merit 'Leak'<br align="left"/><b>Customer:</b> Advise Plumber>];
-            Plan [label=<<b>🗺️ PLANNING</b><br align="left"/><b>New:</b> Factsheet + Callback<br align="left"/><b>General:</b> Merit -> Duty Planner>];
-        }
+        <div class="diagram-wrapper">
+            <div class="controls-overlay">
+                <button class="btn-control" onclick="zoomIn()" title="Zoom In">＋</button>
+                <button class="btn-control" onclick="resetZoom()" title="Reset View">⟲</button>
+                <button class="btn-control" onclick="zoomOut()" title="Zoom Out">－</button>
+                <div style="width: 1px; background: #eee; height: 20px; align-self: center;"></div>
+                <button class="btn-control btn-save" onclick="saveImage()" title="Save High-Res Image">📷</button>
+            </div>
 
-        // GROUP 3: FINANCE
-        subgraph cluster_finance {
-            label = "💰 FINANCE";
-            style = filled; color = "#fff3e0"; fontsize=12; fontcolor="#ef6c00";
-            
-            FinSplit [shape=diamond, fillcolor="#ffcc80", label="Issue?", fontcolor="black", penwidth=0, height=0.5];
-            
-            Fin_Rates [label=<<b>RATES (Check ID!)</b><br align="left"/><b>Pay:</b> TechOne Bal -> BPOINT<br align="left"/><b>Copy:</b> Payreq -> Email PDF<br align="left"/><b>Pension:</b> Email App Form>];
-            Fin_Pay [label=<<b>GENERAL PAYMENT</b><br align="left"/><b>BPOINT Fields:</b><br align="left"/>1. Name 2. Addr 3. Purpose<br align="left"/>Ref: Prop ID or Lic #>];
-            Fin_Lic [label=<<b>LICENCES</b><br align="left"/><b>Renew:</b> BPOINT (Ref: Lic#)<br align="left"/><b>Apply:</b> Eli Forms -> Email>];
-        }
+            <div class="diagram-container" id="diagramContainer">
+                <div class="mermaid" id="mermaidDiagram">
+flowchart LR
+    %% --- STYLING ---
+    classDef startNode fill:#2e7d32,stroke:#1b5e20,stroke-width:3px,color:white,font-size:15px,font-weight:bold;
+    classDef routerNode fill:#ff9800,stroke:#e65100,stroke-width:2px,color:white,font-weight:bold;
+    classDef actionNode fill:#ffffff,stroke:#90a4ae,stroke-width:1px,color:#333,text-align:left;
+    classDef stopNode fill:#c62828,stroke:#b71c1c,stroke-width:2px,color:white,font-weight:bold;
 
-        // GROUP 4: WASTE
-        subgraph cluster_waste {
-            label = "🗑️ WASTE & ROADS";
-            style = filled; color = "#f3e5f5"; fontsize=12; fontcolor="#6a1b9a";
-            
-            WasteSplit [shape=diamond, fillcolor="#ffcc80", label="Issue?", fontcolor="black", penwidth=0, height=0.5];
-            
-            Waste_Bins [label=<<b>RESIDENTIAL BINS</b><br align="left"/><b>Missed/Broken:</b> Lodge <b>Cleanaway</b><br align="left"/><i>(Leave bin on curb)</i>>];
-            Waste_Public [label=<<b>PUBLIC BINS</b><br align="left"/>Check Intramaps<br align="left"/>• Cleanaway Icon? Lodge CA<br align="left"/>• No Icon? Merit 'Maint'>];
-            Roads [label=<<b>🛣️ ROADS</b><br align="left"/><b>Closures:</b> Dashboard<br align="left"/><b>Hwy:</b> TMR (13 20 80)<br align="left"/><b>Potholes:</b> Merit 'Pothole'<br align="left"/><b>Kill:</b> &gt;100kg Merit / &lt;100kg CA>];
-        }
+    %% --- MAIN FLOW (Left to Right) ---
 
-        // GROUP 5: GENERAL
-        subgraph cluster_general {
-            label = "🔧 GENERAL / OTHER";
-            style = filled; color = "#eceff1"; fontsize=12; fontcolor="#455a64";
-            
-            GenSplit [shape=diamond, fillcolor="#ffcc80", label="Other?", fontcolor="black", penwidth=0, height=0.5];
-            
-            Camp [label=<<b>⛺ CAMPGROUNDS</b><br align="left"/><b>Washpool:</b> Eli (Vicki)<br align="left"/><b>Connolly:</b> Self-register>];
-            Env [label=<<b>🍃 ENV HEALTH</b><br align="left"/>1. Check Jurisdiction (Eli)<br align="left"/>2. If Council: Merit 'Env'<br align="left"/>3. Ongoing? Nuisance Diary>];
-            Comp [label=<<b>😡 COMPLAINTS</b><br align="left"/><b>Service:</b> Merit 'Complaint'<br align="left"/><b>Formal:</b> Complaint Form>];
-            Trans [label=<<b>☎️ TRANSFERS</b><br align="left"/>1. Search Pulse/Eli<br align="left"/>2. Warm Transfer<br align="left"/>3. Unavail: Merit Callback>];
-        }
+    subgraph INTAKE [Incoming Stage]
+        direction TB
+        Start([Incoming Call]) --> Greeting["<b>🗣️ GREETING</b><br/>'SDRC, this is [Name]...'"]
+        Greeting --> Verify["<b>🕵️ VERIFY</b><br/>1. Listen<br/>2. ID Check"]
+        Verify --> MainRoute{CATEGORY?}
+    end
 
-        // Terminate
-        Close [label=<<b>👋 CLOSE CALL</b><br/><i>"Anything else?"</i>>, shape=oval, fillcolor="#c62828", fontcolor="white", penwidth=0];
+    %% --- BRANCHES (Stacked Vertically, Flowing Right) ---
 
-        // --- CONNECTIONS ---
-        
-        Start -> Greeting;
-        Greeting -> Verify;
-        Verify -> MainRoute;
+    %% 1. ANIMALS
+    MainRoute -->|Animals| AnimalSplit{Issue?}
+    subgraph SG_Animals [🐕 ANIMAL SERVICES]
+        direction TB
+        AnimalSplit --Lost/Impound--> Anim_Lost["<b>Lost/Found</b><br/>• Reg: <i>S:\...Animals</i><br/>• Notify Local Laws<br/><b>Impound</b><br/>• Check Register<br/>• Arrange Fee"]
+        AnimalSplit --Registration--> Anim_Reg["<b>Registration</b><br/>• Email Form<br/>• Proof of Desexing"]
+        AnimalSplit --Barking--> Anim_Bark["<b>Barking</b><br/>• Fact Sheet + Diary<br/>• Merit 'Barking'"]
+        AnimalSplit --Cruelty--> Anim_RSPCA["<b>Cruelty</b><br/>🚨 RSPCA: 1300 264 625"]
+        AnimalSplit --Attack--> Anim_Attack["<b>⚠️ ATTACK</b><br/>Merit 'attack'<br/>• Danger present?<br/>• Medical needed?"]
+    end
 
-        // Routing to Clusters
-        MainRoute -> AnimalSplit [label="Animals"];
-        MainRoute -> PropSplit [label="Build/Plumb"];
-        MainRoute -> FinSplit [label="Rates/Pay"];
-        MainRoute -> WasteSplit [label="Waste/Roads"];
-        MainRoute -> GenSplit [label="General"];
+    %% 2. PROPERTY
+    MainRoute -->|Prop/Plan| PropSplit{Issue?}
+    subgraph SG_Property [🏗️ PROPERTY]
+        direction TB
+        PropSplit --Building--> Prop_Build["<b>Building</b><br/>• New: Factsheet<br/>• Insp: Email <i>build...</i>"]
+        PropSplit --Plumbing--> Prop_Plumb["<b>Plumbing</b><br/>• New: FAQ<br/>• Insp: Calendar"]
+        PropSplit --Water--> Prop_Conn["<b>Connect Water</b><br/>Check <b>Intramaps</b><br/>• Std: Email App<br/>• Non: Pvt Works"]
+        PropSplit --Leak--> Prop_Leak["<b>Leak</b><br/>Check <b>Aqualas</b><br/>• Council: Merit<br/>• Cust: Plumber"]
+        PropSplit --Planning--> Plan["<b>Planning</b><br/>• General: Merit<br/>• Trans: Duty Planner"]
+    end
 
-        // Animal connections
-        AnimalSplit -> Anim_Lost [label="Lost"];
-        AnimalSplit -> Anim_Reg [label="Rego"];
-        AnimalSplit -> Anim_Bark [label="Bark"];
-        AnimalSplit -> Anim_RSPCA [label="Cruelty"];
-        AnimalSplit -> Anim_Attack [label="Attack"];
-        AnimalSplit -> Anim_Gen [label="Other"];
+    %% 3. FINANCE
+    MainRoute -->|Finance| FinSplit{Issue?}
+    subgraph SG_Finance [💰 FINANCE]
+        direction TB
+        FinSplit --Rates--> Fin_Rates["<b>Rates (ID Check)</b><br/>• Bal: TechOne<br/>• Copy: Payreq<br/>• Pens: Form"]
+        FinSplit --Payment--> Fin_Pay["<b>Payment</b><br/>• BPOINT<br/>• Ref: Prop ID"]
+    end
 
-        // Property Connections
-        PropSplit -> Prop_Build [label="Build"];
-        PropSplit -> Prop_Plumb [label="Plumb"];
-        PropSplit -> Prop_Conn [label="Water"];
-        PropSplit -> Prop_Leak [label="Leak"];
-        MainRoute -> Plan [label="Planning"]; 
+    %% 4. WASTE & ROADS
+    MainRoute -->|Waste| WasteSplit{Issue?}
+    subgraph SG_Waste [🗑️ WASTE / ROADS]
+        direction TB
+        WasteSplit --Bins--> Waste_Bins["<b>Bins</b><br/>• Broken: Cleanaway<br/>• Public: Merit"]
+        WasteSplit --Roads--> Roads["<b>Roads</b><br/>• Closed: Dashboard<br/>• Pot: Merit<br/>• Hwy: TMR"]
+    end
 
-        // Finance Connections
-        FinSplit -> Fin_Rates [label="Rates"];
-        FinSplit -> Fin_Pay [label="Pay"];
-        FinSplit -> Fin_Lic [label="Licence"];
+    %% 5. GENERAL
+    MainRoute -->|General| GenSplit{Issue?}
+    subgraph SG_General [🔧 GENERAL]
+        direction TB
+        GenSplit --Camp--> Camp["<b>Campgrounds</b><br/>• Washpool: Eli<br/>• Connolly: Site"]
+        GenSplit --Env--> Env["<b>Env Health</b><br/>• Jurisdiction?<br/>• Nuisance Diary"]
+        GenSplit --Other--> Trans["<b>Transfers</b><br/>• Pulse Search<br/>• Warm Xfer"]
+    end
 
-        // Waste Connections
-        WasteSplit -> Waste_Bins [label="Res Bin"];
-        WasteSplit -> Waste_Public [label="Pub Bin"];
-        WasteSplit -> Roads [label="Roads"];
-
-        // General Connections
-        GenSplit -> Camp [label="Camp"];
-        GenSplit -> Env [label="Env"];
-        GenSplit -> Comp [label="Complaint"];
-        GenSplit -> Trans [label="Transfer"];
-
-        // Closing connections (Linking groups to Close node)
-        // Using edge concentrators invisibly to keep it tidy
-        
-        {Anim_Lost Anim_Reg Anim_Bark Anim_RSPCA Anim_Attack Anim_Gen} -> Close [color="#cfd8dc"];
-        {Prop_Build Prop_Plumb Prop_Conn Prop_Leak Plan} -> Close [color="#cfd8dc"];
-        {Fin_Rates Fin_Pay Fin_Lic} -> Close [color="#cfd8dc"];
-        {Waste_Bins Waste_Public Roads} -> Close [color="#cfd8dc"];
-        {Camp Env Comp Trans} -> Close [color="#cfd8dc"];
-    }
-    `;
-
-    // RENDER GRAPH
-    // We use d3-graphviz which handles the WASM compilation of Graphviz
-    var t0 = Date.now();
+    %% --- TERMINATORS ---
     
-    d3.select("#graph").graphviz()
-        .transition(function () {
-            return d3.transition("main")
-                .ease(d3.easeLinear)
-                .duration(500);
-        })
-        .renderDot(dotSrc)
-        .on("end", function () {
-            document.getElementById('loading').style.opacity = 0;
-            console.log('Rendered in ' + (Date.now() - t0) + 'ms');
+    SG_Animals --> Close(["<b>👋 CLOSE CALL</b><br/>'Anything else?'"])
+    SG_Property --> Close
+    SG_Finance --> Close
+    SG_Waste --> Close
+    SG_General --> Close
+
+    %% --- CLASS ASSIGNMENT ---
+    class Start startNode;
+    class MainRoute,AnimalSplit,PropSplit,FinSplit,WasteSplit,GenSplit routerNode;
+    class Close stopNode;
+    class Anim_Lost,Anim_Reg,Anim_Bark,Anim_RSPCA,Anim_Attack,Anim_Gen actionNode;
+    class Prop_Build,Prop_Plumb,Prop_Conn,Prop_Leak,Plan actionNode;
+    class Fin_Rates,Fin_Pay,Fin_Lic actionNode;
+    class Waste_Bins,Waste_Public,Waste_Comp,Roads actionNode;
+    class Camp,Env,Comp,Disp,Trans actionNode;
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentZoom = 100;
+        const minZoom = 25;
+        const maxZoom = 200;
+        const zoomStep = 15;
+        let isPanning = false;
+        let startX = 0;
+        let startY = 0;
+        let panX = 0;
+        let panY = 0;
+
+        function updateTransform() {
+            const mermaid = document.getElementById('mermaidDiagram');
+            mermaid.style.transform = `translate(${panX}px, ${panY}px) scale(${currentZoom / 100})`;
+            document.getElementById('zoomLevel').textContent = currentZoom;
+        }
+        function zoomIn() { if (currentZoom < maxZoom) { currentZoom += zoomStep; updateTransform(); } }
+        function zoomOut() { if (currentZoom > minZoom) { currentZoom -= zoomStep; updateTransform(); } }
+        function resetZoom() { currentZoom = 100; panX = 0; panY = 0; updateTransform(); }
+
+        // SAVE IMAGE FUNCTION
+        function saveImage() {
+            const mermaidDiv = document.querySelector('.mermaid');
+            const svg = mermaidDiv.querySelector('svg');
+            if (!svg) { alert('Diagram loading...'); return; }
+
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(svg);
+            if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){ source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"'); }
+
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const svgSize = svg.getBoundingClientRect();
+            
+            const scaleFactor = 3; 
+            canvas.width = svgSize.width * scaleFactor;
+            canvas.height = svgSize.height * scaleFactor;
+
+            const img = new Image();
+            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(source)));
+
+            img.onload = function() {
+                context.fillStyle = '#ffffff';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const a = document.createElement('a');
+                a.download = 'SDRC_Landscape_Flow.png';
+                a.href = canvas.toDataURL('image/png');
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            };
+        }
+
+        document.getElementById('diagramContainer').addEventListener('wheel', function(e) {
+            if (e.ctrlKey || e.metaKey) { e.preventDefault(); if (e.deltaY < 0) zoomIn(); else zoomOut(); }
         });
 
-    // SAVE FUNCTION
-    function saveImage() {
-        const svg = document.querySelector('#graph svg');
-        if (!svg) return;
-
-        // Get SVG source
-        const serializer = new XMLSerializer();
-        let source = serializer.serializeToString(svg);
-
-        // Namespace hacks for browser compatibility
-        if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
-            source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
-        }
-
-        // Canvas setup
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        
-        // High Res Scale
-        const scaleFactor = 4;
-        const bbox = svg.getBBox();
-        // Graphviz SVGs sometimes have huge viewboxes, we use getBBox for actual content size
-        // However, d3-graphviz sets width/height to 100%. We need to be careful.
-        // Best approach for Graphviz: use the viewBox attribute
-        const viewBox = svg.getAttribute('viewBox').split(' ').map(parseFloat);
-        const w = viewBox[2];
-        const h = viewBox[3];
-
-        canvas.width = w * scaleFactor;
-        canvas.height = h * scaleFactor;
-
-        const img = new Image();
-        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(source)));
-
-        img.onload = function() {
-            context.fillStyle = '#ffffff';
-            context.fillRect(0, 0, canvas.width, canvas.height);
-            context.drawImage(img, 0, 0, canvas.width, canvas.height);
-            
-            const a = document.createElement('a');
-            a.download = 'SDRC_Flow_Graphviz.png';
-            a.href = canvas.toDataURL('image/png');
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        };
-    }
-</script>
-
-</body>
-</html>
+        const container = document.getElementById('diagramContainer');
+        container.addEventListener('mousedown', (e) => { isPanning = true; startX = e.clientX - panX; startY = e.clientY - panY; container.style.cursor = 'grabbing'; });
+        window.addEventListener('mouseup', () => { isPanning = false; container.style.cursor = 'grab'; });
+        window.addEventListener('mousemove', (e) => { if (!isPanning) return; e.preventDefault
