@@ -4,29 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SDRC Call Flow - Landscape Mode</title>
-    <script type="module">
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({ 
-            startOnLoad: true,
-            theme: 'base',
-            flowchart: {
-                useMaxWidth: false,
-                htmlLabels: true,
-                curve: 'basis',
-                nodeSpacing: 30, // Tighter spacing
-                rankSpacing: 80, // More space between columns
-                padding: 15
-            },
-            themeVariables: {
-                primaryColor: '#e3f2fd',
-                secondaryColor: '#fff3e0',
-                tertiaryColor: '#e8f5e9',
-                fontSize: '14px',
-                fontFamily: 'Segoe UI, Arial, sans-serif',
-                lineColor: '#546e7a'
-            }
-        });
-    </script>
+    
     <style>
         * { box-sizing: border-box; }
         body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f6f8; height: 100vh; display: flex; flex-direction: column; }
@@ -105,11 +83,11 @@
 
         <div class="diagram-wrapper">
             <div class="controls-overlay">
-                <button class="btn-control" onclick="zoomIn()" title="Zoom In">＋</button>
-                <button class="btn-control" onclick="resetZoom()" title="Reset View">⟲</button>
-                <button class="btn-control" onclick="zoomOut()" title="Zoom Out">－</button>
+                <button class="btn-control" onclick="window.zoomIn()" title="Zoom In">＋</button>
+                <button class="btn-control" onclick="window.resetZoom()" title="Reset View">⟲</button>
+                <button class="btn-control" onclick="window.zoomOut()" title="Zoom Out">－</button>
                 <div style="width: 1px; background: #eee; height: 20px; align-self: center;"></div>
-                <button class="btn-control btn-save" onclick="saveImage()" title="Save High-Res Image">📷</button>
+                <button class="btn-control btn-save" onclick="window.saveImage()" title="Save High-Res Image">📷</button>
             </div>
 
             <div class="diagram-container" id="diagramContainer">
@@ -201,7 +179,33 @@ flowchart LR
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            flowchart: {
+                useMaxWidth: false,
+                htmlLabels: true,
+                curve: 'basis',
+                nodeSpacing: 30,
+                rankSpacing: 80,
+                padding: 15
+            },
+            themeVariables: {
+                primaryColor: '#e3f2fd',
+                secondaryColor: '#fff3e0',
+                tertiaryColor: '#e8f5e9',
+                fontSize: '14px',
+                fontFamily: 'Segoe UI, Arial, sans-serif',
+                lineColor: '#546e7a'
+            }
+        });
+
+        // --- GLOBAL LOGIC ---
+        // We attach these to 'window' so the HTML onclick events can find them
+        
         let currentZoom = 100;
         const minZoom = 25;
         const maxZoom = 200;
@@ -213,53 +217,118 @@ flowchart LR
         let panY = 0;
 
         function updateTransform() {
-            const mermaid = document.getElementById('mermaidDiagram');
-            mermaid.style.transform = `translate(${panX}px, ${panY}px) scale(${currentZoom / 100})`;
-            document.getElementById('zoomLevel').textContent = currentZoom;
+            // Find the div that Mermaid inserts. It usually keeps the ID, but we check.
+            const mermaidDiv = document.getElementById('mermaidDiagram');
+            if(mermaidDiv) {
+                mermaidDiv.style.transform = `translate(${panX}px, ${panY}px) scale(${currentZoom / 100})`;
+                document.getElementById('zoomLevel').textContent = currentZoom;
+            }
         }
-        function zoomIn() { if (currentZoom < maxZoom) { currentZoom += zoomStep; updateTransform(); } }
-        function zoomOut() { if (currentZoom > minZoom) { currentZoom -= zoomStep; updateTransform(); } }
-        function resetZoom() { currentZoom = 100; panX = 0; panY = 0; updateTransform(); }
 
-        // SAVE IMAGE FUNCTION
-        function saveImage() {
-            const mermaidDiv = document.querySelector('.mermaid');
-            const svg = mermaidDiv.querySelector('svg');
-            if (!svg) { alert('Diagram loading...'); return; }
+        window.zoomIn = function() {
+            if (currentZoom < maxZoom) {
+                currentZoom += zoomStep;
+                updateTransform();
+            }
+        };
+
+        window.zoomOut = function() {
+            if (currentZoom > minZoom) {
+                currentZoom -= zoomStep;
+                updateTransform();
+            }
+        };
+
+        window.resetZoom = function() {
+            currentZoom = 100;
+            panX = 0;
+            panY = 0;
+            updateTransform();
+        };
+
+        window.saveImage = function() {
+            const diagramElement = document.getElementById('mermaidDiagram');
+            // Look for the inner SVG
+            const svg = diagramElement.querySelector('svg');
+            
+            if (!svg) {
+                alert('Diagram is not fully loaded yet. Please wait a second.');
+                return;
+            }
 
             const serializer = new XMLSerializer();
             let source = serializer.serializeToString(svg);
-            if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){ source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"'); }
+
+            // Safety Fix: Ensure namespace exists for valid XML
+            if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
+                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+            }
 
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
-            const svgSize = svg.getBoundingClientRect();
             
+            // Get size from bounding box because viewBox might be unset in some mermaid versions
+            const box = svg.getBoundingClientRect();
+            
+            // High Resolution Scale (3x)
             const scaleFactor = 3; 
-            canvas.width = svgSize.width * scaleFactor;
-            canvas.height = svgSize.height * scaleFactor;
+            canvas.width = box.width * scaleFactor;
+            canvas.height = box.height * scaleFactor;
 
             const img = new Image();
             img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(source)));
 
             img.onload = function() {
+                // White background
                 context.fillStyle = '#ffffff';
                 context.fillRect(0, 0, canvas.width, canvas.height);
+                // Draw
                 context.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                // Download
                 const a = document.createElement('a');
-                a.download = 'SDRC_Landscape_Flow.png';
+                a.download = 'SDRC_Flowchart.png';
                 a.href = canvas.toDataURL('image/png');
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
             };
-        }
+            
+            img.onerror = function() {
+                alert('Error generating image. This may be due to browser security restrictions on local files.');
+            };
+        };
 
-        document.getElementById('diagramContainer').addEventListener('wheel', function(e) {
-            if (e.ctrlKey || e.metaKey) { e.preventDefault(); if (e.deltaY < 0) zoomIn(); else zoomOut(); }
+        // --- PANNING EVENTS ---
+        const container = document.getElementById('diagramContainer');
+
+        container.addEventListener('wheel', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                if (e.deltaY < 0) window.zoomIn();
+                else window.zoomOut();
+            }
         });
 
-        const container = document.getElementById('diagramContainer');
-        container.addEventListener('mousedown', (e) => { isPanning = true; startX = e.clientX - panX; startY = e.clientY - panY; container.style.cursor = 'grabbing'; });
-        window.addEventListener('mouseup', () => { isPanning = false; container.style.cursor = 'grab'; });
-        window.addEventListener('mousemove', (e) => { if (!isPanning) return; e.preventDefault
+        container.addEventListener('mousedown', (e) => {
+            isPanning = true;
+            startX = e.clientX - panX;
+            startY = e.clientY - panY;
+            container.style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mouseup', () => {
+            isPanning = false;
+            container.style.cursor = 'grab';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isPanning) return;
+            e.preventDefault();
+            panX = e.clientX - startX;
+            panY = e.clientY - startY;
+            updateTransform();
+        });
+    </script>
+</body>
+</html>
