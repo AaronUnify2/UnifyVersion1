@@ -411,6 +411,16 @@ function updateMonsterStore() {
     
     if (store.shopkeeperSpawned && !store.rewardGiven) {
         updateShopkeeper();
+        
+        // Countdown shopkeeper timeout (45 seconds to interact)
+        if (store.shopkeeperTimeout > 0) {
+            store.shopkeeperTimeout--;
+            if (store.shopkeeperTimeout <= 0) {
+                console.log('Shopkeeper timeout - player did not interact in time, cleaning up store');
+                cleanupMonsterStore();
+                return;
+            }
+        }
     }
     
     // Calculate distance from player to store
@@ -420,14 +430,6 @@ function updateMonsterStore() {
     
     // Cleanup if player walks far away after shopping
     if (dist > CONFIG.renderDistance * 2 && store.rewardGiven) {
-        cleanupMonsterStore();
-        return;
-    }
-    
-    // Cleanup if player walks far away BEFORE interacting with shopkeeper
-    // This prevents the shopkeeper from chasing forever and causing issues
-    if (dist > CONFIG.renderDistance * 1.5 && store.shopkeeperSpawned && !store.rewardGiven) {
-        console.log('Player walked away before interacting with shopkeeper - cleaning up store');
         cleanupMonsterStore();
         return;
     }
@@ -477,6 +479,9 @@ function spawnShopkeeper() {
     slimeCompanionState.storeShopkeeper = shopkeeper;
     store.shopkeeperSpawned = true;
     
+    // Start 45 second timeout - store disappears if player doesn't interact
+    store.shopkeeperTimeout = 45 * 60; // 45 seconds at 60fps
+    
     // Story dialogue based on visit count
     const visitNum = slimeCompanionState.storeVisitCount;
     const greeting = visitNum < 3 ? STORE_DIALOGUE.shopkeeperGreeting[visitNum] : STORE_DIALOGUE.defaultGreeting;
@@ -503,12 +508,12 @@ function updateShopkeeper() {
         return;
     }
     
-    // Limit how far shopkeeper can move from the store (max 30 units)
+    // Limit how far shopkeeper can move from the store (max 90 units)
     const shopkeeperToStoreDx = shopkeeper.position.x - store.position.x;
     const shopkeeperToStoreDz = shopkeeper.position.z - store.position.z;
     const distFromStore = Math.sqrt(shopkeeperToStoreDx * shopkeeperToStoreDx + shopkeeperToStoreDz * shopkeeperToStoreDz);
     
-    if (distFromStore > 30) {
+    if (distFromStore > 90) {
         // Shopkeeper is too far from store - don't chase further, wait for player
         // Just return without moving
         return;
