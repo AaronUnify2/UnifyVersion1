@@ -481,6 +481,67 @@ function spawnBoss() {
     gameState.targetCameraZoom = 1.8; // Zoom out camera
 }
 
+// Spawn a specific boss type by name (used by story sequence)
+function spawnBossOfType(bossTypeName) {
+    // Ensure textures are initialized
+    initBossTextures();
+    
+    // Find the boss type by name
+    const type = bossTypes.find(b => b.name === bossTypeName);
+    if (!type) {
+        console.error('Unknown boss type:', bossTypeName);
+        // Fallback to random boss
+        spawnBoss();
+        return;
+    }
+    
+    console.log('Spawning specific boss:', bossTypeName);
+    const angle = Math.random() * Math.PI * 2;
+    const dist = CONFIG.enemySpawnRadius * 1.2;
+    
+    const x = gameState.player.position.x + Math.cos(angle) * dist;
+    const z = gameState.player.position.z + Math.sin(angle) * dist;
+
+    const material = new THREE.SpriteMaterial({ 
+        map: bossTextures[type.texture], 
+        transparent: true 
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(type.scale[0], type.scale[1], 1);
+    sprite.position.set(x, type.scale[1] / 2, z);
+
+    const boss = {
+        sprite,
+        type,
+        health: getBossHealth(),
+        maxHealth: getBossHealth(),
+        damage: getBossDamage(),
+        attackTimer: 0,
+        boomTimer: type.boomCooldown || 0,
+        hitFlash: 0,
+        projectiles: [],
+        club: null,
+        clubAngle: 0
+    };
+
+    // Create troll's club
+    if (type.behavior === 'chase_club') {
+        const clubMaterial = new THREE.SpriteMaterial({
+            map: bossTextures.trollClub,
+            transparent: true
+        });
+        const clubSprite = new THREE.Sprite(clubMaterial);
+        clubSprite.scale.set(2.5, 6, 1);
+        scene.add(clubSprite);
+        boss.club = clubSprite;
+    }
+
+    scene.add(sprite);
+    gameState.bosses.push(boss);
+    gameState.bossActive = true;
+    gameState.targetCameraZoom = 1.8; // Zoom out camera
+}
+
 function updateBosses() {
     // Pause during dialogue
     if (gameState.dialogueTimer > 0) return;
@@ -597,6 +658,11 @@ function updateBosses() {
             gameState.bosses.splice(i, 1);
             gameState.kills++;
             document.getElementById('kills').textContent = gameState.kills;
+            
+            // Notify story system that boss was defeated
+            if (typeof onBossDefeated === 'function') {
+                onBossDefeated();
+            }
             
             if (gameState.bosses.length === 0) {
                 gameState.bossActive = false;
