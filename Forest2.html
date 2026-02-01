@@ -1643,6 +1643,20 @@
                         }
                     }
                 }
+                
+                // Check collision with Land Giant
+                if (!hitSomething && encounterState.landGiant) {
+                    const giant = encounterState.landGiant;
+                    const dx = proj.sprite.position.x - giant.sprite.position.x;
+                    const dz = proj.sprite.position.z - giant.sprite.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (dist < 5) {
+                        giant.health -= proj.damage;
+                        giant.hitFlash = 10;
+                        hitSomething = true;
+                    }
+                }
 
                 // Check collision with cloud arena enemies
                 if (!hitSomething && encounterState.inCloudArena) {
@@ -1890,6 +1904,25 @@
                             boss.health -= swordDamage;
                             boss.hitFlash = 10;
                             sword.hitCooldowns.set(boss, now);
+                        }
+                    }
+                }
+                
+                // Check collision with Land Giant
+                if (encounterState.landGiant) {
+                    const giant = encounterState.landGiant;
+                    const dx = sword.sprite.position.x - giant.sprite.position.x;
+                    const dz = sword.sprite.position.z - giant.sprite.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (dist < 5) {
+                        const lastHit = sword.hitCooldowns.get(giant) || 0;
+                        const now = Date.now();
+                        
+                        if (now - lastHit > 500) {
+                            giant.health -= swordDamage;
+                            giant.hitFlash = 10;
+                            sword.hitCooldowns.set(giant, now);
                         }
                     }
                 }
@@ -2153,6 +2186,20 @@
                     if (dist < 4) {
                         boss.health -= proj.damage;
                         boss.hitFlash = 10;
+                        // Boom projectiles pass through
+                    }
+                }
+                
+                // Check collision with Land Giant
+                if (encounterState.landGiant) {
+                    const giant = encounterState.landGiant;
+                    const dx = proj.sprite.position.x - giant.sprite.position.x;
+                    const dz = proj.sprite.position.z - giant.sprite.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (dist < 5) {
+                        giant.health -= proj.damage;
+                        giant.hitFlash = 10;
                         // Boom projectiles pass through
                     }
                 }
@@ -3049,6 +3096,22 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        // ============================================
+        // GLOBAL DAMAGE HELPER (for external systems like slime companion)
+        // ============================================
+        // This function can be called by any system to damage the Land Giant
+        function damageLandGiant(damage) {
+            if (encounterState && encounterState.landGiant) {
+                encounterState.landGiant.health -= damage;
+                encounterState.landGiant.hitFlash = 10;
+                return true;
+            }
+            return false;
+        }
+        
+        // Expose for external use
+        window.damageLandGiant = damageLandGiant;
 
         // ============================================
         // DEBUG PANEL FUNCTIONS
