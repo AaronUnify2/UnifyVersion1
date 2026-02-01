@@ -1145,6 +1145,11 @@ function closeSlimeStore() {
     
     // Increment visit count after showing dialogue
     slimeCompanionState.storeVisitCount++;
+    
+    // Advance story stage when monster store closes
+    if (typeof onMonsterStoreClosed === 'function') {
+        onMonsterStoreClosed();
+    }
 }
 
 function updateSlimeStoreUI() {
@@ -1519,6 +1524,64 @@ function updateCompanionSwords(companionIndex) {
             }
         }
         
+        // Check Land Giant
+        if (typeof encounterState !== 'undefined' && encounterState.landGiant) {
+            const giant = encounterState.landGiant;
+            const dx = sword.sprite.position.x - giant.sprite.position.x;
+            const dz = sword.sprite.position.z - giant.sprite.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            
+            if (dist < 5) {
+                const lastHit = sword.hitCooldowns.get(giant) || 0;
+                const now = Date.now();
+                
+                if (now - lastHit > 500) {
+                    if (typeof damageLandGiant === 'function') {
+                        damageLandGiant(swordDamage);
+                    }
+                    sword.hitCooldowns.set(giant, now);
+                }
+            }
+        }
+        
+        // Check arena enemies
+        if (typeof encounterState !== 'undefined' && encounterState.inCloudArena) {
+            for (const arenaEnemy of encounterState.arenaEnemies || []) {
+                const dx = sword.sprite.position.x - arenaEnemy.sprite.position.x;
+                const dz = sword.sprite.position.z - arenaEnemy.sprite.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist < 1.5) {
+                    const lastHit = sword.hitCooldowns.get(arenaEnemy) || 0;
+                    const now = Date.now();
+                    
+                    if (now - lastHit > 500) {
+                        arenaEnemy.health -= swordDamage;
+                        arenaEnemy.hitFlash = 10;
+                        sword.hitCooldowns.set(arenaEnemy, now);
+                    }
+                }
+            }
+            
+            // Check arena bosses
+            for (const arenaBoss of encounterState.arenaBosses || []) {
+                const dx = sword.sprite.position.x - arenaBoss.sprite.position.x;
+                const dz = sword.sprite.position.z - arenaBoss.sprite.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist < 5) {
+                    const lastHit = sword.hitCooldowns.get(arenaBoss) || 0;
+                    const now = Date.now();
+                    
+                    if (now - lastHit > 500) {
+                        arenaBoss.health -= swordDamage;
+                        arenaBoss.hitFlash = 10;
+                        sword.hitCooldowns.set(arenaBoss, now);
+                    }
+                }
+            }
+        }
+        
         // Cleanup dead targets from cooldown map
         for (const [target, time] of sword.hitCooldowns) {
             if (!gameState.enemies.includes(target) && 
@@ -1554,10 +1617,201 @@ function updateCompanionSlime() {
         
         // Heal ability
         updateCompanionHeal(index);
+        
+        // Check for enemy attacks on this companion
+        checkEnemyAttacksOnCompanion(index);
     });
     
     // Update health bars
     updateHealthBarsUI();
+}
+
+// ============================================
+// ENEMY ATTACKS ON COMPANIONS
+// ============================================
+function checkEnemyAttacksOnCompanion(companionIndex) {
+    const companion = slimeCompanionState.companions[companionIndex];
+    if (!companion || !companion.sprite || companion.health <= 0) return;
+    
+    const compPos = companion.sprite.position;
+    const attackRange = 2.0; // Enemies need to be this close to attack
+    const baseDamage = CONFIG.enemyBaseDamage * (1 + gameState.player.level * 0.1);
+    
+    // Check regular enemies
+    for (const enemy of gameState.enemies) {
+        if (!enemy.sprite) continue;
+        
+        const dx = compPos.x - enemy.sprite.position.x;
+        const dz = compPos.z - enemy.sprite.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < attackRange) {
+            // Initialize attack cooldown if not set
+            if (enemy.companionAttackCooldown === undefined) {
+                enemy.companionAttackCooldown = 0;
+            }
+            
+            if (enemy.companionAttackCooldown <= 0) {
+                damageCompanion(companionIndex, baseDamage);
+                enemy.companionAttackCooldown = 60; // 1 second cooldown
+            }
+        }
+    }
+    
+    // Check bosses
+    for (const boss of gameState.bosses) {
+        if (!boss.sprite) continue;
+        
+        const dx = compPos.x - boss.sprite.position.x;
+        const dz = compPos.z - boss.sprite.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        if (dist < 5) { // Bosses have larger attack range
+            if (boss.companionAttackCooldown === undefined) {
+                boss.companionAttackCooldown = 0;
+            }
+            
+            if (boss.companionAttackCooldown <= 0) {
+                damageCompanion(companionIndex, baseDamage * 2); // Bosses hit harder
+                boss.companionAttackCooldown = 90;
+            }
+        }
+    }
+    
+    // Check encounter guards
+    if (typeof encounterState !== 'undefined' && encounterState.encounterGuards) {
+        for (const guard of encounterState.encounterGuards) {
+            if (!guard.sprite) continue;
+            
+            const dx = compPos.x - guard.sprite.position.x;
+            const dz = compPos.z - guard.sprite.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            
+            if (dist < attackRange) {
+                if (guard.companionAttackCooldown === undefined) {
+                    guard.companionAttackCooldown = 0;
+                }
+                
+                if (guard.companionAttackCooldown <= 0) {
+                    damageCompanion(companionIndex, baseDamage);
+                    guard.companionAttackCooldown = 60;
+                }
+            }
+        }
+    }
+    
+    // Check Land Giant
+    if (typeof encounterState !== 'undefined' && encounterState.landGiant) {
+        const giant = encounterState.landGiant;
+        if (giant.sprite) {
+            const dx = compPos.x - giant.sprite.position.x;
+            const dz = compPos.z - giant.sprite.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            
+            if (dist < 6) { // Giant has large attack range
+                if (giant.companionAttackCooldown === undefined) {
+                    giant.companionAttackCooldown = 0;
+                }
+                
+                if (giant.companionAttackCooldown <= 0) {
+                    damageCompanion(companionIndex, baseDamage * 3); // Giant hits very hard
+                    giant.companionAttackCooldown = 90;
+                }
+            }
+        }
+    }
+    
+    // Check arena enemies (cloud arena)
+    if (typeof encounterState !== 'undefined' && encounterState.inCloudArena) {
+        // Arena enemies
+        for (const arenaEnemy of encounterState.arenaEnemies || []) {
+            if (!arenaEnemy.sprite) continue;
+            
+            const dx = compPos.x - arenaEnemy.sprite.position.x;
+            const dz = compPos.z - arenaEnemy.sprite.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            
+            if (dist < attackRange) {
+                if (arenaEnemy.companionAttackCooldown === undefined) {
+                    arenaEnemy.companionAttackCooldown = 0;
+                }
+                
+                if (arenaEnemy.companionAttackCooldown <= 0) {
+                    damageCompanion(companionIndex, baseDamage * 1.5);
+                    arenaEnemy.companionAttackCooldown = 60;
+                }
+            }
+        }
+        
+        // Arena bosses (Giant Troll, Ghosts)
+        for (const arenaBoss of encounterState.arenaBosses || []) {
+            if (!arenaBoss.sprite) continue;
+            
+            const dx = compPos.x - arenaBoss.sprite.position.x;
+            const dz = compPos.z - arenaBoss.sprite.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            
+            if (dist < 6) {
+                if (arenaBoss.companionAttackCooldown === undefined) {
+                    arenaBoss.companionAttackCooldown = 0;
+                }
+                
+                if (arenaBoss.companionAttackCooldown <= 0) {
+                    damageCompanion(companionIndex, baseDamage * 2.5);
+                    arenaBoss.companionAttackCooldown = 75;
+                }
+            }
+        }
+    }
+}
+
+// Decrement attack cooldowns for all enemies (called from main loop)
+function updateEnemyCompanionCooldowns() {
+    // Regular enemies
+    for (const enemy of gameState.enemies) {
+        if (enemy.companionAttackCooldown !== undefined && enemy.companionAttackCooldown > 0) {
+            enemy.companionAttackCooldown--;
+        }
+    }
+    
+    // Bosses
+    for (const boss of gameState.bosses) {
+        if (boss.companionAttackCooldown !== undefined && boss.companionAttackCooldown > 0) {
+            boss.companionAttackCooldown--;
+        }
+    }
+    
+    // Encounter guards
+    if (typeof encounterState !== 'undefined' && encounterState.encounterGuards) {
+        for (const guard of encounterState.encounterGuards) {
+            if (guard.companionAttackCooldown !== undefined && guard.companionAttackCooldown > 0) {
+                guard.companionAttackCooldown--;
+            }
+        }
+    }
+    
+    // Land Giant
+    if (typeof encounterState !== 'undefined' && encounterState.landGiant) {
+        if (encounterState.landGiant.companionAttackCooldown !== undefined && 
+            encounterState.landGiant.companionAttackCooldown > 0) {
+            encounterState.landGiant.companionAttackCooldown--;
+        }
+    }
+    
+    // Arena enemies
+    if (typeof encounterState !== 'undefined' && encounterState.inCloudArena) {
+        for (const arenaEnemy of encounterState.arenaEnemies || []) {
+            if (arenaEnemy.companionAttackCooldown !== undefined && arenaEnemy.companionAttackCooldown > 0) {
+                arenaEnemy.companionAttackCooldown--;
+            }
+        }
+        
+        for (const arenaBoss of encounterState.arenaBosses || []) {
+            if (arenaBoss.companionAttackCooldown !== undefined && arenaBoss.companionAttackCooldown > 0) {
+                arenaBoss.companionAttackCooldown--;
+            }
+        }
+    }
 }
 
 function updateCompanionMovement(companionIndex) {
@@ -1595,6 +1849,61 @@ function updateCompanionMovement(companionIndex) {
         if (bDist < nearestDist) {
             nearestDist = bDist;
             nearestEnemy = boss;
+        }
+    }
+    
+    // Check encounter guards
+    if (typeof encounterState !== 'undefined' && encounterState.encounterGuards) {
+        for (const guard of encounterState.encounterGuards) {
+            if (!guard.sprite) continue;
+            const gx = guard.sprite.position.x - companion.sprite.position.x;
+            const gz = guard.sprite.position.z - companion.sprite.position.z;
+            const gDist = Math.sqrt(gx * gx + gz * gz);
+            
+            if (gDist < nearestDist) {
+                nearestDist = gDist;
+                nearestEnemy = guard;
+            }
+        }
+    }
+    
+    // Check Land Giant
+    if (typeof encounterState !== 'undefined' && encounterState.landGiant && encounterState.landGiant.sprite) {
+        const giant = encounterState.landGiant;
+        const gx = giant.sprite.position.x - companion.sprite.position.x;
+        const gz = giant.sprite.position.z - companion.sprite.position.z;
+        const gDist = Math.sqrt(gx * gx + gz * gz);
+        
+        if (gDist < nearestDist) {
+            nearestDist = gDist;
+            nearestEnemy = giant;
+        }
+    }
+    
+    // Check arena enemies and bosses
+    if (typeof encounterState !== 'undefined' && encounterState.inCloudArena) {
+        for (const arenaEnemy of encounterState.arenaEnemies || []) {
+            if (!arenaEnemy.sprite) continue;
+            const ax = arenaEnemy.sprite.position.x - companion.sprite.position.x;
+            const az = arenaEnemy.sprite.position.z - companion.sprite.position.z;
+            const aDist = Math.sqrt(ax * ax + az * az);
+            
+            if (aDist < nearestDist) {
+                nearestDist = aDist;
+                nearestEnemy = arenaEnemy;
+            }
+        }
+        
+        for (const arenaBoss of encounterState.arenaBosses || []) {
+            if (!arenaBoss.sprite) continue;
+            const ax = arenaBoss.sprite.position.x - companion.sprite.position.x;
+            const az = arenaBoss.sprite.position.z - companion.sprite.position.z;
+            const aDist = Math.sqrt(ax * ax + az * az);
+            
+            if (aDist < nearestDist) {
+                nearestDist = aDist;
+                nearestEnemy = arenaBoss;
+            }
         }
     }
     
@@ -1667,6 +1976,53 @@ function updateCompanionCombat(companionIndex) {
                     boss.hitFlash = 10;
                     hit = true;
                     break;
+                }
+            }
+        }
+        
+        // Check Land Giant
+        if (!hit && typeof damageLandGiant === 'function') {
+            if (typeof encounterState !== 'undefined' && encounterState.landGiant) {
+                const giant = encounterState.landGiant;
+                const dx = proj.sprite.position.x - giant.sprite.position.x;
+                const dz = proj.sprite.position.z - giant.sprite.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist < 5) {
+                    damageLandGiant(proj.damage);
+                    hit = true;
+                }
+            }
+        }
+        
+        // Check arena enemies
+        if (!hit && typeof encounterState !== 'undefined' && encounterState.inCloudArena) {
+            for (const arenaEnemy of encounterState.arenaEnemies || []) {
+                const dx = proj.sprite.position.x - arenaEnemy.sprite.position.x;
+                const dz = proj.sprite.position.z - arenaEnemy.sprite.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist < 2) {
+                    arenaEnemy.health -= proj.damage;
+                    arenaEnemy.hitFlash = 10;
+                    hit = true;
+                    break;
+                }
+            }
+            
+            // Check arena bosses
+            if (!hit) {
+                for (const arenaBoss of encounterState.arenaBosses || []) {
+                    const dx = proj.sprite.position.x - arenaBoss.sprite.position.x;
+                    const dz = proj.sprite.position.z - arenaBoss.sprite.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (dist < 5) {
+                        arenaBoss.health -= proj.damage;
+                        arenaBoss.hitFlash = 10;
+                        hit = true;
+                        break;
+                    }
                 }
             }
         }
@@ -1816,6 +2172,9 @@ function updateSlimeCompanion() {
     }
     
     updateCompanionSlime();
+    
+    // Update enemy attack cooldowns on companions
+    updateEnemyCompanionCooldowns();
 }
 
 function resetSlimeCompanion() {
