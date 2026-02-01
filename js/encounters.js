@@ -60,11 +60,11 @@ const encounterState = {
     // Forest cloud sprites (spawn when portal appears)
     forestCloudSprites: [],
     
-    // Story encounter sequence: Princess → Witch → Dharmachakra
-    storyEncounterStage: 0, // 0=Princess, 1=Witch, 2=Dharmachakra, 3=completed
-    
-    // Sword in Stone story sequence
-    swordStoneStage: 0, // 0=Act1, 1=Act2, 2=Act3, 3=completed
+    // ===========================================
+    // SEQUENTIAL STORY SYSTEM
+    // ===========================================
+    // Master story progression tracker
+    storyStage: 0,
     
     // Dharma wheel wizards (for Dharmachakra encounter)
     wizardWheels: [], // Orbiting wheels on wizards
@@ -83,12 +83,36 @@ const encounterState = {
     savedGroundMaterial: null,
     savedFogColor: null,
     
-    // Guaranteed encounter queue (level-triggered)
+    // Guaranteed encounter queue (level-triggered) - legacy, kept for compatibility
     guaranteedEncounterQueue: [],
     
     // Textures (initialized on load)
     textures: {}
 };
+
+// ===========================================
+// STORY SEQUENCE DEFINITION
+// ===========================================
+// The fixed order of story events in the game
+// Each entry is either:
+//   - A string: the encounter template name to spawn
+//   - 'cloudPortal': spawns the cloud portal (player enters for arena stages)
+//   - 'monsterStore': spawns the monster store
+const STORY_SEQUENCE = [
+    'swordInStone',        // 0: Act 1 - Goblin's Ambition
+    'princessTower',       // 1: Princess Tower
+    'monsterStore',        // 2: Monster Store
+    'witchHut',            // 3: Witch's Cottage
+    'swordInStoneAct2',    // 4: Act 2 - The Bribe (Missing Sword)
+    'dharmachakra',        // 5: Dogmatic Buddhists
+    'monsterStore',        // 6: Monster Store
+    'swordInStoneAct3',    // 7: Act 3 - Land Giant Boss
+    'cloudPortal',         // 8: Cloud Portal (leads to Sky Giant Pets - Stage 0)
+    'cloudPortal',         // 9: Cloud Portal (leads to Giant Troll - Stage 1)
+    'monsterStore',        // 10: Monster Store
+    'cloudPortal',         // 11: Cloud Portal (leads to Ghost Trio - Stage 2)
+    'storyComplete'        // 12: Story complete - return to random encounters
+];
 
 // ============================================
 // ENCOUNTER TEMPLATE DEFINITIONS
@@ -2079,42 +2103,6 @@ function spawnRandomEncounter() {
     }
 }
 
-// Spawn the next story encounter in sequence
-function spawnStoryEncounter() {
-    if (!encounterState) {
-        if (typeof debug === 'function') debug('storyEnc: no encounterState');
-        return;
-    }
-    
-    const stage = encounterState.storyEncounterStage || 0;
-    if (typeof debug === 'function') debug('storyEnc stage=' + stage);
-    
-    if (stage === 0) {
-        // Princess Tower
-        if (typeof debug === 'function') debug('Spawning princessTower');
-        spawnSpecificEncounter('princessTower');
-    } else if (stage === 1) {
-        // Witch Hut
-        if (typeof debug === 'function') debug('Spawning witchHut');
-        spawnSpecificEncounter('witchHut');
-    } else if (stage === 2) {
-        // Dharmachakra Shrine
-        if (typeof debug === 'function') debug('Spawning dharmachakra');
-        spawnDharmachakraEncounter();
-    } else {
-        // All story encounters completed - spawn random alternative
-        if (typeof debug === 'function') debug('Story complete, fallback');
-        const fallbackRoll = Math.random();
-        if (fallbackRoll < 0.5) {
-            spawnSpecificEncounter('swordInStone');
-        } else if (typeof spawnMonsterStore === 'function') {
-            spawnMonsterStore();
-        } else {
-            spawnSpecificEncounter('swordInStone');
-        }
-    }
-}
-
 // Special spawn function for Dharmachakra encounter
 function spawnDharmachakraEncounter() {
     const template = ENCOUNTER_TEMPLATES.dharmachakra;
@@ -2323,23 +2311,84 @@ function spawnSpecificEncounter(templateKey) {
 // ============================================
 // ENCOUNTER SPAWNING
 // ============================================
-function spawnEncounter() {
-    let template;
-    
-    // Check for guaranteed encounter
-    if (hasGuaranteedEncounter()) {
-        const key = getNextGuaranteedEncounter();
-        template = ENCOUNTER_TEMPLATES[key];
-        console.log('Spawning guaranteed encounter:', key);
-    } else {
-        // Random encounter selection
-        const available = getAvailableEncounters(gameState.player.level);
-        if (available.length === 0) return;
-        
-        const index = Math.floor(Math.random() * available.length);
-        template = available[index];
-        console.log('Spawning random encounter:', template.name);
+// ===========================================
+// STORY SEQUENCE SPAWNING SYSTEM
+// ===========================================
+
+// Get the current story event to spawn
+function getCurrentStoryEvent() {
+    if (encounterState.storyStage >= STORY_SEQUENCE.length) {
+        return null; // Story complete
     }
+    return STORY_SEQUENCE[encounterState.storyStage];
+}
+
+// Advance to the next story stage
+function advanceStoryStage() {
+    encounterState.storyStage++;
+    console.log('Story advanced to stage:', encounterState.storyStage, 
+                '- Next event:', getCurrentStoryEvent());
+}
+
+// Check if story is complete
+function isStoryComplete() {
+    return encounterState.storyStage >= STORY_SEQUENCE.length || 
+           getCurrentStoryEvent() === 'storyComplete';
+}
+
+// Main story encounter spawn function
+function spawnStoryEncounter() {
+    const event = getCurrentStoryEvent();
+    
+    if (!event || event === 'storyComplete') {
+        console.log('Story complete! Spawning random encounter instead.');
+        spawnRandomEncounter();
+        return;
+    }
+    
+    console.log('Spawning story event:', event, '(Stage', encounterState.storyStage, ')');
+    
+    // Handle special event types
+    if (event === 'cloudPortal') {
+        spawnCloudPortal();
+        return;
+    }
+    
+    if (event === 'monsterStore') {
+        if (typeof spawnMonsterStore === 'function') {
+            spawnMonsterStore();
+        } else {
+            console.warn('Monster store not available, advancing story');
+            advanceStoryStage();
+        }
+        return;
+    }
+    
+    // Handle dharmachakra specially (has custom spawn logic)
+    if (event === 'dharmachakra') {
+        spawnDharmachakraEncounter();
+        return;
+    }
+    
+    // Standard encounter spawning
+    const template = ENCOUNTER_TEMPLATES[event];
+    if (!template) {
+        console.error('Unknown encounter template:', event);
+        advanceStoryStage();
+        return;
+    }
+    
+    spawnSpecificEncounter(event);
+}
+
+// Spawn a random encounter (for after story is complete)
+function spawnRandomEncounter() {
+    const available = getAvailableEncounters(gameState.player.level);
+    if (available.length === 0) return;
+    
+    const index = Math.floor(Math.random() * available.length);
+    const template = available[index];
+    console.log('Spawning random encounter:', template.name);
     
     // Calculate spawn position
     const angle = Math.random() * Math.PI * 2;
@@ -2368,17 +2417,14 @@ function spawnEncounter() {
         let guardTexture, guardScale;
         
         if (template.guards.customTexture) {
-            // Use our custom texture (golden skeleton)
             guardTexture = encounterState.textures[template.guards.type];
             guardScale = [2.5, 4];
         } else {
-            // Use enemy texture from enemies.js
             const enemyType = enemyTypes.find(t => t.name === template.guards.type);
             if (enemyType) {
                 guardTexture = enemyType.texture();
                 guardScale = enemyType.scale;
             } else {
-                // Fallback to goblin
                 guardTexture = createGoblinTexture();
                 guardScale = [2.5, 3.2];
             }
@@ -2421,6 +2467,11 @@ function spawnEncounter() {
     };
     
     gameState.targetCameraZoom = template.cameraZoom;
+}
+
+// Legacy function - now calls story spawn
+function spawnEncounter() {
+    spawnStoryEncounter();
 }
 
 // ============================================
@@ -2632,11 +2683,6 @@ function giveEncounterReward(enc, template) {
             // Apply upgrade effects
             if (reward.upgrade === 'swords') {
                 updateSwordCount();
-                
-                // Track sword stone story progress
-                if (template.name === 'swordInStone') {
-                    encounterState.swordStoneStage = 1; // Next: Act 2
-                }
             } else if (reward.upgrade === 'boom') {
                 updateBoomIndicator();
                 document.getElementById('boomCooldown').classList.add('active');
@@ -2657,11 +2703,6 @@ function giveEncounterReward(enc, template) {
         gameState.player.gold += goldAmount;
         document.getElementById('goldNum').textContent = gameState.player.gold;
         showReward(reward.text);
-        
-        // Track sword stone story progress
-        if (template.name === 'swordInStoneAct2') {
-            encounterState.swordStoneStage = 2; // Next: Act 3
-        }
     } else if (reward.type === 'dharmaWheel') {
         // Grant the dharma wheel to the player
         if (!gameState.hasDharmaWheel) {
@@ -2670,9 +2711,6 @@ function giveEncounterReward(enc, template) {
             spawnPlayerDharmaWheel();
             showReward(reward.text);
             showDialogue('☸️ ENLIGHTENMENT', '"The Wheel of Dharma now orbits your being. Use it wisely... or don\'t. The Buddha has no strong opinions either way. "');
-            
-            // Advance story stage
-            encounterState.storyEncounterStage = 3; // Completed
         } else {
             // Already have it - give gold
             const goldReward = 2000;
@@ -2694,6 +2732,9 @@ function giveEncounterReward(enc, template) {
             showReward(`💰 ${goldReward} GOLD (Already have giant's blades!)`);
         }
     }
+    
+    // Advance story stage when encounter is completed
+    advanceStoryStage();
     
     gameState.targetCameraZoom = 1;
 }
@@ -3158,9 +3199,6 @@ function onLandGiantDefeated() {
     // Hide boss health bar
     document.getElementById('bossHealthBar').classList.remove('active');
     
-    // Increment sword stone stage
-    encounterState.swordStoneStage = 3; // Completed
-    
     // Show victory dialogue
     const template = ENCOUNTER_TEMPLATES.swordInStoneAct3;
     showDialogue(template.victoryDialogue.speaker, template.victoryDialogue.text);
@@ -3175,6 +3213,9 @@ function onLandGiantDefeated() {
             encounterState.currentEncounter.rewardGiven = true;
             encounterState.currentEncounter.cleanupTimer = 300;
         }
+        
+        // Advance the story stage
+        advanceStoryStage();
     }, 2000);
     
     // Reset camera zoom
@@ -3992,6 +4033,9 @@ function winCloudArena() {
     
     encounterState.pendingArenaExit = true;
     
+    // Advance the main story when arena stage is complete
+    advanceStoryStage();
+    
     showDialogue(stageConfig.winDialogue.title, stageConfig.winDialogue.text);
 }
 
@@ -4241,8 +4285,7 @@ function resetEncounterSystem() {
     encounterState.forestCloudSprites = [];
     encounterState.inCloudArena = false;
     encounterState.arenaStage = 0; // Reset to stage 0
-    encounterState.storyEncounterStage = 0; // Reset story encounters
-    encounterState.swordStoneStage = 0; // Reset sword stone story
+    encounterState.storyStage = 0; // Reset story progression
     encounterState.ghostDefeated = false;
     encounterState.savedForestPosition = null;
     encounterState.pendingArenaExit = false;
@@ -4253,6 +4296,15 @@ function resetEncounterSystem() {
         gameState.hasDharmaWheel = false;
         gameState.hasBonusSwords = false;
     }
+}
+
+// ===========================================
+// MONSTER STORE STORY HOOK
+// ===========================================
+// Call this when the monster store closes to advance the story
+function onMonsterStoreClosed() {
+    console.log('Monster store closed, advancing story');
+    advanceStoryStage();
 }
 
 // Check for pending arena exit (called when dialogue closes)
