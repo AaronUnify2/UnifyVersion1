@@ -413,13 +413,23 @@ function updateMonsterStore() {
         updateShopkeeper();
     }
     
-    // Cleanup if player walks far away after shopping
+    // Calculate distance from player to store
     const dx = gameState.player.position.x - store.position.x;
     const dz = gameState.player.position.z - store.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
     
+    // Cleanup if player walks far away after shopping
     if (dist > CONFIG.renderDistance * 2 && store.rewardGiven) {
         cleanupMonsterStore();
+        return;
+    }
+    
+    // Cleanup if player walks far away BEFORE interacting with shopkeeper
+    // This prevents the shopkeeper from chasing forever and causing issues
+    if (dist > CONFIG.renderDistance * 1.5 && store.shopkeeperSpawned && !store.rewardGiven) {
+        console.log('Player walked away before interacting with shopkeeper - cleaning up store');
+        cleanupMonsterStore();
+        return;
     }
 }
 
@@ -477,11 +487,32 @@ function updateShopkeeper() {
     const store = slimeCompanionState.monsterStore;
     const shopkeeper = slimeCompanionState.storeShopkeeper;
     
-    if (!shopkeeper || store.rewardGiven) return;
+    // Safety checks
+    if (!store || !shopkeeper || store.rewardGiven) return;
+    if (!shopkeeper.position) return;
     
     const dx = gameState.player.position.x - shopkeeper.position.x;
     const dz = gameState.player.position.z - shopkeeper.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
+    
+    // Check for NaN (can happen with extreme distances)
+    if (isNaN(dist) || isNaN(dx) || isNaN(dz)) {
+        console.warn('Invalid shopkeeper distance calculation - resetting position');
+        shopkeeper.position.copy(store.position);
+        shopkeeper.position.y = 2.25;
+        return;
+    }
+    
+    // Limit how far shopkeeper can move from the store (max 30 units)
+    const shopkeeperToStoreDx = shopkeeper.position.x - store.position.x;
+    const shopkeeperToStoreDz = shopkeeper.position.z - store.position.z;
+    const distFromStore = Math.sqrt(shopkeeperToStoreDx * shopkeeperToStoreDx + shopkeeperToStoreDz * shopkeeperToStoreDz);
+    
+    if (distFromStore > 30) {
+        // Shopkeeper is too far from store - don't chase further, wait for player
+        // Just return without moving
+        return;
+    }
     
     if (dist > 2.5) {
         shopkeeper.position.x += (dx / dist) * 0.05;
@@ -1130,20 +1161,33 @@ function createUpgradeItemHTML(companionIndex, upgradeKey, icon, name, desc) {
 }
 
 function openSlimeStore() {
-    slimeCompanionState.storeMenuOpen = true;
-    gameState.menuOpen = true;
-    
-    // Pay out investment (10x return!)
-    if (slimeCompanionState.investedGold > 0) {
-        const payout = slimeCompanionState.investedGold * 10;
-        gameState.player.gold += payout;
-        updateUI();
-        showReward(`💰 INVESTMENT RETURN: +${payout} GOLD!`);
-        slimeCompanionState.investedGold = 0;
+    // Safety check - make sure store still exists
+    if (!slimeCompanionState.monsterStore) {
+        console.warn('Attempted to open store but store no longer exists');
+        return;
     }
     
-    rebuildStoreUI();
-    document.getElementById('slimeStoreMenu').style.display = 'flex';
+    try {
+        slimeCompanionState.storeMenuOpen = true;
+        gameState.menuOpen = true;
+        
+        // Pay out investment (10x return!)
+        if (slimeCompanionState.investedGold > 0) {
+            const payout = slimeCompanionState.investedGold * 10;
+            gameState.player.gold += payout;
+            updateUI();
+            showReward(`💰 INVESTMENT RETURN: +${payout} GOLD!`);
+            slimeCompanionState.investedGold = 0;
+        }
+        
+        rebuildStoreUI();
+        document.getElementById('slimeStoreMenu').style.display = 'flex';
+    } catch (error) {
+        console.error('Error opening slime store:', error);
+        // Try to recover by closing store state
+        slimeCompanionState.storeMenuOpen = false;
+        gameState.menuOpen = false;
+    }
 }
 
 function closeSlimeStore() {
