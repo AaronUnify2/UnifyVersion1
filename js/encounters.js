@@ -3742,7 +3742,7 @@ function spawnArenaDecorations() {
     }
     
     // Spawn LIGHT WISPY CLOUDS inside the arena
-    const lightCloudCount = 200;
+    const lightCloudCount = 400;
     for (let i = 0; i < lightCloudCount; i++) {
         const angle = Math.random() * Math.PI * 2;
         const dist = 10 + Math.random() * (arenaRadius - 15);
