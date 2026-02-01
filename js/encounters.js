@@ -3700,7 +3700,7 @@ function spawnArenaDecorations() {
     const grassTexture = createCloudGrassTexture();
     
     // Spawn HEAVY CLOUDS around the outer edge (arena border)
-    const heavyCloudCount = 40;
+    const heavyCloudCount = 400;
     for (let i = 0; i < heavyCloudCount; i++) {
         const angle = (i / heavyCloudCount) * Math.PI * 2 + Math.random() * 0.3;
         const dist = arenaRadius + 10 + Math.random() * (outerRadius - arenaRadius - 10);
@@ -3721,7 +3721,7 @@ function spawnArenaDecorations() {
     }
     
     // Extra dense layer of heavy clouds at the very edge
-    const edgeCloudCount = 30;
+    const edgeCloudCount = 300;
     for (let i = 0; i < edgeCloudCount; i++) {
         const angle = (i / edgeCloudCount) * Math.PI * 2 + Math.random() * 0.2;
         const dist = outerRadius - 5 + Math.random() * 15;
@@ -3742,7 +3742,7 @@ function spawnArenaDecorations() {
     }
     
     // Spawn LIGHT WISPY CLOUDS inside the arena
-    const lightCloudCount = 20;
+    const lightCloudCount = 200;
     for (let i = 0; i < lightCloudCount; i++) {
         const angle = Math.random() * Math.PI * 2;
         const dist = 10 + Math.random() * (arenaRadius - 15);
@@ -3763,7 +3763,7 @@ function spawnArenaDecorations() {
     }
     
     // Spawn GRASS TUFTS scattered across the arena floor
-    const grassCount = 35;
+    const grassCount = 80;
     for (let i = 0; i < grassCount; i++) {
         const angle = Math.random() * Math.PI * 2;
         const dist = 5 + Math.random() * (arenaRadius - 5);
@@ -3783,7 +3783,7 @@ function spawnArenaDecorations() {
     }
     
     // Add some grass clusters (2-3 tufts close together)
-    const clusterCount = 12;
+    const clusterCount = 50;
     for (let i = 0; i < clusterCount; i++) {
         const baseAngle = Math.random() * Math.PI * 2;
         const baseDist = 8 + Math.random() * (arenaRadius - 12);
