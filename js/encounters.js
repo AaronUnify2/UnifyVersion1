@@ -63,11 +63,21 @@ const encounterState = {
     // Story encounter sequence: Princess → Witch → Dharmachakra
     storyEncounterStage: 0, // 0=Princess, 1=Witch, 2=Dharmachakra, 3=completed
     
+    // Sword in Stone story sequence
+    swordStoneStage: 0, // 0=Act1, 1=Act2, 2=Act3, 3=completed
+    
     // Dharma wheel wizards (for Dharmachakra encounter)
     wizardWheels: [], // Orbiting wheels on wizards
     
     // Player's dharma wheel (reward from completing Dharmachakra)
     playerDharmaWheel: null,
+    
+    // Bonus swords from Land Giant (3 swords on outer ring)
+    bonusSwords: [], // Array of 3 sword sprites
+    hasBonusSwords: false,
+    
+    // Land Giant boss (for Sword in Stone Act 3)
+    landGiant: null,
     
     // Saved environment for arena restoration
     savedGroundMaterial: null,
@@ -156,9 +166,95 @@ const ENCOUNTER_TEMPLATES = {
         
         onComplete: 'interactWithStructure',
         interactionRange: 3,
+        
+        // Act 1: The Goblin's Ambition
+        spawnDialogue: {
+            speaker: '🗡️ GOBLINS',
+            text: '"Legend says: pull sword, become King! ...We not sure what happens next, but must be good!"'
+        },
         completionDialogue: {
             speaker: '🪨 STONE',
-            text: '"Ahh, sweet relief! That sword was such a pain in my side. Take it, please! It\'s all yours!"'
+            text: 'The sword slides out effortlessly. In the distance, goblin jaws drop in unison.'
+        }
+    },
+    
+    swordInStoneAct2: {
+        name: 'swordInStoneAct2',
+        displayName: 'The Empty Stone',
+        textureKey: 'emptyStone',
+        scale: [6, 8],
+        
+        guards: {
+            type: 'goblin',
+            count: 15,
+            healthMultiplier: 1,
+            customTexture: false
+        },
+        
+        cameraZoom: 2.2,
+        
+        reward: {
+            type: 'gold',
+            amount: 150,
+            text: '💰 +150 GOLD (The goblin\'s bribe!)'
+        },
+        
+        minLevel: 5,
+        maxLevel: 999,
+        spawnWeight: 0, // Only spawns via story sequence
+        
+        npc: null,
+        
+        onComplete: 'interactWithStructure',
+        interactionRange: 3,
+        
+        // Act 2: The Bribe
+        spawnDialogue: {
+            speaker: '🗡️ GOBLINS',
+            text: '"Sword gone! Big Boss gonna be so mad! Quick - put shinies around rock! Maybe Giant think \'ooh nice spot\' and put sword back!"'
+        },
+        completionDialogue: {
+            speaker: '🗡️ GOBLIN',
+            text: '"...You think this work?" The goblins exchange uncertain glances, then scatter into the forest.'
+        }
+    },
+    
+    swordInStoneAct3: {
+        name: 'swordInStoneAct3',
+        displayName: 'The Land Giant',
+        textureKey: 'emptyStone',
+        scale: [6, 8],
+        
+        guards: {
+            type: 'goblin',
+            count: 10,
+            healthMultiplier: 1,
+            customTexture: false
+        },
+        
+        cameraZoom: 3.0,
+        
+        reward: {
+            type: 'bonusSwords',
+            text: '⚔️ THE GIANT\'S POWER SPLITS INTO THREE BLADES!'
+        },
+        
+        minLevel: 5,
+        maxLevel: 999,
+        spawnWeight: 0, // Only spawns via story sequence
+        
+        npc: null,
+        
+        onComplete: 'spawnLandGiant',
+        
+        // Act 3: The Date
+        spawnDialogue: {
+            speaker: '👹 LAND GIANT',
+            text: '"At last! My date with the lovely princess of the tow— WAIT. YOU. You have MY sword! I put that there for ROMANCE! This was going to be the most important night of my— RAAAGH!"'
+        },
+        victoryDialogue: {
+            speaker: '👹 LAND GIANT',
+            text: '"Defeated... and stood up... She said she\'d be here... something about \'practicing her magic first\'... This is the worst date ever..."'
         }
     },
     
@@ -358,7 +454,7 @@ const FUN_FACTS = [
     "In a pinch, slimes can be used as a surprisingly effective sidekick.",
     "In a pinch, slimes can be used as a surprisingly effective roommate.",
     "A person with good kharma can wield Buddha\'s secret weapon.",
-    "On occasion a bat will be carrying a huge bag of gold.",
+    "The evil tree may be dangerous but at least he makes oxygen.",
     "The most important thing in the forest is to have a goal otherwise you just run around fighting enemies."
 ];
 
@@ -644,6 +740,159 @@ function createSwordInStoneTexture() {
         ctx.beginPath();
         ctx.arc(24, 30, 15, 0, Math.PI * 2);
         ctx.fill();
+    });
+}
+
+function createEmptyStoneTexture() {
+    return createPixelTexture(48, 64, (ctx, w, h) => {
+        // Gold piles around the stone (the goblin's bribe)
+        ctx.fillStyle = '#ffd700';
+        // Left pile
+        ctx.beginPath();
+        ctx.ellipse(8, 58, 6, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(10, 55, 4, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Right pile
+        ctx.beginPath();
+        ctx.ellipse(40, 58, 6, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(38, 55, 4, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Front pile
+        ctx.beginPath();
+        ctx.ellipse(24, 62, 5, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Individual coins
+        ctx.fillStyle = '#ffec8b';
+        ctx.fillRect(6, 56, 2, 2);
+        ctx.fillRect(12, 57, 2, 2);
+        ctx.fillRect(38, 56, 2, 2);
+        ctx.fillRect(42, 58, 2, 2);
+        ctx.fillRect(22, 60, 2, 2);
+        ctx.fillRect(26, 61, 2, 2);
+        
+        // Stone base (same as original)
+        ctx.fillStyle = '#5d6d7e';
+        ctx.beginPath();
+        ctx.ellipse(24, 50, 22, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Stone top
+        ctx.fillStyle = '#6c7a89';
+        ctx.beginPath();
+        ctx.ellipse(24, 45, 18, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Stone texture
+        ctx.fillStyle = '#4a5568';
+        ctx.fillRect(12, 44, 6, 8);
+        ctx.fillRect(28, 46, 8, 6);
+        ctx.fillRect(18, 50, 5, 5);
+        
+        // Empty hole where sword was (darker, deeper looking)
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(22, 40, 4, 12);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillRect(21, 40, 1, 12);
+        ctx.fillRect(26, 40, 1, 12);
+        
+        // Sad crack lines radiating from hole
+        ctx.fillStyle = '#4a5568';
+        ctx.fillRect(18, 44, 4, 1);
+        ctx.fillRect(26, 46, 4, 1);
+        ctx.fillRect(20, 50, 2, 1);
+        ctx.fillRect(26, 50, 3, 1);
+        
+        // Some moss (stone has been here a while)
+        ctx.fillStyle = '#2d5a27';
+        ctx.fillRect(8, 48, 3, 2);
+        ctx.fillRect(35, 52, 4, 2);
+        ctx.fillRect(14, 54, 2, 2);
+    });
+}
+
+function createLandGiantTexture() {
+    return createPixelTexture(64, 80, (ctx, w, h) => {
+        // Body - earthy brown/green tones
+        ctx.fillStyle = '#5a6b4a'; // Mossy brown-green
+        ctx.beginPath();
+        ctx.ellipse(32, 55, 25, 24, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Head
+        ctx.fillStyle = '#6a7b5a';
+        ctx.beginPath();
+        ctx.ellipse(32, 25, 18, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Arms
+        ctx.fillStyle = '#4a5b3a';
+        ctx.beginPath();
+        ctx.ellipse(8, 50, 12, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(56, 50, 12, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Angry eyes (he's been stood up!)
+        ctx.fillStyle = '#ff6600';
+        ctx.fillRect(22, 20, 6, 6);
+        ctx.fillRect(36, 20, 6, 6);
+        
+        // Angry eyebrows
+        ctx.fillStyle = '#3a4a2a';
+        ctx.beginPath();
+        ctx.moveTo(20, 20);
+        ctx.lineTo(30, 17);
+        ctx.lineTo(30, 19);
+        ctx.lineTo(20, 22);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(44, 20);
+        ctx.lineTo(34, 17);
+        ctx.lineTo(34, 19);
+        ctx.lineTo(44, 22);
+        ctx.fill();
+        
+        // Eye glow
+        ctx.fillStyle = 'rgba(255, 102, 0, 0.5)';
+        ctx.beginPath();
+        ctx.arc(25, 23, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(39, 23, 6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Angry mouth
+        ctx.fillStyle = '#2a3a1a';
+        ctx.fillRect(26, 32, 12, 4);
+        
+        // Crown of branches/twigs (forest king!)
+        ctx.fillStyle = '#4a3520';
+        ctx.fillRect(20, 8, 3, 10);
+        ctx.fillRect(29, 5, 3, 12);
+        ctx.fillRect(38, 8, 3, 10);
+        // Leaves on crown
+        ctx.fillStyle = '#2d5a27';
+        ctx.beginPath();
+        ctx.ellipse(21, 6, 4, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(30, 3, 4, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(39, 6, 4, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Moss/vine details on body
+        ctx.fillStyle = '#3d6a37';
+        ctx.fillRect(15, 45, 4, 8);
+        ctx.fillRect(45, 48, 5, 6);
+        ctx.fillRect(28, 65, 8, 4);
     });
 }
 
@@ -1663,12 +1912,16 @@ function initEncounterTextures() {
         // Encounter structures
         princessTower: createPrincessTowerTexture(),
         swordInStone: createSwordInStoneTexture(),
+        emptyStone: createEmptyStoneTexture(),
         witchHut: createWitchHutTexture(),
         
         // NPCs
         princess: createPrincessTexture(),
         witch: createWitchTexture(),
         goldenSkeleton: createGoldenSkeletonTexture(),
+        
+        // Bosses
+        landGiant: createLandGiantTexture(),
         
         // Effects
         heart: createHeartTexture(),
@@ -2053,7 +2306,13 @@ function spawnSpecificEncounter(templateKey) {
     gameState.targetCameraZoom = template.cameraZoom;
     
     console.log('Spawned specific encounter:', template.name);
-    showDialogue('⚔️ ' + template.displayName.toUpperCase(), `A ${template.displayName} has appeared! Defeat the guards to claim your reward!`);
+    
+    // Use spawn dialogue if available, otherwise use default
+    if (template.spawnDialogue) {
+        showDialogue(template.spawnDialogue.speaker, template.spawnDialogue.text);
+    } else {
+        showDialogue('⚔️ ' + template.displayName.toUpperCase(), `A ${template.displayName} has appeared! Defeat the guards to claim your reward!`);
+    }
     
     } catch (error) {
         if (typeof debug === 'function') debug('spawnSpec ERROR: ' + error.message);
@@ -2285,6 +2544,9 @@ function onEncounterComplete(enc, template) {
     } else if (template.onComplete === 'interactWithStructure') {
         // Show dialogue hint
         showDialogue('✨ MAGICAL SWORD', 'Touch the stone to claim your reward!');
+    } else if (template.onComplete === 'spawnLandGiant') {
+        // Sword in Stone Act 3: Spawn the Land Giant boss
+        spawnLandGiant();
     }
 }
 
@@ -2370,6 +2632,11 @@ function giveEncounterReward(enc, template) {
             // Apply upgrade effects
             if (reward.upgrade === 'swords') {
                 updateSwordCount();
+                
+                // Track sword stone story progress
+                if (template.name === 'swordInStone') {
+                    encounterState.swordStoneStage = 1; // Next: Act 2
+                }
             } else if (reward.upgrade === 'boom') {
                 updateBoomIndicator();
                 document.getElementById('boomCooldown').classList.add('active');
@@ -2383,6 +2650,17 @@ function giveEncounterReward(enc, template) {
             gameState.player.gold += goldReward;
             document.getElementById('goldNum').textContent = gameState.player.gold;
             showReward(`💰 ${goldReward} GOLD (Upgrade already maxed!)`);
+        }
+    } else if (reward.type === 'gold') {
+        // Gold reward type (used by Sword in Stone Act 2)
+        const goldAmount = reward.amount || 100;
+        gameState.player.gold += goldAmount;
+        document.getElementById('goldNum').textContent = gameState.player.gold;
+        showReward(reward.text);
+        
+        // Track sword stone story progress
+        if (template.name === 'swordInStoneAct2') {
+            encounterState.swordStoneStage = 2; // Next: Act 3
         }
     } else if (reward.type === 'dharmaWheel') {
         // Grant the dharma wheel to the player
@@ -2401,6 +2679,19 @@ function giveEncounterReward(enc, template) {
             gameState.player.gold += goldReward;
             document.getElementById('goldNum').textContent = gameState.player.gold;
             showReward(`💰 ${goldReward} GOLD (Already enlightened!)`);
+        }
+    } else if (reward.type === 'bonusSwords') {
+        // Bonus swords from Land Giant - handled in onLandGiantDefeated
+        // This case shouldn't normally be reached since the giant handles its own reward
+        if (!gameState.hasBonusSwords) {
+            spawnBonusSwords();
+            showReward(reward.text);
+        } else {
+            // Already have them - give gold
+            const goldReward = 2500;
+            gameState.player.gold += goldReward;
+            document.getElementById('goldNum').textContent = gameState.player.gold;
+            showReward(`💰 ${goldReward} GOLD (Already have giant's blades!)`);
         }
     }
     
@@ -2620,6 +2911,304 @@ function updatePlayerDharmaWheel() {
             enemy.hitFlash = 5;
         }
     }
+}
+
+// ============================================
+// BONUS SWORDS (reward from Land Giant)
+// ============================================
+// Creates a simple sword texture for the bonus swords
+function createBonusSwordTexture() {
+    return createPixelTexture(16, 32, (ctx, w, h) => {
+        // Blade
+        ctx.fillStyle = '#bdc3c7';
+        ctx.fillRect(6, 0, 4, 24);
+        
+        // Blade shine
+        ctx.fillStyle = '#ecf0f1';
+        ctx.fillRect(7, 2, 2, 20);
+        
+        // Tip
+        ctx.beginPath();
+        ctx.moveTo(6, 0);
+        ctx.lineTo(10, 0);
+        ctx.lineTo(8, -4);
+        ctx.fill();
+        
+        // Guard
+        ctx.fillStyle = '#f1c40f';
+        ctx.fillRect(2, 24, 12, 3);
+        
+        // Handle
+        ctx.fillStyle = '#8b4513';
+        ctx.fillRect(6, 27, 4, 5);
+    });
+}
+
+function spawnBonusSwords() {
+    if (encounterState.hasBonusSwords) return; // Already have them
+    
+    // Create texture once
+    const swordTexture = createBonusSwordTexture();
+    
+    // Create 3 swords at South, East, West (North is reserved for Dharma Wheel)
+    // Positions: S = PI/2 (90°), E = 0 (0°), W = PI (180°)
+    // Dharma wheel is at N = -PI/2 (270° or -90°)
+    const positions = [
+        { name: 'South', angle: Math.PI / 2 },      // 90° - bottom
+        { name: 'East', angle: 0 },                  // 0° - right  
+        { name: 'West', angle: Math.PI }             // 180° - left
+    ];
+    
+    encounterState.bonusSwords = [];
+    
+    for (const pos of positions) {
+        const material = new THREE.SpriteMaterial({
+            map: swordTexture,
+            transparent: true
+        });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(2, 4, 1);
+        scene.add(sprite);
+        
+        encounterState.bonusSwords.push({
+            sprite,
+            baseAngle: pos.angle, // Fixed position relative to dharma wheel
+            name: pos.name
+        });
+    }
+    
+    encounterState.hasBonusSwords = true;
+    gameState.hasBonusSwords = true; // For persistence
+    
+    console.log('Bonus swords spawned!');
+}
+
+function updateBonusSwords() {
+    if (!gameState || !gameState.hasBonusSwords) return;
+    if (!encounterState || !encounterState.bonusSwords || encounterState.bonusSwords.length === 0) return;
+    
+    // Get the dharma wheel's current angle (or use a default rotation)
+    let baseRotation = 0;
+    if (encounterState.playerDharmaWheel) {
+        baseRotation = encounterState.playerDharmaWheel.angle;
+    } else {
+        // If no dharma wheel, rotate independently
+        baseRotation = Date.now() * 0.001; // Slow rotation
+    }
+    
+    const radius = 5; // Same radius as dharma wheel
+    const baseSwordDamage = CONFIG.projectileBaseDamage * (1 + gameState.player.level * 0.25);
+    const swordDamage = baseSwordDamage * 1.5; // Each bonus sword does 1.5x damage
+    
+    for (const sword of encounterState.bonusSwords) {
+        if (!sword.sprite) continue;
+        
+        // Calculate position - sword stays at fixed offset from dharma wheel rotation
+        const angle = baseRotation + sword.baseAngle;
+        sword.sprite.position.x = gameState.player.position.x + Math.cos(angle) * radius;
+        sword.sprite.position.z = gameState.player.position.z + Math.sin(angle) * radius;
+        sword.sprite.position.y = 1.5;
+        
+        // Rotate sword to point outward
+        sword.sprite.material.rotation = angle + Math.PI / 2;
+        
+        // Check collision with enemies
+        for (const enemy of gameState.enemies) {
+            const dx = enemy.sprite.position.x - sword.sprite.position.x;
+            const dz = enemy.sprite.position.z - sword.sprite.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            
+            if (dist < 2) {
+                enemy.health -= swordDamage * 0.02;
+                enemy.hitFlash = 5;
+            }
+        }
+        
+        // Check collision with bosses
+        for (const boss of gameState.bosses) {
+            const dx = boss.sprite.position.x - sword.sprite.position.x;
+            const dz = boss.sprite.position.z - sword.sprite.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            
+            if (dist < 2.5) {
+                boss.health -= swordDamage * 0.02;
+                boss.hitFlash = 5;
+            }
+        }
+        
+        // Check collision with encounter guards
+        for (const guard of encounterState.encounterGuards) {
+            const dx = guard.sprite.position.x - sword.sprite.position.x;
+            const dz = guard.sprite.position.z - sword.sprite.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            
+            if (dist < 2) {
+                guard.health -= swordDamage * 0.02;
+                guard.hitFlash = 5;
+            }
+        }
+        
+        // Check collision with land giant
+        if (encounterState.landGiant) {
+            const dx = encounterState.landGiant.sprite.position.x - sword.sprite.position.x;
+            const dz = encounterState.landGiant.sprite.position.z - sword.sprite.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            
+            if (dist < 4) {
+                encounterState.landGiant.health -= swordDamage * 0.02;
+                encounterState.landGiant.hitFlash = 5;
+            }
+        }
+    }
+}
+
+// ============================================
+// LAND GIANT BOSS (Sword in Stone Act 3)
+// ============================================
+function spawnLandGiant() {
+    if (encounterState.landGiant) return; // Already exists
+    
+    const enc = encounterState.currentEncounter;
+    if (!enc) return;
+    
+    // Spawn near the stone
+    const x = enc.position.x + (Math.random() - 0.5) * 10;
+    const z = enc.position.z + (Math.random() - 0.5) * 10;
+    
+    const material = new THREE.SpriteMaterial({
+        map: encounterState.textures.landGiant,
+        transparent: true
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(12, 15, 1); // Big boss!
+    sprite.position.set(x, 7.5, z);
+    scene.add(sprite);
+    
+    const baseHealth = CONFIG.enemyBaseHealth * (1 + gameState.player.level * 0.3) * 15; // Very tanky
+    
+    encounterState.landGiant = {
+        sprite,
+        health: baseHealth,
+        maxHealth: baseHealth,
+        damage: CONFIG.enemyBaseDamage * (1 + gameState.player.level * 0.2) * 2,
+        speed: 0.04, // Slow but menacing
+        attackCooldown: 0,
+        hitFlash: 0,
+        stompCooldown: 0 // Special attack
+    };
+    
+    // Show boss health bar
+    document.getElementById('bossHealthBar').classList.add('active');
+    document.getElementById('bossName').textContent = '👹 LAND GIANT';
+    document.getElementById('bossFill').style.width = '100%';
+    
+    // Zoom out for boss fight
+    gameState.targetCameraZoom = 3.5;
+    
+    console.log('Land Giant spawned!');
+}
+
+function updateLandGiant() {
+    if (!encounterState.landGiant) return;
+    
+    const giant = encounterState.landGiant;
+    
+    // Move toward player
+    const dx = gameState.player.position.x - giant.sprite.position.x;
+    const dz = gameState.player.position.z - giant.sprite.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    
+    if (dist > 4) {
+        giant.sprite.position.x += (dx / dist) * giant.speed;
+        giant.sprite.position.z += (dz / dist) * giant.speed;
+    } else if (giant.attackCooldown <= 0) {
+        // Melee attack
+        takeDamage(giant.damage);
+        giant.attackCooldown = 90;
+    }
+    
+    giant.attackCooldown = Math.max(0, giant.attackCooldown - 1);
+    
+    // Hit flash
+    if (giant.hitFlash > 0) {
+        giant.hitFlash--;
+        giant.sprite.material.color.setHex(giant.hitFlash % 4 < 2 ? 0xffffff : 0xff0000);
+    } else {
+        giant.sprite.material.color.setHex(0xffffff);
+    }
+    
+    // Update boss health bar
+    const healthPercent = (giant.health / giant.maxHealth) * 100;
+    document.getElementById('bossFill').style.width = healthPercent + '%';
+    
+    // Check if defeated
+    if (giant.health <= 0) {
+        onLandGiantDefeated();
+    }
+}
+
+function onLandGiantDefeated() {
+    const giant = encounterState.landGiant;
+    if (!giant) return;
+    
+    // Remove sprite
+    scene.remove(giant.sprite);
+    encounterState.landGiant = null;
+    
+    // Hide boss health bar
+    document.getElementById('bossHealthBar').classList.remove('active');
+    
+    // Increment sword stone stage
+    encounterState.swordStoneStage = 3; // Completed
+    
+    // Show victory dialogue
+    const template = ENCOUNTER_TEMPLATES.swordInStoneAct3;
+    showDialogue(template.victoryDialogue.speaker, template.victoryDialogue.text);
+    
+    // Grant bonus swords after dialogue
+    setTimeout(() => {
+        spawnBonusSwords();
+        showReward(template.reward.text);
+        
+        // Mark encounter as complete
+        if (encounterState.currentEncounter) {
+            encounterState.currentEncounter.rewardGiven = true;
+            encounterState.currentEncounter.cleanupTimer = 300;
+        }
+    }, 2000);
+    
+    // Reset camera zoom
+    gameState.targetCameraZoom = 1;
+    
+    // Drop gold
+    for (let i = 0; i < 20; i++) {
+        const goldX = giant.sprite.position.x + (Math.random() - 0.5) * 8;
+        const goldZ = giant.sprite.position.z + (Math.random() - 0.5) * 8;
+        spawnGoldOrb(new THREE.Vector3(goldX, 0, goldZ), 25);
+    }
+    
+    gameState.kills++;
+    document.getElementById('kills').textContent = gameState.kills;
+    
+    console.log('Land Giant defeated!');
+}
+
+// Check projectile hits against Land Giant
+function checkLandGiantProjectileHit(projPos, damage) {
+    if (!encounterState.landGiant) return false;
+    
+    const giant = encounterState.landGiant;
+    const dx = projPos.x - giant.sprite.position.x;
+    const dz = projPos.z - giant.sprite.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    
+    if (dist < 5) {
+        giant.health -= damage;
+        giant.hitFlash = 10;
+        return true;
+    }
+    
+    return false;
 }
 
 // ============================================
@@ -3515,6 +4104,12 @@ function updateEncounterSystem() {
         
         // Update player's dharma wheel (if they have one)
         updatePlayerDharmaWheel();
+        
+        // Update bonus swords (if they have them)
+        updateBonusSwords();
+        
+        // Update Land Giant boss (if active)
+        updateLandGiant();
     } catch (error) {
         console.error('Error in updateEncounterSystem:', error);
         if (typeof debug === 'function') debug('ENC ERROR: ' + error.message);
@@ -3625,6 +4220,19 @@ function resetEncounterSystem() {
         encounterState.playerDharmaWheel = null;
     }
     
+    // Cleanup bonus swords
+    for (const sword of encounterState.bonusSwords) {
+        scene.remove(sword.sprite);
+    }
+    encounterState.bonusSwords = [];
+    encounterState.hasBonusSwords = false;
+    
+    // Cleanup land giant
+    if (encounterState.landGiant) {
+        scene.remove(encounterState.landGiant.sprite);
+        encounterState.landGiant = null;
+    }
+    
     // Reset state
     encounterState.currentEncounter = null;
     encounterState.encounterGuards = [];
@@ -3634,14 +4242,16 @@ function resetEncounterSystem() {
     encounterState.inCloudArena = false;
     encounterState.arenaStage = 0; // Reset to stage 0
     encounterState.storyEncounterStage = 0; // Reset story encounters
+    encounterState.swordStoneStage = 0; // Reset sword stone story
     encounterState.ghostDefeated = false;
     encounterState.savedForestPosition = null;
     encounterState.pendingArenaExit = false;
     encounterState.guaranteedEncounterQueue = [];
     
-    // Reset gameState dharma wheel flag
+    // Reset gameState flags
     if (typeof gameState !== 'undefined') {
         gameState.hasDharmaWheel = false;
+        gameState.hasBonusSwords = false;
     }
 }
 
