@@ -1028,22 +1028,39 @@ function rebuildStoreUI() {
         const section = document.createElement('div');
         section.className = 'companion-section';
         section.style.borderColor = companion.color.primary;
-        section.innerHTML = `
-            <div class="companion-header" style="color: ${companion.color.primary}">
-                ${companion.color.icon} ${companion.color.name} Slime #${index + 1}
-            </div>
-            <div class="companion-upgrades" id="companion-${index}-upgrades">
-                ${createUpgradeItemHTML(index, 'attackSpeed', '⚡', 'Attack Speed', 'Faster slime attacks')}
-                ${createUpgradeItemHTML(index, 'health', '❤️', 'Slime Health', '+5% max health per level')}
+        
+        // Only first slime (index 0) gets swords, heal, and armor
+        // Other slimes only get attack speed and health
+        let upgradesHTML = `
+            ${createUpgradeItemHTML(index, 'attackSpeed', '⚡', 'Attack Speed', 'Faster slime attacks')}
+            ${createUpgradeItemHTML(index, 'health', '❤️', 'Slime Health', '+5% max health per level')}
+        `;
+        
+        if (index === 0) {
+            upgradesHTML += `
                 ${createUpgradeItemHTML(index, 'swords', '⚔️', 'Slime Swords', 'Orbiting blades around slime')}
                 ${createUpgradeItemHTML(index, 'heal', '💚', 'Heal Ability', 'Heals faster: 60s→50s→40s')}
                 ${createUpgradeItemHTML(index, 'armor', '🛡️', 'Slime Armor', '10x health boost!')}
+            `;
+        }
+        
+        section.innerHTML = `
+            <div class="companion-header" style="color: ${companion.color.primary}">
+                ${companion.color.icon} ${companion.color.name} Slime #${index + 1}${index === 0 ? ' ⭐' : ''}
+            </div>
+            <div class="companion-upgrades" id="companion-${index}-upgrades">
+                ${upgradesHTML}
             </div>
         `;
         itemsContainer.appendChild(section);
         
         // Setup upgrade buttons for this companion
-        ['attackSpeed', 'health', 'swords', 'heal', 'armor'].forEach(upgradeKey => {
+        // Only setup swords/heal/armor buttons for first companion
+        const availableUpgrades = index === 0 
+            ? ['attackSpeed', 'health', 'swords', 'heal', 'armor']
+            : ['attackSpeed', 'health'];
+            
+        availableUpgrades.forEach(upgradeKey => {
             const btn = document.getElementById(`companion-${index}-${upgradeKey}-btn`);
             if (btn) {
                 btn.addEventListener('click', () => purchaseCompanionUpgrade(index, upgradeKey));
@@ -1170,8 +1187,13 @@ function updateSlimeStoreUI() {
     }
     
     // Update each companion's upgrades
+    // Only first slime (index 0) has swords, heal, armor
     state.companions.forEach((companion, index) => {
-        ['attackSpeed', 'health', 'swords', 'heal', 'armor'].forEach(upgradeKey => {
+        const availableUpgrades = index === 0 
+            ? ['attackSpeed', 'health', 'swords', 'heal', 'armor']
+            : ['attackSpeed', 'health'];
+            
+        availableUpgrades.forEach(upgradeKey => {
             updateCompanionUpgradeItem(index, upgradeKey);
         });
     });
@@ -1273,6 +1295,12 @@ function purchaseCompanionUpgrade(companionIndex, upgradeKey) {
     const state = slimeCompanionState;
     const companion = state.companions[companionIndex];
     if (!companion) return;
+    
+    // Only first slime (index 0) can have swords, heal, armor
+    if (companionIndex > 0 && ['swords', 'heal', 'armor'].includes(upgradeKey)) {
+        console.log('This upgrade is only available for the first slime!');
+        return;
+    }
     
     const upgrade = companion.upgrades[upgradeKey];
     if (upgrade.level >= upgrade.maxLevel) return;
