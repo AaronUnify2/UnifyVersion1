@@ -2065,44 +2065,6 @@ function shouldSpawnChest() {
     return Math.random() < TREASURE_CHEST_CONFIG.spawnChance;
 }
 
-// Spawn a random encounter
-// Sequential encounters: Sky Giants (3 stages), Story (Princess → Witch → Dharmachakra)
-// Random encounters: Monster Store, Sword in Stone
-function spawnRandomEncounter() {
-    const roll = Math.random();
-    if (typeof debug === 'function') debug('randEnc roll=' + roll.toFixed(2));
-    
-    if (roll < 0.20) {
-        // Monster Store (20%) - random
-        if (typeof spawnMonsterStore === 'function' && typeof shouldSpawnMonsterStore === 'function' && shouldSpawnMonsterStore()) {
-            if (typeof debug === 'function') debug('-> MonsterStore');
-            spawnMonsterStore();
-        } else {
-            if (typeof debug === 'function') debug('-> Story (store fallback)');
-            // Fallback to story encounter
-            spawnStoryEncounter();
-        }
-    } else if (roll < 0.40) {
-        // Sky Giants Portal (20%) - sequential
-        if (shouldSpawnPortal()) {
-            if (typeof debug === 'function') debug('-> SkyGiants');
-            spawnCloudPortal();
-        } else {
-            if (typeof debug === 'function') debug('-> Story (portal fallback)');
-            // If all 3 stages completed, spawn story encounter instead
-            spawnStoryEncounter();
-        }
-    } else if (roll < 0.80) {
-        // Story Encounter (40%) - sequential: Princess → Witch → Dharmachakra
-        if (typeof debug === 'function') debug('-> Story');
-        spawnStoryEncounter();
-    } else {
-        // Sword in Stone (20%) - random
-        if (typeof debug === 'function') debug('-> SwordInStone');
-        spawnSpecificEncounter('swordInStone');
-    }
-}
-
 // Special spawn function for Dharmachakra encounter
 function spawnDharmachakraEncounter() {
     const template = ENCOUNTER_TEMPLATES.dharmachakra;
