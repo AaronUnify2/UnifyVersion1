@@ -54,6 +54,9 @@ const encounterState = {
     trollClubs: [],
     trollProjectiles: [],
     
+    // Arena decorations (clouds and grass)
+    arenaDecorations: [],
+    
     // Ghost stage tracking (stage 2)
     ghostDefeated: false,
     
@@ -1303,6 +1306,129 @@ function createCloudGroundTexture() {
             ctx.arc(x, y, 10, 0, Math.PI * 2);
             ctx.fill();
         }
+    });
+}
+
+// Heavy cloud decoration (for arena border)
+function createHeavyCloudTexture() {
+    return createPixelTexture(64, 48, (ctx, w, h) => {
+        // Dense white cloud
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.ellipse(32, 30, 28, 18, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(16, 28, 16, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(48, 28, 16, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(32, 18, 20, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(20, 20, 14, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(44, 20, 14, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.beginPath();
+        ctx.ellipse(28, 16, 10, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Shadow underneath
+        ctx.fillStyle = 'rgba(200, 210, 230, 0.6)';
+        ctx.beginPath();
+        ctx.ellipse(32, 38, 24, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
+// Light wispy cloud (for inside arena)
+function createLightCloudTexture() {
+    return createPixelTexture(48, 32, (ctx, w, h) => {
+        // Wispy transparent cloud
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.beginPath();
+        ctx.ellipse(24, 18, 20, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(12, 16, 10, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(36, 16, 10, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Even lighter wisps
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(24, 12, 14, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
+// Cloud grass tuft (implies solid ground)
+function createCloudGrassTexture() {
+    return createPixelTexture(24, 20, (ctx, w, h) => {
+        // Light blue-green grass blades
+        ctx.fillStyle = '#a8d8ea';
+        
+        // Center blade (tallest)
+        ctx.beginPath();
+        ctx.moveTo(12, 18);
+        ctx.lineTo(10, 4);
+        ctx.lineTo(14, 4);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Left blades
+        ctx.beginPath();
+        ctx.moveTo(6, 18);
+        ctx.lineTo(3, 8);
+        ctx.lineTo(7, 7);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(9, 18);
+        ctx.lineTo(6, 6);
+        ctx.lineTo(10, 5);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Right blades
+        ctx.beginPath();
+        ctx.moveTo(18, 18);
+        ctx.lineTo(21, 8);
+        ctx.lineTo(17, 7);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(15, 18);
+        ctx.lineTo(18, 6);
+        ctx.lineTo(14, 5);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Lighter highlights on some blades
+        ctx.fillStyle = '#c8e8fa';
+        ctx.beginPath();
+        ctx.moveTo(12, 16);
+        ctx.lineTo(11, 6);
+        ctx.lineTo(13, 6);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(6, 16);
+        ctx.lineTo(4, 10);
+        ctx.lineTo(6, 9);
+        ctx.closePath();
+        ctx.fill();
     });
 }
 
@@ -3555,6 +3681,137 @@ function cleanupPortal() {
     encounterState.forestCloudSprites = [];
 }
 
+// ============================================
+// ARENA DECORATIONS (CLOUDS AND GRASS)
+// ============================================
+function spawnArenaDecorations() {
+    // Clear any existing decorations
+    for (const deco of encounterState.arenaDecorations) {
+        scene.remove(deco);
+    }
+    encounterState.arenaDecorations = [];
+    
+    const arenaRadius = 50; // Main arena area
+    const outerRadius = 90; // Heavy cloud border
+    
+    // Create textures
+    const heavyCloudTexture = createHeavyCloudTexture();
+    const lightCloudTexture = createLightCloudTexture();
+    const grassTexture = createCloudGrassTexture();
+    
+    // Spawn HEAVY CLOUDS around the outer edge (arena border)
+    const heavyCloudCount = 40;
+    for (let i = 0; i < heavyCloudCount; i++) {
+        const angle = (i / heavyCloudCount) * Math.PI * 2 + Math.random() * 0.3;
+        const dist = arenaRadius + 10 + Math.random() * (outerRadius - arenaRadius - 10);
+        const x = Math.cos(angle) * dist;
+        const z = Math.sin(angle) * dist;
+        
+        const material = new THREE.SpriteMaterial({
+            map: heavyCloudTexture,
+            transparent: true,
+            opacity: 0.85 + Math.random() * 0.15
+        });
+        const sprite = new THREE.Sprite(material);
+        const scale = 8 + Math.random() * 6;
+        sprite.scale.set(scale, scale * 0.75, 1);
+        sprite.position.set(x, 1 + Math.random() * 3, z);
+        scene.add(sprite);
+        encounterState.arenaDecorations.push(sprite);
+    }
+    
+    // Extra dense layer of heavy clouds at the very edge
+    const edgeCloudCount = 30;
+    for (let i = 0; i < edgeCloudCount; i++) {
+        const angle = (i / edgeCloudCount) * Math.PI * 2 + Math.random() * 0.2;
+        const dist = outerRadius - 5 + Math.random() * 15;
+        const x = Math.cos(angle) * dist;
+        const z = Math.sin(angle) * dist;
+        
+        const material = new THREE.SpriteMaterial({
+            map: heavyCloudTexture,
+            transparent: true,
+            opacity: 0.9
+        });
+        const sprite = new THREE.Sprite(material);
+        const scale = 10 + Math.random() * 8;
+        sprite.scale.set(scale, scale * 0.75, 1);
+        sprite.position.set(x, 2 + Math.random() * 4, z);
+        scene.add(sprite);
+        encounterState.arenaDecorations.push(sprite);
+    }
+    
+    // Spawn LIGHT WISPY CLOUDS inside the arena
+    const lightCloudCount = 20;
+    for (let i = 0; i < lightCloudCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 10 + Math.random() * (arenaRadius - 15);
+        const x = Math.cos(angle) * dist;
+        const z = Math.sin(angle) * dist;
+        
+        const material = new THREE.SpriteMaterial({
+            map: lightCloudTexture,
+            transparent: true,
+            opacity: 0.4 + Math.random() * 0.3
+        });
+        const sprite = new THREE.Sprite(material);
+        const scale = 4 + Math.random() * 4;
+        sprite.scale.set(scale, scale * 0.67, 1);
+        sprite.position.set(x, 0.5 + Math.random() * 1.5, z);
+        scene.add(sprite);
+        encounterState.arenaDecorations.push(sprite);
+    }
+    
+    // Spawn GRASS TUFTS scattered across the arena floor
+    const grassCount = 35;
+    for (let i = 0; i < grassCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 5 + Math.random() * (arenaRadius - 5);
+        const x = Math.cos(angle) * dist;
+        const z = Math.sin(angle) * dist;
+        
+        const material = new THREE.SpriteMaterial({
+            map: grassTexture,
+            transparent: true
+        });
+        const sprite = new THREE.Sprite(material);
+        const scale = 1.5 + Math.random() * 1.5;
+        sprite.scale.set(scale, scale * 0.83, 1);
+        sprite.position.set(x, scale * 0.4, z);
+        scene.add(sprite);
+        encounterState.arenaDecorations.push(sprite);
+    }
+    
+    // Add some grass clusters (2-3 tufts close together)
+    const clusterCount = 12;
+    for (let i = 0; i < clusterCount; i++) {
+        const baseAngle = Math.random() * Math.PI * 2;
+        const baseDist = 8 + Math.random() * (arenaRadius - 12);
+        const baseX = Math.cos(baseAngle) * baseDist;
+        const baseZ = Math.sin(baseAngle) * baseDist;
+        
+        // Spawn 2-3 grass tufts in a cluster
+        const clusterSize = 2 + Math.floor(Math.random() * 2);
+        for (let j = 0; j < clusterSize; j++) {
+            const offsetX = (Math.random() - 0.5) * 3;
+            const offsetZ = (Math.random() - 0.5) * 3;
+            
+            const material = new THREE.SpriteMaterial({
+                map: grassTexture,
+                transparent: true
+            });
+            const sprite = new THREE.Sprite(material);
+            const scale = 1.2 + Math.random() * 1.0;
+            sprite.scale.set(scale, scale * 0.83, 1);
+            sprite.position.set(baseX + offsetX, scale * 0.4, baseZ + offsetZ);
+            scene.add(sprite);
+            encounterState.arenaDecorations.push(sprite);
+        }
+    }
+    
+    console.log('Arena decorations spawned:', encounterState.arenaDecorations.length);
+}
+
 function enterCloudArena() {
     const stage = encounterState.arenaStage;
     const stageConfig = CLOUD_ARENA_CONFIG['stage' + stage];
@@ -3583,6 +3840,9 @@ function enterCloudArena() {
     playerGroup.position.set(0, 0, 0);
     
     gameState.targetCameraZoom = stageConfig.cameraZoom;
+    
+    // Spawn arena decorations (clouds and grass)
+    spawnArenaDecorations();
     
     // Stage-specific enemy spawning
     if (stage === 0) {
@@ -4114,6 +4374,12 @@ function exitCloudArena() {
     }
     encounterState.trollProjectiles = [];
     
+    // Clear arena decorations (clouds and grass)
+    for (const deco of encounterState.arenaDecorations) {
+        scene.remove(deco);
+    }
+    encounterState.arenaDecorations = [];
+    
     // Regenerate forest
     updateChunks();
 }
@@ -4290,6 +4556,12 @@ function resetEncounterSystem() {
         scene.remove(proj.sprite);
     }
     encounterState.trollProjectiles = [];
+    
+    // Cleanup arena decorations
+    for (const deco of encounterState.arenaDecorations) {
+        scene.remove(deco);
+    }
+    encounterState.arenaDecorations = [];
     
     // Cleanup wizard dharma wheels
     for (const wheel of encounterState.wizardWheels) {
