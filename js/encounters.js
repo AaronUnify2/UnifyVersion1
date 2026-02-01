@@ -100,18 +100,29 @@ const encounterState = {
 //   - 'monsterStore': spawns the monster store
 const STORY_SEQUENCE = [
     'swordInStone',        // 0: Act 1 - Goblin's Ambition
-    'princessTower',       // 1: Princess Tower
-    'monsterStore',        // 2: Monster Store
-    'witchHut',            // 3: Witch's Cottage
-    'swordInStoneAct2',    // 4: Act 2 - The Bribe (Missing Sword)
-    'dharmachakra',        // 5: Dogmatic Buddhists
-    'monsterStore',        // 6: Monster Store
-    'swordInStoneAct3',    // 7: Act 3 - Land Giant Boss
-    'cloudPortal',         // 8: Cloud Portal (leads to Sky Giant Pets - Stage 0)
-    'cloudPortal',         // 9: Cloud Portal (leads to Giant Troll - Stage 1)
-    'monsterStore',        // 10: Monster Store
-    'cloudPortal',         // 11: Cloud Portal (leads to Ghost Trio - Stage 2)
-    'storyComplete'        // 12: Story complete - return to random encounters
+    'boss_troll',          // 1: Troll Boss
+    'princessTower',       // 2: Princess Tower
+    'boss_tree',           // 3: Evil Tree Boss
+    'monsterStore',        // 4: Monster Store
+    'boss_dragon',         // 5: Dragon Boss
+    'witchHut',            // 6: Witch's Cottage
+    'boss_troll',          // 7: Troll Boss
+    'swordInStoneAct2',    // 8: Act 2 - The Bribe (Missing Sword)
+    'boss_tree',           // 9: Evil Tree Boss
+    'dharmachakra',        // 10: Dogmatic Buddhists
+    'boss_dragon',         // 11: Dragon Boss
+    'monsterStore',        // 12: Monster Store
+    'boss_troll',          // 13: Troll Boss
+    'swordInStoneAct3',    // 14: Act 3 - Land Giant Boss
+    'boss_tree',           // 15: Evil Tree Boss
+    'cloudPortal',         // 16: Cloud Portal (leads to Sky Giant Pets - Stage 0)
+    'boss_dragon',         // 17: Dragon Boss
+    'cloudPortal',         // 18: Cloud Portal (leads to Giant Troll - Stage 1)
+    'boss_troll',          // 19: Troll Boss
+    'monsterStore',        // 20: Monster Store
+    'boss_tree',           // 21: Evil Tree Boss
+    'cloudPortal',         // 22: Cloud Portal (leads to Ghost Trio - Stage 2)
+    'storyComplete'        // 23: Story complete - return to random encounters
 ];
 
 // ============================================
@@ -2310,6 +2321,23 @@ function spawnStoryEncounter() {
     
     console.log('Spawning story event:', event, '(Stage', encounterState.storyStage, ')');
     
+    // Handle boss events
+    if (event.startsWith('boss_')) {
+        const bossType = event.replace('boss_', '');
+        console.log('Spawning story boss:', bossType);
+        
+        if (typeof spawnSpecificBoss === 'function') {
+            spawnSpecificBoss(bossType);
+        } else if (typeof spawnBoss === 'function') {
+            // Fallback to random boss spawn if specific spawn not available
+            spawnBoss();
+        } else {
+            console.warn('Boss spawn not available, advancing story');
+            advanceStoryStage();
+        }
+        return;
+    }
+    
     // Handle special event types
     if (event === 'cloudPortal') {
         spawnCloudPortal();
@@ -2342,6 +2370,55 @@ function spawnStoryEncounter() {
     
     spawnSpecificEncounter(event);
 }
+
+// ===========================================
+// BOSS SPAWN AND DEFEAT HANDLING
+// ===========================================
+
+// Spawn a specific boss type (called from story sequence)
+// This wrapper calls the actual boss spawn function from bosses.js
+function spawnSpecificBoss(bossType) {
+    console.log('Story boss spawn requested:', bossType);
+    
+    // If bosses.js has a spawnBossOfType function, use it
+    if (typeof spawnBossOfType === 'function') {
+        spawnBossOfType(bossType);
+        return;
+    }
+    
+    // Otherwise, try to use the bossTypes array and spawn manually
+    if (typeof bossTypes !== 'undefined' && typeof spawnBossFromType === 'function') {
+        const bossTypeObj = bossTypes.find(b => b.name === bossType);
+        if (bossTypeObj) {
+            spawnBossFromType(bossTypeObj);
+            return;
+        }
+    }
+    
+    // Fallback: Just spawn a random boss
+    if (typeof spawnBoss === 'function') {
+        console.log('Falling back to random boss spawn');
+        spawnBoss();
+    } else {
+        console.error('No boss spawn function available!');
+        advanceStoryStage(); // Skip this boss
+    }
+}
+
+// Called when a boss is defeated - advances story if current event is a boss
+function onBossDefeated() {
+    const currentEvent = getCurrentStoryEvent();
+    
+    // Only advance story if we're currently on a boss event
+    if (currentEvent && currentEvent.startsWith('boss_')) {
+        console.log('Boss defeated, advancing story from:', currentEvent);
+        advanceStoryStage();
+    }
+}
+
+// Expose globally so bosses.js can call it
+window.onBossDefeated = onBossDefeated;
+window.spawnSpecificBoss = spawnSpecificBoss;
 
 // Spawn a random encounter (for after story is complete)
 function spawnRandomEncounter() {
