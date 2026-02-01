@@ -513,7 +513,7 @@ function updateShopkeeper() {
     const shopkeeperToStoreDz = shopkeeper.position.z - store.position.z;
     const distFromStore = Math.sqrt(shopkeeperToStoreDx * shopkeeperToStoreDx + shopkeeperToStoreDz * shopkeeperToStoreDz);
     
-    if (distFromStore > 90) {
+    if (distFromStore > 900) {
         // Shopkeeper is too far from store - don't chase further, wait for player
         // Just return without moving
         return;
