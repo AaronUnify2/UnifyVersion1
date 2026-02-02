@@ -208,7 +208,7 @@ const ENCOUNTER_TEMPLATES = {
         // Act 1: The Goblin's Ambition
         spawnDialogue: {
             speaker: '🗡️ GOBLINS',
-            text: '"The King put this sword in the stone because he is in love, pull the sword, become King of Forest!"'
+            text: '"The King put this sword in the stone because he is in love, take the sword, become King of Forest!"'
         },
         completionDialogue: {
             speaker: '🪨 STONE',
@@ -253,7 +253,7 @@ const ENCOUNTER_TEMPLATES = {
         },
         completionDialogue: {
             speaker: '🗡️ GOBLIN',
-            text: '"...Maybe he kill goblin friend?" The goblins exchange uncertain glances, then scatter into the forest.'
+            text: '"...Maybe that man kill goblin friend, not giant?" The goblins exchange uncertain glances, then scatter into the forest.'
         }
     },
     
@@ -288,11 +288,11 @@ const ENCOUNTER_TEMPLATES = {
         // Act 3: The Date
         spawnDialogue: {
             speaker: '👹 LAND GIANT',
-            text: '"At last! My date with the lovely princess of the tow— WAIT. YOU. You have MY sword! I put that there for ROMANCE REASONS! RAAGH!"'
+            text: '"At last! My time for my date, her picture is of beautiful princess— WAIT. YOU. You have MY sword! I put that there for ROMANCE REASONS! RAAGH!"'
         },
         victoryDialogue: {
             speaker: '👹 LAND GIANT',
-            text: '"Defeated... and stood up... She said she\'d be here... something about \'finishing her magic first\'..."'
+            text: '"Defeated... and stood up... She said she\'d be here...\'..."'
         }
     },
     
@@ -328,7 +328,7 @@ const ENCOUNTER_TEMPLATES = {
             spawnOffset: { x: 8, z: 3 },
             dialogue: {
                 speaker: '🧙‍♀️ WITCH',
-                text: '"I tried to summon a handsome wizard for companionship and instead summoned a group of dogmatic buddhists!"'
+                text: '"I tried to summon a handsome wizard for companionship but instead I summoned a group of dogmatic buddhists!"'
             },
             rewardOnContact: true
         },
@@ -369,10 +369,16 @@ const ENCOUNTER_TEMPLATES = {
         // Dogmatic Buddhist dialogue options (shown randomly during combat)
         combatDialogues: [
             '"It is an UNDENIABLE FACT that Buddha has risen!"',
+            '"Compassion for all beings... except THAT guy."',
             '"To be enlightened is to NEVER question Buddha\'s teachings!"',
             '"ENLIGHTENMENT OR ELSE!"',
+            '"Our vow includes protecting THIS EXACT STATUE FROM THIS EXACT KNIGHT!"',
             '"Buddha WILL return, and he will NOT be pleased with you!"',
+            '"We\'ve transcended violence, but YOU haven\t"',
             '"Your karma is about to get VERY negative!"',
+            '"We took a vow of silence, NOT a vow of VIOLENCE!!"',
+            '"Your karmic debt is DUE, and we are COLLECTORS!"',
+            '"The Buddha said no killing... but he didn\'t say anything about WOUNDING"',
             '"...but I\'m not a dog!"'
         ]
     }
@@ -491,6 +497,7 @@ const FUN_FACTS = [
     "In a pinch, slimes can be used as a surprisingly effective roommate.",
     "A person with good kharma can wield Buddha\'s secret weapon.",
     "The evil tree may be dangerous but at least he makes oxygen.",
+    "A truly dogmatic buddhist would become god of the forest in 90 seconds",
     "The most important thing in the forest is to have a goal otherwise you just run around fighting enemies."
 ];
 
