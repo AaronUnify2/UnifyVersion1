@@ -4321,6 +4321,9 @@ function winCloudArena() {
     const stage = encounterState.arenaStage;
     const stageConfig = CLOUD_ARENA_CONFIG['stage' + stage];
     
+    // Check if this is the final stage (Ghost Trio - stage 2)
+    const isFinalStage = (stage === 2);
+    
     // Advance to next stage
     encounterState.arenaStage++;
     
@@ -4336,6 +4339,11 @@ function winCloudArena() {
     advanceStoryStage();
     
     showDialogue(stageConfig.winDialogue.title, stageConfig.winDialogue.text);
+    
+    // If this was the final stage, trigger Sky King victory!
+    if (isFinalStage && typeof triggerSkyKingVictory === 'function') {
+        triggerSkyKingVictory();
+    }
 }
 
 function exitCloudArena() {
