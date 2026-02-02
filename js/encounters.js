@@ -141,7 +141,7 @@ const ENCOUNTER_TEMPLATES = {
         // Guard configuration - references enemy types from enemies.js
         guards: {
             type: 'goldenSkeleton', // Custom texture, not from enemies.js
-            count: 15,
+            count: 25,
             healthMultiplier: 2,
             customTexture: true // Indicates we use our own texture
         },
@@ -208,7 +208,7 @@ const ENCOUNTER_TEMPLATES = {
         // Act 1: The Goblin's Ambition
         spawnDialogue: {
             speaker: '🗡️ GOBLINS',
-            text: '"Legend says: pull sword, become King! ...We not sure what happens next, but must be good!"'
+            text: '"The King put this sword in the stone because he is in love, pull the sword, become King of Forest!"'
         },
         completionDialogue: {
             speaker: '🪨 STONE',
@@ -224,7 +224,7 @@ const ENCOUNTER_TEMPLATES = {
         
         guards: {
             type: 'goblin',
-            count: 15,
+            count: 25,
             healthMultiplier: 1,
             customTexture: false
         },
@@ -233,8 +233,8 @@ const ENCOUNTER_TEMPLATES = {
         
         reward: {
             type: 'gold',
-            amount: 150,
-            text: '💰 +150 GOLD (The goblin\'s bribe!)'
+            amount: 650,
+            text: '💰 +650 GOLD (The goblin\'s bribe!)'
         },
         
         minLevel: 5,
@@ -249,11 +249,11 @@ const ENCOUNTER_TEMPLATES = {
         // Act 2: The Bribe
         spawnDialogue: {
             speaker: '🗡️ GOBLINS',
-            text: '"Sword gone! Big Boss gonna be so mad! Quick - put shinies around rock! Maybe Giant think \'ooh nice spot\' and put sword back!"'
+            text: '"Sword gone! Goblins gone!! Maybe giant take? Quick - put shinies around rock! Maybe Giant think \'ooh nice gold\' and bring goblin friends back!"'
         },
         completionDialogue: {
             speaker: '🗡️ GOBLIN',
-            text: '"...You think this work?" The goblins exchange uncertain glances, then scatter into the forest.'
+            text: '"...Maybe he kill goblin friend?" The goblins exchange uncertain glances, then scatter into the forest.'
         }
     },
     
@@ -288,11 +288,11 @@ const ENCOUNTER_TEMPLATES = {
         // Act 3: The Date
         spawnDialogue: {
             speaker: '👹 LAND GIANT',
-            text: '"At last! My date with the lovely princess of the tow— WAIT. YOU. You have MY sword! I put that there for ROMANCE! This was going to be the most important night of my— RAAAGH!"'
+            text: '"At last! My date with the lovely princess of the tow— WAIT. YOU. You have MY sword! I put that there for ROMANCE REASONS! RAAGH!"'
         },
         victoryDialogue: {
             speaker: '👹 LAND GIANT',
-            text: '"Defeated... and stood up... She said she\'d be here... something about \'practicing her magic first\'... This is the worst date ever..."'
+            text: '"Defeated... and stood up... She said she\'d be here... something about \'finishing her magic first\'..."'
         }
     },
     
@@ -328,7 +328,7 @@ const ENCOUNTER_TEMPLATES = {
             spawnOffset: { x: 8, z: 3 },
             dialogue: {
                 speaker: '🧙‍♀️ WITCH',
-                text: '"Remember me? I tried to summon a handsome wizard for companionship and instead summoned a group of dogmatic buddhists!"'
+                text: '"I tried to summon a handsome wizard for companionship and instead summoned a group of dogmatic buddhists!"'
             },
             rewardOnContact: true
         },
@@ -344,7 +344,7 @@ const ENCOUNTER_TEMPLATES = {
         
         guards: {
             type: 'dharmaWizard', // Custom super-powered wizards
-            count: 20,
+            count: 30,
             healthMultiplier: 3, // Super powered
             customTexture: true,
             hasOrbitingWheel: true // Special property for dharma wheels
@@ -371,11 +371,8 @@ const ENCOUNTER_TEMPLATES = {
             '"It is an UNDENIABLE FACT that Buddha has risen!"',
             '"To be enlightened is to NEVER question Buddha\'s teachings!"',
             '"ENLIGHTENMENT OR ELSE!"',
-            '"The Eightfold Path is the ONLY path! All other paths lead to SUFFERING!"',
-            '"Have you accepted the Four Noble Truths into your heart?!"',
             '"Buddha WILL return, and he will NOT be pleased with you!"',
             '"Your karma is about to get VERY negative!"',
-            '"We didn\'t choose the monastic life, the monastic life chose US!"',
             '"...but I\'m not a dog!"'
         ]
     }
@@ -411,7 +408,7 @@ const CLOUD_ARENA_CONFIG = {
     // Stage 1: Giant Troll (revenge for his pets)
     stage1: {
         name: 'Giant Troll',
-        trollHealthMultiplier: 2.0, // Really beefy
+        trollHealthMultiplier: 1.0, // Really beefy
         trollGoldDrop: 1000,
         goldReward: 1000,
         cameraZoom: 3.5, // Zoom way out for the huge troll
@@ -421,7 +418,7 @@ const CLOUD_ARENA_CONFIG = {
         projectileCooldown: 120,
         introDialogue: {
             title: '😡 GIANT TROLL',
-            text: '"YOU KILLED MY CLOUD PETS! NOW IT\'S TIME TO DIE!"'
+            text: '"YOU KILLED MY CLOUD PETS! THEY WERE LIKE ANIMALS TO ME!"'
         },
         winDialogue: {
             title: '🏆 VICTORY!',
@@ -467,7 +464,7 @@ const TREASURE_CHEST_CONFIG = {
     maxChests: 5,
     spawnChance: 0.08,
     goldMin: 15,
-    goldMax: 50
+    goldMax: 70
 };
 
 // Fun facts for treasure chests
@@ -482,6 +479,7 @@ const FUN_FACTS = [
     "Orbiting swords are great for the forest, impractical for dating.",
     "The skeletons? Fallen heroes who drank lots of milk. The ghosts? Heroes' who didn't drink enough milk.",
     "The little green forest people are called goblins. But NEVER let them hear you call them that.",
+     "What if you never killed anything? Just walked away from the very beginning, it'd be pretty lame.",
     "In a pinch, slimes can be used as a surprisingly effective food source.",
     "In a pinch, slimes can be used as a surprisingly effective hat.",
     "While trolls may seem dangerous there have been zero recorded deaths.",
