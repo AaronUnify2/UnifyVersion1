@@ -621,9 +621,21 @@
             left: 50%;
             transform: translateX(-50%);
             color: rgba(255,255,255,0.5);
-            font-size: 8px;
+            font-size: 7px;
             text-align: center;
             white-space: nowrap;
+            max-width: 95vw;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        @media (max-width: 600px) {
+            #instructions {
+                font-size: 6px;
+                white-space: normal;
+                max-width: 90vw;
+                line-height: 1.4;
+            }
         }
         
         /* Debug Panel Styles */
@@ -943,7 +955,7 @@
         
         <div id="boomIndicator">💥</div>
         
-        <div id="instructions">SWIPE TO LOOK • D-PAD TO MOVE • ✦ ATTACK • 🛒 SHOP</div>
+        <div id="instructions">📱 SWIPE+D-PAD • 💻 CLICK TO ENABLE MOUSE LOOK • WASD+MOUSE • CLICK=SHOOT • SPACE=BOOM</div>
     </div>
     
     <div id="damageFlash"></div>
@@ -2862,20 +2874,24 @@
         // View swipe control - now works anywhere on screen with multi-touch
         function setupViewControl() {
             const viewArea = document.getElementById('viewArea');
+            const canvas = document.getElementById('gameCanvas');
 
             // Check if an element is a UI control that shouldn't trigger camera rotation
             function isUIElement(element) {
                 const uiIds = ['dpad', 'dpad-up', 'dpad-down', 'dpad-left', 'dpad-right', 
-                               'magicBtn', 'menuBtn', 'restartBtn', 'boomBtn', 'slimeStoreMenu'];
+                               'magicBtn', 'menuBtn', 'restartBtn', 'boomBtn', 'slimeStoreMenu',
+                               'debugToggle', 'debugPanel'];
                 while (element) {
                     if (uiIds.includes(element.id) || 
                         element.classList?.contains('dpad-btn') ||
                         element.classList?.contains('upgrade-btn') ||
                         element.classList?.contains('dialogue-btn') ||
                         element.classList?.contains('store-btn') ||
+                        element.classList?.contains('debug-btn') ||
                         element.id === 'upgradeMenu' ||
                         element.id === 'dialogueBox' ||
-                        element.id === 'slimeStoreMenu') {
+                        element.id === 'slimeStoreMenu' ||
+                        element.id === 'debugPanel') {
                         return true;
                     }
                     element = element.parentElement;
@@ -2931,22 +2947,60 @@
                 }
             });
 
-            // Mouse support (unchanged - works on viewArea)
-            viewArea.addEventListener('mousedown', (e) => {
-                cameraTouchStartX = e.clientX;
-                isDragging = true;
-            });
-
-            document.addEventListener('mousemove', (e) => {
-                if (isDragging && gameState.dialogueTimer <= 0) {
-                    const dx = e.clientX - cameraTouchStartX;
-                    gameState.player.rotation += dx * 0.005;
-                    cameraTouchStartX = e.clientX;
+            // ============================================
+            // DESKTOP MOUSE CONTROLS
+            // ============================================
+            // Click canvas to enable mouse look (pointer lock)
+            // Move mouse to rotate camera
+            // Left click to shoot
+            
+            let mouseEnabled = false;
+            
+            // Request pointer lock when clicking on canvas/viewArea
+            canvas.addEventListener('click', (e) => {
+                if (gameState.isGameOver || gameState.menuOpen) return;
+                if (isUIElement(e.target)) return;
+                
+                // If not locked, request lock
+                if (document.pointerLockElement !== canvas) {
+                    canvas.requestPointerLock();
                 }
             });
-
-            document.addEventListener('mouseup', () => {
-                isDragging = false;
+            
+            // Handle pointer lock change
+            document.addEventListener('pointerlockchange', () => {
+                mouseEnabled = (document.pointerLockElement === canvas);
+                if (mouseEnabled) {
+                    console.log('Mouse look enabled - move mouse to rotate, click to shoot, ESC to exit');
+                }
+            });
+            
+            // Mouse movement for camera rotation (when pointer locked)
+            document.addEventListener('mousemove', (e) => {
+                if (!mouseEnabled || gameState.dialogueTimer > 0 || gameState.isGameOver || gameState.menuOpen) return;
+                
+                // Use movementX for smooth rotation
+                const sensitivity = 0.003;
+                gameState.player.rotation += e.movementX * sensitivity;
+            });
+            
+            // Left click to shoot (when pointer locked)
+            document.addEventListener('mousedown', (e) => {
+                if (!mouseEnabled || gameState.dialogueTimer > 0 || gameState.isGameOver || gameState.menuOpen) return;
+                
+                if (e.button === 0) { // Left click
+                    shootProjectile();
+                }
+            });
+            
+            // Right click for boom (optional alternative)
+            document.addEventListener('contextmenu', (e) => {
+                if (mouseEnabled) {
+                    e.preventDefault();
+                    if (!gameState.dialogueTimer && !gameState.isGameOver && !gameState.menuOpen) {
+                        fireBoom();
+                    }
+                }
             });
         }
 
@@ -2963,8 +3017,11 @@
                     case 's': case 'arrowdown': controls.down = true; break;
                     case 'a': case 'arrowleft': controls.left = true; break;
                     case 'd': case 'arrowright': controls.right = true; break;
-                    case ' ': shootProjectile(); break;
-                    case 'q': fireBoom(); break;
+                    case ' ': 
+                        e.preventDefault(); // Prevent page scroll
+                        fireBoom(); 
+                        break;
+                    case 'q': shootProjectile(); break; // Q as backup for shooting
                     case 'e': case 'escape': 
                         if (gameState.menuOpen) closeMenu();
                         else openMenu();
@@ -3174,6 +3231,18 @@
                     }
                     debug('Initial enemies spawned');
                 }, 1000);
+                
+                // Hide instructions after 45 seconds
+                setTimeout(() => {
+                    const instructions = document.getElementById('instructions');
+                    if (instructions) {
+                        instructions.style.transition = 'opacity 2s ease-out';
+                        instructions.style.opacity = '0';
+                        setTimeout(() => {
+                            instructions.style.display = 'none';
+                        }, 2000);
+                    }
+                }, 45000);
             } catch (error) {
                 debug('INIT ERROR: ' + error.message);
             }
