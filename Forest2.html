@@ -631,15 +631,33 @@
             position: fixed;
             top: 80px;
             right: 10px;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.92);
             border: 2px solid #0f0;
             border-radius: 8px;
             padding: 10px;
             z-index: 9999;
             display: none;
-            max-height: 80vh;
+            max-height: calc(100vh - 100px);
+            max-width: 200px;
             overflow-y: auto;
+            overflow-x: hidden;
             pointer-events: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #0f0 #222;
+        }
+        
+        #debugPanel::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        #debugPanel::-webkit-scrollbar-track {
+            background: #222;
+            border-radius: 3px;
+        }
+        
+        #debugPanel::-webkit-scrollbar-thumb {
+            background: #0f0;
+            border-radius: 3px;
         }
         
         #debugPanel.active {
@@ -653,6 +671,11 @@
             text-align: center;
             border-bottom: 1px solid #0f0;
             padding-bottom: 5px;
+            position: sticky;
+            top: -10px;
+            background: rgba(0, 0, 0, 0.95);
+            padding-top: 5px;
+            margin-top: -5px;
         }
         
         .debug-section {
@@ -763,9 +786,13 @@
             cursor: pointer;
             z-index: 10000;
             pointer-events: auto;
-            display: flex;
+            display: none;
             align-items: center;
             justify-content: center;
+        }
+        
+        #debugToggle.unlocked {
+            display: flex;
         }
         
         #debugToggle:hover {
@@ -773,7 +800,29 @@
         }
         
         #debugToggle.panel-open {
-            right: 180px;
+            right: 220px;
+        }
+        
+        /* Smaller screens */
+        @media (max-height: 600px) {
+            #debugPanel {
+                top: 60px;
+                max-height: calc(100vh - 70px);
+                padding: 8px;
+                font-size: 90%;
+            }
+            #debugPanel h3 {
+                font-size: 9px;
+            }
+            .debug-btn {
+                padding: 6px 8px;
+                font-size: 6px;
+            }
+            #debugToggle {
+                top: 60px;
+                width: 35px;
+                height: 35px;
+            }
         }
     </style>
 </head>
@@ -1262,7 +1311,13 @@
             chunks: new Map(),
             isGameOver: false,
             menuOpen: false,
-            hasDharmaWheel: false // Dharma wheel reward from Dharmachakra encounter
+            hasDharmaWheel: false, // Dharma wheel reward from Dharmachakra encounter
+            // Win condition tracking
+            debugUnlocked: false,
+            gameStartTime: null, // Set when game starts
+            pacifistCheckDone: false, // Only check once at 90 seconds
+            skyKingVictory: false, // Completed all sky giant stages
+            pacifistVictory: false // No kills for first 90 seconds
         };
 
         // ============================================
@@ -2417,6 +2472,12 @@
             gameState.isGameOver = false;
             gameState.menuOpen = false;
             
+            // Reset win condition tracking (but keep debugUnlocked - that's permanent!)
+            gameState.gameStartTime = Date.now();
+            gameState.pacifistCheckDone = false;
+            gameState.skyKingVictory = false;
+            gameState.pacifistVictory = false;
+            
             // Reset cloud arena state
             if (encounterState.inCloudArena) {
                 // Restore forest environment
@@ -3006,6 +3067,9 @@
                     updateCompass();
                     updateCameraZoom();
                     
+                    // Check for pacifist victory (no kills in first 90 seconds)
+                    checkPacifistVictory();
+                    
                     // Update slime companion system (if loaded)
                     if (typeof updateSlimeCompanion === 'function') {
                         updateSlimeCompanion();
@@ -3050,6 +3114,9 @@
         function init() {
             debug('init() starting...');
             try {
+                // Set game start time for win condition tracking
+                gameState.gameStartTime = Date.now();
+                
                 setupDPad();
                 debug('DPad setup');
                 setupMagicButton();
@@ -3118,6 +3185,70 @@
         
         // Expose for external use
         window.damageLandGiant = damageLandGiant;
+
+        // ============================================
+        // WIN CONDITIONS & DEBUG UNLOCK SYSTEM
+        // ============================================
+        
+        // Unlock the debug menu (called when any win condition is met)
+        function unlockDebugMenu(reason) {
+            if (gameState.debugUnlocked) return; // Already unlocked
+            
+            gameState.debugUnlocked = true;
+            
+            // Show the debug toggle button
+            const debugToggle = document.getElementById('debugToggle');
+            if (debugToggle) {
+                debugToggle.classList.add('unlocked');
+            }
+            
+            console.log('Debug menu unlocked! Reason:', reason);
+        }
+        
+        // Check for pacifist victory (no kills in first 90 seconds)
+        function checkPacifistVictory() {
+            if (gameState.pacifistCheckDone) return;
+            if (!gameState.gameStartTime) return;
+            
+            const elapsedSeconds = (Date.now() - gameState.gameStartTime) / 1000;
+            
+            if (elapsedSeconds >= 90) {
+                gameState.pacifistCheckDone = true;
+                
+                if (gameState.kills === 0) {
+                    // Pacifist victory!
+                    gameState.pacifistVictory = true;
+                    unlockDebugMenu('pacifist');
+                    
+                    showDialogue('🕊️ PACIFIST VICTORY!', 
+                        '"You have walked through the forest without harming a single creature for 90 seconds. ' +
+                        'Your peaceful nature has been rewarded. The debug tools are now yours to command!"');
+                    
+                    showReward('🕊️ PACIFIST RUN COMPLETE! DEBUG MENU UNLOCKED!');
+                }
+            }
+        }
+        
+        // Called when completing the final sky giant arena (Ghost Trio - stage 2)
+        function triggerSkyKingVictory() {
+            if (gameState.skyKingVictory) return; // Already achieved
+            
+            gameState.skyKingVictory = true;
+            unlockDebugMenu('skyKing');
+            
+            // This dialogue will be shown after the arena win dialogue
+            setTimeout(() => {
+                showDialogue('👑 KING OF FOREST & SKY! 👑', 
+                    '"You have conquered both the earthly realm and the heavens above! ' +
+                    'All creatures bow before your might. The debug tools are now yours to command!"');
+                
+                showReward('👑 ALL SKY GIANTS DEFEATED! DEBUG MENU UNLOCKED!');
+            }, 4000); // Delay to show after arena win dialogue
+        }
+        
+        // Expose for external use (encounters.js will call this)
+        window.triggerSkyKingVictory = triggerSkyKingVictory;
+        window.unlockDebugMenu = unlockDebugMenu;
 
         // ============================================
         // DEBUG PANEL FUNCTIONS
