@@ -65,19 +65,19 @@ const STORE_DIALOGUE = {
     ],
     // When the shopkeeper greets you
     shopkeeperGreeting: [
-        '"Ah, a visitor of REFINEMENT! Pay no mind to these... peasant slimes. They crawled here from some uncultured slime pool to protest my establishment. Jealousy, I say! Pure jealousy!"',
-        '"You return! I knew you were a person of DISTINGUISHED taste. These rabble outside? Common muck from the bog. MY slimes have PEDIGREE. Seventeen generations of selective breeding! They wouldn\'t understand..."',
-        '"My dear friend! Come, come - away from those... creatures. *shudders* Do you know they don\'t even have PAPERS? No lineage documentation whatsoever! Meanwhile, MY specimens can trace their ancestry back to the Royal Slime Pools of the Old Kingdom. But alas, the masses always resent their betters, don\'t they?"'
+        '"Ah, a visitor of REFINEMENT! These rabble outside? Common muck from the bog"',
+        '"You return! I knew you were a person of DISTINGUISHED taste."',
+        '"Come, come - away from those... creatures. *shudders* MY specimens can trace their ancestry back to the Royal Slime Pools of the Old Kingdom. "'
     ],
     // When leaving the store
     shopkeeperFarewell: [
-        '"Do visit again! And don\'t let those gutter-slimes touch you on the way out. One never knows what diseases fester in an unrefined slime pool. Hmph!"',
-        '"Until next time, my cultured friend! Remember - a pedigree slime is not merely a companion, it is a STATEMENT. A statement that says \'I refuse to associate with common ooze.\' Toodle-oo!"',
-        '"Farewell, dear patron! Together, we shall show this forest what TRUE slime excellence looks like. Let the bog-dwellers gurgle in protest - they shall never know the joy of a PROPER gelatinous companion. Hehehehe!"'
+        '"Do visit again! And don\'t let those gutter-slimes touch you on the way out."',
+        '"Remember - a pedigree slime is not merely a companion, it is a STATEMENT. A statement that says \'I refuse to associate with ooze.\' Toodle-oo!"',
+        '"Let the bog-dwellers gurgle in protest - they shall never know the joy of a PROPER gelatinous companion. Hehehehe!"'
     ],
     // Default for visits 4+
-    defaultGreeting: '"Ah, my most ESTEEMED customer returns! The unwashed slimes outside have been particularly rowdy today. Unionizing, I suspect. How dreadfully common of them."',
-    defaultFarewell: '"Ta-ta for now! Do keep your pedigree slimes away from any wild pools - we wouldn\'t want them picking up any... *whispers* ...lower-class habits."'
+    defaultGreeting: '"The unwashed slimes outside have been particularly rowdy today. Unionizing, I suspect."',
+    defaultFarewell: '"Ta-ta for now! Do keep your pedigree slimes away from the wild pools"'
 };
 
 // ============================================
