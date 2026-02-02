@@ -441,6 +441,102 @@
             50% { transform: scale(1.1); }
         }
         
+        /* First-Person Toggle Button */
+        #fpToggle {
+            position: absolute;
+            top: 105px;
+            right: 10px;
+            width: 45px;
+            height: 45px;
+            background: linear-gradient(180deg, rgba(52,73,94,0.9), rgba(44,62,80,0.9));
+            border: 2px solid #95a5a6;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #fff;
+            pointer-events: auto;
+            cursor: pointer;
+            z-index: 100;
+            transition: all 0.2s;
+        }
+        
+        #fpToggle:hover {
+            box-shadow: 0 0 10px rgba(255,255,255,0.3);
+        }
+        
+        #fpToggle:active {
+            transform: scale(0.95);
+        }
+        
+        #fpToggle.active {
+            background: linear-gradient(180deg, rgba(46,204,113,0.9), rgba(39,174,96,0.9));
+            border-color: #2ecc71;
+            box-shadow: 0 0 10px rgba(46,204,113,0.5);
+        }
+        
+        #fpToggle .fp-label {
+            font-size: 6px;
+            font-family: 'Press Start 2P', cursive;
+            margin-top: 2px;
+        }
+        
+        /* Crosshair for first-person mode */
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 500;
+            display: none;
+        }
+        
+        #crosshair.active {
+            display: block;
+        }
+        
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+        }
+        
+        /* Horizontal line */
+        #crosshair::before {
+            width: 20px;
+            height: 2px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        /* Vertical line */
+        #crosshair::after {
+            width: 2px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        /* Center dot */
+        #crosshair .crosshair-dot {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 100, 100, 0.9);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 4px rgba(255, 100, 100, 0.5);
+        }
+        
         #bossHealthBar {
             position: absolute;
             top: 50px;
@@ -955,11 +1051,16 @@
         
         <div id="boomIndicator">💥</div>
         
-        <div id="instructions">📱 SWIPE+D-PAD • 💻 CLICK TO ENABLE MOUSE LOOK • WASD+MOUSE • CLICK=SHOOT • SPACE=BOOM</div>
+        <button id="fpToggle">👁️<span class="fp-label">VIEW</span></button>
+        
+        <div id="instructions">📱 SWIPE+D-PAD • 💻 CLICK TO ENABLE MOUSE LOOK • WASD+MOUSE • CLICK=SHOOT • SPACE=BOOM • V=VIEW</div>
     </div>
     
     <div id="damageFlash"></div>
     <div id="levelUp">LEVEL UP!</div>
+    
+    <!-- Crosshair for first-person mode -->
+    <div id="crosshair"><div class="crosshair-dot"></div></div>
     
     <div id="gameOver">
         <h1>GAME OVER</h1>
@@ -1340,6 +1441,7 @@
             isGameOver: false,
             menuOpen: false,
             hasDharmaWheel: false, // Dharma wheel reward from Dharmachakra encounter
+            firstPersonMode: false, // Toggle first-person camera view
             // Win condition tracking
             debugUnlocked: false,
             gameStartTime: null, // Set when game starts
@@ -2506,6 +2608,16 @@
             gameState.skyKingVictory = false;
             gameState.pacifistVictory = false;
             
+            // Reset first-person mode
+            gameState.firstPersonMode = false;
+            camera.fov = 60;
+            camera.updateProjectionMatrix();
+            playerGroup.visible = true;
+            const fpBtn = document.getElementById('fpToggle');
+            if (fpBtn) fpBtn.classList.remove('active');
+            const crosshair = document.getElementById('crosshair');
+            if (crosshair) crosshair.classList.remove('active');
+            
             // Reset cloud arena state
             if (encounterState.inCloudArena) {
                 // Restore forest environment
@@ -2880,7 +2992,7 @@
             function isUIElement(element) {
                 const uiIds = ['dpad', 'dpad-up', 'dpad-down', 'dpad-left', 'dpad-right', 
                                'magicBtn', 'menuBtn', 'restartBtn', 'boomBtn', 'slimeStoreMenu',
-                               'debugToggle', 'debugPanel'];
+                               'debugToggle', 'debugPanel', 'fpToggle'];
                 while (element) {
                     if (uiIds.includes(element.id) || 
                         element.classList?.contains('dpad-btn') ||
@@ -3022,6 +3134,7 @@
                         fireBoom(); 
                         break;
                     case 'q': shootProjectile(); break; // Q as backup for shooting
+                    case 'v': toggleFirstPerson(); break; // V to toggle first-person view
                     case 'e': case 'escape': 
                         if (gameState.menuOpen) closeMenu();
                         else openMenu();
@@ -3037,6 +3150,48 @@
                     case 'd': case 'arrowright': controls.right = false; break;
                 }
             });
+        }
+        
+        // Toggle first-person camera view
+        function toggleFirstPerson() {
+            gameState.firstPersonMode = !gameState.firstPersonMode;
+            
+            // Update FOV for more immersive first-person
+            if (gameState.firstPersonMode) {
+                camera.fov = 90;
+                showReward('👁️ FIRST-PERSON VIEW');
+            } else {
+                camera.fov = 60;
+                showReward('🎥 THIRD-PERSON VIEW');
+            }
+            camera.updateProjectionMatrix();
+            
+            // Update the toggle button appearance
+            const fpBtn = document.getElementById('fpToggle');
+            if (fpBtn) {
+                fpBtn.classList.toggle('active', gameState.firstPersonMode);
+            }
+            
+            // Show/hide crosshair
+            const crosshair = document.getElementById('crosshair');
+            if (crosshair) {
+                crosshair.classList.toggle('active', gameState.firstPersonMode);
+            }
+        }
+        
+        // Setup first-person toggle button
+        function setupFPToggle() {
+            const fpBtn = document.getElementById('fpToggle');
+            if (fpBtn) {
+                fpBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    toggleFirstPerson();
+                });
+                fpBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    toggleFirstPerson();
+                });
+            }
         }
 
         // Restart button
@@ -3081,18 +3236,39 @@
 
             // Update player visual position
             playerGroup.position.copy(gameState.player.position);
+            
+            // Hide player in first-person mode
+            playerGroup.visible = !gameState.firstPersonMode;
 
-            // Update camera with zoom
-            const camDist = 12 * gameState.cameraZoom;
-            const camHeight = 8 * gameState.cameraZoom;
-            camera.position.x = gameState.player.position.x + Math.sin(gameState.player.rotation) * camDist;
-            camera.position.z = gameState.player.position.z + Math.cos(gameState.player.rotation) * camDist;
-            camera.position.y = camHeight;
-            camera.lookAt(
-                gameState.player.position.x,
-                2,
-                gameState.player.position.z
-            );
+            // Update camera based on view mode
+            if (gameState.firstPersonMode) {
+                // First-person camera - at player eye level, looking forward
+                const eyeHeight = 1.8;
+                const lookDist = 10;
+                
+                camera.position.x = gameState.player.position.x;
+                camera.position.z = gameState.player.position.z;
+                camera.position.y = eyeHeight;
+                
+                // Look in the direction the player is facing
+                camera.lookAt(
+                    gameState.player.position.x - Math.sin(gameState.player.rotation) * lookDist,
+                    eyeHeight,
+                    gameState.player.position.z - Math.cos(gameState.player.rotation) * lookDist
+                );
+            } else {
+                // Third-person camera (original)
+                const camDist = 12 * gameState.cameraZoom;
+                const camHeight = 8 * gameState.cameraZoom;
+                camera.position.x = gameState.player.position.x + Math.sin(gameState.player.rotation) * camDist;
+                camera.position.z = gameState.player.position.z + Math.cos(gameState.player.rotation) * camDist;
+                camera.position.y = camHeight;
+                camera.lookAt(
+                    gameState.player.position.x,
+                    2,
+                    gameState.player.position.z
+                );
+            }
 
             // Update ground position to follow player
             ground.position.x = gameState.player.position.x;
@@ -3198,6 +3374,7 @@
                 setupKeyboard();
                 setupMenuControls();
                 setupDialogueButton();
+                setupFPToggle();
                 debug('Controls setup');
                 
                 // Initialize encounter system (includes portal textures)
@@ -3307,7 +3484,7 @@
                     
                     showDialogue('🕊️ PACIFIST VICTORY!', 
                         '"You have walked through the forest without harming a single creature for 90 seconds. ' +
-                        'Your peaceful nature has been rewarded. You win the nobel peace prize"');
+                        'Your peaceful nature has been rewarded. The debug tools are now yours to command!"');
                     
                     showReward('🕊️ PACIFIST RUN COMPLETE! DEBUG MENU UNLOCKED!');
                 }
@@ -3325,7 +3502,7 @@
             setTimeout(() => {
                 showDialogue('👑 KING OF FOREST & SKY! 👑', 
                     '"You have conquered both the earthly realm and the heavens above! ' +
-                    'All creatures bow before your might. You now command the powers beyond Buddah himself!"');
+                    'All creatures bow before your might. The debug tools are now yours to command!"');
                 
                 showReward('👑 ALL SKY GIANTS DEFEATED! DEBUG MENU UNLOCKED!');
             }, 4000); // Delay to show after arena win dialogue
