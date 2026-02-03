@@ -1053,7 +1053,7 @@
         
         <button id="fpToggle">👁️<span class="fp-label">VIEW</span></button>
         
-        <div id="instructions">📱 SWIPE+D-PAD • 💻 CLICK TO ENABLE MOUSE LOOK • WASD+MOUSE • CLICK=SHOOT • SPACE=BOOM • V=VIEW</div>
+        <div id="instructions">📱 SWIPE+D-PAD • 💻 WASD+MOUSE • CLICK=SHOOT • SPACE=BOOM • V=VIEW</div>
     </div>
     
     <div id="damageFlash"></div>
@@ -3062,56 +3062,63 @@
             // ============================================
             // DESKTOP MOUSE CONTROLS
             // ============================================
-            // Click canvas to enable mouse look (pointer lock)
-            // Move mouse to rotate camera
+            // Move mouse to rotate camera (always active)
             // Left click to shoot
+            // Right click for boom
             
-            let mouseEnabled = false;
+            let lastMouseX = null;
+            let mouseActive = false;
             
-            // Request pointer lock when clicking on canvas/viewArea
-            canvas.addEventListener('click', (e) => {
-                if (gameState.isGameOver || gameState.menuOpen) return;
-                if (isUIElement(e.target)) return;
-                
-                // If not locked, request lock
-                if (document.pointerLockElement !== canvas) {
-                    canvas.requestPointerLock();
-                }
+            // Track when mouse enters canvas area
+            canvas.addEventListener('mouseenter', () => {
+                mouseActive = true;
             });
             
-            // Handle pointer lock change
-            document.addEventListener('pointerlockchange', () => {
-                mouseEnabled = (document.pointerLockElement === canvas);
-                if (mouseEnabled) {
-                    console.log('Mouse look enabled - move mouse to rotate, click to shoot, ESC to exit');
-                }
+            canvas.addEventListener('mouseleave', () => {
+                mouseActive = false;
+                lastMouseX = null;
             });
             
-            // Mouse movement for camera rotation (when pointer locked)
+            // Mouse movement for camera rotation (always on when mouse is over canvas)
             document.addEventListener('mousemove', (e) => {
-                if (!mouseEnabled || gameState.dialogueTimer > 0 || gameState.isGameOver || gameState.menuOpen) return;
+                if (!mouseActive || gameState.dialogueTimer > 0 || gameState.isGameOver || gameState.menuOpen) {
+                    lastMouseX = null;
+                    return;
+                }
                 
-                // Use movementX for smooth rotation
-                const sensitivity = 0.003;
-                gameState.player.rotation += e.movementX * sensitivity;
+                // Check if mouse is over a UI element
+                const element = document.elementFromPoint(e.clientX, e.clientY);
+                if (isUIElement(element)) {
+                    lastMouseX = null;
+                    return;
+                }
+                
+                if (lastMouseX !== null) {
+                    const dx = e.clientX - lastMouseX;
+                    const sensitivity = 0.005;
+                    gameState.player.rotation += dx * sensitivity;
+                }
+                lastMouseX = e.clientX;
             });
             
-            // Left click to shoot (when pointer locked)
-            document.addEventListener('mousedown', (e) => {
-                if (!mouseEnabled || gameState.dialogueTimer > 0 || gameState.isGameOver || gameState.menuOpen) return;
+            // Left click to shoot
+            canvas.addEventListener('mousedown', (e) => {
+                if (gameState.dialogueTimer > 0 || gameState.isGameOver || gameState.menuOpen) return;
+                
+                // Check if clicking on UI
+                const element = document.elementFromPoint(e.clientX, e.clientY);
+                if (isUIElement(element)) return;
                 
                 if (e.button === 0) { // Left click
                     shootProjectile();
                 }
             });
             
-            // Right click for boom (optional alternative)
-            document.addEventListener('contextmenu', (e) => {
-                if (mouseEnabled) {
-                    e.preventDefault();
-                    if (!gameState.dialogueTimer && !gameState.isGameOver && !gameState.menuOpen) {
-                        fireBoom();
-                    }
+            // Right click for boom
+            canvas.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                if (!gameState.dialogueTimer && !gameState.isGameOver && !gameState.menuOpen) {
+                    fireBoom();
                 }
             });
         }
@@ -3482,9 +3489,9 @@
                     gameState.pacifistVictory = true;
                     unlockDebugMenu('pacifist');
                     
-                    showDialogue('🕊️ THE MOST DOGMATIC BUDDHIST!', 
-                        '"You have walked through the forest without harming a single creature. ' +
-                        'Your peaceful nature has been rewarded."');
+                    showDialogue('🕊️ PACIFIST VICTORY!', 
+                        '"You have walked through the forest without harming a single creature for 90 seconds. ' +
+                        'Your peaceful nature has been rewarded. The debug tools are now yours to command!"');
                     
                     showReward('🕊️ PACIFIST RUN COMPLETE! DEBUG MENU UNLOCKED!');
                 }
@@ -3502,7 +3509,7 @@
             setTimeout(() => {
                 showDialogue('👑 KING OF FOREST & SKY! 👑', 
                     '"You have conquered both the earthly realm and the heavens above! ' +
-                    'Probably many evil schemes were thwarted by your ruthless crusade"');
+                    'All creatures bow before your might. The debug tools are now yours to command!"');
                 
                 showReward('👑 ALL SKY GIANTS DEFEATED! DEBUG MENU UNLOCKED!');
             }, 4000); // Delay to show after arena win dialogue
