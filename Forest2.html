@@ -3062,63 +3062,60 @@
             // ============================================
             // DESKTOP MOUSE CONTROLS
             // ============================================
-            // Move mouse to rotate camera (always active)
+            // Move mouse to rotate camera (no click needed)
             // Left click to shoot
             // Right click for boom
             
             let lastMouseX = null;
-            let mouseActive = false;
             
-            // Track when mouse enters canvas area
-            canvas.addEventListener('mouseenter', () => {
-                mouseActive = true;
-            });
-            
-            canvas.addEventListener('mouseleave', () => {
-                mouseActive = false;
-                lastMouseX = null;
-            });
-            
-            // Mouse movement for camera rotation (always on when mouse is over canvas)
+            // Mouse move - rotate camera when moving over game area
             document.addEventListener('mousemove', (e) => {
-                if (!mouseActive || gameState.dialogueTimer > 0 || gameState.isGameOver || gameState.menuOpen) {
+                if (gameState.dialogueTimer > 0 || gameState.isGameOver || gameState.menuOpen) {
                     lastMouseX = null;
                     return;
                 }
                 
-                // Check if mouse is over a UI element
+                // Check if mouse is over a UI element - if so, don't rotate
                 const element = document.elementFromPoint(e.clientX, e.clientY);
                 if (isUIElement(element)) {
                     lastMouseX = null;
                     return;
                 }
                 
+                // Rotate camera based on mouse movement
                 if (lastMouseX !== null) {
                     const dx = e.clientX - lastMouseX;
-                    const sensitivity = 0.005;
+                    const sensitivity = 0.004;
                     gameState.player.rotation += dx * sensitivity;
                 }
                 lastMouseX = e.clientX;
             });
             
+            // Reset tracking when mouse leaves window
+            document.addEventListener('mouseleave', () => {
+                lastMouseX = null;
+            });
+            
             // Left click to shoot
-            canvas.addEventListener('mousedown', (e) => {
+            document.addEventListener('mousedown', (e) => {
                 if (gameState.dialogueTimer > 0 || gameState.isGameOver || gameState.menuOpen) return;
                 
-                // Check if clicking on UI
+                // Check if clicking on UI element
                 const element = document.elementFromPoint(e.clientX, e.clientY);
                 if (isUIElement(element)) return;
                 
                 if (e.button === 0) { // Left click
                     shootProjectile();
+                } else if (e.button === 2) { // Right click
+                    fireBoom();
                 }
             });
             
-            // Right click for boom
-            canvas.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                if (!gameState.dialogueTimer && !gameState.isGameOver && !gameState.menuOpen) {
-                    fireBoom();
+            // Prevent context menu on game area
+            document.addEventListener('contextmenu', (e) => {
+                const element = document.elementFromPoint(e.clientX, e.clientY);
+                if (!isUIElement(element)) {
+                    e.preventDefault();
                 }
             });
         }
