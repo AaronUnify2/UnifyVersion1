@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mermaid Diagram Builder</title>
+    <title>Pyramid Diagram Builder</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -18,29 +18,36 @@
             font-family: 'Syne', sans-serif;
         }
         
-        .node-card {
+        .level-card {
             background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.8) 100%);
-            border: 1px solid rgba(148, 163, 184, 0.2);
+            border: 2px solid rgba(96, 165, 250, 0.3);
             transition: all 0.3s ease;
         }
         
-        .node-card:hover {
-            border-color: rgba(148, 163, 184, 0.4);
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+        .level-card:hover {
+            border-color: rgba(96, 165, 250, 0.6);
+            box-shadow: 0 8px 16px rgba(59, 130, 246, 0.2);
+        }
+
+        .node-input {
+            background: rgba(2, 6, 23, 0.8);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            color: white;
         }
         
-        .connection-card {
-            background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.6) 100%);
-            border: 1px solid rgba(168, 85, 247, 0.2);
+        .node-input:focus {
+            border-color: rgba(96, 165, 250, 0.5);
+            background: rgba(2, 6, 23, 0.9);
+            outline: none;
         }
-        
-        input, textarea, select {
+
+        input[type="text"], textarea, select {
             background: rgba(2, 6, 23, 0.8) !important;
             border: 1px solid rgba(148, 163, 184, 0.2) !important;
             color: white !important;
         }
         
-        input:focus, textarea:focus, select:focus {
+        input[type="text"]:focus, textarea:focus, select:focus {
             border-color: rgba(96, 165, 250, 0.5) !important;
             background: rgba(2, 6, 23, 0.9) !important;
             outline: none;
@@ -50,7 +57,7 @@
             background: linear-gradient(135deg, rgba(51, 65, 85, 0.1) 0%, rgba(30, 41, 59, 0.1) 100%);
             border: 1px solid rgba(148, 163, 184, 0.1);
             border-radius: 12px;
-            overflow: hidden;
+            overflow: auto;
         }
 
         #diagram-container svg {
@@ -58,6 +65,39 @@
             margin: auto;
             max-width: 100%;
             height: auto;
+        }
+
+        .pyramid-visual {
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .pyramid-level {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .pyramid-node {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.2) 100%);
+            border: 2px solid rgba(59, 130, 246, 0.5);
+            padding: 12px 16px;
+            border-radius: 8px;
+            color: rgba(191, 219, 254, 1);
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+            max-width: 150px;
+            word-break: break-word;
+        }
+
+        .pyramid-node.empty {
+            border-style: dashed;
+            opacity: 0.5;
+            color: rgba(148, 163, 184, 0.7);
         }
 
         @keyframes slideIn {
@@ -74,6 +114,20 @@
         .notification {
             animation: slideIn 0.3s ease;
         }
+
+        .level-number {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 1) 0%, rgba(37, 99, 235, 1) 100%);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 min-h-screen">
@@ -83,10 +137,10 @@
         // Initialize Mermaid
         mermaid.initialize({ startOnLoad: true, theme: 'dark' });
 
-        class MermaidBuilder {
+        class PyramidBuilder {
             constructor() {
                 this.orientation = null;
-                this.nodes = [];
+                this.levels = [];
                 this.connections = [];
                 this.showCode = false;
                 this.notification = '';
@@ -97,100 +151,136 @@
                 return `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             }
 
+            addLevel() {
+                const newLevel = {
+                    id: this.generateNodeId(),
+                    nodes: [
+                        { id: this.generateNodeId(), title: '', text: '' }
+                    ]
+                };
+                this.levels.push(newLevel);
+                this.render();
+            }
+
+            addNodeToLevel(levelIndex) {
+                if (levelIndex >= 0 && levelIndex < this.levels.length) {
+                    this.levels[levelIndex].nodes.push({
+                        id: this.generateNodeId(),
+                        title: '',
+                        text: ''
+                    });
+                    this.render();
+                }
+            }
+
+            removeLevel(levelIndex) {
+                this.levels.splice(levelIndex, 1);
+                this.render();
+                this.renderDiagram();
+            }
+
+            updateNode(levelIndex, nodeIndex, field, value) {
+                if (levelIndex >= 0 && levelIndex < this.levels.length &&
+                    nodeIndex >= 0 && nodeIndex < this.levels[levelIndex].nodes.length) {
+                    this.levels[levelIndex].nodes[nodeIndex][field] = value;
+                    this.render();
+                    this.renderDiagram();
+                }
+            }
+
+            deleteNode(levelIndex, nodeIndex) {
+                if (levelIndex >= 0 && levelIndex < this.levels.length) {
+                    this.levels[levelIndex].nodes.splice(nodeIndex, 1);
+                    if (this.levels[levelIndex].nodes.length === 0 && this.levels.length > 1) {
+                        this.removeLevel(levelIndex);
+                    } else {
+                        this.render();
+                        this.renderDiagram();
+                    }
+                }
+            }
+
+            addConnectionToNode(levelIndex, nodeIndex) {
+                if (levelIndex < this.levels.length - 1) {
+                    const sourceNode = this.levels[levelIndex].nodes[nodeIndex];
+                    const newConnection = {
+                        id: this.generateNodeId(),
+                        fromNode: sourceNode.id,
+                        toNode: this.levels[levelIndex + 1].nodes[0]?.id || '',
+                        label: 'connects to'
+                    };
+                    this.connections.push(newConnection);
+                    this.render();
+                }
+            }
+
+            updateConnection(connIndex, field, value) {
+                if (connIndex >= 0 && connIndex < this.connections.length) {
+                    this.connections[connIndex][field] = value;
+                    this.render();
+                    this.renderDiagram();
+                }
+            }
+
+            deleteConnection(connIndex) {
+                this.connections.splice(connIndex, 1);
+                this.render();
+                this.renderDiagram();
+            }
+
             generateMermaidCode() {
-                if (!this.orientation || this.nodes.length === 0) {
+                if (this.levels.length === 0) {
                     return '';
                 }
 
                 let code = `graph ${this.orientation === 'landscape' ? 'LR' : 'TD'}\n`;
                 
-                // Add nodes
-                this.nodes.forEach(node => {
-                    const label = node.text ? `${node.title}<br/><i>${node.text}</i>` : node.title;
-                    code += `    ${node.id}["${label}"]\n`;
+                // Add all nodes
+                this.levels.forEach((level, levelIndex) => {
+                    level.nodes.forEach(node => {
+                        if (node.title.trim()) {
+                            const label = node.text ? `${node.title}<br/><i>${node.text}</i>` : node.title;
+                            code += `    ${node.id}["${label}"]\n`;
+                        }
+                    });
                 });
 
                 // Add connections
                 this.connections.forEach(conn => {
-                    code += `    ${conn.from} -->|${conn.label}| ${conn.to}\n`;
+                    code += `    ${conn.fromNode} -->|${conn.label}| ${conn.toNode}\n`;
                 });
 
                 return code;
+            }
+
+            getAllNodes() {
+                const nodes = [];
+                this.levels.forEach(level => {
+                    level.nodes.forEach(node => {
+                        if (node.title.trim()) {
+                            nodes.push(node);
+                        }
+                    });
+                });
+                return nodes;
             }
 
             async renderDiagram() {
                 const mermaidCode = this.generateMermaidCode();
                 const container = document.getElementById('diagram-container');
                 
-                if (!mermaidCode) {
+                if (!mermaidCode || this.getAllNodes().length === 0) {
                     container.innerHTML = '<p class="text-slate-500">Add nodes to see diagram</p>';
                     return;
                 }
 
                 try {
-                    const { svg } = await mermaid.render('diagram', mermaidCode);
+                    const { svg } = await mermaid.render('diagram_' + Date.now(), mermaidCode);
                     container.innerHTML = svg;
                 } catch (e) {
                     console.error('Mermaid render error:', e);
                     container.innerHTML = '<div style="padding: 20px; color: #666;">Diagram rendering error</div>';
                 }
-            }
-
-            addNode() {
-                const newNode = {
-                    id: this.generateNodeId(),
-                    title: 'New Node',
-                    text: ''
-                };
-                this.nodes.push(newNode);
-                this.render();
-            }
-
-            updateNode(id, field, value) {
-                const node = this.nodes.find(n => n.id === id);
-                if (node) {
-                    node[field] = value;
-                    this.render();
-                    this.renderDiagram();
-                }
-            }
-
-            deleteNode(id) {
-                this.nodes = this.nodes.filter(n => n.id !== id);
-                this.connections = this.connections.filter(c => c.from !== id && c.to !== id);
-                this.render();
-                this.renderDiagram();
-            }
-
-            addConnection() {
-                if (this.nodes.length < 2) {
-                    this.showNotification('You need at least 2 nodes to create a connection');
-                    return;
-                }
-                const newConnection = {
-                    id: this.generateNodeId(),
-                    from: this.nodes[0].id,
-                    to: this.nodes[1].id,
-                    label: 'connects to'
-                };
-                this.connections.push(newConnection);
-                this.render();
-                this.renderDiagram();
-            }
-
-            updateConnection(id, field, value) {
-                const conn = this.connections.find(c => c.id === id);
-                if (conn) {
-                    conn[field] = value;
-                    this.render();
-                    this.renderDiagram();
-                }
-            }
-
-            deleteConnection(id) {
-                this.connections = this.connections.filter(c => c.id !== id);
-                this.render();
-                this.renderDiagram();
             }
 
             showNotification(message) {
@@ -225,7 +315,7 @@
                         ctx.drawImage(img, 10, 10);
                         const link = document.createElement('a');
                         link.href = canvas.toDataURL('image/png');
-                        link.download = 'mermaid-diagram.png';
+                        link.download = 'pyramid-diagram.png';
                         link.click();
                         this.showNotification('Diagram downloaded!');
                     };
@@ -250,14 +340,14 @@
                     app.innerHTML = `
                         <div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 flex items-center justify-center p-4">
                             <div class="text-center">
-                                <h1 class="text-5xl font-bold text-white mb-2" style="font-family: 'Syne', sans-serif;">Mermaid Builder</h1>
+                                <h1 class="text-5xl font-bold text-white mb-2" style="font-family: 'Syne', sans-serif;">Pyramid Builder</h1>
                                 <p class="text-slate-400 mb-12 text-lg">Choose your canvas orientation</p>
                                 <div class="flex gap-8 justify-center flex-wrap">
-                                    <button onclick="app.setOrientation('portrait')" class="group relative px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50">
+                                    <button onclick="app.orientation = 'portrait'; app.render();" class="group relative px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-blue-500/50">
                                         <div class="text-sm opacity-75 mb-2">↕️</div>
                                         Portrait (TD)
                                     </button>
-                                    <button onclick="app.setOrientation('landscape')" class="group relative px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-purple-500/50">
+                                    <button onclick="app.orientation = 'landscape'; app.render();" class="group relative px-8 py-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-purple-500/50">
                                         <div class="text-sm opacity-75 mb-2">↔️</div>
                                         Landscape (LR)
                                     </button>
@@ -268,84 +358,109 @@
                     return;
                 }
 
+                const allNodes = this.getAllNodes();
+
                 app.innerHTML = `
                     <div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800">
                         <div class="max-w-7xl mx-auto p-6">
                             <!-- Header -->
                             <div class="mb-8 flex items-center justify-between flex-wrap gap-4">
                                 <div>
-                                    <h1 class="text-4xl font-bold text-white mb-1" style="font-family: 'Syne', sans-serif;">Mermaid Builder</h1>
+                                    <h1 class="text-4xl font-bold text-white mb-1" style="font-family: 'Syne', sans-serif;">Pyramid Builder</h1>
                                     <p class="text-slate-400">
                                         ${this.orientation === 'landscape' ? '→ Landscape (Left to Right)' : '↓ Portrait (Top to Bottom)'}
                                     </p>
                                 </div>
-                                <button onclick="app.resetProject()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
+                                <button onclick="app.orientation = null; app.levels = []; app.connections = []; app.showCode = false; app.render();" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
                                     New Project
                                 </button>
                             </div>
 
                             <!-- Main Grid -->
                             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                                <!-- Left Panel - Nodes -->
-                                <div class="lg:col-span-1">
-                                    <div class="node-card rounded-xl p-6">
-                                        <div class="flex items-center justify-between mb-4">
-                                            <h2 class="text-xl font-bold text-white">Nodes</h2>
-                                            <button onclick="app.addNode()" class="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors" title="Add new node">
-                                                <i class="fas fa-plus"></i>
-                                            </button>
-                                        </div>
-
-                                        <div class="space-y-3 max-h-96 overflow-y-auto">
-                                            ${this.nodes.length === 0 ? '<p class="text-slate-400 text-sm py-8 text-center">No nodes yet. Click + to add one.</p>' : ''}
-                                            ${this.nodes.map(node => `
-                                                <div class="bg-slate-800 border border-slate-700 rounded-lg p-3 space-y-2">
-                                                    <input type="text" value="${node.title}" onchange="app.updateNode('${node.id}', 'title', this.value)" placeholder="Node Title" class="w-full px-3 py-2 rounded text-sm" />
-                                                    <textarea onchange="app.updateNode('${node.id}', 'text', this.value)" placeholder="Node Description (optional)" class="w-full px-3 py-2 rounded text-sm h-16 resize-none">${node.text}</textarea>
-                                                    <button onclick="app.deleteNode('${node.id}')" class="w-full py-1 bg-red-900/30 hover:bg-red-900/50 text-red-300 rounded text-sm transition-colors flex items-center justify-center gap-1">
-                                                        <i class="fas fa-trash"></i>
-                                                        Delete
+                                <!-- Left Panel - Pyramid Levels -->
+                                <div class="lg:col-span-1 max-h-[600px] overflow-y-auto">
+                                    <div class="space-y-4">
+                                        ${this.levels.length === 0 ? `
+                                            <div class="level-card rounded-xl p-6 text-center">
+                                                <p class="text-slate-400 mb-4">No levels yet. Start building your pyramid!</p>
+                                            </div>
+                                        ` : ''}
+                                        ${this.levels.map((level, levelIndex) => `
+                                            <div class="level-card rounded-xl p-6">
+                                                <div class="flex items-center justify-between mb-4">
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="level-number">${levelIndex + 1}</div>
+                                                        <h3 class="text-lg font-bold text-white">Level ${levelIndex + 1}</h3>
+                                                    </div>
+                                                    <button onclick="app.removeLevel(${levelIndex})" class="p-1 text-red-400 hover:text-red-300 transition-colors" title="Delete level">
+                                                        <i class="fas fa-trash text-lg"></i>
                                                     </button>
                                                 </div>
-                                            `).join('')}
-                                        </div>
+                                                <div class="space-y-3 mb-4">
+                                                    ${level.nodes.map((node, nodeIndex) => `
+                                                        <div class="bg-slate-800 border border-slate-700 rounded-lg p-3 space-y-2">
+                                                            <input type="text" value="${node.title}" onchange="app.updateNode(${levelIndex}, ${nodeIndex}, 'title', this.value)" placeholder="Node Title" class="w-full px-3 py-2 rounded text-sm" />
+                                                            <textarea onchange="app.updateNode(${levelIndex}, ${nodeIndex}, 'text', this.value)" placeholder="Description (optional)" class="w-full px-3 py-2 rounded text-sm h-12 resize-none">${node.text}</textarea>
+                                                            <button onclick="app.deleteNode(${levelIndex}, ${nodeIndex})" class="w-full py-1 bg-red-900/30 hover:bg-red-900/50 text-red-300 rounded text-sm transition-colors flex items-center justify-center gap-1">
+                                                                <i class="fas fa-trash text-sm"></i>
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    `).join('')}
+                                                </div>
+                                                <button onclick="app.addNodeToLevel(${levelIndex})" class="w-full py-2 bg-blue-600/50 hover:bg-blue-600 text-blue-100 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
+                                                    <i class="fas fa-plus"></i>
+                                                    Add Node
+                                                </button>
+                                            </div>
+                                        `).join('')}
                                     </div>
+                                    <button onclick="app.addLevel()" class="w-full mt-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-semibold flex items-center justify-center gap-2">
+                                        <i class="fas fa-plus"></i>
+                                        Add Level
+                                    </button>
                                 </div>
 
                                 <!-- Center Panel - Diagram -->
                                 <div class="lg:col-span-1">
                                     <div id="diagram-container" class="w-full h-96 flex items-center justify-center">
-                                        <p class="text-slate-500">Add nodes to see diagram</p>
+                                        <p class="text-slate-500">Add levels to see diagram</p>
                                     </div>
                                 </div>
 
                                 <!-- Right Panel - Connections -->
-                                <div class="lg:col-span-1">
-                                    <div class="node-card rounded-xl p-6">
-                                        <div class="flex items-center justify-between mb-4">
-                                            <h2 class="text-xl font-bold text-white">Connections</h2>
-                                            <button onclick="app.addConnection()" class="p-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors" title="Add new connection">
-                                                <i class="fas fa-plus"></i>
-                                            </button>
-                                        </div>
+                                <div class="lg:col-span-1 max-h-[600px] overflow-y-auto">
+                                    <div class="level-card rounded-xl p-6">
+                                        <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                                            <i class="fas fa-link"></i>
+                                            Connections
+                                        </h2>
 
-                                        <div class="space-y-3 max-h-96 overflow-y-auto">
-                                            ${this.connections.length === 0 ? '<p class="text-slate-400 text-sm py-8 text-center">No connections yet. Click + to add one.</p>' : ''}
-                                            ${this.connections.map(conn => `
-                                                <div class="connection-card rounded-lg p-3 space-y-2">
-                                                    <select onchange="app.updateConnection('${conn.id}', 'from', this.value)" class="w-full px-3 py-2 rounded text-sm">
-                                                        ${this.nodes.map(node => `<option value="${node.id}" ${conn.from === node.id ? 'selected' : ''}>${node.title || 'Unnamed'}</option>`).join('')}
-                                                    </select>
-                                                    <input type="text" value="${conn.label}" onchange="app.updateConnection('${conn.id}', 'label', this.value)" placeholder="Connection Label" class="w-full px-3 py-2 rounded text-sm" />
-                                                    <select onchange="app.updateConnection('${conn.id}', 'to', this.value)" class="w-full px-3 py-2 rounded text-sm">
-                                                        ${this.nodes.map(node => `<option value="${node.id}" ${conn.to === node.id ? 'selected' : ''}>${node.title || 'Unnamed'}</option>`).join('')}
-                                                    </select>
-                                                    <button onclick="app.deleteConnection('${conn.id}')" class="w-full py-1 bg-red-900/30 hover:bg-red-900/50 text-red-300 rounded text-sm transition-colors flex items-center justify-center gap-1">
-                                                        <i class="fas fa-trash"></i>
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            `).join('')}
+                                        <div class="space-y-3">
+                                            ${this.connections.length === 0 ? '<p class="text-slate-400 text-sm py-4">Auto-connected levels. Customize below.</p>' : ''}
+                                            ${this.connections.map((conn, connIndex) => {
+                                                const sourceNode = allNodes.find(n => n.id === conn.fromNode);
+                                                const targetNode = allNodes.find(n => n.id === conn.toNode);
+                                                return `
+                                                    <div class="bg-slate-800 border border-slate-700 rounded-lg p-3 space-y-2">
+                                                        <div class="text-xs text-slate-400">
+                                                            From: <span class="text-blue-300">${sourceNode?.title || 'Unknown'}</span>
+                                                        </div>
+                                                        <input type="text" value="${conn.label}" onchange="app.updateConnection(${connIndex}, 'label', this.value)" placeholder="Connection label" class="w-full px-3 py-2 rounded text-sm" />
+                                                        <div class="text-xs text-slate-400">
+                                                            To: 
+                                                            <select onchange="app.updateConnection(${connIndex}, 'toNode', this.value)" class="text-xs px-2 py-1">
+                                                                ${allNodes.map(node => `<option value="${node.id}" ${conn.toNode === node.id ? 'selected' : ''}>${node.title}</option>`).join('')}
+                                                            </select>
+                                                        </div>
+                                                        <button onclick="app.deleteConnection(${connIndex})" class="w-full py-1 bg-red-900/30 hover:bg-red-900/50 text-red-300 rounded text-sm transition-colors flex items-center justify-center gap-1">
+                                                            <i class="fas fa-trash text-sm"></i>
+                                                            Delete
+                                                        </button>
+                                                    </div>
+                                                `;
+                                            }).join('')}
                                         </div>
                                     </div>
                                 </div>
@@ -354,27 +469,27 @@
                             <!-- Bottom Panel - Preview & Export -->
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <!-- Full Diagram Preview -->
-                                <div class="node-card rounded-xl p-6">
+                                <div class="level-card rounded-xl p-6">
                                     <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
                                         <i class="fas fa-eye"></i>
-                                        Diagram Preview
+                                        Full Diagram
                                     </h3>
                                     <div class="bg-slate-800 rounded-lg p-4 h-64 overflow-auto flex items-center justify-center">
                                         <div id="diagram-container" class="w-full">
-                                            ${!this.generateMermaidCode() ? '<p class="text-slate-500 text-center">Add nodes and connections to preview</p>' : ''}
+                                            ${this.getAllNodes().length === 0 ? '<p class="text-slate-500 text-center">Add nodes to see diagram</p>' : ''}
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- Code & Export -->
-                                <div class="node-card rounded-xl p-6">
+                                <div class="level-card rounded-xl p-6">
                                     <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
                                         <i class="fas fa-code"></i>
                                         Export
                                     </h3>
                                     
                                     <div class="space-y-3">
-                                        <button onclick="app.toggleCode()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2">
+                                        <button onclick="app.showCode = !app.showCode; app.render();" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2">
                                             <i class="fas fa-code"></i>
                                             ${this.showCode ? 'Hide' : 'Show'} Code
                                         </button>
@@ -385,12 +500,12 @@
                                             </div>
                                         ` : ''}
 
-                                        <button onclick="app.copyCode()" ${!this.generateMermaidCode() ? 'disabled' : ''} class="w-full py-2 bg-slate-600 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center justify-center gap-2">
+                                        <button onclick="app.copyCode()" ${this.getAllNodes().length === 0 ? 'disabled' : ''} class="w-full py-2 bg-slate-600 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center justify-center gap-2">
                                             <i class="fas fa-copy"></i>
                                             Copy Code
                                         </button>
 
-                                        <button onclick="app.downloadImage()" ${!this.generateMermaidCode() ? 'disabled' : ''} class="w-full py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center justify-center gap-2">
+                                        <button onclick="app.downloadImage()" ${this.getAllNodes().length === 0 ? 'disabled' : ''} class="w-full py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center justify-center gap-2">
                                             <i class="fas fa-download"></i>
                                             Download as PNG
                                         </button>
@@ -410,29 +525,10 @@
 
                 this.renderDiagram();
             }
-
-            setOrientation(orientation) {
-                this.orientation = orientation;
-                this.render();
-                this.renderDiagram();
-            }
-
-            resetProject() {
-                this.orientation = null;
-                this.nodes = [];
-                this.connections = [];
-                this.showCode = false;
-                this.render();
-            }
-
-            toggleCode() {
-                this.showCode = !this.showCode;
-                this.render();
-            }
         }
 
         // Initialize the app
-        const app = new MermaidBuilder();
+        const app = new PyramidBuilder();
     </script>
 </body>
 </html>
