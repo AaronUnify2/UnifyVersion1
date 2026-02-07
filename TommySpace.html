@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Titan Scale: Heavy Gravity</title>
+    <title>Titan Scale: Textured</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Michroma&display=swap');
         
@@ -89,15 +89,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
     /* ================================================================
-       TITAN SCALE v9: HEAVY GRAVITY
+       TITAN SCALE: TEXTURED EDITION
        ================================================================ */
 
     const config = {
         renderDist: 3000000000,
         lockDist: 40000,
-        // SPEED CONFIGURATION
-        deepSpaceSpeed: 2500, // Reduced from 20,000 to 2,500
-        minSpeed: 5,         // Crawling speed near surface
+        deepSpaceSpeed: 2500,
+        minSpeed: 5,
         sunRadius: 50000
     };
 
@@ -112,47 +111,158 @@
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, config.renderDist);
     camera.up.set(0, 1, 0); 
 
-    // Lighting
-    scene.add(new THREE.AmbientLight(0x404040, 1.2));
-    scene.add(new THREE.PointLight(0xffffff, 1.8, 0));
+    scene.add(new THREE.AmbientLight(0x404040, 1.5)); // Slightly brighter for textures
+    scene.add(new THREE.PointLight(0xffffff, 2.0, 0));
 
-    // Raycaster
     const raycaster = new THREE.Raycaster();
     const systemGroup = new THREE.Group();
     scene.add(systemGroup);
+
+    // ================= TEXTURE GENERATORS (From Original) =================
+    function makeTexture(w, h, drawFn) {
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const ctx = c.getContext('2d'); drawFn(ctx, w, h);
+        const t = new THREE.CanvasTexture(c); t.magFilter = THREE.LinearFilter; return t;
+    }
+
+    function sunTexture() {
+        return makeTexture(256, 128, (ctx, w, h) => {
+            ctx.fillStyle = '#ff8c00'; ctx.fillRect(0, 0, w, h);
+            for (let i = 0; i < 200; i++) {
+                ctx.fillStyle = ['#ffaa00', '#ff6600', '#ffcc00', '#ffe066'][Math.floor(Math.random() * 4)];
+                ctx.fillRect(Math.random() * w, Math.random() * h, 3 + Math.random() * 5, 2 + Math.random() * 3);
+            }
+        });
+    }
+
+    function mercuryTexture() {
+        return makeTexture(128, 64, (ctx, w, h) => {
+            ctx.fillStyle = '#8a8a8a'; ctx.fillRect(0, 0, w, h);
+            for (let i = 0; i < 30; i++) {
+                ctx.fillStyle = `rgba(60,60,60,${0.3 + Math.random() * 0.4})`;
+                ctx.beginPath(); ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 0, Math.PI * 2); ctx.fill();
+            }
+        });
+    }
+
+    function venusTexture() {
+        return makeTexture(128, 64, (ctx, w, h) => {
+            ctx.fillStyle = '#d4a537'; ctx.fillRect(0, 0, w, h);
+            for (let i = 0; i < 50; i++) {
+                ctx.fillStyle = `rgba(${180 + Math.random()*40}, ${140 + Math.random()*40}, ${30 + Math.random()*30}, 0.3)`;
+                ctx.fillRect(Math.random() * w, Math.random() * h, 4 + Math.random() * 8, 1 + Math.random() * 2);
+            }
+        });
+    }
+
+    function earthTexture() {
+        return makeTexture(256, 128, (ctx, w, h) => {
+            ctx.fillStyle = '#1a5276'; ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = '#27ae60';
+            ctx.beginPath(); ctx.ellipse(60, 50, 24, 36, 0.2, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(110, 40, 30, 24, -0.1, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(170, 60, 36, 20, 0.3, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#d4ac6e';
+            ctx.beginPath(); ctx.ellipse(116, 56, 12, 8, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, w, 10); ctx.fillRect(0, h - 10, w, 10);
+            ctx.fillStyle = 'rgba(255,255,255,0.25)';
+            for (let i = 0; i < 20; i++) { ctx.fillRect(Math.random() * w, Math.random() * h, 16 + Math.random() * 30, 4); }
+        });
+    }
+
+    function marsTexture() {
+        return makeTexture(128, 64, (ctx, w, h) => {
+            ctx.fillStyle = '#c0392b'; ctx.fillRect(0, 0, w, h);
+            for (let i = 0; i < 40; i++) {
+                ctx.fillStyle = `rgba(${150 + Math.random()*60}, ${50 + Math.random()*30}, ${20 + Math.random()*20}, 0.4)`;
+                ctx.beginPath(); ctx.arc(Math.random() * w, Math.random() * h, 2 + Math.random() * 6, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillRect(0, 0, w, 6);
+        });
+    }
+
+    function jupiterTexture() {
+        return makeTexture(256, 128, (ctx, w, h) => {
+            const bands = ['#c4956a', '#d4a574', '#a07850', '#e8c090', '#b08860', '#c8a870', '#906840'];
+            for (let y = 0; y < h; y++) { ctx.fillStyle = bands[y % bands.length]; ctx.fillRect(0, y, w, 1); }
+            ctx.fillStyle = '#c05030'; ctx.beginPath(); ctx.ellipse(160, 70, 20, 12, 0, 0, Math.PI * 2); ctx.fill();
+        });
+    }
+
+    function saturnTexture() {
+        return makeTexture(256, 128, (ctx, w, h) => {
+            const bands = ['#d4b896', '#c4a878', '#e0c8a0', '#b89868', '#d0b888', '#c8a070'];
+            for (let y = 0; y < h; y++) { ctx.fillStyle = bands[y % bands.length]; ctx.fillRect(0, y, w, 1); }
+        });
+    }
+
+    function uranusTexture() {
+        return makeTexture(128, 64, (ctx, w, h) => {
+            ctx.fillStyle = '#5dade2'; ctx.fillRect(0, 0, w, h);
+            for (let i = 0; i < 20; i++) {
+                ctx.fillStyle = `rgba(${70 + Math.random()*40}, ${180 + Math.random()*30}, ${220 + Math.random()*30}, 0.2)`;
+                ctx.fillRect(0, Math.random() * h, w, 2 + Math.random() * 4);
+            }
+        });
+    }
+
+    function neptuneTexture() {
+        return makeTexture(128, 64, (ctx, w, h) => {
+            ctx.fillStyle = '#2e4482'; ctx.fillRect(0, 0, w, h);
+            for (let i = 0; i < 20; i++) {
+                ctx.fillStyle = `rgba(${40 + Math.random()*30}, ${60 + Math.random()*40}, ${150 + Math.random()*50}, 0.3)`;
+                ctx.fillRect(0, Math.random() * h, w, 2 + Math.random() * 4);
+            }
+        });
+    }
+
+    function moonTexture() {
+        return makeTexture(64, 32, (ctx, w, h) => {
+            ctx.fillStyle = '#b0b0a8'; ctx.fillRect(0, 0, w, h);
+            for (let i = 0; i < 25; i++) {
+                ctx.fillStyle = `rgba(80,80,75,${0.2 + Math.random()*0.3})`;
+                ctx.beginPath(); ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 4, 0, Math.PI * 2); ctx.fill();
+            }
+        });
+    }
 
     // ================= PLANET SYSTEM =================
     const planets = [];
     const labelsContainer = document.getElementById('labels-container');
 
-    function createTexture(color) {
-        const c = document.createElement('canvas'); c.width=256; c.height=128;
-        const ctx = c.getContext('2d');
-        ctx.fillStyle = color; ctx.fillRect(0,0,256,128);
-        ctx.globalAlpha = 0.1;
-        for(let i=0;i<50;i++){
-            ctx.fillStyle = Math.random()>0.5?'#fff':'#000';
-            ctx.beginPath(); ctx.arc(Math.random()*256, Math.random()*128, Math.random()*15, 0, Math.PI*2); ctx.fill();
-        }
-        return new THREE.CanvasTexture(c);
-    }
-
-    function createPlanet(name, radius, dist, color, isSun=false) {
+    function createPlanet(name, radius, dist, texFn, isSun=false) {
         const grp = new THREE.Group();
         grp.position.set(dist, 0, 0);
         
         const geo = new THREE.SphereGeometry(radius, 64, 64);
-        const mat = isSun ? new THREE.MeshBasicMaterial({ color: 0xffaa00 }) : new THREE.MeshStandardMaterial({ map: createTexture(color), roughness: 0.9 });
+        
+        // Sun uses Basic (Unlit) to glow, others use Standard (Lit)
+        const mat = isSun 
+            ? new THREE.MeshBasicMaterial({ map: texFn() }) 
+            : new THREE.MeshStandardMaterial({ map: texFn(), roughness: 0.9, metalness: 0.1 });
+            
         const mesh = new THREE.Mesh(geo, mat);
         mesh.name = "PM_" + name;
         grp.add(mesh);
 
+        // Orbit Ring
         if(dist > 0) {
             const rGeo = new THREE.RingGeometry(dist-300, dist+300, 128);
             const rMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.03, side: THREE.DoubleSide });
             const ring = new THREE.Mesh(rGeo, rMat);
             ring.rotation.x = Math.PI/2;
             scene.add(ring);
+        }
+
+        // --- EARTH SPECIFIC: ADD MOON ---
+        let moonMesh = null;
+        if(name === "EARTH") {
+            const mGeo = new THREE.SphereGeometry(radius * 0.27, 32, 32);
+            const mMat = new THREE.MeshStandardMaterial({ map: moonTexture(), roughness: 0.9 });
+            moonMesh = new THREE.Mesh(mGeo, mMat);
+            // Place Moon relative to Earth (scaled up distance for visibility)
+            moonMesh.position.set(radius * 4, 0, 0); 
+            grp.add(moonMesh);
         }
         
         systemGroup.add(grp);
@@ -163,27 +273,37 @@
         labelsContainer.appendChild(label);
 
         planets.push({
-            name, grp, mesh, radius, dist, label,
+            name, grp, mesh, radius, dist, label, moonMesh,
             angle: Math.random()*10,
             orbitSpeed: dist === 0 ? 0 : (20000 / dist) * 0.0001
         });
     }
 
-    // Distances are kept large to enforce the speed limit feeling
-    createPlanet("SUN", config.sunRadius, 0, '#ffaa00', true);
-    createPlanet("MERCURY", 400,   80000,  '#aaaaaa');
-    createPlanet("VENUS",   900,   140000, '#ffccaa');
-    createPlanet("EARTH",   1000,  200000, '#4488ff');
-    createPlanet("MARS",    500,   300000, '#ff4422');
-    createPlanet("JUPITER", 12000, 600000, '#d8ca9d');
-    createPlanet("SATURN",  10000, 1000000, '#eaddb8');
-    createPlanet("URANUS",  4000,  1800000,'#44ffff');
-    createPlanet("NEPTUNE", 3900,  2600000,'#4466ff');
+    // Titan Scale Distances + Custom Textures
+    createPlanet("SUN", config.sunRadius, 0, sunTexture, true);
+    createPlanet("MERCURY", 400,   80000,  mercuryTexture);
+    createPlanet("VENUS",   900,   140000, venusTexture);
+    createPlanet("EARTH",   1000,  200000, earthTexture);
+    createPlanet("MARS",    500,   300000, marsTexture);
+    createPlanet("JUPITER", 12000, 600000, jupiterTexture);
+    createPlanet("SATURN",  10000, 1000000, saturnTexture);
+    createPlanet("URANUS",  4000,  1800000, uranusTexture);
+    createPlanet("NEPTUNE", 3900,  2600000, neptuneTexture);
+
+    // Saturn Ring (Manual Add)
+    const saturnP = planets.find(p => p.name === "SATURN");
+    if(saturnP) {
+        const sRingGeo = new THREE.RingGeometry(14000, 22000, 64);
+        const sRingMat = new THREE.MeshBasicMaterial({ color: 0xd4c8a0, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        const sRing = new THREE.Mesh(sRingGeo, sRingMat);
+        sRing.rotation.x = Math.PI / 2;
+        saturnP.grp.add(sRing);
+    }
 
     // ================= SPAWN =================
-    // Spawn at Earth Surface + 500 units
+    // Spawn 500 units above Earth
     camera.position.set(200000, 1500, 500); 
-    let camYaw = Math.PI; // Face Earth
+    let camYaw = Math.PI; 
     let camPitch = 0;
 
     // ================= CONTROLS & ACTIONS =================
@@ -199,7 +319,6 @@
             const p = landedPlanet;
             const worldPos = new THREE.Vector3();
             p.grp.getWorldPosition(worldPos);
-            // Teleport to North Pole + 500 altitude
             camera.position.set(worldPos.x, worldPos.y + p.radius + 500, worldPos.z);
             camPitch = -Math.PI/2; // Look down
             landedPlanet = null;
@@ -209,7 +328,6 @@
             const p = nearestPlanet;
             const worldPos = new THREE.Vector3();
             p.grp.getWorldPosition(worldPos);
-            // Teleport to Surface (Equator) + 2 altitude
             camera.position.set(worldPos.x, worldPos.y, worldPos.z + p.radius + 2);
             camYaw = Math.PI;
             camPitch = 0.1;
@@ -279,6 +397,18 @@
                 p.grp.position.x = Math.cos(p.angle + time * p.orbitSpeed) * p.dist;
                 p.grp.position.z = Math.sin(p.angle + time * p.orbitSpeed) * p.dist;
             }
+            
+            // Spin Planet
+            p.mesh.rotation.y += 0.001;
+
+            // Moon Logic (Earth only)
+            if(p.moonMesh) {
+                p.moonMesh.rotation.y += 0.01; // Spin moon
+                // Simple orbit around Earth (Static relative to group is fine since group moves, but let's rotate it)
+                const mSpeed = time * 0.0005;
+                p.moonMesh.position.x = Math.cos(mSpeed) * (p.radius * 4);
+                p.moonMesh.position.z = Math.sin(mSpeed) * (p.radius * 4);
+            }
 
             // Dist calc
             p.mesh.getWorldPosition(tempVec);
@@ -292,8 +422,7 @@
 
             // Gravity Lock
             const delta = p.grp.position.clone().sub(prevPos);
-            if (!isNaN(delta.x) && !isNaN(delta.y) && !isNaN(delta.z)) {
-                // Lock if landed OR if close
+            if (!isNaN(delta.x)) {
                 if(landedPlanet === p || (!landedPlanet && distSurface < config.lockDist)) {
                     camera.position.add(delta);
                     isLocked = true;
@@ -347,24 +476,15 @@
             }
         }
 
-        // 3. SPEED CALCULATIONS (The "Heavy" Logic)
+        // 3. HEAVY GRAVITY SPEED LOGIC
         let targetSpeed = 0;
 
         if (landedPlanet) {
-            // Walking speed
             targetSpeed = config.minSpeed; 
         } else {
-            // Speed = Distance * 0.005
-            // At 100,000 dist -> 500 speed.
-            // At 1,000,000 dist -> 5000 speed.
-            // Max cap at 2500 for deep space cruise feeling.
-            
+            // Logarithmic drag based on distance
             targetSpeed = closestDist * 0.005; 
-            
-            // Hard Cap (Cruise Limit)
             if(targetSpeed > config.deepSpaceSpeed) targetSpeed = config.deepSpaceSpeed;
-            
-            // Hard Floor (Stall Limit)
             if(targetSpeed < config.minSpeed) targetSpeed = config.minSpeed;
         }
 
