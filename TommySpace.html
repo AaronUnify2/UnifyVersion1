@@ -3,47 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Titan Scale: Landing</title>
+    <title>Titan Scale: Stable</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;700&display=swap');
         
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; user-select: none; -webkit-user-select: none; }
-        body { overflow: hidden; background: #000; font-family: 'Orbitron', sans-serif; }
+        body { overflow: hidden; background: #000; font-family: 'Chakra Petch', sans-serif; }
         
         #ui-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         
-        /* Planet Labels */
+        /* Labels */
         .planet-label {
             position: absolute; transform: translate(-50%, -50%);
-            color: rgba(255, 255, 255, 0.9); font-size: 12px;
+            color: rgba(255, 255, 255, 0.8); font-size: 11px;
             text-align: center; pointer-events: none;
             text-shadow: 0 0 4px #000; transition: opacity 0.2s;
         }
-        .label-name { font-weight: 700; letter-spacing: 1px; color: #fff; }
-        .label-dist { font-size: 10px; color: #00ffcc; }
-        .label-dot { width: 4px; height: 4px; background: #fff; border-radius: 50%; margin: 0 auto 4px auto; box-shadow: 0 0 5px #fff; }
+        .label-name { font-weight: 700; color: #fff; }
+        .label-dist { font-size: 9px; color: #00ffcc; }
 
-        /* HUD Info */
-        #hud-top {
-            position: absolute; top: 20px; width: 100%; text-align: center; pointer-events: none;
-        }
-        #hud-bottom {
-            position: absolute; bottom: 20px; width: 100%; text-align: center; pointer-events: none;
-        }
-        .hud-text { color: rgba(0, 255, 204, 0.8); font-size: 14px; letter-spacing: 2px; text-shadow: 0 0 5px rgba(0, 255, 204, 0.3); }
+        /* HUD */
+        #hud-top { position: absolute; top: 20px; width: 100%; text-align: center; pointer-events: none; }
+        #hud-bottom { position: absolute; bottom: 20px; width: 100%; text-align: center; pointer-events: none; }
+        
+        .hud-text { color: #00ffcc; font-size: 14px; letter-spacing: 2px; text-shadow: 0 0 5px rgba(0, 255, 204, 0.4); }
+        .sub-text { color: #555; font-size: 10px; margin-top: 4px; }
 
-        /* Action Buttons (Land/Takeoff) */
+        /* Action Button */
         #action-btn {
-            position: absolute; top: 50%; right: 40px; transform: translateY(-50%);
-            width: 100px; height: 100px; border-radius: 50%;
+            position: absolute; top: 50%; right: 30px; transform: translateY(-50%);
+            width: 90px; height: 90px; border-radius: 50%;
             border: 2px solid #00ffcc; color: #00ffcc;
             display: none; align-items: center; justify-content: center;
-            font-size: 16px; font-weight: bold; background: rgba(0, 50, 50, 0.6);
+            font-size: 14px; font-weight: bold; background: rgba(0, 50, 50, 0.8);
             cursor: pointer; pointer-events: auto;
             box-shadow: 0 0 20px rgba(0, 255, 204, 0.2);
-            animation: pulse 2s infinite;
         }
-        @keyframes pulse { 0% { box-shadow: 0 0 10px rgba(0,255,204,0.2); } 50% { box-shadow: 0 0 25px rgba(0,255,204,0.6); } 100% { box-shadow: 0 0 10px rgba(0,255,204,0.2); } }
 
         /* Controls */
         #controls { pointer-events: auto; }
@@ -73,10 +68,11 @@
         <div id="labels-container"></div>
         
         <div id="hud-top">
-            <div id="lock-status" class="hud-text">SYSTEM NORMAL</div>
+            <div id="lock-status" class="hud-text">SYSTEM ONLINE</div>
+            <div id="nearest-obj" class="sub-text">SCANNING...</div>
         </div>
         <div id="hud-bottom">
-            <div id="speed-readout" class="hud-text">VELOCITY: 0 u/s</div>
+            <div id="speed-readout" class="hud-text">VEL: 0</div>
         </div>
 
         <div id="action-btn">LAND</div>
@@ -91,14 +87,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
     /* ================================================================
-       TITAN SCALE v7: ZENO'S LANDING
+       TITAN SCALE v8: STABLE FLIGHT
        ================================================================ */
 
     const config = {
         renderDist: 3000000000,
-        lockDist: 40000, // Reduced as requested
-        maxSpeed: 15000,
-        sunRadius: 40000
+        lockDist: 40000,
+        maxSpeed: 20000, // Faster max speed for travel
+        minSpeed: 10,    // Hard minimum so you never get stuck
+        sunRadius: 50000
     };
 
     const canvas = document.getElementById('gameCanvas');
@@ -110,125 +107,109 @@
     scene.background = new THREE.Color(0x000005);
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, config.renderDist);
-    camera.up.set(0, 1, 0); // Force "Up" to be Y-axis
+    camera.up.set(0, 1, 0); 
 
-    // Lighting
     scene.add(new THREE.AmbientLight(0x404040, 1.5));
-    const sunLight = new THREE.PointLight(0xffffff, 2.0, 0);
-    scene.add(sunLight);
+    scene.add(new THREE.PointLight(0xffffff, 2.0, 0));
 
-    // Raycaster for occlusion checks
+    // Raycaster for occlusion
     const raycaster = new THREE.Raycaster();
-
-    // ================= HELPERS =================
-    function createTexture(color) {
-        const c = document.createElement('canvas'); c.width=256; c.height=128;
-        const ctx = c.getContext('2d');
-        ctx.fillStyle = color; ctx.fillRect(0,0,256,128);
-        ctx.globalAlpha = 0.2;
-        for(let i=0;i<60;i++){
-            ctx.fillStyle = Math.random()>0.5?'#fff':'#000';
-            ctx.beginPath(); ctx.arc(Math.random()*256, Math.random()*128, Math.random()*15, 0, Math.PI*2); ctx.fill();
-        }
-        return new THREE.CanvasTexture(c);
-    }
+    const systemGroup = new THREE.Group();
+    scene.add(systemGroup);
 
     // ================= PLANET SYSTEM =================
     const planets = [];
     const labelsContainer = document.getElementById('labels-container');
-    const systemGroup = new THREE.Group(); // Hold all planets for simpler raycasting
-    scene.add(systemGroup);
 
-    function createPlanet(name, radius, dist, color, isSun = false) {
+    function createTexture(color) {
+        const c = document.createElement('canvas'); c.width=256; c.height=128;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = color; ctx.fillRect(0,0,256,128);
+        ctx.globalAlpha = 0.15;
+        for(let i=0;i<40;i++){
+            ctx.fillStyle = Math.random()>0.5?'#fff':'#000';
+            ctx.beginPath(); ctx.arc(Math.random()*256, Math.random()*128, Math.random()*10, 0, Math.PI*2); ctx.fill();
+        }
+        return new THREE.CanvasTexture(c);
+    }
+
+    function createPlanet(name, radius, dist, color, isSun=false) {
         const grp = new THREE.Group();
         grp.position.set(dist, 0, 0);
         
         const geo = new THREE.SphereGeometry(radius, 64, 64);
-        let mat;
-        if(isSun) mat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-        else mat = new THREE.MeshStandardMaterial({ map: createTexture(color), roughness: 0.8 });
-        
+        const mat = isSun ? new THREE.MeshBasicMaterial({ color: 0xffaa00 }) : new THREE.MeshStandardMaterial({ map: createTexture(color), roughness: 0.8 });
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.name = "PlanetMesh_" + name; // For raycasting ID
+        mesh.name = "PM_" + name;
         grp.add(mesh);
 
-        // Orbit Ring
         if(dist > 0) {
-            const rGeo = new THREE.RingGeometry(dist-150, dist+150, 128);
-            const rMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.04, side: THREE.DoubleSide });
+            const rGeo = new THREE.RingGeometry(dist-200, dist+200, 128);
+            const rMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.05, side: THREE.DoubleSide });
             const ring = new THREE.Mesh(rGeo, rMat);
             ring.rotation.x = Math.PI/2;
             scene.add(ring);
         }
         
-        systemGroup.add(grp); // Add planet wrapper to system group
+        systemGroup.add(grp);
 
-        // Label
         const label = document.createElement('div');
         label.className = 'planet-label';
-        label.innerHTML = `<div class="label-dot" style="background:${color}"></div><div class="label-name">${name}</div><div class="label-dist"></div>`;
+        label.innerHTML = `<div class="label-name">${name}</div><div class="label-dist"></div>`;
         labelsContainer.appendChild(label);
 
         planets.push({
             name, grp, mesh, radius, dist, label,
             angle: Math.random()*10,
-            orbitSpeed: dist === 0 ? 0 : (20000 / dist) * 0.0001
+            orbitSpeed: dist === 0 ? 0 : (25000 / dist) * 0.0001
         });
     }
 
     createPlanet("SUN", config.sunRadius, 0, '#ffaa00', true);
-    createPlanet("MERCURY", 400,   70000,  '#aaaaaa');
-    createPlanet("VENUS",   900,   120000, '#ffccaa');
-    createPlanet("EARTH",   1000,  180000, '#4488ff');
-    createPlanet("MARS",    500,   260000, '#ff4422');
-    createPlanet("JUPITER", 12000, 550000, '#d8ca9d');
-    createPlanet("SATURN",  10000, 950000, '#eaddb8');
-    createPlanet("URANUS",  4000,  1600000,'#44ffff');
-    createPlanet("NEPTUNE", 3900,  2300000,'#4466ff');
+    createPlanet("MERCURY", 400,   80000,  '#aaaaaa');
+    createPlanet("VENUS",   900,   140000, '#ffccaa');
+    createPlanet("EARTH",   1000,  200000, '#4488ff');
+    createPlanet("MARS",    500,   300000, '#ff4422');
+    createPlanet("JUPITER", 12000, 600000, '#d8ca9d');
+    createPlanet("SATURN",  10000, 1000000, '#eaddb8');
+    createPlanet("URANUS",  4000,  1800000,'#44ffff');
+    createPlanet("NEPTUNE", 3900,  2600000,'#4466ff');
 
-    // Spawn
-    camera.position.set(180000, 2000, 8000); 
-    let camYaw = Math.PI/2 + 0.2; 
+    // ================= SPAWN =================
+    // Explicitly set spawn near Earth
+    // Earth is at 200,000. Radius 1000.
+    // Spawn at 200,000 x, 2000 y, 5000 z
+    camera.position.set(200000, 2000, 5000); 
+    let camYaw = Math.PI; // Face Earth (Earth is at 0z relative to group, but we are at 5000z)
     let camPitch = 0;
 
     // ================= LANDING LOGIC =================
     const actionBtn = document.getElementById('action-btn');
-    let landedPlanet = null; // Object if landed
-    let currentNearestPlanet = null;
+    let landedPlanet = null;
+    let nearestPlanet = null;
 
     actionBtn.addEventListener('click', () => {
         if(landedPlanet) {
-            // TAKEOFF SEQUENCE
-            // Teleport 100 units above North Pole
-            // Planet is at (x,0,z). North pole is (x, radius, z).
-            // Target: (x, radius + 100, z)
+            // TAKEOFF
             const p = landedPlanet;
             const worldPos = new THREE.Vector3();
             p.grp.getWorldPosition(worldPos);
-            
-            camera.position.set(worldPos.x, worldPos.y + p.radius + 100, worldPos.z);
-            camPitch = -Math.PI/2; // Look down
-            
+            camera.position.set(worldPos.x, worldPos.y + p.radius + 200, worldPos.z); // 200u up
+            camPitch = -Math.PI/2;
             landedPlanet = null;
             actionBtn.style.display = 'none';
-        } else if (currentNearestPlanet) {
-            // LANDING SEQUENCE
-            // Teleport to Equator (Surface)
-            // Current pos relative to planet center
-            const p = currentNearestPlanet;
+        } else if (nearestPlanet) {
+            // LAND
+            const p = nearestPlanet;
             const worldPos = new THREE.Vector3();
             p.grp.getWorldPosition(worldPos);
-            
-            // Just offset Z by radius + 2 units (standing height)
-            camera.position.set(worldPos.x, worldPos.y, worldPos.z + p.radius + 2);
-            camYaw = Math.PI; // Look back at planet (or away?) Let's look 'East'
-            camPitch = 0;
-            
+            camera.position.set(worldPos.x, worldPos.y, worldPos.z + p.radius + 5);
+            camYaw = Math.PI;
+            camPitch = 0.2; // Look up slightly
             landedPlanet = p;
             actionBtn.innerText = "TAKEOFF";
         }
     });
-
 
     // ================= CONTROLS =================
     const input = { x:0, y:0, up:false, down:false };
@@ -273,76 +254,67 @@
     // ================= LOOP =================
     const speedText = document.getElementById('speed-readout');
     const lockText = document.getElementById('lock-status');
+    const nearText = document.getElementById('nearest-obj');
     const tempVec = new THREE.Vector3();
     const screenVec = new THREE.Vector3();
 
     function animate() {
         requestAnimationFrame(animate);
         const time = Date.now();
+        
+        let closestP = null;
+        let closestDist = Infinity;
         let isLocked = false;
-        let nearestP = null;
-        let nearestDist = Infinity;
 
-        // 1. Planet Logic
+        // 1. UPDATE PLANETS
         planets.forEach(p => {
             const prevPos = p.grp.position.clone();
-
+            
             // Orbit
             if(p.dist > 0) {
                 p.grp.position.x = Math.cos(p.angle + time * p.orbitSpeed) * p.dist;
                 p.grp.position.z = Math.sin(p.angle + time * p.orbitSpeed) * p.dist;
             }
 
-            const delta = p.grp.position.clone().sub(prevPos);
+            // Dist calc
             p.mesh.getWorldPosition(tempVec);
-            const distToCenter = camera.position.distanceTo(tempVec);
-            const distToSurface = distToCenter - p.radius;
+            const distCenter = camera.position.distanceTo(tempVec);
+            const distSurface = distCenter - p.radius;
 
-            // Track Nearest
-            if(distToSurface < nearestDist) {
-                nearestDist = distToSurface;
-                nearestP = p;
+            if(distSurface < closestDist) {
+                closestDist = distSurface;
+                closestP = p;
             }
 
-            // GRAVITY LOCK (If landed or close)
-            if(landedPlanet === p || (!landedPlanet && distToSurface < config.lockDist)) {
-                camera.position.add(delta);
-                isLocked = true;
-                lockText.innerText = landedPlanet ? `SURFACE LOCK: ${p.name}` : `GRAVITY LOCK: ${p.name}`;
-                lockText.style.color = landedPlanet ? '#00ffcc' : '#ffffff';
+            // Gravity Lock
+            const delta = p.grp.position.clone().sub(prevPos);
+            
+            // Validate Delta (Prevent NaN)
+            if (!isNaN(delta.x) && !isNaN(delta.y) && !isNaN(delta.z)) {
+                if(landedPlanet === p || (!landedPlanet && distSurface < config.lockDist)) {
+                    camera.position.add(delta);
+                    isLocked = true;
+                }
             }
 
-            // --- OCCLUSION CHECK FOR LABELS ---
-            if(distToSurface < 200000) {
-                // Too close, fade out naturally
+            // Labels with Raycasting
+            if(distSurface < 100000) {
                 p.label.style.opacity = '0';
             } else {
-                // Check if visible on screen
-                tempVec.project(camera); // reuse world pos from above
-                if(tempVec.z < 1 && tempVec.z > 0 && Math.abs(tempVec.x)<1 && Math.abs(tempVec.y)<1) {
-                    
-                    // Raycast Check
+                tempVec.project(camera);
+                if(tempVec.z < 1 && Math.abs(tempVec.x)<1 && Math.abs(tempVec.y)<1) {
                     screenVec.set(tempVec.x, tempVec.y, 0.5);
                     raycaster.setFromCamera(screenVec, camera);
                     const intersects = raycaster.intersectObjects(systemGroup.children, true);
-                    
-                    // If the first thing we hit is NOT this planet, hide label
-                    if(intersects.length > 0) {
-                        // Check if intersect object belongs to this planet group
-                        // We named mesh: PlanetMesh_Name
-                        const hitName = intersects[0].object.name;
-                        if(hitName === "PlanetMesh_" + p.name) {
-                            // Visible
-                            const x = (tempVec.x * .5 + .5) * canvas.clientWidth;
-                            const y = (tempVec.y * -.5 + .5) * canvas.clientHeight;
-                            p.label.style.left = x + 'px';
-                            p.label.style.top = y + 'px';
-                            p.label.style.opacity = '1';
-                            p.label.querySelector('.label-dist').innerText = Math.floor(distToCenter).toLocaleString() + ' u';
-                        } else {
-                            // Blocked by something else
-                            p.label.style.opacity = '0';
-                        }
+                    if(intersects.length > 0 && intersects[0].object.name === "PM_" + p.name) {
+                        const x = (tempVec.x * .5 + .5) * canvas.clientWidth;
+                        const y = (tempVec.y * -.5 + .5) * canvas.clientHeight;
+                        p.label.style.left = x + 'px';
+                        p.label.style.top = y + 'px';
+                        p.label.style.opacity = '1';
+                        p.label.querySelector('.label-dist').innerText = Math.floor(distSurface).toLocaleString() + ' u';
+                    } else {
+                        p.label.style.opacity = '0';
                     }
                 } else {
                     p.label.style.opacity = '0';
@@ -350,53 +322,52 @@
             }
         });
 
-        // 2. Landing UI Logic
-        currentNearestPlanet = (nearestDist < 1000 && !landedPlanet) ? nearestP : null;
+        // 2. HUD & STATE
+        nearestPlanet = (closestDist < 1000 && !landedPlanet) ? closestP : null;
         
         if (landedPlanet) {
-            actionBtn.style.display = 'flex';
-            actionBtn.innerText = "TAKEOFF";
-        } else if (currentNearestPlanet) {
-            actionBtn.style.display = 'flex';
-            actionBtn.innerText = "LAND";
+            actionBtn.style.display = 'flex'; actionBtn.innerText = "TAKEOFF";
+            lockText.innerText = "SURFACE LOCK"; lockText.style.color = "#00ffcc";
+        } else if (nearestPlanet) {
+            actionBtn.style.display = 'flex'; actionBtn.innerText = "LAND";
+            lockText.innerText = "ORBIT LOCK"; lockText.style.color = "#ffff00";
         } else {
             actionBtn.style.display = 'none';
+            if(isLocked) {
+                 lockText.innerText = "GRAVITY LOCK"; lockText.style.color = "#00ffcc";
+            } else {
+                 lockText.innerText = "SYSTEM ONLINE"; lockText.style.color = "#00aa88";
+            }
         }
-
-        if(!isLocked) {
-            lockText.innerText = "SYSTEM NORMAL";
-            lockText.style.color = "rgba(0, 255, 204, 0.8)";
-        }
-
-        // 3. Movement Physics (Zeno's Approach)
-        // If landed, speed is walking speed (very slow)
-        // If flying, speed scales with distance
         
+        nearText.innerText = closestP ? `NEAREST: ${closestP.name} (${Math.floor(closestDist)})` : "DEEP SPACE";
+
+        // 3. MOVEMENT (SAFE)
         let targetSpeed = 0;
         
-        if(landedPlanet) {
-            targetSpeed = 10; // Walking speed
+        if (landedPlanet) {
+            targetSpeed = 10;
         } else {
-            // Zeno's Paradox: Speed is a fraction of distance.
-            // dist 100,000 -> speed 5000
-            // dist 10,000 -> speed 500
-            // dist 1,000 -> speed 50
-            // You never reach 0.
-            targetSpeed = nearestDist * 0.05;
+            // Smooth speed curve:
+            // Far away (>1mil): Max speed
+            // Approaching (50k - 1mil): Linear scale
+            // Close (<50k): Fine control
             
-            // Cap max speed for deep space so we don't teleport instantly
-            if(targetSpeed > config.maxSpeed) targetSpeed = config.maxSpeed;
-            
-            // Floor speed so we don't actually stop at 0.0001
-            if(targetSpeed < 2) targetSpeed = 2;
+            if(closestDist > 500000) {
+                targetSpeed = config.maxSpeed;
+            } else {
+                targetSpeed = Math.max(config.minSpeed, closestDist * 0.05);
+            }
         }
+        
+        // Final NaN Check
+        if(isNaN(targetSpeed)) targetSpeed = 10;
+        
+        speedText.innerText = `VEL: ${Math.floor(targetSpeed)}`;
 
-        speedReadout.innerText = `VELOCITY: ${Math.floor(targetSpeed)} u/s`;
-
-        // Apply Move
         const fwd = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
         const right = new THREE.Vector3(1, 0, 0).applyEuler(camera.rotation);
-        const up = new THREE.Vector3(0, 1, 0); // World Up
+        const up = new THREE.Vector3(0, 1, 0); 
 
         if(Math.abs(input.y)>0.05) camera.position.addScaledVector(fwd, -input.y * targetSpeed);
         if(Math.abs(input.x)>0.05) camera.position.addScaledVector(right, input.x * targetSpeed);
