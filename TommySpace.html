@@ -3,533 +3,449 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>🚀 Space Explorer</title>
+    <title>Titan Scale Solar System</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; -webkit-user-select: none; user-select: none; }
-        body { overflow: hidden; background: #000; font-family: 'Press Start 2P', cursive; }
-        #gameCanvas { display: block; }
+        @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@300;600&display=swap');
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; user-select: none; -webkit-user-select: none; }
+        body { overflow: hidden; background: #000; font-family: 'Exo 2', sans-serif; }
+        
+        #gameCanvas { display: block; width: 100vw; height: 100vh; }
 
-        #ui {
+        /* UI Overlay */
+        #ui-layer {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; z-index: 10;
         }
 
-        #label {
-            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
-            color: #fff; font-size: 10px; text-shadow: 0 0 20px rgba(100, 200, 255, 0.8);
-            text-align: center; opacity: 0.7;
+        #hud-top {
+            position: absolute; top: 20px; width: 100%; text-align: center;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+        
+        h1 { color: rgba(255,255,255,0.9); font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
+        
+        #readout {
+            color: #00e5ff; font-size: 11px; margin-top: 5px; font-family: monospace;
+            text-shadow: 0 0 10px rgba(0,229,255,0.5);
         }
 
-        #planetLabel {
-            position: absolute; top: 45px; left: 50%; transform: translateX(-50%);
-            color: #ffd700; font-size: 14px; text-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
-            text-align: center; transition: opacity 0.5s;
+        #proximity-alert {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #ff3333; border: 1px solid #ff3333; padding: 10px 20px;
+            font-size: 12px; display: none; background: rgba(0,0,0,0.7);
         }
 
-        #joystickArea {
-            position: fixed; bottom: 20px; left: 20px;
-            width: 160px; height: 160px; pointer-events: auto; z-index: 20;
+        /* Controls */
+        #controls { pointer-events: auto; }
+        
+        #stick-area {
+            position: absolute; bottom: 30px; left: 30px;
+            width: 140px; height: 140px;
         }
-        #joystickBase {
-            position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-            width: 130px; height: 130px; border-radius: 50%;
-            background: radial-gradient(circle, rgba(100,200,255,0.12), rgba(100,200,255,0.04));
-            border: 2px solid rgba(100, 200, 255, 0.25);
+        
+        .stick-base {
+            width: 100%; height: 100%; border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
+            border: 1px solid rgba(255,255,255,0.2); position: relative;
         }
-        #joystickThumb {
-            position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-            width: 50px; height: 50px; border-radius: 50%;
-            background: radial-gradient(circle, rgba(100,200,255,0.35), rgba(100,200,255,0.1));
-            border: 2px solid rgba(100, 200, 255, 0.4);
+        
+        .stick-thumb {
+            width: 50px; height: 50px; background: rgba(0, 229, 255, 0.5);
+            border-radius: 50%; position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); box-shadow: 0 0 15px rgba(0,229,255,0.4);
         }
 
-        .flyBtn {
-            position: fixed; right: 25px; width: 85px; height: 85px;
-            border-radius: 50%; border: 3px solid; pointer-events: auto; z-index: 20;
+        .thruster-btn {
+            position: absolute; width: 70px; height: 70px; border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.3); color: white;
             display: flex; align-items: center; justify-content: center;
-            font-size: 32px; cursor: pointer;
-            -webkit-tap-highlight-color: transparent;
+            font-size: 24px; backdrop-filter: blur(4px); cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
         }
-        #flyUp {
-            bottom: 130px;
-            background: radial-gradient(circle at 40% 35%, #7c4dff, #4a148c);
-            border-color: rgba(179, 136, 255, 0.6);
-            box-shadow: 0 0 25px rgba(124, 77, 255, 0.4);
-        }
-        #flyDown {
-            bottom: 30px;
-            background: radial-gradient(circle at 40% 35%, #00bcd4, #006064);
-            border-color: rgba(0, 229, 255, 0.6);
-            box-shadow: 0 0 25px rgba(0, 188, 212, 0.4);
-        }
-        .flyBtn:active { transform: scale(0.9); }
+        
+        .thruster-btn:active { transform: scale(0.95); background: rgba(255,255,255,0.1); }
+        
+        #btn-up { bottom: 120px; right: 30px; background: linear-gradient(180deg, rgba(76, 175, 80, 0.4), rgba(0,0,0,0)); }
+        #btn-down { bottom: 30px; right: 30px; background: linear-gradient(0deg, rgba(33, 150, 243, 0.4), rgba(0,0,0,0)); }
 
-        #speedLines {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; z-index: 5; opacity: 0; transition: opacity 0.3s;
-            background: radial-gradient(ellipse at center, transparent 40%, rgba(100,200,255,0.03) 100%);
+        #speed-readout {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            color: rgba(255,255,255,0.5); font-size: 10px;
         }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
-    <div id="ui">
-        <div id="label">🚀 SPACE EXPLORER</div>
-        <div id="planetLabel"></div>
+    
+    <div id="ui-layer">
+        <div id="hud-top">
+            <h1>Solar System: Titan Scale</h1>
+            <div id="readout">DISTANCE LOCK: ENGAGED</div>
+        </div>
+        <div id="proximity-alert">GRAVITY WELL DETECTED</div>
+        
+        <div id="speed-readout">THRUSTER OUTPUT: 0%</div>
+
+        <div id="controls">
+            <div id="stick-area"><div class="stick-base"><div class="stick-thumb" id="stick"></div></div></div>
+            <div id="btn-up" class="thruster-btn">▲</div>
+            <div id="btn-down" class="thruster-btn">▼</div>
+        </div>
     </div>
-    <div id="joystickArea">
-        <div id="joystickBase"><div id="joystickThumb"></div></div>
-    </div>
-    <div id="flyUp" class="flyBtn">🚀</div>
-    <div id="flyDown" class="flyBtn">🌍</div>
-    <div id="speedLines"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-    // ============================================================
-    // SPACE EXPLORER — A toy for little astronauts
-    // ============================================================
+    /* ================================================================
+       TITAN SCALE ENGINE
+       ================================================================
+       Logic:
+       1. Scale everything up by 100x compared to previous version.
+       2. Use logarithmic depth buffer to prevent Z-fighting at massive distances.
+       3. "Gravity Lock" reduces move speed based on proximity to surface.
+    */
 
+    const config = {
+        sunRadius: 40000,     // Massive
+        earthRadius: 1000,    // Big enough to land on
+        moonRadius: 270,
+        earthDist: 200000,    // Far enough to feel lonely
+        moonDist: 6000,       // Orbiting Earth
+        baseSpeed: 100,
+        maxSpeed: 10000
+    };
+
+    // SETUP
     const canvas = document.getElementById('gameCanvas');
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, logarithmicDepthBuffer: true }); // Log depth is crucial for scale
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x000005);
-
+    
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500000);
-    camera.position.set(0, 200, 3000);
+    scene.background = new THREE.Color(0x000005);
+    
+    // Camera allows seeing from 1 unit to 2 million units
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 5000000);
 
-    // Lighting
-    const ambient = new THREE.AmbientLight(0x222244, 0.4);
+    // LIGHTING
+    const ambient = new THREE.AmbientLight(0x404040, 0.1); // Very dark shadows for space contrast
     scene.add(ambient);
-
-    // Point light from sun
-    const sunLight = new THREE.PointLight(0xffffff, 2, 200000);
-    sunLight.position.set(0, 0, 0);
+    
+    // The Sun Light - Point light at 0,0,0
+    const sunLight = new THREE.PointLight(0xffffff, 1.5, 0); // 0 range = infinite
     scene.add(sunLight);
 
-    // Extra directional for visibility
-    const dirLight = new THREE.DirectionalLight(0xffeedd, 0.3);
-    dirLight.position.set(100, 200, 100);
-    scene.add(dirLight);
+    // TEXTURE GENERATORS (Procedural High Res)
+    function createTexture(width, height, fn) {
+        const c = document.createElement('canvas');
+        c.width = width; c.height = height;
+        const ctx = c.getContext('2d');
+        fn(ctx, width, height);
+        const t = new THREE.CanvasTexture(c);
+        return t;
+    }
 
-    window.addEventListener('resize', () => {
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
+    // 1. Sun Texture (Bright, shifting)
+    const texSun = createTexture(512, 256, (ctx, w, h) => {
+        const grd = ctx.createLinearGradient(0,0,0,h);
+        grd.addColorStop(0, '#ffaa00'); grd.addColorStop(0.5, '#ff8800'); grd.addColorStop(1, '#ff4400');
+        ctx.fillStyle = grd; ctx.fillRect(0,0,w,h);
+        // Solar flares
+        ctx.globalCompositeOperation = 'lighter';
+        for(let i=0; i<100; i++) {
+            ctx.fillStyle = `rgba(255, 255, 200, ${Math.random()*0.3})`;
+            ctx.beginPath(); ctx.arc(Math.random()*w, Math.random()*h, Math.random()*20, 0, Math.PI*2); ctx.fill();
+        }
     });
 
-    // ===================== STARFIELD =============================
-    // Thousands of distant stars as points
+    // 2. Earth Texture (Detailed continents)
+    const texEarth = createTexture(1024, 512, (ctx, w, h) => {
+        ctx.fillStyle = '#051e3e'; ctx.fillRect(0,0,w,h); // Deep Ocean
+        
+        // Continents (Noise-like blobs)
+        ctx.fillStyle = '#3a5f40';
+        for(let i=0; i<60; i++) {
+            const x = Math.random()*w, y = Math.random()*h * 0.8 + h*0.1;
+            const r = Math.random() * 50 + 20;
+            ctx.beginPath(); ctx.ellipse(x, y, r, r*0.6, Math.random()*3, 0, Math.PI*2); ctx.fill();
+        }
+        
+        // Clouds
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        for(let i=0; i<200; i++) {
+            const x = Math.random()*w, y = Math.random()*h;
+            ctx.fillRect(x, y, Math.random()*30+10, 2);
+        }
+    });
+
+    // 3. Moon Texture (Craters)
+    const texMoon = createTexture(512, 256, (ctx, w, h) => {
+        ctx.fillStyle = '#888888'; ctx.fillRect(0,0,w,h);
+        ctx.fillStyle = '#666666';
+        for(let i=0; i<100; i++) {
+            const r = Math.random() * 10 + 2;
+            ctx.beginPath(); ctx.arc(Math.random()*w, Math.random()*h, r, 0, Math.PI*2); ctx.fill();
+        }
+    });
+
+    // 4. Starfield (Deep depth)
     const starGeo = new THREE.BufferGeometry();
-    const starCount = 15000;
-    const starPositions = new Float32Array(starCount * 3);
-    const starColors = new Float32Array(starCount * 3);
-    for (let i = 0; i < starCount; i++) {
-        const r = 150000 + Math.random() * 200000;
+    const starPos = [];
+    for(let i=0; i<5000; i++) {
+        const r = 1000000 + Math.random() * 1000000;
         const theta = Math.random() * Math.PI * 2;
         const phi = Math.acos(2 * Math.random() - 1);
-        starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        starPositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-        starPositions[i * 3 + 2] = r * Math.cos(phi);
-        // Color variety
-        const temp = Math.random();
-        if (temp < 0.6) { starColors[i*3]=1; starColors[i*3+1]=1; starColors[i*3+2]=1; }
-        else if (temp < 0.75) { starColors[i*3]=1; starColors[i*3+1]=0.9; starColors[i*3+2]=0.7; }
-        else if (temp < 0.9) { starColors[i*3]=0.7; starColors[i*3+1]=0.8; starColors[i*3+2]=1; }
-        else { starColors[i*3]=1; starColors[i*3+1]=0.7; starColors[i*3+2]=0.7; }
+        starPos.push(r * Math.sin(phi) * Math.cos(theta));
+        starPos.push(r * Math.sin(phi) * Math.sin(theta));
+        starPos.push(r * Math.cos(phi));
     }
-    starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-    starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
-    const starMat = new THREE.PointsMaterial({ size: 40, vertexColors: true, sizeAttenuation: true });
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 400, sizeAttenuation: true });
     scene.add(new THREE.Points(starGeo, starMat));
 
-    // ===================== PLANET TEXTURES ========================
-    function makeTexture(w, h, drawFn) {
-        const c = document.createElement('canvas'); c.width = w; c.height = h;
-        const ctx = c.getContext('2d'); drawFn(ctx, w, h);
-        const t = new THREE.CanvasTexture(c); t.magFilter = THREE.LinearFilter; return t;
-    }
 
-    function sunTexture() {
-        return makeTexture(128, 64, (ctx, w, h) => {
-            ctx.fillStyle = '#ff8c00'; ctx.fillRect(0, 0, w, h);
-            for (let i = 0; i < 200; i++) {
-                ctx.fillStyle = ['#ffaa00', '#ff6600', '#ffcc00', '#ffe066'][Math.floor(Math.random() * 4)];
-                ctx.fillRect(Math.random() * w, Math.random() * h, 3 + Math.random() * 5, 2 + Math.random() * 3);
-            }
-        });
-    }
+    // OBJECTS
+    const objects = [];
 
-    function mercuryTexture() {
-        return makeTexture(64, 32, (ctx, w, h) => {
-            ctx.fillStyle = '#8a8a8a'; ctx.fillRect(0, 0, w, h);
-            for (let i = 0; i < 30; i++) {
-                ctx.fillStyle = `rgba(60,60,60,${0.3 + Math.random() * 0.4})`;
-                ctx.beginPath(); ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 0, Math.PI * 2); ctx.fill();
-            }
-        });
-    }
-
-    function venusTexture() {
-        return makeTexture(64, 32, (ctx, w, h) => {
-            ctx.fillStyle = '#d4a537'; ctx.fillRect(0, 0, w, h);
-            for (let i = 0; i < 50; i++) {
-                ctx.fillStyle = `rgba(${180 + Math.random()*40}, ${140 + Math.random()*40}, ${30 + Math.random()*30}, 0.3)`;
-                ctx.fillRect(Math.random() * w, Math.random() * h, 4 + Math.random() * 8, 1 + Math.random() * 2);
-            }
-        });
-    }
-
-    function earthTexture() {
-        return makeTexture(128, 64, (ctx, w, h) => {
-            // Ocean
-            ctx.fillStyle = '#1a5276'; ctx.fillRect(0, 0, w, h);
-            // Continents
-            ctx.fillStyle = '#27ae60';
-            ctx.beginPath(); ctx.ellipse(30, 25, 12, 18, 0.2, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(55, 20, 15, 12, -0.1, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(85, 30, 18, 10, 0.3, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(70, 50, 10, 6, 0, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(110, 25, 8, 12, 0, 0, Math.PI * 2); ctx.fill();
-            // Desert
-            ctx.fillStyle = '#d4ac6e';
-            ctx.beginPath(); ctx.ellipse(58, 28, 6, 4, 0, 0, Math.PI * 2); ctx.fill();
-            // Ice caps
-            ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, w, 5); ctx.fillRect(0, h - 5, w, 5);
-            // Clouds
-            ctx.fillStyle = 'rgba(255,255,255,0.25)';
-            for (let i = 0; i < 15; i++) {
-                ctx.fillRect(Math.random() * w, Math.random() * h, 8 + Math.random() * 15, 2);
-            }
-        });
-    }
-
-    function marsTexture() {
-        return makeTexture(64, 32, (ctx, w, h) => {
-            ctx.fillStyle = '#c0392b'; ctx.fillRect(0, 0, w, h);
-            for (let i = 0; i < 40; i++) {
-                ctx.fillStyle = `rgba(${150 + Math.random()*60}, ${50 + Math.random()*30}, ${20 + Math.random()*20}, 0.4)`;
-                ctx.beginPath(); ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 0, Math.PI * 2); ctx.fill();
-            }
-            // Polar cap
-            ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillRect(0, 0, w, 3);
-        });
-    }
-
-    function jupiterTexture() {
-        return makeTexture(128, 64, (ctx, w, h) => {
-            const bands = ['#c4956a', '#d4a574', '#a07850', '#e8c090', '#b08860', '#c8a870', '#906840'];
-            for (let y = 0; y < h; y++) {
-                ctx.fillStyle = bands[y % bands.length];
-                ctx.fillRect(0, y, w, 1);
-            }
-            // Great red spot
-            ctx.fillStyle = '#c05030';
-            ctx.beginPath(); ctx.ellipse(80, 35, 10, 6, 0, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#d06040';
-            ctx.beginPath(); ctx.ellipse(80, 35, 7, 4, 0, 0, Math.PI * 2); ctx.fill();
-        });
-    }
-
-    function saturnTexture() {
-        return makeTexture(128, 64, (ctx, w, h) => {
-            const bands = ['#d4b896', '#c4a878', '#e0c8a0', '#b89868', '#d0b888', '#c8a070'];
-            for (let y = 0; y < h; y++) {
-                ctx.fillStyle = bands[y % bands.length];
-                ctx.fillRect(0, y, w, 1);
-            }
-        });
-    }
-
-    function uranusTexture() {
-        return makeTexture(64, 32, (ctx, w, h) => {
-            ctx.fillStyle = '#5dade2'; ctx.fillRect(0, 0, w, h);
-            for (let i = 0; i < 20; i++) {
-                ctx.fillStyle = `rgba(${70 + Math.random()*40}, ${180 + Math.random()*30}, ${220 + Math.random()*30}, 0.2)`;
-                ctx.fillRect(0, Math.random() * h, w, 1 + Math.random() * 2);
-            }
-        });
-    }
-
-    function neptuneTexture() {
-        return makeTexture(64, 32, (ctx, w, h) => {
-            ctx.fillStyle = '#2e4482'; ctx.fillRect(0, 0, w, h);
-            for (let i = 0; i < 20; i++) {
-                ctx.fillStyle = `rgba(${40 + Math.random()*30}, ${60 + Math.random()*40}, ${150 + Math.random()*50}, 0.3)`;
-                ctx.fillRect(0, Math.random() * h, w, 1 + Math.random() * 2);
-            }
-            // Dark spot
-            ctx.fillStyle = 'rgba(20, 30, 80, 0.5)';
-            ctx.beginPath(); ctx.ellipse(40, 18, 6, 4, 0, 0, Math.PI * 2); ctx.fill();
-        });
-    }
-
-    function moonTexture() {
-        return makeTexture(64, 32, (ctx, w, h) => {
-            ctx.fillStyle = '#b0b0a8'; ctx.fillRect(0, 0, w, h);
-            for (let i = 0; i < 25; i++) {
-                ctx.fillStyle = `rgba(80,80,75,${0.2 + Math.random()*0.3})`;
-                ctx.beginPath(); ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 4, 0, Math.PI * 2); ctx.fill();
-            }
-        });
-    }
-
-    // ===================== SOLAR SYSTEM ===========================
-    const planets = [];
-
-    function addPlanet(name, radius, orbitR, orbitSpeed, spinSpeed, texFn, color, tilt) {
-        const geo = new THREE.SphereGeometry(radius, 32, 24);
-        const mat = new THREE.MeshStandardMaterial({ map: texFn(), roughness: 0.8, metalness: 0.1 });
-        const mesh = new THREE.Mesh(geo, mat);
-        scene.add(mesh);
-
-        planets.push({ name, mesh, radius, orbitR, orbitSpeed, spinSpeed, angle: Math.random() * Math.PI * 2, tilt: tilt || 0 });
-        return mesh;
-    }
-
-    // Sun — huge
-    const sunGeo = new THREE.SphereGeometry(800, 48, 32);
-    const sunMat = new THREE.MeshBasicMaterial({ map: sunTexture() });
+    // The Sun
+    const sunGeo = new THREE.SphereGeometry(config.sunRadius, 64, 64);
+    const sunMat = new THREE.MeshBasicMaterial({ map: texSun });
     const sun = new THREE.Mesh(sunGeo, sunMat);
     scene.add(sun);
-    // Sun glow
-    const glowGeo = new THREE.SphereGeometry(900, 32, 24);
-    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff8c00, transparent: true, opacity: 0.12 });
-    scene.add(new THREE.Mesh(glowGeo, glowMat));
-    const glow2Geo = new THREE.SphereGeometry(1100, 32, 24);
-    const glow2Mat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.05 });
-    scene.add(new THREE.Mesh(glow2Geo, glow2Mat));
-    const glow3Geo = new THREE.SphereGeometry(1400, 32, 24);
-    const glow3Mat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.02 });
-    scene.add(new THREE.Mesh(glow3Geo, glow3Mat));
+    
+    // Sun Glow (Atmosphere)
+    const sunGlowGeo = new THREE.SphereGeometry(config.sunRadius * 1.2, 32, 32);
+    const sunGlowMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.1, side: THREE.BackSide });
+    const sunGlow = new THREE.Mesh(sunGlowGeo, sunGlowMat);
+    scene.add(sunGlow);
+    objects.push({ mesh: sun, radius: config.sunRadius, name: "SUN" });
 
-    // Planets — huge scale, real proportional feel
-    //                  name       radius   orbit     orbitSpd   spinSpd   texture
-    addPlanet('Mercury',   40,     2500,    0.004,    0.02,     mercuryTexture, 0x8a8a8a);
-    addPlanet('Venus',     95,     4500,    0.0025,   0.005,    venusTexture,   0xd4a537);
-    const earthMesh = addPlanet('Earth', 100, 7000, 0.0015, 0.015, earthTexture, 0x1a5276);
-    addPlanet('Mars',      55,     10000,   0.001,    0.014,    marsTexture,    0xc0392b);
-    addPlanet('Jupiter',   400,    18000,   0.0005,   0.03,     jupiterTexture, 0xc4956a);
-    const saturnMesh = addPlanet('Saturn', 340, 30000, 0.0003, 0.025, saturnTexture, 0xd4b896, 0.4);
-    addPlanet('Uranus',    180,    45000,   0.00015,  0.02,     uranusTexture,  0x5dade2, 1.4);
-    addPlanet('Neptune',   170,    60000,   0.0001,   0.018,    neptuneTexture, 0x2e4482);
+    // Earth Container (Holds Earth and Moon system)
+    const earthSystem = new THREE.Group();
+    scene.add(earthSystem);
 
-    // Saturn rings — massive
-    const sRingGeo = new THREE.RingGeometry(480, 700, 128);
-    const sRingMat = new THREE.MeshBasicMaterial({
-        color: 0xd4c8a0, side: THREE.DoubleSide, transparent: true, opacity: 0.45
-    });
-    const saturnRing = new THREE.Mesh(sRingGeo, sRingMat);
-    saturnRing.rotation.x = Math.PI / 2 + 0.4;
-    scene.add(saturnRing);
+    // Earth
+    const earthGeo = new THREE.SphereGeometry(config.earthRadius, 64, 64);
+    const earthMat = new THREE.MeshStandardMaterial({ map: texEarth, roughness: 0.6, metalness: 0.1 });
+    const earth = new THREE.Mesh(earthGeo, earthMat);
+    earthSystem.add(earth);
+    objects.push({ mesh: earth, radius: config.earthRadius, name: "EARTH", parent: earthSystem });
 
-    // Earth's moon — big enough to see
-    const moonGeo = new THREE.SphereGeometry(25, 24, 16);
-    const moonMat = new THREE.MeshStandardMaterial({ map: moonTexture(), roughness: 0.9 });
-    const moonMesh = new THREE.Mesh(moonGeo, moonMat);
-    scene.add(moonMesh);
-    let moonAngle = 0;
+    // Moon pivot (for orbiting Earth)
+    const moonPivot = new THREE.Group();
+    earthSystem.add(moonPivot);
+    
+    // Moon
+    const moonGeo = new THREE.SphereGeometry(config.moonRadius, 32, 32);
+    const moonMat = new THREE.MeshStandardMaterial({ map: texMoon, roughness: 1.0 });
+    const moon = new THREE.Mesh(moonGeo, moonMat);
+    moon.position.set(config.moonDist, 0, 0); // Offset from Earth
+    moonPivot.add(moon);
+    // Note: We need absolute position for collision, but it's nested. We'll handle proximity via world position.
 
-    // No ground — pure space
+    // INITIAL POSITIONING
+    // Place Earth far from Sun
+    earthSystem.position.set(config.earthDist, 0, 0);
 
-    // ===================== INPUT ==================================
-    const input = { moveX: 0, moveZ: 0, lookDX: 0, lookDY: 0, flyUp: false, flyDown: false };
-    let yaw = 0, pitch = -0.1;
-    const pos = new THREE.Vector3(0, 200, 7500); // Start near Earth
-    const speed = 15;
-    const flySpeed = 12;
+    // Place Player ON EARTH SURFACE
+    // Earth is at (config.earthDist, 0, 0)
+    // We want to be on the surface, looking at the moon.
+    // Moon is at (config.earthDist + config.moonDist, 0, 0) relative to sun? No, moon is relative to Earth.
+    
+    // Let's position camera on the "Dark Side" of Earth relative to Sun, so we look out into space?
+    // Or on the sunset line?
+    // Let's stand on top (Y+)
+    camera.position.set(config.earthDist, config.earthRadius + 2, 0); 
+    camera.lookAt(config.earthDist + 100, config.earthRadius + 2, 0); // Look "East"
+    
+    // Rotation variables
+    let camYaw = -Math.PI/2; // Facing towards Sun/Earth center axis
+    let camPitch = 0;
 
+    // INPUT HANDLING
+    const input = { x: 0, y: 0, up: false, down: false };
+    
     // Joystick
-    const joystickArea = document.getElementById('joystickArea');
-    const joystickThumb = document.getElementById('joystickThumb');
-    let jTouch = null, jCenter = { x: 0, y: 0 };
+    const stick = document.getElementById('stick');
+    const stickArea = document.getElementById('stick-area');
+    let touchId = null;
+    const stickCenter = { x: 70, y: 70 }; // Half of 140px
 
-    joystickArea.addEventListener('touchstart', (e) => {
-        const t = e.changedTouches[0]; jTouch = t.identifier;
-        const r = document.getElementById('joystickBase').getBoundingClientRect();
-        jCenter = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-    });
-    joystickArea.addEventListener('touchmove', (e) => {
+    stickArea.addEventListener('touchstart', e => {
         e.preventDefault();
-        for (const t of e.changedTouches) {
-            if (t.identifier === jTouch) {
-                const dx = t.clientX - jCenter.x, dy = t.clientY - jCenter.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                const maxR = 50;
-                const nx = dist > maxR ? dx / dist * maxR : dx;
-                const ny = dist > maxR ? dy / dist * maxR : dy;
-                joystickThumb.style.transform = `translate(calc(-50% + ${nx}px), calc(-50% + ${ny}px))`;
-                input.moveX = nx / maxR;
-                input.moveZ = ny / maxR;
+        const t = e.changedTouches[0];
+        touchId = t.identifier;
+        updateStick(t.clientX, t.clientY);
+    });
+    
+    stickArea.addEventListener('touchmove', e => {
+        e.preventDefault();
+        for(let i=0; i<e.changedTouches.length; i++) {
+            if(e.changedTouches[i].identifier === touchId) {
+                updateStick(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
             }
         }
     });
-    joystickArea.addEventListener('touchend', () => {
-        jTouch = null; joystickThumb.style.transform = 'translate(-50%, -50%)';
-        input.moveX = 0; input.moveZ = 0;
-    });
 
-    // Look — touch on canvas area
-    const viewArea = canvas;
-    let viewTouch = null, lastTouchX = 0, lastTouchY = 0;
-    viewArea.addEventListener('touchstart', (e) => {
-        // Only grab touches not on buttons/joystick
-        for (const t of e.changedTouches) {
-            if (t.clientX > 180 && t.clientX < window.innerWidth - 120) {
-                viewTouch = t.identifier; lastTouchX = t.clientX; lastTouchY = t.clientY;
-            }
-        }
-    });
-    viewArea.addEventListener('touchmove', (e) => {
-        for (const t of e.changedTouches) {
-            if (t.identifier === viewTouch) {
-                input.lookDX = (t.clientX - lastTouchX) * 0.003;
-                input.lookDY = (t.clientY - lastTouchY) * 0.003;
-                lastTouchX = t.clientX; lastTouchY = t.clientY;
-            }
-        }
-    });
-    viewArea.addEventListener('touchend', (e) => {
-        for (const t of e.changedTouches) { if (t.identifier === viewTouch) viewTouch = null; }
-    });
+    const resetStick = () => {
+        touchId = null;
+        stick.style.transform = `translate(-50%, -50%)`;
+        input.x = 0; input.y = 0;
+    };
 
-    // Fly buttons
-    const flyUpBtn = document.getElementById('flyUp');
-    const flyDownBtn = document.getElementById('flyDown');
-    flyUpBtn.addEventListener('touchstart', () => input.flyUp = true);
-    flyUpBtn.addEventListener('touchend', () => input.flyUp = false);
-    flyDownBtn.addEventListener('touchstart', () => input.flyDown = true);
-    flyDownBtn.addEventListener('touchend', () => input.flyDown = false);
+    stickArea.addEventListener('touchend', resetStick);
 
-    // Keyboard fallback
-    const keys = {};
-    window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
-    window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
-    canvas.addEventListener('click', () => canvas.requestPointerLock && canvas.requestPointerLock());
-    document.addEventListener('mousemove', (e) => {
-        if (document.pointerLockElement === canvas) {
-            input.lookDX = e.movementX * 0.002;
-            input.lookDY = e.movementY * 0.002;
-        }
-    });
-
-    // ===================== PLANET LABEL ===========================
-    const planetLabel = document.getElementById('planetLabel');
-    let labelTimer = 0;
-
-    function checkNearPlanet() {
-        for (const p of planets) {
-            const d = pos.distanceTo(p.mesh.position);
-            if (d < p.radius * 5) {
-                planetLabel.textContent = `🪐 ${p.name}`;
-                planetLabel.style.opacity = '1';
-                labelTimer = 120;
-                return;
-            }
-        }
-        // Check sun
-        if (pos.length() < 2000) {
-            planetLabel.textContent = '☀️ The Sun';
-            planetLabel.style.opacity = '1';
-            labelTimer = 120;
-        }
+    function updateStick(cx, cy) {
+        const rect = stickArea.getBoundingClientRect();
+        const x = cx - rect.left - stickCenter.x;
+        const y = cy - rect.top - stickCenter.y;
+        const dist = Math.sqrt(x*x+y*y);
+        const maxDist = 40;
+        const angle = Math.atan2(y, x);
+        
+        const clampDist = Math.min(dist, maxDist);
+        const joyX = Math.cos(angle) * clampDist;
+        const joyY = Math.sin(angle) * clampDist;
+        
+        stick.style.transform = `translate(calc(-50% + ${joyX}px), calc(-50% + ${joyY}px))`;
+        
+        input.x = joyX / maxDist;
+        input.y = joyY / maxDist;
     }
 
-    // ===================== GAME LOOP ==============================
-    const speedLines = document.getElementById('speedLines');
-    let frame = 0;
+    // Look (Screen Drag)
+    let lookTouchId = null;
+    let lastLook = { x: 0, y: 0 };
+    
+    document.addEventListener('touchstart', e => {
+        for(let i=0; i<e.changedTouches.length; i++) {
+            const t = e.changedTouches[i];
+            if(t.identifier !== touchId && !t.target.closest('.thruster-btn')) {
+                lookTouchId = t.identifier;
+                lastLook = { x: t.clientX, y: t.clientY };
+            }
+        }
+    });
+
+    document.addEventListener('touchmove', e => {
+        for(let i=0; i<e.changedTouches.length; i++) {
+            if(e.changedTouches[i].identifier === lookTouchId) {
+                const dx = e.changedTouches[i].clientX - lastLook.x;
+                const dy = e.changedTouches[i].clientY - lastLook.y;
+                camYaw -= dx * 0.005;
+                camPitch -= dy * 0.005;
+                camPitch = Math.max(-1.5, Math.min(1.5, camPitch));
+                lastLook = { x: e.changedTouches[i].clientX, y: e.changedTouches[i].clientY };
+            }
+        }
+    });
+    
+    document.addEventListener('touchend', e => {
+        for(let i=0; i<e.changedTouches.length; i++) {
+            if(e.changedTouches[i].identifier === lookTouchId) lookTouchId = null;
+        }
+    });
+
+    // Buttons
+    document.getElementById('btn-up').addEventListener('touchstart', (e) => { e.preventDefault(); input.up = true; });
+    document.getElementById('btn-up').addEventListener('touchend', (e) => { e.preventDefault(); input.up = false; });
+    document.getElementById('btn-down').addEventListener('touchstart', (e) => { e.preventDefault(); input.down = true; });
+    document.getElementById('btn-down').addEventListener('touchend', (e) => { e.preventDefault(); input.down = false; });
+
+    // PHYSICS & LOOP
+    const readout = document.getElementById('readout');
+    const spdReadout = document.getElementById('speed-readout');
+    const worldPos = new THREE.Vector3(); // temp vector
+
+    function getDistanceToSurface(obj, radius) {
+        obj.getWorldPosition(worldPos);
+        return camera.position.distanceTo(worldPos) - radius;
+    }
 
     function animate() {
         requestAnimationFrame(animate);
-        frame++;
 
-        // Keyboard input
-        let kx = 0, kz = 0;
-        if (keys['w'] || keys['arrowup']) kz = -1;
-        if (keys['s'] || keys['arrowdown']) kz = 1;
-        if (keys['a'] || keys['arrowleft']) kx = -1;
-        if (keys['d'] || keys['arrowright']) kx = 1;
-        const flyUpK = keys[' '] || keys['shift'];
-        const flyDownK = keys['control'];
+        // 1. Calculate Gravity Lock (Speed Governor)
+        let closestDist = Infinity;
+        let closestObj = '';
 
-        const mx = input.moveX || kx;
-        const mz = input.moveZ || kz;
+        // Check Sun
+        const sunD = getDistanceToSurface(sun, config.sunRadius);
+        if(sunD < closestDist) { closestDist = sunD; closestObj = 'SUN'; }
 
-        // Look
-        yaw -= input.lookDX;
-        pitch -= input.lookDY;
-        pitch = Math.max(-1.4, Math.min(1.4, pitch));
-        input.lookDX = 0; input.lookDY = 0;
+        // Check Earth
+        const earthD = getDistanceToSurface(earth, config.earthRadius);
+        if(earthD < closestDist) { closestDist = earthD; closestObj = 'EARTH'; }
 
-        // Movement — forward/right relative to camera
-        const fwdX = -Math.sin(yaw), fwdZ = -Math.cos(yaw);
-        const rightX = Math.cos(yaw), rightZ = -Math.sin(yaw);
+        // Check Moon
+        const moonD = getDistanceToSurface(moon, config.moonRadius);
+        if(moonD < closestDist) { closestDist = moonD; closestObj = 'MOON'; }
 
-        const curSpeed = speed * (1 + pos.length() / 5000); // faster the further from sun
-        if (Math.abs(mx) > 0.1 || Math.abs(mz) > 0.1) {
-            const wx = rightX * mx + fwdX * (-mz);
-            const wz = rightZ * mx + fwdZ * (-mz);
-            const len = Math.sqrt(wx * wx + wz * wz) || 1;
-            pos.x += (wx / len) * curSpeed;
-            pos.z += (wz / len) * curSpeed;
+        // Dynamic Speed Formula
+        // If dist is 0 (on ground), speed is minimal (walking speed).
+        // If dist is huge, speed is massive.
+        // Formula: Speed = log(dist) or linear scale? Linear feels better for approach.
+        
+        let targetSpeed = 0;
+        if (closestDist < 100) {
+             // Walking speed on surface (approx 2 units/frame)
+            targetSpeed = 1.0; 
+            readout.innerText = `SURFACE DETECTED: ${closestObj}`;
+            readout.style.color = '#00ff00';
+        } else if (closestDist < 5000) {
+            // Approach speed
+            targetSpeed = closestDist / 20; 
+            readout.innerText = `APPROACHING ${closestObj}`;
+            readout.style.color = '#ffff00';
+        } else {
+            // Deep space travel
+            targetSpeed = Math.min(closestDist / 10, config.maxSpeed);
+            readout.innerText = `DEEP SPACE`;
+            readout.style.color = '#00e5ff';
         }
+        
+        // Minimum floor
+        targetSpeed = Math.max(0.5, targetSpeed);
+        spdReadout.innerText = `SPEED: ${Math.floor(targetSpeed)} kps`;
 
-        // Fly up/down
-        if (input.flyUp || flyUpK) pos.y += flySpeed * (1 + pos.length() / 5000);
-        if (input.flyDown || flyDownK) pos.y -= flySpeed * (1 + pos.length() / 5000);
+        // 2. Movement
+        const fwd = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
+        const right = new THREE.Vector3(1, 0, 0).applyEuler(camera.rotation);
+        const up = new THREE.Vector3(0, 1, 0).applyEuler(camera.rotation);
 
-        // Speed lines effect when flying
-        speedLines.style.opacity = (input.flyUp || flyUpK) ? '1' : '0';
+        if(Math.abs(input.y) > 0.1) camera.position.addScaledVector(fwd, -input.y * targetSpeed);
+        if(Math.abs(input.x) > 0.1) camera.position.addScaledVector(right, input.x * targetSpeed);
+        if(input.up) camera.position.addScaledVector(up, targetSpeed * 0.5);
+        if(input.down) camera.position.addScaledVector(up, -targetSpeed * 0.5);
 
-        // Camera
-        camera.position.set(pos.x, pos.y + 1, pos.z);
-        camera.rotation.order = 'YXZ';
-        camera.rotation.y = yaw;
-        camera.rotation.x = pitch;
+        // 3. Camera Rotation
+        camera.rotation.order = "YXZ";
+        camera.rotation.y = camYaw;
+        camera.rotation.x = camPitch;
 
-        // Update planets
-        for (const p of planets) {
-            p.angle += p.orbitSpeed;
-            p.mesh.position.x = Math.cos(p.angle) * p.orbitR;
-            p.mesh.position.z = Math.sin(p.angle) * p.orbitR;
-            p.mesh.position.y = Math.sin(p.angle * 0.3) * p.orbitR * 0.05; // slight vertical wobble
-            p.mesh.rotation.y += p.spinSpeed;
-            if (p.tilt) p.mesh.rotation.x = p.tilt;
-        }
+        // 4. Orbit Animations
+        // Earth orbits Sun slowly
+        const time = Date.now() * 0.0001;
+        earthSystem.position.x = Math.cos(time * 0.1) * config.earthDist;
+        earthSystem.position.z = Math.sin(time * 0.1) * config.earthDist;
+        
+        // Earth Spin
+        earth.rotation.y += 0.0005;
 
-        // Saturn ring follows Saturn
-        const saturn = planets.find(p => p.name === 'Saturn');
-        if (saturn) {
-            saturnRing.position.copy(saturn.mesh.position);
-        }
-
-        // Moon orbits Earth
-        const earth = planets.find(p => p.name === 'Earth');
-        if (earth) {
-            moonAngle += 0.01;
-            moonMesh.position.set(
-                earth.mesh.position.x + Math.cos(moonAngle) * 300,
-                earth.mesh.position.y + Math.sin(moonAngle * 0.3) * 30,
-                earth.mesh.position.z + Math.sin(moonAngle) * 300
-            );
-            moonMesh.rotation.y += 0.005;
-        }
-
-        // Sun rotation
-        sun.rotation.y += 0.002;
-
-        // Planet label
-        if (frame % 30 === 0) checkNearPlanet();
-        if (labelTimer > 0) {
-            labelTimer--;
-            if (labelTimer <= 0) planetLabel.style.opacity = '0';
-        }
+        // Moon orbits Earth (Faster)
+        moonPivot.rotation.y = time * 2; 
+        // Moon spins (tidally locked roughly)
+        moon.rotation.y = time * 2;
 
         renderer.render(scene, camera);
     }
+    
+    // Resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 
     animate();
     </script>
