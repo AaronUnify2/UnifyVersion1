@@ -655,11 +655,47 @@
     }
 
     function uranusTexture() {
-        return makeTexture(128, 64, (ctx, w, h) => {
-            ctx.fillStyle = '#5dade2'; ctx.fillRect(0, 0, w, h);
-            for (let i = 0; i < 20; i++) {
-                ctx.fillStyle = `rgba(${70 + Math.random()*40}, ${180 + Math.random()*30}, ${220 + Math.random()*30}, 0.2)`;
-                ctx.fillRect(0, Math.random() * h, w, 2 + Math.random() * 4);
+        return makeTexture(256, 128, (ctx, w, h) => {
+            // Uranus: pale blue-green, very uniform compared to other giants
+            // The methane in its atmosphere absorbs red light, giving it that distinctive cyan
+            const grad = ctx.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0,    '#6aacb8');  // Slightly grey-green pole
+            grad.addColorStop(0.1,  '#78c0cc');
+            grad.addColorStop(0.2,  '#82ccd8');
+            grad.addColorStop(0.35, '#8ed4de');
+            grad.addColorStop(0.45, '#96dae4');  // Brighter equatorial
+            grad.addColorStop(0.55, '#96dae4');
+            grad.addColorStop(0.65, '#8ed4de');
+            grad.addColorStop(0.8,  '#82ccd8');
+            grad.addColorStop(0.9,  '#78c0cc');
+            grad.addColorStop(1,    '#6aacb8');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+
+            // Very subtle banding (Uranus looks almost featureless)
+            for (let i = 0; i < 80; i++) {
+                const y = Math.random() * h;
+                const r = 100 + Math.random() * 40;
+                const g = 190 + Math.random() * 30;
+                const b = 200 + Math.random() * 30;
+                ctx.fillStyle = `rgba(${r},${g},${b},${0.03 + Math.random() * 0.04})`;
+                ctx.fillRect(0, y, w, 0.5 + Math.random() * 2);
+            }
+
+            // Faint south polar brightening (Hubble observed this)
+            for (let i = 0; i < 12; i++) {
+                ctx.fillStyle = `rgba(170, 220, 230, ${0.02+Math.random()*0.03})`;
+                ctx.beginPath();
+                ctx.ellipse(Math.random()*w, h - Math.random()*15, 5+Math.random()*10, 2+Math.random()*4, Math.random(), 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            // Very faint cloud features
+            for (let i = 0; i < 6; i++) {
+                ctx.fillStyle = `rgba(180, 230, 240, ${0.03+Math.random()*0.03})`;
+                ctx.beginPath();
+                ctx.ellipse(Math.random()*w, h*0.2+Math.random()*h*0.6, 3+Math.random()*8, 1.5+Math.random()*3, 0, 0, Math.PI*2);
+                ctx.fill();
             }
         });
     }
@@ -1227,15 +1263,6 @@
         mesh.name = "PM_" + name;
         grp.add(mesh);
 
-        // Orbit Ring (skip for tilted planets — the flat ring clips through them)
-        if(dist > 0 && name !== "SATURN" && name !== "NEPTUNE") {
-            const rGeo = new THREE.RingGeometry(dist-300, dist+300, 128);
-            const rMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.03, side: THREE.DoubleSide });
-            const ring = new THREE.Mesh(rGeo, rMat);
-            ring.rotation.x = Math.PI/2;
-            scene.add(ring);
-        }
-
         // --- EARTH SPECIFIC: ADD MOON + CLOUDS + ATMOSPHERE ---
         let moonMesh = null;
         let cloudMesh = null;
@@ -1461,6 +1488,41 @@
         jupiterP.grp.rotation.z = 0.054;
     }
 
+    // ================= URANUS — THE SIDEWAYS PLANET =================
+    const uranusP = planets.find(p => p.name === "URANUS");
+    if(uranusP) {
+        const uR = uranusP.radius; // 2000
+
+        // Atmosphere glow — pale cyan
+        const uAtmGeo = new THREE.SphereGeometry(uR * 1.07, 48, 48);
+        const uAtmMat = new THREE.MeshBasicMaterial({
+            color: 0x80d0d8,
+            transparent: true,
+            opacity: 0.08,
+            side: THREE.BackSide
+        });
+        uranusP.grp.add(new THREE.Mesh(uAtmGeo, uAtmMat));
+
+        // Uranus's faint ring system (discovered 1977)
+        const uRingColors = [0x8a9aa0, 0x909898, 0x8a9098];
+        [1.64, 1.75, 1.85].forEach((mult, i) => {
+            const rGeo = new THREE.RingGeometry(uR * mult, uR * (mult + 0.02), 64);
+            const rMat = new THREE.MeshBasicMaterial({
+                color: uRingColors[i],
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.04,
+                depthWrite: false
+            });
+            const rMesh = new THREE.Mesh(rGeo, rMat);
+            rMesh.rotation.x = Math.PI / 2;
+            uranusP.grp.add(rMesh);
+        });
+
+        // Uranus's extreme axial tilt — 97.8°! It rolls on its side
+        uranusP.grp.rotation.z = 1.706;
+    }
+
     // ================= NEPTUNE'S MOONS + ATMOSPHERE =================
     const neptuneP = planets.find(p => p.name === "NEPTUNE");
     if(neptuneP) {
@@ -1527,17 +1589,37 @@
         neptuneP.grp.rotation.z = 0.494;
     }
 
-    // ================= SPAWN =================
-    camera.position.set(200000, 1500, 500); 
+    // ================= SPAWN ON EARTH =================
+    const earthSpawn = planets.find(p => p.name === "EARTH");
+    const spawnTime = Date.now();
+    if(earthSpawn && earthSpawn.dist > 0) {
+        // Set Earth's initial orbit position
+        earthSpawn.grp.position.x = Math.cos(earthSpawn.angle + spawnTime * earthSpawn.orbitSpeed) * earthSpawn.dist;
+        earthSpawn.grp.position.z = Math.sin(earthSpawn.angle + spawnTime * earthSpawn.orbitSpeed) * earthSpawn.dist;
+    }
+    // Place camera on Earth's surface — use grp.position directly (mesh is at 0,0,0 within group)
+    camera.position.set(
+        earthSpawn.grp.position.x,
+        earthSpawn.grp.position.y + earthSpawn.radius + 100,
+        earthSpawn.grp.position.z
+    );
     let camYaw = Math.PI; 
-    let camPitch = 0;
+    let camPitch = -0.2;
+
+    // ================= ATMOSPHERE SYSTEM =================
+    // Blue sky colors for Earth atmosphere
+    const skyBlue = new THREE.Color(0x4a90d9);    // Bright blue sky
+    const skyHorizon = new THREE.Color(0x87ceeb);  // Lighter horizon
+    const spaceBlack = new THREE.Color(0x000008);   // Deep space
+    const atmosphereHeight = 3000; // Altitude above surface where atmosphere fades completely
+    const skyFullHeight = 300;     // Below this altitude, sky is fully blue
 
     // ================= CONTROLS & ACTIONS =================
     const actionBtn = document.getElementById('action-btn');
     const lockText = document.getElementById('system-status');
     const proxText = document.getElementById('proximity-alert');
 
-    let landedPlanet = null;
+    let landedPlanet = earthSpawn; // Start landed on Earth
     let nearestPlanet = null;
     const input = { x: 0, y: 0, up: false, down: false };
 
@@ -1783,6 +1865,48 @@
         camera.rotation.order = "YXZ";
         camera.rotation.y = camYaw;
         camera.rotation.x = camPitch;
+
+        // 5. EARTH ATMOSPHERE EFFECT
+        // Check distance from Earth's surface to determine sky color
+        const earthP = planets.find(p => p.name === "EARTH");
+        if(earthP) {
+            const earthWorldPos = new THREE.Vector3();
+            earthP.mesh.getWorldPosition(earthWorldPos);
+            const earthDist = camera.position.distanceTo(earthWorldPos) - earthP.radius;
+            
+            if(earthDist < atmosphereHeight) {
+                // We're within Earth's atmosphere
+                let t; // 0 = on surface (full blue), 1 = in space (full black)
+                if(earthDist <= skyFullHeight) {
+                    t = 0;
+                } else {
+                    t = (earthDist - skyFullHeight) / (atmosphereHeight - skyFullHeight);
+                    t = Math.min(1, Math.max(0, t));
+                    // Smooth easing for natural transition
+                    t = t * t;
+                }
+                
+                // Blend sky color
+                const skyColor = new THREE.Color();
+                skyColor.copy(skyBlue).lerp(spaceBlack, t);
+                scene.background = skyColor;
+                
+                // Fog — thicker near surface (hides stars naturally), thins as you ascend
+                if(t < 0.95) {
+                    const fogColor = new THREE.Color();
+                    fogColor.copy(skyHorizon).lerp(spaceBlack, t);
+                    const fogNear = 500 + t * 50000;
+                    const fogFar = 50000 + t * 500000;
+                    scene.fog = new THREE.Fog(fogColor, fogNear, fogFar);
+                } else {
+                    scene.fog = null;
+                }
+            } else {
+                // Deep space — no atmosphere
+                scene.background = spaceBlack;
+                scene.fog = null;
+            }
+        }
 
         renderer.render(scene, camera);
     }
