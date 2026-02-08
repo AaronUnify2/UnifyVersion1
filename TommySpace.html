@@ -1603,14 +1603,26 @@
         earthSpawn.grp.position.x = Math.cos(earthSpawn.angle + spawnTime * earthSpawn.orbitSpeed) * earthSpawn.dist;
         earthSpawn.grp.position.z = Math.sin(earthSpawn.angle + spawnTime * earthSpawn.orbitSpeed) * earthSpawn.dist;
     }
-    // Earth starts invisible — will appear when we launch
-    if(earthSpawn) earthSpawn.grp.visible = false;
-    // Hide entire solar system and stars during ground phase
-    systemGroup.visible = false;
+    // Hide only Earth's sphere and clouds (not the Moon or the whole group)
+    if(earthSpawn) {
+        earthSpawn.mesh.visible = false;
+        if(earthSpawn.cloudMesh) earthSpawn.cloudMesh.visible = false;
+        // Hide atmosphere meshes too (they're children of grp)
+        earthSpawn.grp.children.forEach(child => {
+            if(child !== earthSpawn.mesh && child !== earthSpawn.moonMesh && child !== earthSpawn.cloudMesh) {
+                if(child.material && child.material.side === THREE.BackSide) {
+                    child.userData.isAtmosphere = true;
+                    child.visible = false;
+                }
+            }
+        });
+    }
 
-    // --- Ground scene group (independent of Earth orbit) ---
+    // --- Ground scene group (attached to Earth's group so it moves with orbit) ---
     const groundGroup = new THREE.Group();
-    scene.add(groundGroup);
+    // Position ground on Earth's equator (local Z+ direction, on the surface)
+    groundGroup.position.set(0, 0, earthSpawn.radius);
+    earthSpawn.grp.add(groundGroup);
 
     // Grass ground plane
     const grassCanvas = document.createElement('canvas');
@@ -1618,16 +1630,16 @@
     const grassCtx = grassCanvas.getContext('2d');
     // Base green
     const grassGrad = grassCtx.createRadialGradient(128, 128, 20, 128, 128, 180);
-    grassGrad.addColorStop(0, '#4a8a3a');
-    grassGrad.addColorStop(0.5, '#3d7a2e');
-    grassGrad.addColorStop(1, '#357025');
+    grassGrad.addColorStop(0, '#2e5a24');
+    grassGrad.addColorStop(0.5, '#264d1e');
+    grassGrad.addColorStop(1, '#1f4218');
     grassCtx.fillStyle = grassGrad;
     grassCtx.fillRect(0, 0, 256, 256);
     // Grass detail
     for(let i = 0; i < 2000; i++) {
         const gx = Math.random() * 256;
         const gy = Math.random() * 256;
-        grassCtx.fillStyle = `rgba(${30+Math.random()*40}, ${90+Math.random()*60}, ${20+Math.random()*30}, ${0.15+Math.random()*0.15})`;
+        grassCtx.fillStyle = `rgba(${20+Math.random()*30}, ${60+Math.random()*40}, ${15+Math.random()*20}, ${0.15+Math.random()*0.15})`;
         grassCtx.fillRect(gx, gy, 1, 1 + Math.random() * 2);
     }
     // Yellow wildflower patches
@@ -1793,16 +1805,22 @@
     const groundSun = new THREE.DirectionalLight(0xfffbe6, 1.5);
     groundSun.position.set(50, 100, -30);
     groundGroup.add(groundSun);
-    const groundFill = new THREE.HemisphereLight(0x87ceeb, 0x3a7a2e, 0.6);
+    const groundFill = new THREE.HemisphereLight(0x87ceeb, 0x264d1e, 0.6);
     groundGroup.add(groundFill);
 
-    // Camera starts on the field
-    camera.position.set(0, 5, 40);
+    // Camera starts on the field (world coordinates relative to Earth)
+    camera.position.set(
+        earthSpawn.grp.position.x,
+        earthSpawn.grp.position.y + 5,
+        earthSpawn.grp.position.z + earthSpawn.radius + 40
+    );
     let camYaw = Math.PI; // Facing toward the rocket
     let camPitch = 0;
     const WALK_SPEED = 0.4;
-    const ROCKET_INTERACT_DIST = 35; // How close to get to the rocket
+    const ROCKET_INTERACT_DIST = 35;
     let nearRocket = false;
+    // Track local position on the ground (relative to groundGroup)
+    let groundLocalPos = new THREE.Vector3(0, 5, 40);
 
     // ================= ATMOSPHERE SYSTEM =================
     // Blue sky colors for Earth atmosphere
@@ -1935,26 +1953,50 @@
             // Hide all planet labels
             planets.forEach(p => p.label.style.opacity = '0');
 
-            // Walk on flat field
-            const fwd = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
-            const right = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
+            // Walk on flat field — update local position
+            const walkFwd = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
+            const walkRight = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
 
-            if(Math.abs(input.y) > 0.05) camera.position.addScaledVector(fwd, -input.y * WALK_SPEED);
-            if(Math.abs(input.x) > 0.05) camera.position.addScaledVector(right, input.x * WALK_SPEED);
-            camera.position.y = 5; // Eye height locked
+            if(Math.abs(input.y) > 0.05) groundLocalPos.addScaledVector(walkFwd, -input.y * WALK_SPEED);
+            if(Math.abs(input.x) > 0.05) groundLocalPos.addScaledVector(walkRight, input.x * WALK_SPEED);
+            groundLocalPos.y = 5; // Eye height locked
 
             // Clamp to field
             const fieldLimit = 850;
-            camera.position.x = Math.max(-fieldLimit, Math.min(fieldLimit, camera.position.x));
-            camera.position.z = Math.max(-fieldLimit, Math.min(fieldLimit, camera.position.z));
+            groundLocalPos.x = Math.max(-fieldLimit, Math.min(fieldLimit, groundLocalPos.x));
+            groundLocalPos.z = Math.max(-fieldLimit, Math.min(fieldLimit, groundLocalPos.z));
+
+            // Update all planets (so Earth orbits, Moon orbits, etc.)
+            planets.forEach(p => {
+                if(p.dist > 0) {
+                    p.grp.position.x = Math.cos(p.angle + time * p.orbitSpeed) * p.dist;
+                    p.grp.position.z = Math.sin(p.angle + time * p.orbitSpeed) * p.dist;
+                }
+                p.mesh.rotation.y += 0.001;
+                if(p.cloudMesh) p.cloudMesh.rotation.y += 0.0013;
+                if(p.moonMesh) {
+                    const moonOrbitDist = p.radius * MOON_ORBIT_RADIUS_MULT;
+                    const mSpeed = -time * 0.00005;
+                    p.moonMesh.position.x = Math.cos(mSpeed) * moonOrbitDist;
+                    p.moonMesh.position.z = Math.sin(mSpeed) * moonOrbitDist;
+                    p.moonMesh.rotation.y = -mSpeed + Math.PI;
+                }
+            });
+
+            // Position camera in world space: Earth's position + surface offset + local walk
+            const ePos = earthSpawn.grp.position;
+            camera.position.set(
+                ePos.x + groundLocalPos.x,
+                ePos.y + groundLocalPos.y,
+                ePos.z + earthSpawn.radius + groundLocalPos.z
+            );
 
             camera.rotation.order = "YXZ";
             camera.rotation.y = camYaw;
             camera.rotation.x = camPitch;
 
-            // Check rocket distance
-            const rocketWorldPos = new THREE.Vector3(0, 0, -80);
-            const distToRocket = camera.position.distanceTo(rocketWorldPos);
+            // Check rocket distance (rocket is at local 0, 0, -80)
+            const distToRocket = Math.sqrt(groundLocalPos.x * groundLocalPos.x + (groundLocalPos.z + 80) * (groundLocalPos.z + 80));
             nearRocket = distToRocket < ROCKET_INTERACT_DIST;
 
             if(nearRocket) {
@@ -1970,16 +2012,6 @@
             // Blue sky during ground phase
             scene.background = skyBlue;
             scene.fog = new THREE.Fog(skyHorizon, 400, 1200);
-
-            // Keep planets ticking (but hidden Earth)
-            planets.forEach(p => {
-                if(p.dist > 0) {
-                    p.grp.position.x = Math.cos(p.angle + time * p.orbitSpeed) * p.dist;
-                    p.grp.position.z = Math.sin(p.angle + time * p.orbitSpeed) * p.dist;
-                }
-                p.mesh.rotation.y += 0.001;
-                if(p.cloudMesh) p.cloudMesh.rotation.y += 0.0013;
-            });
 
             renderer.render(scene, camera);
             return;
@@ -2003,14 +2035,17 @@
                 if(p.cloudMesh) p.cloudMesh.rotation.y += 0.0013;
             });
 
-            // Camera rises accelerating upward
+            // Camera rises accelerating upward, tracking Earth's position
             const launchAccel = t * t * t; // Cubic acceleration
-            camera.position.y = 5 + launchAccel * 8000;
-            camera.position.x = 0;
-            camera.position.z = -80;
+            const ePos = earthSpawn.grp.position;
+            camera.position.set(
+                ePos.x,
+                ePos.y + 5 + launchAccel * 8000,
+                ePos.z + earthSpawn.radius
+            );
 
-            // Tilt camera upward during launch
-            camPitch = -0.2 - t * 0.8;
+            // Look straight up so the player sees sky→space, not the ground swap
+            camPitch = -Math.PI / 2;
             camera.rotation.order = "YXZ";
             camera.rotation.y = camYaw;
             camera.rotation.x = camPitch;
