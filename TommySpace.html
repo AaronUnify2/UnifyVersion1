@@ -70,15 +70,15 @@
         <div id="labels-container"></div>
         
         <div id="hud-top">
-            <div id="system-status" class="hud-text">EXPLORE</div>
-            <div id="proximity-alert" class="sub-text">WALK TO THE ROCKET</div>
+            <div id="system-status" class="hud-text">SYSTEM ONLINE</div>
+            <div id="proximity-alert" class="sub-text">CRUISE MODE</div>
         </div>
         <!-- Thrust readout hidden -->
         <div id="hud-bottom" style="display:none;">
             <div id="speed-readout" class="hud-text">THRUST: 0%</div>
         </div>
 
-        <div id="action-btn">LAUNCH</div>
+        <div id="action-btn">LAND</div>
 
         <div id="controls">
             <div id="stick-area"><div id="stick-thumb"></div></div>
@@ -107,7 +107,7 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x4a90d9); // Blue sky — we start on the ground
+    scene.background = new THREE.Color(0x000008);
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, config.renderDist);
     camera.up.set(0, 1, 0); 
@@ -1590,237 +1590,22 @@
         neptuneP.grp.rotation.z = 0.494;
     }
 
-    // ================= GROUND LAUNCH SCENE =================
-    // Phase system: 'ground' → 'launching' → 'space'
-    let gamePhase = 'ground';
-    let launchTimer = 0;
-    const LAUNCH_DURATION = 4000; // ms for launch sequence
-
-    // Hide Earth initially (we're standing on a flat field, not on the sphere)
+    // ================= SPAWN ON EARTH =================
     const earthSpawn = planets.find(p => p.name === "EARTH");
     const spawnTime = Date.now();
     if(earthSpawn && earthSpawn.dist > 0) {
+        // Set Earth's initial orbit position
         earthSpawn.grp.position.x = Math.cos(earthSpawn.angle + spawnTime * earthSpawn.orbitSpeed) * earthSpawn.dist;
         earthSpawn.grp.position.z = Math.sin(earthSpawn.angle + spawnTime * earthSpawn.orbitSpeed) * earthSpawn.dist;
     }
-    // Hide only Earth's sphere and clouds (not the Moon or the whole group)
-    if(earthSpawn) {
-        earthSpawn.mesh.visible = false;
-        if(earthSpawn.cloudMesh) earthSpawn.cloudMesh.visible = false;
-        // Hide atmosphere meshes too (they're children of grp)
-        earthSpawn.grp.children.forEach(child => {
-            if(child !== earthSpawn.mesh && child !== earthSpawn.moonMesh && child !== earthSpawn.cloudMesh) {
-                if(child.material && child.material.side === THREE.BackSide) {
-                    child.userData.isAtmosphere = true;
-                    child.visible = false;
-                }
-            }
-        });
-    }
-
-    // --- Ground scene group (attached to Earth's group so it moves with orbit) ---
-    const groundGroup = new THREE.Group();
-    // Position ground on Earth's equator (local Z+ direction, on the surface)
-    groundGroup.position.set(0, 0, earthSpawn.radius);
-    earthSpawn.grp.add(groundGroup);
-
-    // Grass ground plane
-    const grassCanvas = document.createElement('canvas');
-    grassCanvas.width = 256; grassCanvas.height = 256;
-    const grassCtx = grassCanvas.getContext('2d');
-    // Base green
-    const grassGrad = grassCtx.createRadialGradient(128, 128, 20, 128, 128, 180);
-    grassGrad.addColorStop(0, '#2e5a24');
-    grassGrad.addColorStop(0.5, '#264d1e');
-    grassGrad.addColorStop(1, '#1f4218');
-    grassCtx.fillStyle = grassGrad;
-    grassCtx.fillRect(0, 0, 256, 256);
-    // Grass detail
-    for(let i = 0; i < 2000; i++) {
-        const gx = Math.random() * 256;
-        const gy = Math.random() * 256;
-        grassCtx.fillStyle = `rgba(${20+Math.random()*30}, ${60+Math.random()*40}, ${15+Math.random()*20}, ${0.15+Math.random()*0.15})`;
-        grassCtx.fillRect(gx, gy, 1, 1 + Math.random() * 2);
-    }
-    // Yellow wildflower patches
-    for(let i = 0; i < 30; i++) {
-        grassCtx.fillStyle = `rgba(${200+Math.random()*55}, ${200+Math.random()*40}, 50, ${0.2+Math.random()*0.2})`;
-        grassCtx.beginPath();
-        grassCtx.arc(Math.random()*256, Math.random()*256, 1+Math.random()*2, 0, Math.PI*2);
-        grassCtx.fill();
-    }
-    const grassTex = new THREE.CanvasTexture(grassCanvas);
-    grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping;
-    grassTex.repeat.set(40, 40);
-
-    const groundGeo = new THREE.PlaneGeometry(2000, 2000);
-    const groundMat = new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.95 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = 0;
-    groundGroup.add(ground);
-
-    // --- Tree ring on the horizon ---
-    function makeTreeTexture(variant) {
-        const c = document.createElement('canvas');
-        c.width = 64; c.height = 96;
-        const ctx = c.getContext('2d');
-        ctx.clearRect(0, 0, 64, 96);
-        const trunkW = 4 + variant * 2;
-        ctx.fillStyle = '#5a3a1a';
-        ctx.fillRect(32 - trunkW/2, 55, trunkW, 41);
-        ctx.fillStyle = 'rgba(30,15,5,0.3)';
-        ctx.fillRect(32 - trunkW/2, 55, trunkW/2, 41);
-        if(variant < 2) {
-            const colors = ['#2a6e2a', '#267326', '#308030', '#1e5e1e'];
-            for(let i = 0; i < 5; i++) {
-                ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
-                ctx.beginPath();
-                ctx.arc(28+(Math.random()-0.5)*20, 30+(Math.random()-0.5)*22, 12+Math.random()*8, 0, Math.PI*2);
-                ctx.fill();
-            }
-            for(let i = 0; i < 3; i++) {
-                ctx.fillStyle = 'rgba(80,180,60,0.25)';
-                ctx.beginPath();
-                ctx.arc(28+Math.random()*12, 22+Math.random()*15, 4+Math.random()*5, 0, Math.PI*2);
-                ctx.fill();
-            }
-        } else {
-            for(let i = 0; i < 4; i++) {
-                const y = 12 + i * 13;
-                const halfW = 20 - i * 3;
-                ctx.fillStyle = i % 2 === 0 ? '#1a5a1a' : '#1e661e';
-                ctx.beginPath();
-                ctx.moveTo(32, y - 8); ctx.lineTo(32+halfW, y+12); ctx.lineTo(32-halfW, y+12);
-                ctx.closePath(); ctx.fill();
-            }
-        }
-        const tex = new THREE.CanvasTexture(c);
-        tex.needsUpdate = true;
-        return tex;
-    }
-
-    const treeTextures = [makeTreeTexture(0), makeTreeTexture(1), makeTreeTexture(2), makeTreeTexture(3)];
-    for(let i = 0; i < 120; i++) {
-        const angle = (i / 120) * Math.PI * 2 + (Math.random() - 0.5) * 0.08;
-        const dist = 700 + Math.random() * 250;
-        const tex = treeTextures[Math.floor(Math.random() * treeTextures.length)];
-        const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, fog: true, depthWrite: false });
-        const sprite = new THREE.Sprite(spriteMat);
-        sprite.position.set(Math.cos(angle) * dist, 25 + Math.random() * 15, Math.sin(angle) * dist);
-        const s = 40 + Math.random() * 30;
-        sprite.scale.set(s * 0.67, s, 1);
-        groundGroup.add(sprite);
-    }
-
-    // --- Launchpad ---
-    // Concrete pad
-    const padGeo = new THREE.CylinderGeometry(25, 25, 1, 32);
-    const padMat = new THREE.MeshStandardMaterial({ color: 0x808080, roughness: 0.9 });
-    const pad = new THREE.Mesh(padGeo, padMat);
-    pad.position.set(0, 0.5, -80);
-    groundGroup.add(pad);
-
-    // Pad markings — circle
-    const markGeo = new THREE.RingGeometry(18, 20, 32);
-    const markMat = new THREE.MeshBasicMaterial({ color: 0xcccc00, side: THREE.DoubleSide });
-    const marking = new THREE.Mesh(markGeo, markMat);
-    marking.rotation.x = -Math.PI / 2;
-    marking.position.set(0, 1.1, -80);
-    groundGroup.add(marking);
-
-    // Inner cross on pad
-    const crossMat = new THREE.MeshBasicMaterial({ color: 0xcccc00, side: THREE.DoubleSide });
-    const crossGeo1 = new THREE.PlaneGeometry(30, 1.5);
-    const cross1 = new THREE.Mesh(crossGeo1, crossMat);
-    cross1.rotation.x = -Math.PI / 2; cross1.position.set(0, 1.1, -80);
-    groundGroup.add(cross1);
-    const cross2 = new THREE.Mesh(crossGeo1.clone(), crossMat);
-    cross2.rotation.x = -Math.PI / 2; cross2.rotation.z = Math.PI / 2;
-    cross2.position.set(0, 1.1, -80);
-    groundGroup.add(cross2);
-
-    // --- Rocket ---
-    const rocketGroup = new THREE.Group();
-    rocketGroup.position.set(0, 0, -80);
-
-    // Body — white cylinder
-    const bodyGeo = new THREE.CylinderGeometry(3, 3.5, 30, 16);
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.3, metalness: 0.2 });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 16;
-    rocketGroup.add(body);
-
-    // Nose cone — red
-    const noseGeo = new THREE.ConeGeometry(3, 8, 16);
-    const noseMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.4, metalness: 0.3 });
-    const nose = new THREE.Mesh(noseGeo, noseMat);
-    nose.position.y = 35;
-    rocketGroup.add(nose);
-
-    // Window — blue circle
-    const winGeo = new THREE.CircleGeometry(1.2, 16);
-    const winMat = new THREE.MeshBasicMaterial({ color: 0x4488cc });
-    const win = new THREE.Mesh(winGeo, winMat);
-    win.position.set(0, 26, 3.1);
-    rocketGroup.add(win);
-
-    // Engine nozzle
-    const nozzleGeo = new THREE.CylinderGeometry(2, 3.5, 4, 16);
-    const nozzleMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.6, metalness: 0.5 });
-    const nozzle = new THREE.Mesh(nozzleGeo, nozzleMat);
-    nozzle.position.y = -1;
-    rocketGroup.add(nozzle);
-
-    // Fins — 4 fins
-    const finShape = new THREE.Shape();
-    finShape.moveTo(0, 0); finShape.lineTo(6, 0); finShape.lineTo(0, 10); finShape.closePath();
-    const finGeo = new THREE.ShapeGeometry(finShape);
-    const finMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.5, side: THREE.DoubleSide });
-    for(let i = 0; i < 4; i++) {
-        const fin = new THREE.Mesh(finGeo, finMat);
-        const a = (i / 4) * Math.PI * 2;
-        fin.position.set(Math.sin(a) * 3.5, 1, Math.cos(a) * 3.5);
-        fin.rotation.y = -a;
-        fin.rotation.x = -0.1;
-        rocketGroup.add(fin);
-    }
-
-    // Support tower (simple lattice)
-    const towerGeo = new THREE.BoxGeometry(1, 35, 1);
-    const towerMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7 });
-    const tower = new THREE.Mesh(towerGeo, towerMat);
-    tower.position.set(8, 17.5, -80);
-    groundGroup.add(tower);
-    // Tower crossbeams
-    for(let i = 0; i < 4; i++) {
-        const beam = new THREE.Mesh(new THREE.BoxGeometry(7, 0.5, 0.5), towerMat);
-        beam.position.set(4.5, 5 + i * 9, -80);
-        groundGroup.add(beam);
-    }
-
-    groundGroup.add(rocketGroup);
-
-    // Ground scene sunlight (from above-right to simulate daytime sun)
-    const groundSun = new THREE.DirectionalLight(0xfffbe6, 1.5);
-    groundSun.position.set(50, 100, -30);
-    groundGroup.add(groundSun);
-    const groundFill = new THREE.HemisphereLight(0x87ceeb, 0x264d1e, 0.6);
-    groundGroup.add(groundFill);
-
-    // Camera starts on the field (world coordinates relative to Earth)
+    // Place camera on Earth's equator (Z offset = equatorial surface)
     camera.position.set(
         earthSpawn.grp.position.x,
-        earthSpawn.grp.position.y + 5,
-        earthSpawn.grp.position.z + earthSpawn.radius + 40
+        earthSpawn.grp.position.y,
+        earthSpawn.grp.position.z + earthSpawn.radius + 100
     );
-    let camYaw = Math.PI; // Facing toward the rocket
-    let camPitch = 0;
-    const WALK_SPEED = 0.4;
-    const ROCKET_INTERACT_DIST = 35;
-    let nearRocket = false;
-    // Track local position on the ground (relative to groundGroup)
-    let groundLocalPos = new THREE.Vector3(0, 5, 40);
+    let camYaw = Math.PI; 
+    let camPitch = 0; // Looking straight ahead at the horizon
 
     // ================= ATMOSPHERE SYSTEM =================
     // Blue sky colors for Earth atmosphere
@@ -1835,26 +1620,19 @@
     const lockText = document.getElementById('system-status');
     const proxText = document.getElementById('proximity-alert');
 
-    let landedPlanet = null; // Not on a planet — on the ground field
+    let landedPlanet = earthSpawn; // Start landed on Earth
     let nearestPlanet = null;
     const input = { x: 0, y: 0, up: false, down: false };
 
     // ACTION BUTTON
     actionBtn.addEventListener('click', () => {
-        if(gamePhase === 'ground' && nearRocket) {
-            // LAUNCH!
-            gamePhase = 'launching';
-            launchTimer = Date.now();
-            actionBtn.style.display = 'none';
-            lockText.innerText = "LAUNCH SEQUENCE"; lockText.style.color = "#ff4400";
-            proxText.innerText = "3... 2... 1... LIFTOFF!";
-        } else if (landedPlanet) {
-            // Takeoff from a planet (normal space gameplay)
+        if (landedPlanet) {
+            // Takeoff
             const fwd = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
             camera.position.addScaledVector(new THREE.Vector3(0,1,0), landedPlanet.radius * 0.5);
             landedPlanet = null;
         } else if (nearestPlanet) {
-            // Land on a planet
+            // Land
             const dir = new THREE.Vector3();
             nearestPlanet.mesh.getWorldPosition(dir);
             dir.sub(camera.position).normalize();
@@ -1947,165 +1725,7 @@
     function animate() {
         requestAnimationFrame(animate);
         const time = Date.now();
-
-        // ============ GROUND PHASE ============
-        if(gamePhase === 'ground') {
-            // Hide all planet labels
-            planets.forEach(p => p.label.style.opacity = '0');
-
-            // Walk on flat field — update local position
-            const walkFwd = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
-            const walkRight = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
-
-            if(Math.abs(input.y) > 0.05) groundLocalPos.addScaledVector(walkFwd, -input.y * WALK_SPEED);
-            if(Math.abs(input.x) > 0.05) groundLocalPos.addScaledVector(walkRight, input.x * WALK_SPEED);
-            groundLocalPos.y = 5; // Eye height locked
-
-            // Clamp to field
-            const fieldLimit = 850;
-            groundLocalPos.x = Math.max(-fieldLimit, Math.min(fieldLimit, groundLocalPos.x));
-            groundLocalPos.z = Math.max(-fieldLimit, Math.min(fieldLimit, groundLocalPos.z));
-
-            // Update all planets (so Earth orbits, Moon orbits, etc.)
-            planets.forEach(p => {
-                if(p.dist > 0) {
-                    p.grp.position.x = Math.cos(p.angle + time * p.orbitSpeed) * p.dist;
-                    p.grp.position.z = Math.sin(p.angle + time * p.orbitSpeed) * p.dist;
-                }
-                p.mesh.rotation.y += 0.001;
-                if(p.cloudMesh) p.cloudMesh.rotation.y += 0.0013;
-                if(p.moonMesh) {
-                    const moonOrbitDist = p.radius * MOON_ORBIT_RADIUS_MULT;
-                    const mSpeed = -time * 0.00005;
-                    p.moonMesh.position.x = Math.cos(mSpeed) * moonOrbitDist;
-                    p.moonMesh.position.z = Math.sin(mSpeed) * moonOrbitDist;
-                    p.moonMesh.rotation.y = -mSpeed + Math.PI;
-                }
-            });
-
-            // Position camera in world space: Earth's position + surface offset + local walk
-            const ePos = earthSpawn.grp.position;
-            camera.position.set(
-                ePos.x + groundLocalPos.x,
-                ePos.y + groundLocalPos.y,
-                ePos.z + earthSpawn.radius + groundLocalPos.z
-            );
-
-            camera.rotation.order = "YXZ";
-            camera.rotation.y = camYaw;
-            camera.rotation.x = camPitch;
-
-            // Check rocket distance (rocket is at local 0, 0, -80)
-            const distToRocket = Math.sqrt(groundLocalPos.x * groundLocalPos.x + (groundLocalPos.z + 80) * (groundLocalPos.z + 80));
-            nearRocket = distToRocket < ROCKET_INTERACT_DIST;
-
-            if(nearRocket) {
-                actionBtn.style.display = 'flex'; actionBtn.innerText = "LAUNCH";
-                lockText.innerText = "ROCKET READY"; lockText.style.color = "#00ffcc";
-                proxText.innerText = "BOARD & LAUNCH";
-            } else {
-                actionBtn.style.display = 'none';
-                lockText.innerText = "EXPLORE"; lockText.style.color = "#00aa88";
-                proxText.innerText = "WALK TO THE ROCKET";
-            }
-
-            // Blue sky during ground phase
-            scene.background = skyBlue;
-            scene.fog = new THREE.Fog(skyHorizon, 400, 1200);
-
-            renderer.render(scene, camera);
-            return;
-        }
-
-        // ============ LAUNCH PHASE ============
-        if(gamePhase === 'launching') {
-            // Hide all planet labels
-            planets.forEach(p => p.label.style.opacity = '0');
-
-            const elapsed = time - launchTimer;
-            const t = Math.min(1, elapsed / LAUNCH_DURATION);
-
-            // Keep planets ticking
-            planets.forEach(p => {
-                if(p.dist > 0) {
-                    p.grp.position.x = Math.cos(p.angle + time * p.orbitSpeed) * p.dist;
-                    p.grp.position.z = Math.sin(p.angle + time * p.orbitSpeed) * p.dist;
-                }
-                p.mesh.rotation.y += 0.001;
-                if(p.cloudMesh) p.cloudMesh.rotation.y += 0.0013;
-            });
-
-            // Camera rises accelerating upward, tracking Earth's position
-            const launchAccel = t * t * t; // Cubic acceleration
-            const ePos = earthSpawn.grp.position;
-            camera.position.set(
-                ePos.x,
-                ePos.y + 5 + launchAccel * 8000,
-                ePos.z + earthSpawn.radius
-            );
-
-            // Look straight up so the player sees sky→space, not the ground swap
-            camPitch = Math.PI / 2;
-            camera.rotation.order = "YXZ";
-            camera.rotation.y = camYaw;
-            camera.rotation.x = camPitch;
-
-            // Sky transitions from blue to black
-            const skyColor = new THREE.Color();
-            skyColor.copy(skyBlue).lerp(spaceBlack, t * t);
-            scene.background = skyColor;
-
-            if(t < 0.8) {
-                const fogColor = new THREE.Color();
-                fogColor.copy(skyHorizon).lerp(spaceBlack, t);
-                scene.fog = new THREE.Fog(fogColor, 400 + t * 10000, 1200 + t * 50000);
-            } else {
-                scene.fog = null;
-            }
-
-            // HUD updates
-            if(t < 0.3) {
-                proxText.innerText = "3... 2... 1... LIFTOFF!";
-            } else if(t < 0.5) {
-                proxText.innerText = "MAX THRUST";
-                lockText.innerText = "ASCENDING"; lockText.style.color = "#ff8800";
-            } else if(t < 0.8) {
-                proxText.innerText = "LEAVING ATMOSPHERE";
-                lockText.innerText = "ALTITUDE WARNING"; lockText.style.color = "#ffcc00";
-            } else {
-                proxText.innerText = "ORBIT ACHIEVED";
-                lockText.innerText = "SYSTEM ONLINE"; lockText.style.color = "#00ffcc";
-            }
-
-            // Launch complete — transition to space
-            if(t >= 1) {
-                gamePhase = 'space';
-                // Show the solar system
-                systemGroup.visible = true;
-                if(earthSpawn) earthSpawn.grp.visible = true;
-                // Remove ground scene
-                scene.remove(groundGroup);
-                groundGroup.traverse(child => {
-                    if(child.material) { 
-                        if(child.material.map) child.material.map.dispose();
-                        child.material.dispose(); 
-                    }
-                    if(child.geometry) child.geometry.dispose();
-                });
-                // Position camera above Earth
-                const earthPos = earthSpawn.grp.position;
-                camera.position.set(earthPos.x, earthPos.y + earthSpawn.radius + 2000, earthPos.z);
-                camPitch = -0.5; // Looking down at Earth
-                landedPlanet = null;
-                scene.fog = null;
-                scene.background = spaceBlack;
-            }
-
-            renderer.render(scene, camera);
-            return;
-        }
-
-        // ============ SPACE PHASE (normal gameplay) ============
+        
         let closestDist = Infinity;
         let closestP = null;
         let isLocked = false;
@@ -2173,8 +1793,8 @@
                 }
             }
 
-            // Raycast Labels — hide during ground/launch phases and when landed on Earth
-            if(gamePhase !== 'space' || (landedPlanet && landedPlanet.name === "EARTH")) {
+            // Raycast Labels — hide all when landed on Earth (you'd see sky, not labels)
+            if(landedPlanet && landedPlanet.name === "EARTH") {
                 p.label.style.opacity = '0';
             } else if(distSurface < 80000) {
                 p.label.style.opacity = '0';
@@ -2281,19 +1901,13 @@
                 const sunDist = camera.position.distanceTo(sunWPos);
                 const sunAngularSize = sunP.radius / sunDist;
 
-                // Eclipse only when moon disc actually overlaps the sun disc
-                // The sum of angular radii is when the edges first touch
-                const totalAngular = moonAngularSize + sunAngularSize;
-                // alignment = cos(angle between directions); cos(angle) > cos(totalAngular) means overlap
-                // For small angles: cos(a) ≈ 1 - a²/2, so threshold ≈ 1 - totalAngular²/2
-                const overlapThreshold = 1 - (totalAngular * totalAngular) / 2;
-                
-                if(alignment > overlapThreshold && moonDist < sunDist) {
-                    // Total eclipse when moon fully covers sun (alignment very close to 1)
-                    const totalThreshold = 1 - ((moonAngularSize - sunAngularSize) * (moonAngularSize - sunAngularSize)) / 2;
-                    const coverFactor = (alignment - overlapThreshold) / (totalThreshold - overlapThreshold);
-                    eclipseDarkness = Math.min(1, Math.max(0, coverFactor));
-                    eclipseDarkness = eclipseDarkness * eclipseDarkness; // Ease in
+                // Eclipse occurs when Moon aligns with Sun and is close enough to cover it
+                // alignment > 0.9999 is very tight (~0.8° arc) — scale based on angular sizes
+                const eclipseThreshold = 1 - (moonAngularSize * 1.5); // How close alignment needs to be
+                if(alignment > eclipseThreshold && moonDist < sunDist) {
+                    // How much of the Sun is covered
+                    const coverFactor = (alignment - eclipseThreshold) / (1 - eclipseThreshold);
+                    eclipseDarkness = Math.min(1, coverFactor * coverFactor);
                 }
             }
 
@@ -2349,4 +1963,4 @@
     animate();
     </script>
 </body>
-</html>
+    </html>
