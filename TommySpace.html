@@ -98,7 +98,7 @@
         lockDist: 40000,
         deepSpaceSpeed: 2500,
         minSpeed: 5,
-        sunRadius: 5000  // Reduced from 50000 for correct apparent size from Earth
+        sunRadius: 5000
     };
 
     const canvas = document.getElementById('gameCanvas');
@@ -127,72 +127,61 @@
         const sizes = new Float32Array(starCount);
 
         for (let i = 0; i < starCount; i++) {
-            // Distribute stars on a large sphere shell
             const theta = Math.random() * Math.PI * 2;
             const phi = Math.acos(2 * Math.random() - 1);
-            const r = 800000000 + Math.random() * 200000000; // Very far away
+            const r = 800000000 + Math.random() * 200000000;
 
             positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
             positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
             positions[i * 3 + 2] = r * Math.cos(phi);
 
-            // Star color variation: white, blue-white, yellow-white, warm
             const colorRoll = Math.random();
             if (colorRoll < 0.5) {
-                // White
                 colors[i * 3] = 0.9 + Math.random() * 0.1;
                 colors[i * 3 + 1] = 0.9 + Math.random() * 0.1;
-                colors[i * 3 + 2] = 0.95 + Math.random() * 0.05;
+                colors[i * 3 + 2] = 0.9 + Math.random() * 0.1;
             } else if (colorRoll < 0.7) {
-                // Blue-white
                 colors[i * 3] = 0.7 + Math.random() * 0.1;
                 colors[i * 3 + 1] = 0.8 + Math.random() * 0.1;
                 colors[i * 3 + 2] = 1.0;
             } else if (colorRoll < 0.85) {
-                // Yellow
                 colors[i * 3] = 1.0;
                 colors[i * 3 + 1] = 0.9 + Math.random() * 0.1;
-                colors[i * 3 + 2] = 0.6 + Math.random() * 0.2;
+                colors[i * 3 + 2] = 0.7 + Math.random() * 0.1;
             } else {
-                // Warm orange/red
                 colors[i * 3] = 1.0;
-                colors[i * 3 + 1] = 0.6 + Math.random() * 0.3;
+                colors[i * 3 + 1] = 0.6 + Math.random() * 0.2;
                 colors[i * 3 + 2] = 0.4 + Math.random() * 0.2;
             }
-
-            // Varying brightness via size
-            sizes[i] = 1.5 + Math.random() * 3.5;
+            sizes[i] = 200000 + Math.random() * 600000;
         }
 
-        const starGeo = new THREE.BufferGeometry();
-        starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        starGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-
-        const starMat = new THREE.PointsMaterial({
-            size: 800000,
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        const mat = new THREE.PointsMaterial({
+            size: 500000,
             sizeAttenuation: true,
             vertexColors: true,
             transparent: true,
             opacity: 0.9,
         });
+        scene.add(new THREE.Points(geo, mat));
 
-        const stars = new THREE.Points(starGeo, starMat);
-        scene.add(stars);
-
-        // Second layer: dimmer, more numerous background stars
+        // Background dim layer
         const bgCount = 4000;
         const bgPos = new Float32Array(bgCount * 3);
         const bgCol = new Float32Array(bgCount * 3);
         for (let i = 0; i < bgCount; i++) {
             const theta = Math.random() * Math.PI * 2;
             const phi = Math.acos(2 * Math.random() - 1);
-            const r = 1200000000 + Math.random() * 300000000;
+            const r = 900000000 + Math.random() * 100000000;
             bgPos[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
             bgPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
             bgPos[i * 3 + 2] = r * Math.cos(phi);
-            const b = 0.5 + Math.random() * 0.5;
-            bgCol[i * 3] = b; bgCol[i * 3 + 1] = b; bgCol[i * 3 + 2] = b + Math.random() * 0.1;
+            bgCol[i * 3] = 0.7 + Math.random() * 0.3;
+            bgCol[i * 3 + 1] = 0.7 + Math.random() * 0.3;
+            bgCol[i * 3 + 2] = 0.8 + Math.random() * 0.1;
         }
         const bgGeo = new THREE.BufferGeometry();
         bgGeo.setAttribute('position', new THREE.BufferAttribute(bgPos, 3));
@@ -216,11 +205,29 @@
     }
 
     function sunTexture() {
-        return makeTexture(256, 128, (ctx, w, h) => {
-            ctx.fillStyle = '#ff8c00'; ctx.fillRect(0, 0, w, h);
-            for (let i = 0; i < 200; i++) {
-                ctx.fillStyle = ['#ffaa00', '#ff6600', '#ffcc00', '#ffe066'][Math.floor(Math.random() * 4)];
-                ctx.fillRect(Math.random() * w, Math.random() * h, 3 + Math.random() * 5, 2 + Math.random() * 3);
+        return makeTexture(512, 256, (ctx, w, h) => {
+            // Base orange-yellow gradient
+            const grad = ctx.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, '#ffcc00');
+            grad.addColorStop(0.3, '#ff9900');
+            grad.addColorStop(0.5, '#ff8c00');
+            grad.addColorStop(0.7, '#ff6600');
+            grad.addColorStop(1, '#ffaa00');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+            // Granulation
+            for (let i = 0; i < 500; i++) {
+                ctx.fillStyle = ['#ffaa00', '#ff6600', '#ffcc00', '#ffe066', '#ff5500'][Math.floor(Math.random() * 5)];
+                ctx.globalAlpha = 0.15 + Math.random() * 0.2;
+                ctx.fillRect(Math.random() * w, Math.random() * h, 2 + Math.random() * 6, 2 + Math.random() * 4);
+            }
+            ctx.globalAlpha = 1;
+            // Sunspots
+            for (let i = 0; i < 8; i++) {
+                ctx.fillStyle = 'rgba(120,50,0,0.3)';
+                ctx.beginPath();
+                ctx.arc(Math.random() * w, Math.random() * h, 2 + Math.random() * 5, 0, Math.PI * 2);
+                ctx.fill();
             }
         });
     }
@@ -245,44 +252,517 @@
         });
     }
 
+    // ============ REALISTIC EARTH TEXTURE ============
     function earthTexture() {
-        return makeTexture(256, 128, (ctx, w, h) => {
-            ctx.fillStyle = '#1a5276'; ctx.fillRect(0, 0, w, h);
-            ctx.fillStyle = '#27ae60';
-            ctx.beginPath(); ctx.ellipse(60, 50, 24, 36, 0.2, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(110, 40, 30, 24, -0.1, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(170, 60, 36, 20, 0.3, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#d4ac6e';
-            ctx.beginPath(); ctx.ellipse(116, 56, 12, 8, 0, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#ecf0f1'; ctx.fillRect(0, 0, w, 10); ctx.fillRect(0, h - 10, w, 10);
-            ctx.fillStyle = 'rgba(255,255,255,0.25)';
-            for (let i = 0; i < 20; i++) { ctx.fillRect(Math.random() * w, Math.random() * h, 16 + Math.random() * 30, 4); }
+        return makeTexture(512, 256, (ctx, w, h) => {
+            // Deep ocean base
+            const oceanGrad = ctx.createLinearGradient(0, 0, 0, h);
+            oceanGrad.addColorStop(0, '#1a3a5c');
+            oceanGrad.addColorStop(0.15, '#1e5799');
+            oceanGrad.addColorStop(0.3, '#1a6baa');
+            oceanGrad.addColorStop(0.5, '#1565a0');
+            oceanGrad.addColorStop(0.7, '#1a6baa');
+            oceanGrad.addColorStop(0.85, '#1e5799');
+            oceanGrad.addColorStop(1, '#1a3a5c');
+            ctx.fillStyle = oceanGrad;
+            ctx.fillRect(0, 0, w, h);
+
+            // Ocean depth variation
+            for (let i = 0; i < 200; i++) {
+                ctx.fillStyle = `rgba(${10 + Math.random()*20}, ${60 + Math.random()*40}, ${120 + Math.random()*40}, 0.15)`;
+                ctx.fillRect(Math.random() * w, Math.random() * h, 5 + Math.random() * 20, 2 + Math.random() * 6);
+            }
+
+            // --- CONTINENTS ---
+            // Helper to draw a landmass blob
+            function drawContinent(cx, cy, scaleX, scaleY, color, rotation) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(rotation || 0);
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                const points = 12 + Math.floor(Math.random() * 6);
+                for (let i = 0; i <= points; i++) {
+                    const angle = (i / points) * Math.PI * 2;
+                    const rr = 1 + Math.random() * 0.35;
+                    const px = Math.cos(angle) * scaleX * rr;
+                    const py = Math.sin(angle) * scaleY * rr;
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // North America (upper left area)
+            drawContinent(w * 0.18, h * 0.28, 38, 28, '#2d6b30', -0.2);
+            drawContinent(w * 0.15, h * 0.22, 20, 15, '#3a7a3d', 0.3);
+            drawContinent(w * 0.22, h * 0.35, 15, 20, '#2d6b30', -0.1);
+            // Central America
+            drawContinent(w * 0.20, h * 0.42, 8, 12, '#3a7a3d', 0.5);
+
+            // South America (lower left)
+            drawContinent(w * 0.26, h * 0.55, 18, 30, '#2d6b30', 0.15);
+            drawContinent(w * 0.28, h * 0.62, 14, 22, '#3a7a3d', 0.1);
+
+            // Europe (upper middle)
+            drawContinent(w * 0.48, h * 0.22, 18, 12, '#4a8a40', -0.1);
+            drawContinent(w * 0.50, h * 0.18, 12, 8, '#3a7a3d', 0.2);
+            // UK/Scandinavia fragments
+            drawContinent(w * 0.44, h * 0.18, 4, 6, '#4a8a40', 0.3);
+            drawContinent(w * 0.52, h * 0.14, 5, 10, '#3a7a3d', 0.1);
+
+            // Africa (middle)
+            drawContinent(w * 0.50, h * 0.42, 22, 30, '#8B7235', 0.05);
+            drawContinent(w * 0.48, h * 0.38, 18, 16, '#6b8a30', -0.1);
+            drawContinent(w * 0.53, h * 0.52, 14, 18, '#9a8040', 0.1);
+            // Sahara desert region  
+            drawContinent(w * 0.49, h * 0.35, 20, 8, '#c4a555', 0);
+
+            // Asia (upper right area)
+            drawContinent(w * 0.62, h * 0.25, 40, 22, '#3a7a3d', -0.05);
+            drawContinent(w * 0.70, h * 0.28, 28, 18, '#4a8a40', 0.1);
+            drawContinent(w * 0.58, h * 0.20, 20, 14, '#567a45', 0.15);
+            // India
+            drawContinent(w * 0.62, h * 0.40, 10, 14, '#6b8a30', 0.2);
+            // SE Asia
+            drawContinent(w * 0.72, h * 0.42, 12, 10, '#4a8a40', -0.2);
+
+            // Australia (lower right)
+            drawContinent(w * 0.78, h * 0.62, 18, 14, '#9a7a30', 0.1);
+            drawContinent(w * 0.80, h * 0.60, 14, 10, '#8a6a28', -0.15);
+
+            // Antarctica (bottom strip)
+            ctx.fillStyle = '#e8e8f0';
+            ctx.fillRect(0, h - 18, w, 18);
+            for (let i = 0; i < 30; i++) {
+                ctx.fillStyle = `rgba(200,210,230,${0.3 + Math.random()*0.4})`;
+                ctx.beginPath();
+                ctx.arc(Math.random() * w, h - 12 + Math.random() * 10, 3 + Math.random() * 8, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Arctic (top strip)
+            ctx.fillStyle = 'rgba(220,230,240,0.6)';
+            ctx.fillRect(0, 0, w, 10);
+            for (let i = 0; i < 20; i++) {
+                ctx.fillStyle = `rgba(210,220,240,${0.2 + Math.random()*0.3})`;
+                ctx.beginPath();
+                ctx.arc(Math.random() * w, Math.random() * 12, 2 + Math.random() * 6, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Mountain ranges and terrain details on continents
+            for (let i = 0; i < 150; i++) {
+                const shade = Math.random();
+                if (shade < 0.5) {
+                    ctx.fillStyle = `rgba(30,80,30,${0.08 + Math.random()*0.12})`;
+                } else {
+                    ctx.fillStyle = `rgba(80,60,30,${0.06 + Math.random()*0.1})`;
+                }
+                ctx.beginPath();
+                ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Coastal shallows (lighter blue near land)
+            for (let i = 0; i < 100; i++) {
+                ctx.fillStyle = `rgba(40,120,180,${0.05 + Math.random()*0.08})`;
+                ctx.beginPath();
+                ctx.arc(Math.random() * w, Math.random() * h, 2 + Math.random() * 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        });
+    }
+
+    // ============ EARTH CLOUD TEXTURE ============
+    function earthCloudTexture() {
+        return makeTexture(512, 256, (ctx, w, h) => {
+            ctx.clearRect(0, 0, w, h);
+            
+            // Wispy cloud bands
+            for (let band = 0; band < 8; band++) {
+                const bandY = (band / 8) * h + Math.random() * 20 - 10;
+                const bandWidth = 15 + Math.random() * 30;
+                for (let i = 0; i < 40; i++) {
+                    ctx.fillStyle = `rgba(255,255,255,${0.02 + Math.random() * 0.06})`;
+                    ctx.beginPath();
+                    ctx.ellipse(
+                        Math.random() * w,
+                        bandY + (Math.random() - 0.5) * bandWidth,
+                        8 + Math.random() * 25,
+                        3 + Math.random() * 10,
+                        Math.random() * Math.PI,
+                        0, Math.PI * 2
+                    );
+                    ctx.fill();
+                }
+            }
+
+            // Scattered cloud clusters
+            for (let i = 0; i < 60; i++) {
+                const cx = Math.random() * w;
+                const cy = Math.random() * h;
+                const size = 5 + Math.random() * 20;
+                for (let j = 0; j < 5; j++) {
+                    ctx.fillStyle = `rgba(255,255,255,${0.015 + Math.random() * 0.04})`;
+                    ctx.beginPath();
+                    ctx.ellipse(
+                        cx + (Math.random() - 0.5) * size * 2,
+                        cy + (Math.random() - 0.5) * size,
+                        size * (0.5 + Math.random()),
+                        size * (0.3 + Math.random() * 0.4),
+                        Math.random() * Math.PI,
+                        0, Math.PI * 2
+                    );
+                    ctx.fill();
+                }
+            }
+
+            // Tropical storm-like spiral patches
+            for (let s = 0; s < 3; s++) {
+                const sx = Math.random() * w;
+                const sy = h * 0.3 + Math.random() * h * 0.4;
+                for (let a = 0; a < 20; a++) {
+                    const angle = a * 0.5 + Math.random();
+                    const dist = 3 + a * 1.5;
+                    ctx.fillStyle = `rgba(255,255,255,${0.02 + Math.random()*0.03})`;
+                    ctx.beginPath();
+                    ctx.ellipse(
+                        sx + Math.cos(angle) * dist,
+                        sy + Math.sin(angle) * dist * 0.6,
+                        4 + Math.random() * 6,
+                        2 + Math.random() * 3,
+                        angle, 0, Math.PI * 2
+                    );
+                    ctx.fill();
+                }
+            }
         });
     }
 
     function marsTexture() {
-        return makeTexture(128, 64, (ctx, w, h) => {
-            ctx.fillStyle = '#c0392b'; ctx.fillRect(0, 0, w, h);
-            for (let i = 0; i < 40; i++) {
-                ctx.fillStyle = `rgba(${150 + Math.random()*60}, ${50 + Math.random()*30}, ${20 + Math.random()*20}, 0.4)`;
-                ctx.beginPath(); ctx.arc(Math.random() * w, Math.random() * h, 2 + Math.random() * 6, 0, Math.PI * 2); ctx.fill();
+        return makeTexture(256, 128, (ctx, w, h) => {
+            const grad = ctx.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, '#a0522d');
+            grad.addColorStop(0.3, '#c0603d');
+            grad.addColorStop(0.5, '#b5513a');
+            grad.addColorStop(0.7, '#a0452d');
+            grad.addColorStop(1, '#803520');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+            // Surface features
+            for (let i = 0; i < 80; i++) {
+                ctx.fillStyle = `rgba(${130 + Math.random()*40}, ${50 + Math.random()*30}, ${20 + Math.random()*20}, 0.2)`;
+                ctx.beginPath();
+                ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 4, 0, Math.PI * 2);
+                ctx.fill();
             }
-            ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillRect(0, 0, w, 6);
+            // Polar caps
+            ctx.fillStyle = 'rgba(230,220,210,0.4)';
+            ctx.fillRect(0, 0, w, 8);
+            ctx.fillRect(0, h - 8, w, 8);
+            // Valles Marineris-like feature
+            ctx.strokeStyle = 'rgba(80,30,10,0.3)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(w * 0.3, h * 0.45);
+            ctx.bezierCurveTo(w * 0.4, h * 0.42, w * 0.6, h * 0.48, w * 0.7, h * 0.44);
+            ctx.stroke();
         });
     }
 
     function jupiterTexture() {
         return makeTexture(256, 128, (ctx, w, h) => {
-            const bands = ['#c4956a', '#d4a574', '#a07850', '#e8c090', '#b08860', '#c8a870', '#906840'];
-            for (let y = 0; y < h; y++) { ctx.fillStyle = bands[y % bands.length]; ctx.fillRect(0, y, w, 1); }
-            ctx.fillStyle = '#c05030'; ctx.beginPath(); ctx.ellipse(160, 70, 20, 12, 0, 0, Math.PI * 2); ctx.fill();
+            const grad = ctx.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, '#c4956a');
+            grad.addColorStop(0.15, '#d4a87a');
+            grad.addColorStop(0.25, '#b8845a');
+            grad.addColorStop(0.35, '#e8c8a0');
+            grad.addColorStop(0.45, '#c4956a');
+            grad.addColorStop(0.55, '#b07550');
+            grad.addColorStop(0.65, '#d4a87a');
+            grad.addColorStop(0.75, '#c08060');
+            grad.addColorStop(0.85, '#d4b08a');
+            grad.addColorStop(1, '#c4956a');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+            // Band details
+            for (let i = 0; i < 120; i++) {
+                ctx.fillStyle = `rgba(${160 + Math.random()*60}, ${100 + Math.random()*60}, ${60 + Math.random()*40}, 0.15)`;
+                ctx.fillRect(0, Math.random() * h, w, 1 + Math.random() * 3);
+            }
+            // Great Red Spot
+            ctx.fillStyle = 'rgba(180,70,40,0.5)';
+            ctx.beginPath();
+            ctx.ellipse(w * 0.6, h * 0.55, 14, 9, 0.1, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(200,90,50,0.3)';
+            ctx.beginPath();
+            ctx.ellipse(w * 0.6, h * 0.55, 10, 6, 0.1, 0, Math.PI * 2);
+            ctx.fill();
         });
     }
 
     function saturnTexture() {
-        return makeTexture(256, 128, (ctx, w, h) => {
-            const bands = ['#d4b896', '#c4a878', '#e0c8a0', '#b89868', '#d0b888', '#c8a070'];
-            for (let y = 0; y < h; y++) { ctx.fillStyle = bands[y % bands.length]; ctx.fillRect(0, y, w, 1); }
+        return makeTexture(512, 256, (ctx, w, h) => {
+            // Base gradient - muted golds, tans, with blue-grey poles (Cassini palette)
+            const grad = ctx.createLinearGradient(0, 0, 0, h);
+            // North pole - blue-grey hexagonal storm region
+            grad.addColorStop(0,    '#5a7a8e');  // Deep blue-grey at top
+            grad.addColorStop(0.04, '#6a8a9a');  // Blue polar cap
+            grad.addColorStop(0.10, '#8a9da8');  // Transitioning from blue
+            grad.addColorStop(0.15, '#b5aa8a');  // Pale gold
+            grad.addColorStop(0.22, '#c8b898');  // Warm cream
+            grad.addColorStop(0.28, '#d5c8a5');  // Light gold band
+            grad.addColorStop(0.33, '#c0ad85');  // Darker tan band
+            grad.addColorStop(0.38, '#ddd2b5');  // Bright cream
+            grad.addColorStop(0.42, '#c8b590');  // Medium gold
+            grad.addColorStop(0.48, '#e0d5ba');  // Pale warm white
+            grad.addColorStop(0.52, '#d8c8a0');  // Classic Saturn gold
+            grad.addColorStop(0.58, '#c5b28a');  // Darker band
+            grad.addColorStop(0.62, '#ddd0b0');  // Light band
+            grad.addColorStop(0.68, '#c0a878');  // Warm amber
+            grad.addColorStop(0.72, '#d5c8a0');  // Light gold
+            grad.addColorStop(0.78, '#bfb090');  // Muted tan
+            grad.addColorStop(0.85, '#a0a5a0');  // Grey-blue southern transition
+            grad.addColorStop(0.92, '#7a8e8a');  // Blue-grey south
+            grad.addColorStop(1,    '#5a7080');  // South pole blue-grey
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+
+            // --- ATMOSPHERIC BANDS (subtle, horizontal) ---
+            // Fine band structure across the whole planet
+            for (let i = 0; i < 200; i++) {
+                const y = Math.random() * h;
+                const normalizedY = y / h;
+                let r, g, b, a;
+                
+                if (normalizedY < 0.12 || normalizedY > 0.88) {
+                    // Polar regions - blue-grey tones
+                    r = 80 + Math.random() * 30;
+                    g = 100 + Math.random() * 30;
+                    b = 120 + Math.random() * 30;
+                    a = 0.08 + Math.random() * 0.12;
+                } else {
+                    // Mid-latitudes - golds, creams, tans
+                    r = 170 + Math.random() * 50;
+                    g = 155 + Math.random() * 50;
+                    b = 100 + Math.random() * 50;
+                    a = 0.06 + Math.random() * 0.1;
+                }
+                ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+                ctx.fillRect(0, y, w, 0.5 + Math.random() * 2);
+            }
+
+            // --- NORTH POLAR HEXAGON ---
+            // The famous hexagonal storm at Saturn's north pole
+            // On an equirectangular texture, the north pole is the top edge
+            const hexCenterX = w / 2;
+            const hexCenterY = h * 0.04;
+            const hexRadius = 28;
+            
+            // Hexagon outline (dark blue storm boundary)
+            ctx.strokeStyle = 'rgba(40,60,90,0.5)';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+                const px = hexCenterX + Math.cos(angle) * hexRadius;
+                const py = hexCenterY + Math.sin(angle) * hexRadius * 0.4; // Squished due to projection
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.stroke();
+
+            // Fill hexagon interior with darker blue
+            ctx.fillStyle = 'rgba(35,55,85,0.35)';
+            ctx.fill();
+
+            // Inner vortex eye
+            ctx.fillStyle = 'rgba(25,45,75,0.4)';
+            ctx.beginPath();
+            ctx.ellipse(hexCenterX, hexCenterY, 8, 4, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Spiral arms inside hexagon
+            for (let arm = 0; arm < 3; arm++) {
+                ctx.strokeStyle = `rgba(50,70,100,${0.15 + Math.random()*0.1})`;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for (let t = 0; t < 20; t++) {
+                    const angle = arm * Math.PI * 2 / 3 + t * 0.4;
+                    const dist = 3 + t * 1.1;
+                    const px = hexCenterX + Math.cos(angle) * dist;
+                    const py = hexCenterY + Math.sin(angle) * dist * 0.4;
+                    if (t === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.stroke();
+            }
+
+            // --- STORM FEATURES ---
+            // White storm spots (like the Great White Spot that appears periodically)
+            for (let s = 0; s < 5; s++) {
+                const sx = Math.random() * w;
+                const sy = h * 0.25 + Math.random() * h * 0.5;
+                ctx.fillStyle = `rgba(230,225,210,${0.08 + Math.random()*0.06})`;
+                ctx.beginPath();
+                ctx.ellipse(sx, sy, 3 + Math.random() * 6, 1.5 + Math.random() * 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Darker storm eddies
+            for (let s = 0; s < 8; s++) {
+                const sx = Math.random() * w;
+                const sy = h * 0.2 + Math.random() * h * 0.6;
+                ctx.fillStyle = `rgba(120,100,70,${0.06 + Math.random()*0.05})`;
+                ctx.beginPath();
+                ctx.ellipse(sx, sy, 2 + Math.random() * 5, 1 + Math.random() * 2.5, Math.random(), 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // --- SUBTLE WIND SHEAR STREAKS ---
+            // These give the impression of high-speed jet streams
+            for (let i = 0; i < 40; i++) {
+                const y = h * 0.15 + Math.random() * h * 0.7;
+                const x = Math.random() * w;
+                const len = 15 + Math.random() * 40;
+                ctx.strokeStyle = `rgba(200,190,160,${0.03 + Math.random()*0.04})`;
+                ctx.lineWidth = 0.5 + Math.random();
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.bezierCurveTo(
+                    x + len * 0.3, y + (Math.random() - 0.5) * 3,
+                    x + len * 0.6, y + (Math.random() - 0.5) * 3,
+                    x + len, y + (Math.random() - 0.5) * 2
+                );
+                ctx.stroke();
+            }
+
+            // --- SOUTH POLAR VORTEX ---
+            ctx.fillStyle = 'rgba(40,60,75,0.3)';
+            ctx.beginPath();
+            ctx.ellipse(w / 2, h - h * 0.03, 15, 6, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(30,50,65,0.25)';
+            ctx.beginPath();
+            ctx.ellipse(w / 2, h - h * 0.03, 6, 3, 0, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+
+    // ============ SATURN RING TEXTURE ============
+    function saturnRingTexture() {
+        // Create a 1D radial texture for the rings
+        const ringW = 512;
+        const ringH = 64;
+        return makeTexture(ringW, ringH, (ctx, w, h) => {
+            // Each column represents a different radial distance
+            // Paint ring structure from inner to outer edge
+            
+            for (let x = 0; x < w; x++) {
+                const t = x / w; // 0 = inner edge, 1 = outer edge
+                let r, g, b, a;
+
+                // D Ring (very faint inner ring) 0.0 - 0.08
+                if (t < 0.08) {
+                    r = 140; g = 135; b = 125;
+                    a = 0.05 + Math.random() * 0.03;
+                }
+                // C Ring (crepe ring, semi-transparent) 0.08 - 0.22
+                else if (t < 0.22) {
+                    const lt = (t - 0.08) / 0.14;
+                    r = 130 + lt * 30; g = 125 + lt * 25; b = 115 + lt * 15;
+                    a = 0.15 + lt * 0.1 + Math.random() * 0.05;
+                    // Maxwell Gap
+                    if (t > 0.14 && t < 0.155) a *= 0.3;
+                }
+                // B Ring (brightest, densest ring) 0.22 - 0.48
+                else if (t < 0.48) {
+                    const lt = (t - 0.22) / 0.26;
+                    r = 195 + Math.sin(lt * 12) * 15;
+                    g = 185 + Math.sin(lt * 12) * 12;
+                    b = 165 + Math.sin(lt * 12) * 10;
+                    a = 0.6 + Math.sin(lt * 8) * 0.15 + Math.random() * 0.05;
+                    // Fine ringlets within B ring
+                    if (Math.sin(lt * 60) > 0.7) a += 0.1;
+                    if (Math.sin(lt * 60) < -0.7) a -= 0.08;
+                }
+                // *** CASSINI DIVISION *** 0.48 - 0.54 (the famous dark gap)
+                else if (t < 0.54) {
+                    r = 40; g = 35; b = 30;
+                    a = 0.04 + Math.random() * 0.02;
+                    // Faint ringlets within Cassini Division
+                    const lt = (t - 0.48) / 0.06;
+                    if (Math.sin(lt * 15) > 0.6) {
+                        r = 100; g = 95; b = 85;
+                        a = 0.06;
+                    }
+                }
+                // A Ring (outer bright ring) 0.54 - 0.80
+                else if (t < 0.80) {
+                    const lt = (t - 0.54) / 0.26;
+                    r = 180 + Math.sin(lt * 10) * 12;
+                    g = 172 + Math.sin(lt * 10) * 10;
+                    b = 155 + Math.sin(lt * 10) * 8;
+                    a = 0.4 + Math.sin(lt * 6) * 0.1 + Math.random() * 0.04;
+                    // Encke Gap
+                    if (t > 0.72 && t < 0.735) {
+                        a = 0.03; r = 30; g = 25; b = 20;
+                    }
+                    // Keeler Gap
+                    if (t > 0.775 && t < 0.785) {
+                        a = 0.02; r = 20; g = 18; b = 15;
+                    }
+                }
+                // F Ring (thin, bright outer ring) 0.80 - 0.83
+                else if (t < 0.83) {
+                    const lt = (t - 0.80) / 0.03;
+                    const center = Math.abs(lt - 0.5) * 2;
+                    r = 200; g = 195; b = 180;
+                    a = (1 - center) * 0.5 + Math.random() * 0.05;
+                    // F ring is kinked/braided
+                    a *= (0.7 + 0.3 * Math.sin(lt * 20 + x * 0.1));
+                }
+                // G Ring (very faint) 0.83 - 0.90
+                else if (t < 0.90) {
+                    r = 140; g = 135; b = 128;
+                    a = 0.03 + Math.random() * 0.02;
+                }
+                // E Ring (extremely faint outermost) 0.90 - 1.0
+                else {
+                    r = 160; g = 158; b = 155;
+                    a = 0.015 + (1 - t) * 0.02 + Math.random() * 0.01;
+                }
+
+                // Add subtle color variation - slight blue tint to shadows, warm tint to bright areas
+                if (a > 0.3) {
+                    r += Math.random() * 8;
+                    g += Math.random() * 5;
+                } else if (a > 0.05) {
+                    b += Math.random() * 10;
+                }
+
+                // Draw this column across all rows (ring is rotationally symmetric)
+                ctx.fillStyle = `rgba(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)},${a.toFixed(3)})`;
+                ctx.fillRect(x, 0, 1, h);
+            }
+
+            // Add radial "spoke" features (dark radial lines, seen by Voyager)
+            for (let s = 0; s < 6; s++) {
+                const spokeY = Math.random() * h;
+                const spokeStart = w * 0.22 + Math.random() * w * 0.1;
+                const spokeEnd = spokeStart + w * 0.15 + Math.random() * w * 0.1;
+                ctx.strokeStyle = `rgba(60,55,50,${0.04 + Math.random()*0.03})`;
+                ctx.lineWidth = 1 + Math.random() * 2;
+                ctx.beginPath();
+                ctx.moveTo(spokeStart, spokeY);
+                ctx.lineTo(spokeEnd, spokeY + (Math.random()-0.5) * 3);
+                ctx.stroke();
+            }
         });
     }
 
@@ -306,19 +786,169 @@
         });
     }
 
+    // ============ REALISTIC MOON TEXTURE ============
     function moonTexture() {
-        return makeTexture(128, 64, (ctx, w, h) => {
-            ctx.fillStyle = '#b0b0a8'; ctx.fillRect(0, 0, w, h);
-            // Near side features (maria - dark patches) - left half of texture
-            ctx.fillStyle = 'rgba(70,70,65,0.4)';
-            ctx.beginPath(); ctx.ellipse(25, 25, 10, 12, 0, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(40, 18, 8, 6, 0.3, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(15, 38, 7, 9, -0.2, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(50, 35, 6, 8, 0, 0, Math.PI * 2); ctx.fill();
-            // Craters
-            for (let i = 0; i < 40; i++) {
-                ctx.fillStyle = `rgba(80,80,75,${0.15 + Math.random()*0.25})`;
-                ctx.beginPath(); ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 0, Math.PI * 2); ctx.fill();
+        return makeTexture(512, 256, (ctx, w, h) => {
+            // Base grey with subtle variation
+            const baseGrad = ctx.createLinearGradient(0, 0, w, h);
+            baseGrad.addColorStop(0, '#b0ada5');
+            baseGrad.addColorStop(0.3, '#a8a59d');
+            baseGrad.addColorStop(0.5, '#b5b2aa');
+            baseGrad.addColorStop(0.7, '#a0a098');
+            baseGrad.addColorStop(1, '#aba8a0');
+            ctx.fillStyle = baseGrad;
+            ctx.fillRect(0, 0, w, h);
+
+            // Surface noise / regolith texture
+            for (let i = 0; i < 400; i++) {
+                const grey = 130 + Math.random() * 50;
+                ctx.fillStyle = `rgba(${grey},${grey},${grey - 5},${0.05 + Math.random()*0.08})`;
+                ctx.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 4, 1 + Math.random() * 4);
+            }
+
+            // --- NEAR SIDE MARIA (dark volcanic plains) ---
+            // These are positioned on the left half of the texture (near side facing Earth)
+            
+            // Mare Imbrium (Sea of Showers) - large dark patch upper left
+            ctx.fillStyle = 'rgba(65,63,58,0.45)';
+            ctx.beginPath();
+            ctx.ellipse(w * 0.18, h * 0.32, 32, 28, -0.2, 0, Math.PI * 2);
+            ctx.fill();
+            // Lighter inner
+            ctx.fillStyle = 'rgba(75,72,67,0.25)';
+            ctx.beginPath();
+            ctx.ellipse(w * 0.18, h * 0.33, 22, 18, -0.1, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Mare Serenitatis (Sea of Serenity) - right of Imbrium
+            ctx.fillStyle = 'rgba(68,65,60,0.42)';
+            ctx.beginPath();
+            ctx.ellipse(w * 0.30, h * 0.28, 18, 16, 0.15, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Mare Tranquillitatis (Sea of Tranquility) - where Apollo 11 landed
+            ctx.fillStyle = 'rgba(62,60,55,0.4)';
+            ctx.beginPath();
+            ctx.ellipse(w * 0.35, h * 0.40, 20, 18, 0.3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Mare Crisium (Sea of Crises) - isolated dark oval
+            ctx.fillStyle = 'rgba(70,67,62,0.4)';
+            ctx.beginPath();
+            ctx.ellipse(w * 0.42, h * 0.30, 10, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Mare Fecunditatis (Sea of Fertility)
+            ctx.fillStyle = 'rgba(65,63,58,0.35)';
+            ctx.beginPath();
+            ctx.ellipse(w * 0.40, h * 0.50, 16, 14, 0.2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Mare Nubium (Sea of Clouds) - southern
+            ctx.fillStyle = 'rgba(68,65,60,0.38)';
+            ctx.beginPath();
+            ctx.ellipse(w * 0.22, h * 0.55, 18, 12, -0.1, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Oceanus Procellarum (Ocean of Storms) - large western patch
+            ctx.fillStyle = 'rgba(72,70,65,0.35)';
+            ctx.beginPath();
+            ctx.ellipse(w * 0.08, h * 0.40, 22, 35, 0.1, 0, Math.PI * 2);
+            ctx.fill();
+
+            // --- FAR SIDE: much fewer maria, more highlands ---
+            // Far side is mostly bright highland terrain with only a couple small dark patches
+            ctx.fillStyle = 'rgba(75,73,68,0.2)';
+            ctx.beginPath();
+            ctx.ellipse(w * 0.72, h * 0.35, 10, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // --- CRATERS ---
+            // Large named craters
+            function drawCrater(cx, cy, radius, depth) {
+                // Crater rim (lighter ring)
+                ctx.strokeStyle = `rgba(180,175,168,${0.3 + depth * 0.2})`;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+                ctx.stroke();
+                // Shadow inside (darker on one side)
+                ctx.fillStyle = `rgba(50,48,45,${0.15 + depth * 0.15})`;
+                ctx.beginPath();
+                ctx.arc(cx + 1, cy + 1, radius * 0.8, 0, Math.PI * 2);
+                ctx.fill();
+                // Bright rim highlight
+                ctx.fillStyle = `rgba(190,185,178,${0.1 + depth * 0.1})`;
+                ctx.beginPath();
+                ctx.arc(cx - 1, cy - 1, radius * 0.9, Math.PI * 0.8, Math.PI * 1.8);
+                ctx.fill();
+                // Central peak for larger craters
+                if (radius > 5) {
+                    ctx.fillStyle = `rgba(160,155,148,${0.2})`;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, radius * 0.15, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // Tycho (bright rayed crater, southern)
+            drawCrater(w * 0.22, h * 0.72, 8, 0.8);
+            // Rays from Tycho
+            for (let r = 0; r < 8; r++) {
+                const angle = r * Math.PI / 4 + Math.random() * 0.3;
+                ctx.strokeStyle = 'rgba(200,195,188,0.08)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(w * 0.22, h * 0.72);
+                ctx.lineTo(
+                    w * 0.22 + Math.cos(angle) * (40 + Math.random() * 30),
+                    h * 0.72 + Math.sin(angle) * (40 + Math.random() * 30)
+                );
+                ctx.stroke();
+            }
+
+            // Copernicus
+            drawCrater(w * 0.15, h * 0.42, 7, 0.7);
+            // Kepler
+            drawCrater(w * 0.06, h * 0.42, 4, 0.5);
+            // Aristarchus (brightest crater)
+            drawCrater(w * 0.04, h * 0.30, 4, 0.9);
+            // Plato
+            drawCrater(w * 0.17, h * 0.20, 6, 0.4);
+            // Clavius (large southern)
+            drawCrater(w * 0.20, h * 0.78, 9, 0.5);
+
+            // Medium craters
+            for (let i = 0; i < 30; i++) {
+                drawCrater(
+                    Math.random() * w,
+                    Math.random() * h,
+                    2 + Math.random() * 5,
+                    0.3 + Math.random() * 0.4
+                );
+            }
+
+            // Small craters
+            for (let i = 0; i < 100; i++) {
+                const cx = Math.random() * w;
+                const cy = Math.random() * h;
+                const r = 0.5 + Math.random() * 2;
+                ctx.fillStyle = `rgba(80,78,73,${0.1 + Math.random()*0.15})`;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Subtle highland brightness variation
+            for (let i = 0; i < 60; i++) {
+                ctx.fillStyle = `rgba(180,175,168,${0.02 + Math.random()*0.04})`;
+                ctx.beginPath();
+                ctx.ellipse(
+                    Math.random() * w, Math.random() * h,
+                    5 + Math.random() * 15, 5 + Math.random() * 10,
+                    Math.random() * Math.PI, 0, Math.PI * 2
+                );
+                ctx.fill();
             }
         });
     }
@@ -328,7 +958,7 @@
     const labelsContainer = document.getElementById('labels-container');
 
     // Moon orbit config
-    const MOON_ORBIT_RADIUS_MULT = 11; // Multiplier of Earth radius for Moon orbit distance
+    const MOON_ORBIT_RADIUS_MULT = 11;
 
     function createPlanet(name, radius, dist, texFn, isSun=false) {
         const grp = new THREE.Group();
@@ -353,17 +983,73 @@
             scene.add(ring);
         }
 
-        // --- EARTH SPECIFIC: ADD MOON ---
+        // --- EARTH SPECIFIC: ADD MOON + CLOUDS + ATMOSPHERE ---
         let moonMesh = null;
+        let cloudMesh = null;
+        let atmosphereMesh = null;
         if(name === "EARTH") {
+            // MOON
             const moonRadius = radius * 0.27;
             const mGeo = new THREE.SphereGeometry(moonRadius, 32, 32);
-            const mMat = new THREE.MeshStandardMaterial({ map: moonTexture(), roughness: 0.9 });
+            const mMat = new THREE.MeshStandardMaterial({ map: moonTexture(), roughness: 0.95 });
             moonMesh = new THREE.Mesh(mGeo, mMat);
             moonMesh.position.set(radius * MOON_ORBIT_RADIUS_MULT, 0, 0); 
             grp.add(moonMesh);
+
+            // CLOUD LAYER - slightly larger transparent sphere
+            const cloudGeo = new THREE.SphereGeometry(radius * 1.015, 64, 64);
+            const cloudMat = new THREE.MeshStandardMaterial({
+                map: earthCloudTexture(),
+                transparent: true,
+                opacity: 0.45,
+                depthWrite: false,
+                roughness: 1.0,
+                metalness: 0.0
+            });
+            cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+            grp.add(cloudMesh);
+
+            // ATMOSPHERE GLOW - backside rendered blue haze
+            const atmosGeo = new THREE.SphereGeometry(radius * 1.08, 64, 64);
+            const atmosMat = new THREE.MeshBasicMaterial({
+                color: 0x4488ff,
+                transparent: true,
+                opacity: 0.12,
+                side: THREE.BackSide
+            });
+            atmosphereMesh = new THREE.Mesh(atmosGeo, atmosMat);
+            grp.add(atmosphereMesh);
+
+            // Thin bright atmosphere rim
+            const rimGeo = new THREE.SphereGeometry(radius * 1.04, 64, 64);
+            const rimMat = new THREE.MeshBasicMaterial({
+                color: 0x88bbff,
+                transparent: true,
+                opacity: 0.08,
+                side: THREE.BackSide
+            });
+            grp.add(new THREE.Mesh(rimGeo, rimMat));
         }
         
+        // --- SUN SPECIFIC: ADD CORONA GLOW ---
+        if(isSun) {
+            const coronaLayers = [
+                { scale: 1.15, color: 0xff8c00, opacity: 0.12 },
+                { scale: 1.35, color: 0xff6600, opacity: 0.06 },
+                { scale: 1.6,  color: 0xff4400, opacity: 0.025 }
+            ];
+            coronaLayers.forEach(layer => {
+                const gGeo = new THREE.SphereGeometry(radius * layer.scale, 32, 32);
+                const gMat = new THREE.MeshBasicMaterial({
+                    color: layer.color,
+                    transparent: true,
+                    opacity: layer.opacity,
+                    side: THREE.BackSide
+                });
+                grp.add(new THREE.Mesh(gGeo, gMat));
+            });
+        }
+
         systemGroup.add(grp);
 
         const label = document.createElement('div');
@@ -372,7 +1058,7 @@
         labelsContainer.appendChild(label);
 
         planets.push({
-            name, grp, mesh, radius, dist, label, moonMesh,
+            name, grp, mesh, radius, dist, label, moonMesh, cloudMesh,
             angle: Math.random()*10,
             orbitSpeed: dist === 0 ? 0 : (20000 / dist) * 0.0001
         });
@@ -380,33 +1066,103 @@
 
     // ==========================================
     // SCALED PLANET SIZES & DISTANCES
-    // Sun and Moon now appear ~same angular size from Earth's surface
-    // Sun: radius 5000 at dist 200000 → angular ratio 0.025
-    // Moon: radius 270 at dist 11000 from Earth → angular ratio ~0.025
-    // Outer planets reduced so they don't dominate the sky from Earth
     // ==========================================
-    createPlanet("SUN",     config.sunRadius, 0,        sunTexture, true);  // 5000
+    createPlanet("SUN",     config.sunRadius, 0,        sunTexture, true);
     createPlanet("MERCURY", 400,    80000,   mercuryTexture);
     createPlanet("VENUS",   900,    140000,  venusTexture);
     createPlanet("EARTH",   1000,   200000,  earthTexture);
     createPlanet("MARS",    500,    300000,  marsTexture);
-    createPlanet("JUPITER", 5000,   600000,  jupiterTexture);   // Was 12000
-    createPlanet("SATURN",  4500,   1000000, saturnTexture);    // Was 10000
-    createPlanet("URANUS",  2000,   1800000, uranusTexture);    // Was 4000
-    createPlanet("NEPTUNE", 1900,   2600000, neptuneTexture);  // Was 3900
+    createPlanet("JUPITER", 5000,   600000,  jupiterTexture);
+    createPlanet("SATURN",  4500,   1000000, saturnTexture);
+    createPlanet("URANUS",  2000,   1800000, uranusTexture);
+    createPlanet("NEPTUNE", 1900,   2600000, neptuneTexture);
 
-    // Saturn Ring (updated to match smaller Saturn)
+    // Saturn Ring System — detailed multi-ring with Cassini Division
     const saturnP = planets.find(p => p.name === "SATURN");
     if(saturnP) {
-        const sRingGeo = new THREE.RingGeometry(6300, 10000, 64);
-        const sRingMat = new THREE.MeshBasicMaterial({ color: 0xd4c8a0, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
-        const sRing = new THREE.Mesh(sRingGeo, sRingMat);
-        sRing.rotation.x = Math.PI / 2;
-        saturnP.grp.add(sRing);
+        const saturnR = saturnP.radius; // 4500
+        
+        // Ring texture for realistic banding
+        const ringTex = saturnRingTexture();
+        
+        // Main ring disc (D through A rings)
+        const mainRingGeo = new THREE.RingGeometry(saturnR * 1.24, saturnR * 2.27, 128, 8);
+        // UV mapping: map U coordinate to radial position
+        const pos = mainRingGeo.attributes.position;
+        const uv = mainRingGeo.attributes.uv;
+        const innerR = saturnR * 1.24;
+        const outerR = saturnR * 2.27;
+        for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i);
+            const z = pos.getZ(i);
+            const dist = Math.sqrt(x * x + z * z);
+            const t = (dist - innerR) / (outerR - innerR);
+            uv.setXY(i, t, uv.getY(i));
+        }
+        const mainRingMat = new THREE.MeshBasicMaterial({
+            map: ringTex,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.85,
+            depthWrite: false
+        });
+        const mainRing = new THREE.Mesh(mainRingGeo, mainRingMat);
+        mainRing.rotation.x = Math.PI / 2;
+        saturnP.grp.add(mainRing);
+
+        // F Ring (thin, bright, separate)
+        const fRingGeo = new THREE.RingGeometry(saturnR * 2.32, saturnR * 2.36, 128);
+        const fRingMat = new THREE.MeshBasicMaterial({
+            color: 0xc8c0a8,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.3
+        });
+        const fRing = new THREE.Mesh(fRingGeo, fRingMat);
+        fRing.rotation.x = Math.PI / 2;
+        saturnP.grp.add(fRing);
+
+        // G Ring (very faint)
+        const gRingGeo = new THREE.RingGeometry(saturnR * 2.75, saturnR * 3.0, 64);
+        const gRingMat = new THREE.MeshBasicMaterial({
+            color: 0xa0a098,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.05
+        });
+        const gRing = new THREE.Mesh(gRingGeo, gRingMat);
+        gRing.rotation.x = Math.PI / 2;
+        saturnP.grp.add(gRing);
+
+        // Ring shadow on the planet surface (subtle dark band)
+        // Simulated as a slightly transparent dark ring hugging the planet
+        const shadowGeo = new THREE.RingGeometry(saturnR * 0.99, saturnR * 1.01, 64);
+        const shadowMat = new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.1
+        });
+        const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+        shadow.rotation.x = Math.PI / 2;
+        shadow.position.y = saturnR * 0.15; // Offset slightly to simulate shadow
+        saturnP.grp.add(shadow);
+
+        // Saturn atmosphere glow
+        const satAtmosGeo = new THREE.SphereGeometry(saturnR * 1.06, 48, 48);
+        const satAtmosMat = new THREE.MeshBasicMaterial({
+            color: 0xd4c8a0,
+            transparent: true,
+            opacity: 0.06,
+            side: THREE.BackSide
+        });
+        saturnP.grp.add(new THREE.Mesh(satAtmosGeo, satAtmosMat));
+
+        // Saturn's axial tilt (~26.7 degrees) - gives the iconic angled ring view
+        saturnP.grp.rotation.z = 0.466; // ~26.7° in radians
     }
 
     // ================= SPAWN =================
-    // Spawn 500 units above Earth
     camera.position.set(200000, 1500, 500); 
     let camYaw = Math.PI; 
     let camPitch = 0;
@@ -415,43 +1171,37 @@
     const actionBtn = document.getElementById('action-btn');
     const lockText = document.getElementById('system-status');
     const proxText = document.getElementById('proximity-alert');
+
     let landedPlanet = null;
     let nearestPlanet = null;
+    const input = { x: 0, y: 0, up: false, down: false };
 
+    // ACTION BUTTON
     actionBtn.addEventListener('click', () => {
-        if(landedPlanet) {
-            // TAKEOFF
-            const p = landedPlanet;
-            const worldPos = new THREE.Vector3();
-            p.grp.getWorldPosition(worldPos);
-            camera.position.set(worldPos.x, worldPos.y + p.radius + 500, worldPos.z);
-            camPitch = -Math.PI/2;
+        if (landedPlanet) {
+            // Takeoff
+            const fwd = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
+            camera.position.addScaledVector(new THREE.Vector3(0,1,0), landedPlanet.radius * 0.5);
             landedPlanet = null;
-            actionBtn.style.display = 'none';
         } else if (nearestPlanet) {
-            // LAND
-            const p = nearestPlanet;
+            // Land
+            const dir = new THREE.Vector3();
+            nearestPlanet.mesh.getWorldPosition(dir);
+            dir.sub(camera.position).normalize();
             const worldPos = new THREE.Vector3();
-            p.grp.getWorldPosition(worldPos);
-            camera.position.set(worldPos.x, worldPos.y, worldPos.z + p.radius + 2);
-            camYaw = Math.PI;
-            camPitch = 0.1;
-            landedPlanet = p;
-            actionBtn.innerText = "TAKEOFF";
+            nearestPlanet.mesh.getWorldPosition(worldPos);
+            camera.position.copy(worldPos).addScaledVector(dir.negate(), nearestPlanet.radius + 100);
+            landedPlanet = nearestPlanet;
         }
     });
 
-    // ================= INPUT =================
-    const input = { x:0, y:0, up:false, down:false };
-    const stick = document.getElementById('stick-thumb');
+    // JOYSTICK
     const stickArea = document.getElementById('stick-area');
-    let touchId = null;
-
-    stickArea.addEventListener('touchstart', e => { e.preventDefault(); touchId=e.changedTouches[0].identifier; updateStick(e.changedTouches[0]); });
-    stickArea.addEventListener('touchmove', e => { e.preventDefault(); for(let i=0;i<e.changedTouches.length;i++) if(e.changedTouches[i].identifier === touchId) updateStick(e.changedTouches[i]); });
-    stickArea.addEventListener('touchend', () => { touchId=null; stick.style.transform='translate(-50%,-50%)'; input.x=0; input.y=0; });
-
-    function updateStick(t) {
+    const stick = document.getElementById('stick-thumb');
+    stickArea.addEventListener('touchstart', e => e.preventDefault());
+    stickArea.addEventListener('touchmove', e => {
+        e.preventDefault();
+        const t = e.touches[0];
         const r = stickArea.getBoundingClientRect();
         const dx = t.clientX - (r.left + r.width/2);
         const dy = t.clientY - (r.top + r.height/2);
@@ -459,8 +1209,13 @@
         const ang = Math.atan2(dy, dx);
         stick.style.transform = `translate(calc(-50% + ${Math.cos(ang)*dist}px), calc(-50% + ${Math.sin(ang)*dist}px))`;
         input.x = (Math.cos(ang)*dist)/60; input.y = (Math.sin(ang)*dist)/60;
-    }
+    });
+    stickArea.addEventListener('touchend', () => {
+        stick.style.transform = 'translate(-50%, -50%)';
+        input.x = 0; input.y = 0;
+    });
 
+    // LOOK (touch on canvas)
     let lastLook = {x:0, y:0};
     document.addEventListener('touchstart', e => { if(e.target.id==='gameCanvas') lastLook={x:e.touches[0].clientX, y:e.touches[0].clientY}; });
     document.addEventListener('touchmove', e => {
@@ -474,12 +1229,45 @@
         }
     });
 
+    // KEYBOARD
+    document.addEventListener('keydown', e => {
+        if(e.key === 'w' || e.key === 'ArrowUp') input.y = -1;
+        if(e.key === 's' || e.key === 'ArrowDown') input.y = 1;
+        if(e.key === 'a' || e.key === 'ArrowLeft') input.x = -1;
+        if(e.key === 'd' || e.key === 'ArrowRight') input.x = 1;
+        if(e.key === 'q') input.up = true;
+        if(e.key === 'e') input.down = true;
+    });
+    document.addEventListener('keyup', e => {
+        if(e.key === 'w' || e.key === 'ArrowUp' || e.key === 's' || e.key === 'ArrowDown') input.y = 0;
+        if(e.key === 'a' || e.key === 'ArrowLeft' || e.key === 'd' || e.key === 'ArrowRight') input.x = 0;
+        if(e.key === 'q') input.up = false;
+        if(e.key === 'e') input.down = false;
+    });
+
+    // MOUSE LOOK
+    canvas.addEventListener('mousemove', e => {
+        if(e.buttons === 1) {
+            camYaw -= e.movementX * 0.003;
+            camPitch -= e.movementY * 0.003;
+            camPitch = Math.max(-1.5, Math.min(1.5, camPitch));
+        }
+    });
+
+    // UP/DOWN BUTTONS
     const btnUp = document.getElementById('btn-up');
     const btnDown = document.getElementById('btn-down');
     btnUp.addEventListener('touchstart', (e)=>{e.preventDefault();input.up=true});
     btnUp.addEventListener('touchend', (e)=>{e.preventDefault();input.up=false});
     btnDown.addEventListener('touchstart', (e)=>{e.preventDefault();input.down=true});
     btnDown.addEventListener('touchend', (e)=>{e.preventDefault();input.down=false});
+
+    // RESIZE
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 
     // ================= PHYSICS LOOP =================
     const speedText = document.getElementById('speed-readout');
@@ -498,7 +1286,7 @@
         planets.forEach(p => {
             const prevPos = p.grp.position.clone();
 
-            // Orbit
+            // Orbit around Sun
             if(p.dist > 0) {
                 p.grp.position.x = Math.cos(p.angle + time * p.orbitSpeed) * p.dist;
                 p.grp.position.z = Math.sin(p.angle + time * p.orbitSpeed) * p.dist;
@@ -507,18 +1295,22 @@
             // Spin Planet
             p.mesh.rotation.y += 0.001;
 
-            // Moon Logic (Earth only) — TIDALLY LOCKED
+            // Rotate clouds slightly differently than Earth surface
+            if(p.cloudMesh) {
+                p.cloudMesh.rotation.y += 0.0013;
+            }
+
+            // Moon Logic (Earth only) — TIDALLY LOCKED, COUNTER-CLOCKWISE
             if(p.moonMesh) {
                 const moonOrbitDist = p.radius * MOON_ORBIT_RADIUS_MULT;
-                const mSpeed = time * 0.00005; // Moon orbital speed
+                // NEGATIVE speed = counter-clockwise when viewed from above (north pole)
+                const mSpeed = -time * 0.00005;
                 
-                // Position moon in orbit
+                // Position moon in orbit (counter-clockwise)
                 p.moonMesh.position.x = Math.cos(mSpeed) * moonOrbitDist;
                 p.moonMesh.position.z = Math.sin(mSpeed) * moonOrbitDist;
                 
                 // Tidal locking: Moon rotation matches orbit so same face always points to Earth
-                // The moon needs to rotate by the same angle as its orbital position
-                // Adding Math.PI so the "near side" texture faces Earth
                 p.moonMesh.rotation.y = -mSpeed + Math.PI;
             }
 
