@@ -1598,14 +1598,14 @@
         earthSpawn.grp.position.x = Math.cos(earthSpawn.angle + spawnTime * earthSpawn.orbitSpeed) * earthSpawn.dist;
         earthSpawn.grp.position.z = Math.sin(earthSpawn.angle + spawnTime * earthSpawn.orbitSpeed) * earthSpawn.dist;
     }
-    // Place camera on Earth's surface — use grp.position directly (mesh is at 0,0,0 within group)
+    // Place camera on Earth's equator (Z offset = equatorial surface)
     camera.position.set(
         earthSpawn.grp.position.x,
-        earthSpawn.grp.position.y + earthSpawn.radius + 100,
-        earthSpawn.grp.position.z
+        earthSpawn.grp.position.y,
+        earthSpawn.grp.position.z + earthSpawn.radius + 100
     );
     let camYaw = Math.PI; 
-    let camPitch = -0.2;
+    let camPitch = 0; // Looking straight ahead at the horizon
 
     // ================= ATMOSPHERE SYSTEM =================
     // Blue sky colors for Earth atmosphere
@@ -1869,43 +1869,90 @@
         camera.rotation.y = camYaw;
         camera.rotation.x = camPitch;
 
-        // 5. EARTH ATMOSPHERE EFFECT
-        // Check distance from Earth's surface to determine sky color
+        // 5. EARTH ATMOSPHERE EFFECT + SOLAR ECLIPSE
         const earthP = planets.find(p => p.name === "EARTH");
         if(earthP) {
-            const earthWorldPos = new THREE.Vector3();
-            earthP.mesh.getWorldPosition(earthWorldPos);
-            const earthDist = camera.position.distanceTo(earthWorldPos) - earthP.radius;
-            
+            const earthWPos = new THREE.Vector3();
+            earthP.mesh.getWorldPosition(earthWPos);
+            const earthDist = camera.position.distanceTo(earthWPos) - earthP.radius;
+
+            // --- SOLAR ECLIPSE DETECTION ---
+            // Check if the Moon is between camera and Sun
+            let eclipseDarkness = 0; // 0 = no eclipse, 1 = total eclipse
+            const sunP = planets.find(p => p.name === "SUN");
+            if(sunP && earthP.moonMesh && earthDist < atmosphereHeight) {
+                const sunWPos = new THREE.Vector3();
+                sunP.mesh.getWorldPosition(sunWPos);
+                const moonWPos = new THREE.Vector3();
+                earthP.moonMesh.getWorldPosition(moonWPos);
+
+                // Direction from camera to Sun and Moon
+                const toSun = sunWPos.clone().sub(camera.position).normalize();
+                const toMoon = moonWPos.clone().sub(camera.position).normalize();
+
+                // Angular alignment (dot product: 1 = perfectly aligned)
+                const alignment = toSun.dot(toMoon);
+
+                // Moon's apparent angular size from camera
+                const moonDist = camera.position.distanceTo(moonWPos);
+                const moonAngularSize = (earthP.moonMesh.geometry.parameters.radius || 270) / moonDist;
+
+                // Sun's apparent angular size from camera
+                const sunDist = camera.position.distanceTo(sunWPos);
+                const sunAngularSize = sunP.radius / sunDist;
+
+                // Eclipse occurs when Moon aligns with Sun and is close enough to cover it
+                // alignment > 0.9999 is very tight (~0.8° arc) — scale based on angular sizes
+                const eclipseThreshold = 1 - (moonAngularSize * 1.5); // How close alignment needs to be
+                if(alignment > eclipseThreshold && moonDist < sunDist) {
+                    // How much of the Sun is covered
+                    const coverFactor = (alignment - eclipseThreshold) / (1 - eclipseThreshold);
+                    eclipseDarkness = Math.min(1, coverFactor * coverFactor);
+                }
+            }
+
             if(earthDist < atmosphereHeight) {
-                // We're within Earth's atmosphere
                 let t; // 0 = on surface (full blue), 1 = in space (full black)
                 if(earthDist <= skyFullHeight) {
                     t = 0;
                 } else {
                     t = (earthDist - skyFullHeight) / (atmosphereHeight - skyFullHeight);
                     t = Math.min(1, Math.max(0, t));
-                    // Smooth easing for natural transition
                     t = t * t;
                 }
                 
-                // Blend sky color
+                // Blend sky color — darken during eclipse
                 const skyColor = new THREE.Color();
-                skyColor.copy(skyBlue).lerp(spaceBlack, t);
+                if(eclipseDarkness > 0.01) {
+                    // Eclipse: blend from blue sky toward dark twilight
+                    const eclipseSky = new THREE.Color(0x0a0a18); // Near-black with slight blue
+                    const normalSky = new THREE.Color().copy(skyBlue).lerp(spaceBlack, t);
+                    skyColor.copy(normalSky).lerp(eclipseSky, eclipseDarkness);
+                } else {
+                    skyColor.copy(skyBlue).lerp(spaceBlack, t);
+                }
                 scene.background = skyColor;
                 
-                // Fog — thicker near surface (hides stars naturally), thins as you ascend
+                // Fog — thicker near surface, thins as you ascend; reduced during eclipse
                 if(t < 0.95) {
                     const fogColor = new THREE.Color();
-                    fogColor.copy(skyHorizon).lerp(spaceBlack, t);
-                    const fogNear = 500 + t * 50000;
-                    const fogFar = 50000 + t * 500000;
+                    if(eclipseDarkness > 0.01) {
+                        const eclipseFog = new THREE.Color(0x080810);
+                        const normalFog = new THREE.Color().copy(skyHorizon).lerp(spaceBlack, t);
+                        fogColor.copy(normalFog).lerp(eclipseFog, eclipseDarkness);
+                    } else {
+                        fogColor.copy(skyHorizon).lerp(spaceBlack, t);
+                    }
+                    // During eclipse, push fog back so stars become visible
+                    const eclipseFogMult = 1 + eclipseDarkness * 8;
+                    const fogNear = (500 + t * 50000) * eclipseFogMult;
+                    const fogFar = (50000 + t * 500000) * eclipseFogMult;
                     scene.fog = new THREE.Fog(fogColor, fogNear, fogFar);
                 } else {
                     scene.fog = null;
                 }
             } else {
-                // Deep space — no atmosphere
+                // Deep space
                 scene.background = spaceBlack;
                 scene.fog = null;
             }
