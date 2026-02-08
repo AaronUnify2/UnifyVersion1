@@ -73,7 +73,8 @@
             <div id="system-status" class="hud-text">SYSTEM ONLINE</div>
             <div id="proximity-alert" class="sub-text">CRUISE MODE</div>
         </div>
-        <div id="hud-bottom">
+        <!-- Thrust readout hidden -->
+        <div id="hud-bottom" style="display:none;">
             <div id="speed-readout" class="hud-text">THRUST: 0%</div>
         </div>
 
@@ -97,7 +98,7 @@
         lockDist: 40000,
         deepSpaceSpeed: 2500,
         minSpeed: 5,
-        sunRadius: 50000
+        sunRadius: 5000  // Reduced from 50000 for correct apparent size from Earth
     };
 
     const canvas = document.getElementById('gameCanvas');
@@ -111,14 +112,103 @@
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, config.renderDist);
     camera.up.set(0, 1, 0); 
 
-    scene.add(new THREE.AmbientLight(0x404040, 1.5)); // Slightly brighter for textures
+    scene.add(new THREE.AmbientLight(0x404040, 1.5));
     scene.add(new THREE.PointLight(0xffffff, 2.0, 0));
 
     const raycaster = new THREE.Raycaster();
     const systemGroup = new THREE.Group();
     scene.add(systemGroup);
 
-    // ================= TEXTURE GENERATORS (From Original) =================
+    // ================= STAR FIELD =================
+    function createStarField() {
+        const starCount = 6000;
+        const positions = new Float32Array(starCount * 3);
+        const colors = new Float32Array(starCount * 3);
+        const sizes = new Float32Array(starCount);
+
+        for (let i = 0; i < starCount; i++) {
+            // Distribute stars on a large sphere shell
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const r = 800000000 + Math.random() * 200000000; // Very far away
+
+            positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+            positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+            positions[i * 3 + 2] = r * Math.cos(phi);
+
+            // Star color variation: white, blue-white, yellow-white, warm
+            const colorRoll = Math.random();
+            if (colorRoll < 0.5) {
+                // White
+                colors[i * 3] = 0.9 + Math.random() * 0.1;
+                colors[i * 3 + 1] = 0.9 + Math.random() * 0.1;
+                colors[i * 3 + 2] = 0.95 + Math.random() * 0.05;
+            } else if (colorRoll < 0.7) {
+                // Blue-white
+                colors[i * 3] = 0.7 + Math.random() * 0.1;
+                colors[i * 3 + 1] = 0.8 + Math.random() * 0.1;
+                colors[i * 3 + 2] = 1.0;
+            } else if (colorRoll < 0.85) {
+                // Yellow
+                colors[i * 3] = 1.0;
+                colors[i * 3 + 1] = 0.9 + Math.random() * 0.1;
+                colors[i * 3 + 2] = 0.6 + Math.random() * 0.2;
+            } else {
+                // Warm orange/red
+                colors[i * 3] = 1.0;
+                colors[i * 3 + 1] = 0.6 + Math.random() * 0.3;
+                colors[i * 3 + 2] = 0.4 + Math.random() * 0.2;
+            }
+
+            // Varying brightness via size
+            sizes[i] = 1.5 + Math.random() * 3.5;
+        }
+
+        const starGeo = new THREE.BufferGeometry();
+        starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        starGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+        const starMat = new THREE.PointsMaterial({
+            size: 800000,
+            sizeAttenuation: true,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.9,
+        });
+
+        const stars = new THREE.Points(starGeo, starMat);
+        scene.add(stars);
+
+        // Second layer: dimmer, more numerous background stars
+        const bgCount = 4000;
+        const bgPos = new Float32Array(bgCount * 3);
+        const bgCol = new Float32Array(bgCount * 3);
+        for (let i = 0; i < bgCount; i++) {
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const r = 1200000000 + Math.random() * 300000000;
+            bgPos[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+            bgPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+            bgPos[i * 3 + 2] = r * Math.cos(phi);
+            const b = 0.5 + Math.random() * 0.5;
+            bgCol[i * 3] = b; bgCol[i * 3 + 1] = b; bgCol[i * 3 + 2] = b + Math.random() * 0.1;
+        }
+        const bgGeo = new THREE.BufferGeometry();
+        bgGeo.setAttribute('position', new THREE.BufferAttribute(bgPos, 3));
+        bgGeo.setAttribute('color', new THREE.BufferAttribute(bgCol, 3));
+        const bgMat = new THREE.PointsMaterial({
+            size: 400000,
+            sizeAttenuation: true,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.6,
+        });
+        scene.add(new THREE.Points(bgGeo, bgMat));
+    }
+    createStarField();
+
+    // ================= TEXTURE GENERATORS =================
     function makeTexture(w, h, drawFn) {
         const c = document.createElement('canvas'); c.width = w; c.height = h;
         const ctx = c.getContext('2d'); drawFn(ctx, w, h);
@@ -217,11 +307,18 @@
     }
 
     function moonTexture() {
-        return makeTexture(64, 32, (ctx, w, h) => {
+        return makeTexture(128, 64, (ctx, w, h) => {
             ctx.fillStyle = '#b0b0a8'; ctx.fillRect(0, 0, w, h);
-            for (let i = 0; i < 25; i++) {
-                ctx.fillStyle = `rgba(80,80,75,${0.2 + Math.random()*0.3})`;
-                ctx.beginPath(); ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 4, 0, Math.PI * 2); ctx.fill();
+            // Near side features (maria - dark patches) - left half of texture
+            ctx.fillStyle = 'rgba(70,70,65,0.4)';
+            ctx.beginPath(); ctx.ellipse(25, 25, 10, 12, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(40, 18, 8, 6, 0.3, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(15, 38, 7, 9, -0.2, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(50, 35, 6, 8, 0, 0, Math.PI * 2); ctx.fill();
+            // Craters
+            for (let i = 0; i < 40; i++) {
+                ctx.fillStyle = `rgba(80,80,75,${0.15 + Math.random()*0.25})`;
+                ctx.beginPath(); ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 0, Math.PI * 2); ctx.fill();
             }
         });
     }
@@ -230,13 +327,15 @@
     const planets = [];
     const labelsContainer = document.getElementById('labels-container');
 
+    // Moon orbit config
+    const MOON_ORBIT_RADIUS_MULT = 11; // Multiplier of Earth radius for Moon orbit distance
+
     function createPlanet(name, radius, dist, texFn, isSun=false) {
         const grp = new THREE.Group();
         grp.position.set(dist, 0, 0);
         
         const geo = new THREE.SphereGeometry(radius, 64, 64);
         
-        // Sun uses Basic (Unlit) to glow, others use Standard (Lit)
         const mat = isSun 
             ? new THREE.MeshBasicMaterial({ map: texFn() }) 
             : new THREE.MeshStandardMaterial({ map: texFn(), roughness: 0.9, metalness: 0.1 });
@@ -257,11 +356,11 @@
         // --- EARTH SPECIFIC: ADD MOON ---
         let moonMesh = null;
         if(name === "EARTH") {
-            const mGeo = new THREE.SphereGeometry(radius * 0.27, 32, 32);
+            const moonRadius = radius * 0.27;
+            const mGeo = new THREE.SphereGeometry(moonRadius, 32, 32);
             const mMat = new THREE.MeshStandardMaterial({ map: moonTexture(), roughness: 0.9 });
             moonMesh = new THREE.Mesh(mGeo, mMat);
-            // Place Moon relative to Earth (scaled up distance for visibility)
-            moonMesh.position.set(radius * 4, 0, 0); 
+            moonMesh.position.set(radius * MOON_ORBIT_RADIUS_MULT, 0, 0); 
             grp.add(moonMesh);
         }
         
@@ -279,21 +378,27 @@
         });
     }
 
-    // Titan Scale Distances + Custom Textures
-    createPlanet("SUN", config.sunRadius, 0, sunTexture, true);
-    createPlanet("MERCURY", 400,   80000,  mercuryTexture);
-    createPlanet("VENUS",   900,   140000, venusTexture);
-    createPlanet("EARTH",   1000,  200000, earthTexture);
-    createPlanet("MARS",    500,   300000, marsTexture);
-    createPlanet("JUPITER", 12000, 600000, jupiterTexture);
-    createPlanet("SATURN",  10000, 1000000, saturnTexture);
-    createPlanet("URANUS",  4000,  1800000, uranusTexture);
-    createPlanet("NEPTUNE", 3900,  2600000, neptuneTexture);
+    // ==========================================
+    // SCALED PLANET SIZES & DISTANCES
+    // Sun and Moon now appear ~same angular size from Earth's surface
+    // Sun: radius 5000 at dist 200000 → angular ratio 0.025
+    // Moon: radius 270 at dist 11000 from Earth → angular ratio ~0.025
+    // Outer planets reduced so they don't dominate the sky from Earth
+    // ==========================================
+    createPlanet("SUN",     config.sunRadius, 0,        sunTexture, true);  // 5000
+    createPlanet("MERCURY", 400,    80000,   mercuryTexture);
+    createPlanet("VENUS",   900,    140000,  venusTexture);
+    createPlanet("EARTH",   1000,   200000,  earthTexture);
+    createPlanet("MARS",    500,    300000,  marsTexture);
+    createPlanet("JUPITER", 5000,   600000,  jupiterTexture);   // Was 12000
+    createPlanet("SATURN",  4500,   1000000, saturnTexture);    // Was 10000
+    createPlanet("URANUS",  2000,   1800000, uranusTexture);    // Was 4000
+    createPlanet("NEPTUNE", 1900,   2600000, neptuneTexture);  // Was 3900
 
-    // Saturn Ring (Manual Add)
+    // Saturn Ring (updated to match smaller Saturn)
     const saturnP = planets.find(p => p.name === "SATURN");
     if(saturnP) {
-        const sRingGeo = new THREE.RingGeometry(14000, 22000, 64);
+        const sRingGeo = new THREE.RingGeometry(6300, 10000, 64);
         const sRingMat = new THREE.MeshBasicMaterial({ color: 0xd4c8a0, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
         const sRing = new THREE.Mesh(sRingGeo, sRingMat);
         sRing.rotation.x = Math.PI / 2;
@@ -320,7 +425,7 @@
             const worldPos = new THREE.Vector3();
             p.grp.getWorldPosition(worldPos);
             camera.position.set(worldPos.x, worldPos.y + p.radius + 500, worldPos.z);
-            camPitch = -Math.PI/2; // Look down
+            camPitch = -Math.PI/2;
             landedPlanet = null;
             actionBtn.style.display = 'none';
         } else if (nearestPlanet) {
@@ -336,6 +441,7 @@
         }
     });
 
+    // ================= INPUT =================
     const input = { x:0, y:0, up:false, down:false };
     const stick = document.getElementById('stick-thumb');
     const stickArea = document.getElementById('stick-area');
@@ -401,13 +507,19 @@
             // Spin Planet
             p.mesh.rotation.y += 0.001;
 
-            // Moon Logic (Earth only)
+            // Moon Logic (Earth only) — TIDALLY LOCKED
             if(p.moonMesh) {
-                p.moonMesh.rotation.y += 0.01; // Spin moon
-                // Simple orbit around Earth (Static relative to group is fine since group moves, but let's rotate it)
-                const mSpeed = time * 0.00005;
-                p.moonMesh.position.x = Math.cos(mSpeed) * (p.radius * 4);
-                p.moonMesh.position.z = Math.sin(mSpeed) * (p.radius * 4);
+                const moonOrbitDist = p.radius * MOON_ORBIT_RADIUS_MULT;
+                const mSpeed = time * 0.00005; // Moon orbital speed
+                
+                // Position moon in orbit
+                p.moonMesh.position.x = Math.cos(mSpeed) * moonOrbitDist;
+                p.moonMesh.position.z = Math.sin(mSpeed) * moonOrbitDist;
+                
+                // Tidal locking: Moon rotation matches orbit so same face always points to Earth
+                // The moon needs to rotate by the same angle as its orbital position
+                // Adding Math.PI so the "near side" texture faces Earth
+                p.moonMesh.rotation.y = -mSpeed + Math.PI;
             }
 
             // Dist calc
@@ -476,20 +588,18 @@
             }
         }
 
-        // 3. HEAVY GRAVITY SPEED LOGIC
+        // 3. SPEED LOGIC
         let targetSpeed = 0;
 
         if (landedPlanet) {
             targetSpeed = config.minSpeed; 
         } else {
-            // Logarithmic drag based on distance
             targetSpeed = closestDist * 0.005; 
             if(targetSpeed > config.deepSpaceSpeed) targetSpeed = config.deepSpaceSpeed;
             if(targetSpeed < config.minSpeed) targetSpeed = config.minSpeed;
         }
 
         if(isNaN(targetSpeed)) targetSpeed = config.minSpeed;
-        speedText.innerText = `THRUST: ${Math.floor((targetSpeed/config.deepSpaceSpeed)*100)}% (${Math.floor(targetSpeed)} u/s)`;
 
         // 4. APPLY MOVEMENT
         const fwd = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
