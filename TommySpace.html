@@ -1607,6 +1607,127 @@
     let camYaw = Math.PI; 
     let camPitch = 0; // Looking straight ahead at the horizon
 
+    // ================= SPAWN TREE FIELD =================
+    // Create billboard sprite trees around spawn point on Earth's surface
+    const treeGroup = new THREE.Group();
+    let treesDeleted = false;
+
+    // Tree sprite texture (canvas-drawn)
+    function makeTreeTexture(variant) {
+        const c = document.createElement('canvas');
+        c.width = 64; c.height = 96;
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, 64, 96);
+        
+        // Trunk
+        const trunkW = 4 + variant * 2;
+        ctx.fillStyle = '#5a3a1a';
+        ctx.fillRect(32 - trunkW/2, 55, trunkW, 41);
+        // Trunk dark side
+        ctx.fillStyle = 'rgba(30,15,5,0.3)';
+        ctx.fillRect(32 - trunkW/2, 55, trunkW/2, 41);
+        
+        if(variant < 2) {
+            // Deciduous tree — leafy rounded canopy
+            const colors = ['#2a6e2a', '#267326', '#308030', '#1e5e1e'];
+            // Large canopy blobs
+            for(let i = 0; i < 5; i++) {
+                const cx = 28 + (Math.random() - 0.5) * 20;
+                const cy = 30 + (Math.random() - 0.5) * 22;
+                const r = 12 + Math.random() * 8;
+                ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            // Highlights
+            for(let i = 0; i < 3; i++) {
+                ctx.fillStyle = 'rgba(80,180,60,0.25)';
+                ctx.beginPath();
+                ctx.arc(28 + Math.random()*12, 22 + Math.random()*15, 4 + Math.random()*5, 0, Math.PI*2);
+                ctx.fill();
+            }
+        } else {
+            // Pine/conifer tree — triangular
+            const levels = 3 + Math.floor(Math.random() * 2);
+            for(let i = 0; i < levels; i++) {
+                const y = 12 + i * 14;
+                const halfW = 20 - i * 3;
+                ctx.fillStyle = i % 2 === 0 ? '#1a5a1a' : '#1e661e';
+                ctx.beginPath();
+                ctx.moveTo(32, y - 8);
+                ctx.lineTo(32 + halfW, y + 12);
+                ctx.lineTo(32 - halfW, y + 12);
+                ctx.closePath();
+                ctx.fill();
+                // Highlight edge
+                ctx.fillStyle = 'rgba(50,140,40,0.2)';
+                ctx.beginPath();
+                ctx.moveTo(32, y - 8);
+                ctx.lineTo(32 + halfW * 0.5, y + 10);
+                ctx.lineTo(32, y + 10);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+        
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    // Place trees on Earth's surface near the spawn point
+    // Spawn is at local (0, 0, R) on Earth — scatter trees in a clearing pattern
+    if(earthSpawn) {
+        const eR = earthSpawn.radius;
+        const treeTextures = [makeTreeTexture(0), makeTreeTexture(1), makeTreeTexture(2), makeTreeTexture(3)];
+        
+        // Ring of trees around the clearing (not right at the player's feet)
+        for(let i = 0; i < 60; i++) {
+            // Random position on sphere surface near the equatorial Z+ point
+            // Use small angular offsets from (0, 0, 1) direction
+            const angH = (Math.random() - 0.5) * 0.28; // Horizontal spread ~±16°
+            const angV = (Math.random() - 0.5) * 0.18; // Vertical spread ~±10°
+            
+            // Minimum distance from spawn to create a clearing
+            const dist = 0.03 + Math.random() * 0.25;
+            const angle = Math.random() * Math.PI * 2;
+            const offH = Math.cos(angle) * dist * 0.28;
+            const offV = Math.sin(angle) * dist * 0.18;
+            
+            // Skip trees too close to center (the clearing)
+            if(dist < 0.06) continue;
+            
+            // Position on sphere
+            const dir = new THREE.Vector3(
+                Math.sin(offH),
+                Math.sin(offV),
+                Math.cos(offH) * Math.cos(offV)
+            ).normalize();
+            
+            const surfacePos = dir.multiplyScalar(eR + 2); // Just above surface
+            
+            // Create sprite
+            const tex = treeTextures[Math.floor(Math.random() * treeTextures.length)];
+            const spriteMat = new THREE.SpriteMaterial({ 
+                map: tex, 
+                transparent: true,
+                fog: true,
+                depthWrite: false
+            });
+            const sprite = new THREE.Sprite(spriteMat);
+            sprite.position.copy(surfacePos);
+            
+            // Scale trees — vary sizes for natural look
+            const treeScale = 30 + Math.random() * 40;
+            sprite.scale.set(treeScale * 0.67, treeScale, 1);
+            
+            treeGroup.add(sprite);
+        }
+        
+        earthSpawn.grp.add(treeGroup);
+    }
+
     // ================= ATMOSPHERE SYSTEM =================
     // Blue sky colors for Earth atmosphere
     const skyBlue = new THREE.Color(0x4a90d9);    // Bright blue sky
@@ -1901,13 +2022,19 @@
                 const sunDist = camera.position.distanceTo(sunWPos);
                 const sunAngularSize = sunP.radius / sunDist;
 
-                // Eclipse occurs when Moon aligns with Sun and is close enough to cover it
-                // alignment > 0.9999 is very tight (~0.8° arc) — scale based on angular sizes
-                const eclipseThreshold = 1 - (moonAngularSize * 1.5); // How close alignment needs to be
-                if(alignment > eclipseThreshold && moonDist < sunDist) {
-                    // How much of the Sun is covered
-                    const coverFactor = (alignment - eclipseThreshold) / (1 - eclipseThreshold);
-                    eclipseDarkness = Math.min(1, coverFactor * coverFactor);
+                // Eclipse only when moon disc actually overlaps the sun disc
+                // The sum of angular radii is when the edges first touch
+                const totalAngular = moonAngularSize + sunAngularSize;
+                // alignment = cos(angle between directions); cos(angle) > cos(totalAngular) means overlap
+                // For small angles: cos(a) ≈ 1 - a²/2, so threshold ≈ 1 - totalAngular²/2
+                const overlapThreshold = 1 - (totalAngular * totalAngular) / 2;
+                
+                if(alignment > overlapThreshold && moonDist < sunDist) {
+                    // Total eclipse when moon fully covers sun (alignment very close to 1)
+                    const totalThreshold = 1 - ((moonAngularSize - sunAngularSize) * (moonAngularSize - sunAngularSize)) / 2;
+                    const coverFactor = (alignment - overlapThreshold) / (totalThreshold - overlapThreshold);
+                    eclipseDarkness = Math.min(1, Math.max(0, coverFactor));
+                    eclipseDarkness = eclipseDarkness * eclipseDarkness; // Ease in
                 }
             }
 
@@ -1955,6 +2082,16 @@
                 // Deep space
                 scene.background = spaceBlack;
                 scene.fog = null;
+            }
+
+            // Remove trees once player has left the atmosphere
+            if(!treesDeleted && earthDist > atmosphereHeight) {
+                earthP.grp.remove(treeGroup);
+                treeGroup.traverse(child => {
+                    if(child.material) child.material.dispose();
+                    if(child.geometry) child.geometry.dispose();
+                });
+                treesDeleted = true;
             }
         }
 
