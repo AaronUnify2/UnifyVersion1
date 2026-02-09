@@ -1594,7 +1594,7 @@
     // Phase system: 'ground' → 'launching' → 'space'
     let gamePhase = 'ground';
     let launchTimer = 0;
-    const LAUNCH_DURATION = 4000; // ms for launch sequence
+    const LAUNCH_DURATION = 5000; // ms for launch sequence
 
     // Hide Earth initially (we're standing on a flat field, not on the sphere)
     const earthSpawn = planets.find(p => p.name === "EARTH");
@@ -1621,7 +1621,7 @@
     // --- Ground scene group (scene-level, positioned below the orbital plane) ---
     // By placing the ground at y = -5000, the orbital plane (y=0) is above us
     // so the Sun and Moon appear in the SKY, not on the horizon
-    const GROUND_Y_OFFSET = -5000;
+    const GROUND_Y_OFFSET = -40000;
     const groundGroup = new THREE.Group();
     groundGroup.position.set(earthSpawn.grp.position.x, GROUND_Y_OFFSET, earthSpawn.grp.position.z);
     scene.add(groundGroup);
@@ -1823,6 +1823,35 @@
     let nearRocket = false;
     // Track local position on the ground (relative to groundGroup)
     let groundLocalPos = new THREE.Vector3(0, 5, 40);
+
+    // ================= SPEED LINES (launch effect) =================
+    const speedLineGroup = new THREE.Group();
+    speedLineGroup.visible = false;
+    scene.add(speedLineGroup);
+    const SPEED_LINE_COUNT = 80;
+    const SPEED_LINE_SPREAD = 60;
+    const SPEED_LINE_HEIGHT = 200;
+    const speedLineData = [];
+    for(let i = 0; i < SPEED_LINE_COUNT; i++) {
+        const x = (Math.random() - 0.5) * SPEED_LINE_SPREAD * 2;
+        const z = (Math.random() - 0.5) * SPEED_LINE_SPREAD * 2;
+        // Skip lines too close to center (would block the view)
+        if(Math.abs(x) < 8 && Math.abs(z) < 8) continue;
+        const y = Math.random() * SPEED_LINE_HEIGHT - SPEED_LINE_HEIGHT / 2;
+        const len = 8 + Math.random() * 25;
+        const positions = new Float32Array([x, y, z, x, y - len, z]);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const opacity = 0.3 + Math.random() * 0.5;
+        const brightness = 0.7 + Math.random() * 0.3;
+        const mat = new THREE.LineBasicMaterial({ 
+            color: new THREE.Color(brightness, brightness, brightness * 1.1), 
+            transparent: true, opacity: opacity, fog: false 
+        });
+        const line = new THREE.Line(geo, mat);
+        speedLineGroup.add(line);
+        speedLineData.push({ line, baseY: y, len, x, z });
+    }
 
     // ================= ATMOSPHERE SYSTEM =================
     // Blue sky colors for Earth atmosphere
@@ -2076,9 +2105,9 @@
             // Camera rises from ground level up through orbital plane to space
             const launchAccel = t * t * t; // Cubic acceleration
             const ePos = earthSpawn.grp.position;
-            // Rise from GROUND_Y_OFFSET to well above Earth (radius + 3000)
+            // Rise from GROUND_Y_OFFSET to well above Earth (radius + 5000)
             const launchStartY = GROUND_Y_OFFSET + 5;
-            const launchEndY = earthSpawn.radius + 3000;
+            const launchEndY = earthSpawn.radius + 5000;
             const launchY = launchStartY + launchAccel * (launchEndY - launchStartY);
             camera.position.set(
                 ePos.x,
@@ -2091,6 +2120,26 @@
             camera.rotation.order = "YXZ";
             camera.rotation.y = camYaw;
             camera.rotation.x = camPitch;
+
+            // Speed lines — streaking past to show velocity
+            speedLineGroup.visible = true;
+            speedLineGroup.position.copy(camera.position);
+            // Animate lines scrolling downward (since camera looks up, lines move "past" us)
+            const scrollSpeed = (0.5 + launchAccel * 20) * 2;
+            speedLineData.forEach(sd => {
+                const pos = sd.line.geometry.attributes.position.array;
+                // Scroll Y downward
+                pos[1] -= scrollSpeed;
+                pos[4] -= scrollSpeed;
+                // Wrap around when below camera
+                if(pos[1] < -SPEED_LINE_HEIGHT) {
+                    pos[1] += SPEED_LINE_HEIGHT * 2;
+                    pos[4] = pos[1] - sd.len;
+                }
+                sd.line.geometry.attributes.position.needsUpdate = true;
+                // Fade in at start, intensify with speed
+                sd.line.material.opacity = Math.min(0.8, t * 2) * (0.3 + launchAccel * 0.7);
+            });
 
             // Sky transitions from blue to black
             const skyColor = new THREE.Color();
@@ -2122,6 +2171,13 @@
             // Launch complete — transition to space
             if(t >= 1) {
                 gamePhase = 'space';
+                // Hide and clean up speed lines
+                speedLineGroup.visible = false;
+                scene.remove(speedLineGroup);
+                speedLineGroup.traverse(child => {
+                    if(child.material) child.material.dispose();
+                    if(child.geometry) child.geometry.dispose();
+                });
                 // Restore Earth's mesh, clouds, and atmosphere
                 if(earthSpawn) {
                     earthSpawn.mesh.visible = true;
@@ -2141,8 +2197,8 @@
                 });
                 // Position camera above Earth
                 const earthPos = earthSpawn.grp.position;
-                camera.position.set(earthPos.x, earthPos.y + earthSpawn.radius + 2000, earthPos.z);
-                camPitch = -0.5; // Looking down at Earth
+                camera.position.set(earthPos.x, earthPos.y + earthSpawn.radius + 5000, earthPos.z);
+                camPitch = -0.3; // Looking slightly down at Earth
                 landedPlanet = null;
                 scene.fog = null;
                 scene.background = spaceBlack;
