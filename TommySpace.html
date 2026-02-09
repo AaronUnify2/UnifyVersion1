@@ -105,17 +105,9 @@
         #speed-gauge-value { position: absolute; top: -18px; left: 0; width: 36px; text-align: center; font-size: 10px; }
         .gauge-tick { position: absolute; left: 0; width: 6px; height: 1px; background: rgba(0,255,204,0.3); }
 
-        #shield-container { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
-        .shield-row { display: flex; align-items: center; gap: 4px; }
-        .shield-label { font-size: 7px; width: 20px; text-align: right; }
-        .shield-bar-bg { width: 50px; height: 6px; border: 1px solid rgba(0,255,204,0.2); border-radius: 2px; overflow: hidden; }
-        .shield-bar-fill { height: 100%; border-radius: 1px; transition: width 0.3s; }
-        .shield-fill-green { background: linear-gradient(to right, #00cc66, #00ffcc); box-shadow: 0 0 4px rgba(0,255,140,0.3); }
-        .shield-fill-blue { background: linear-gradient(to right, #0066cc, #00ccff); box-shadow: 0 0 4px rgba(0,140,255,0.3); }
+
 
         #hud-right-panel { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
-        #altitude-readout { text-align: right; font-size: 10px; }
-        #altitude-label { font-size: 7px; opacity: 0.6; }
         #target-readout { text-align: right; font-size: 9px; margin-top: 4px; }
         #target-label { font-size: 7px; opacity: 0.6; }
         #target-dist { font-size: 11px; margin-top: 2px; }
@@ -192,9 +184,7 @@
         </svg>
         <div id="proximity-warning" class="hud-inst-warn">⚠ PROXIMITY ALERT ⚠</div>
         <div id="hud-top-bar">
-            <span id="gforce-readout" class="hud-inst">1.0G</span>
             <span id="heading-readout" class="hud-inst">HDG 000</span>
-            <span id="phase-readout" class="hud-inst" style="opacity:0.7;font-size:8px;">CRUISE</span>
         </div>
         <div id="hud-left-panel">
             <div id="speed-gauge">
@@ -205,13 +195,8 @@
                 <div class="gauge-tick" style="bottom:75%"></div>
                 <div id="speed-gauge-label" class="hud-inst" style="font-size:7px;opacity:0.5">THR</div>
             </div>
-            <div id="shield-container">
-                <div class="shield-row"><span class="shield-label hud-inst">SHD</span><div class="shield-bar-bg"><div class="shield-bar-fill shield-fill-green" id="shield-fill" style="width:100%"></div></div></div>
-                <div class="shield-row"><span class="shield-label hud-inst">PWR</span><div class="shield-bar-bg"><div class="shield-bar-fill shield-fill-blue" id="power-fill" style="width:100%"></div></div></div>
-            </div>
         </div>
         <div id="hud-right-panel">
-            <div id="altitude-readout" class="hud-inst"><div id="altitude-label">ALT</div><div id="altitude-value">0</div></div>
             <div id="target-readout"><div id="target-label" class="hud-inst">TARGET</div><div id="target-name" class="hud-inst">---</div><div id="target-dist" class="hud-inst">---</div></div>
         </div>
         <div id="radar-container"><canvas id="radar-canvas" width="280" height="280"></canvas><div id="radar-label" class="hud-inst">SCANNER</div></div>
@@ -301,8 +286,10 @@
 
     const hudData = {
         speed: 0, maxSpeed: 2500, altitude: 0, heading: 0,
-        targetName: '---', targetDist: 0, phase: 'GROUND',
-        nearPlanet: false, planets: []
+        targetName: '---', targetDist: 0,
+        nearPlanet: false, planets: [],
+        maxOrbitDist: 2600000, // Neptune's orbit
+        playerRadarAngle: 0, playerSunDist: 0
     };
 
     function updateHUD() {
@@ -312,13 +299,6 @@
         const speedPct = Math.min(100, (hudData.speed / hudData.maxSpeed) * 100);
         document.getElementById('speed-gauge-fill').style.height = speedPct + '%';
         document.getElementById('speed-gauge-value').textContent = Math.floor(hudData.speed);
-
-        // Altitude
-        const alt = hudData.altitude;
-        const altStr = alt > 1000000 ? (alt / 1000000).toFixed(1) + 'M'
-            : alt > 1000 ? (alt / 1000).toFixed(1) + 'K'
-            : Math.floor(alt).toString();
-        document.getElementById('altitude-value').textContent = altStr;
 
         // Heading
         const hdg = ((hudData.heading % 360) + 360) % 360;
@@ -336,25 +316,12 @@
             document.getElementById('target-dist').textContent = '---';
         }
 
-        // Phase
-        document.getElementById('phase-readout').textContent = hudData.phase;
-
         // Proximity warning
         document.getElementById('proximity-warning').classList.toggle('visible', hudData.nearPlanet);
 
         // Reticle spin
         const rot = (Date.now() * 0.02) % 360;
         reticleSpin.setAttribute('transform', 'rotate(' + rot + ' 40 40)');
-
-        // Simulated shield/power wobble
-        const shieldPct = 92 + Math.sin(Date.now() * 0.001) * 5;
-        const powerPct = 85 + Math.sin(Date.now() * 0.0008 + 1) * 8;
-        document.getElementById('shield-fill').style.width = shieldPct + '%';
-        document.getElementById('power-fill').style.width = powerPct + '%';
-
-        // G-force
-        const gforce = 1.0 + (hudData.speed / hudData.maxSpeed) * 2.5;
-        document.getElementById('gforce-readout').textContent = gforce.toFixed(1) + 'G';
 
         drawRadar();
     }
@@ -364,16 +331,19 @@
         const cx = w / 2, cy = h / 2, r = cx - 10;
         radarCtx.clearRect(0, 0, w, h);
 
-        // Background circles
+        // Background circle
         radarCtx.strokeStyle = 'rgba(0,255,204,0.12)';
         radarCtx.lineWidth = 1;
         radarCtx.beginPath(); radarCtx.arc(cx, cy, r, 0, Math.PI * 2); radarCtx.stroke();
-        radarCtx.strokeStyle = 'rgba(0,255,204,0.06)';
-        radarCtx.beginPath(); radarCtx.arc(cx, cy, r * 0.5, 0, Math.PI * 2); radarCtx.stroke();
-        radarCtx.beginPath(); radarCtx.arc(cx, cy, r * 0.25, 0, Math.PI * 2); radarCtx.stroke();
+
+        // Orbit rings (faint concentric circles for scale)
+        radarCtx.strokeStyle = 'rgba(0,255,204,0.04)';
+        for (let i = 1; i <= 5; i++) {
+            radarCtx.beginPath(); radarCtx.arc(cx, cy, r * (i / 5), 0, Math.PI * 2); radarCtx.stroke();
+        }
 
         // Cross hairs
-        radarCtx.strokeStyle = 'rgba(0,255,204,0.08)';
+        radarCtx.strokeStyle = 'rgba(0,255,204,0.06)';
         radarCtx.beginPath(); radarCtx.moveTo(cx, cy - r); radarCtx.lineTo(cx, cy + r); radarCtx.stroke();
         radarCtx.beginPath(); radarCtx.moveTo(cx - r, cy); radarCtx.lineTo(cx + r, cy); radarCtx.stroke();
 
@@ -386,43 +356,67 @@
         radarCtx.lineTo(cx + Math.cos(sweepAngle) * r, cy + Math.sin(sweepAngle) * r);
         radarCtx.stroke();
 
-        // Player center dot
-        radarCtx.fillStyle = '#00ffcc';
-        radarCtx.beginPath(); radarCtx.arc(cx, cy, 3, 0, Math.PI * 2); radarCtx.fill();
+        // Sun at center (gold dot)
+        radarCtx.fillStyle = '#ffcc00';
+        radarCtx.shadowColor = '#ffcc00';
+        radarCtx.shadowBlur = 8;
+        radarCtx.beginPath(); radarCtx.arc(cx, cy, 4, 0, Math.PI * 2); radarCtx.fill();
+        radarCtx.shadowBlur = 0;
 
-        // Planet blips
-        const maxRadarRange = 3000000;
+        // Planet blips — positioned by their orbit around the sun
         hudData.planets.forEach(p => {
-            if (p.dist <= 0) return;
-            const normDist = Math.min(1, p.dist / maxRadarRange);
-            const px = cx + Math.cos(p.angle) * normDist * r;
-            const py = cy + Math.sin(p.angle) * normDist * r;
-            const dx = px - cx, dy = py - cy;
-            if (Math.sqrt(dx * dx + dy * dy) > r - 4) return;
+            if (p.isSun || p.dist <= 0) return;
 
-            if (p.isSun) {
-                radarCtx.fillStyle = '#ffcc00';
-                radarCtx.shadowColor = '#ffcc00';
-                radarCtx.shadowBlur = 6;
-                radarCtx.beginPath(); radarCtx.arc(px, py, 4, 0, Math.PI * 2); radarCtx.fill();
-                radarCtx.shadowBlur = 0;
-            } else {
-                const blipAngle = Math.atan2(py - cy, px - cx);
-                let angleDiff = sweepAngle - blipAngle;
-                while (angleDiff < 0) angleDiff += Math.PI * 2;
-                while (angleDiff > Math.PI * 2) angleDiff -= Math.PI * 2;
-                const fade = angleDiff < Math.PI ? Math.max(0.15, 1 - angleDiff / Math.PI) : 0.15;
+            const normDist = Math.min(1, p.dist / hudData.maxOrbitDist);
+            const px = cx + Math.cos(p.angle) * normDist * (r - 6);
+            const py = cy + Math.sin(p.angle) * normDist * (r - 6);
 
-                radarCtx.fillStyle = 'rgba(0,255,180,' + fade + ')';
-                radarCtx.beginPath(); radarCtx.arc(px, py, 2.5, 0, Math.PI * 2); radarCtx.fill();
+            // Check within radar circle
+            const dx2 = px - cx, dy2 = py - cy;
+            if (Math.sqrt(dx2 * dx2 + dy2 * dy2) > r - 4) return;
 
-                if (normDist < 0.6) {
-                    radarCtx.fillStyle = 'rgba(0,255,204,' + (fade * 0.7) + ')';
-                    radarCtx.font = '8px Share Tech Mono';
-                    radarCtx.fillText(p.name.slice(0, 3), px + 5, py - 4);
-                }
+            // Brightness based on sweep line proximity
+            const blipAngle = Math.atan2(py - cy, px - cx);
+            let angleDiff = sweepAngle - blipAngle;
+            while (angleDiff < 0) angleDiff += Math.PI * 2;
+            while (angleDiff > Math.PI * 2) angleDiff -= Math.PI * 2;
+            const fade = angleDiff < Math.PI ? Math.max(0.15, 1 - angleDiff / Math.PI) : 0.15;
+
+            // Draw blip
+            const isNearest = p.name === hudData.targetName;
+            const blipSize = isNearest ? 3.5 : 2.5;
+            const blipColor = isNearest ? 'rgba(255,204,0,' + fade + ')' : 'rgba(0,255,180,' + fade + ')';
+            radarCtx.fillStyle = blipColor;
+            radarCtx.beginPath(); radarCtx.arc(px, py, blipSize, 0, Math.PI * 2); radarCtx.fill();
+
+            // Labels for all visible planets
+            if (fade > 0.3) {
+                radarCtx.fillStyle = 'rgba(0,255,204,' + (fade * 0.6) + ')';
+                radarCtx.font = '7px Share Tech Mono';
+                radarCtx.fillText(p.name.slice(0, 3), px + 5, py - 3);
             }
         });
+
+        // Player position indicator (small triangle on the edge pointing inward)
+        if (hudData.playerRadarAngle !== undefined) {
+            const pa = hudData.playerRadarAngle;
+            const playerDist = Math.min(1, hudData.playerSunDist / hudData.maxOrbitDist);
+            const ppx = cx + Math.cos(pa) * playerDist * (r - 6);
+            const ppy = cy + Math.sin(pa) * playerDist * (r - 6);
+
+            // Check within radar
+            const pdx = ppx - cx, pdy = ppy - cy;
+            if (Math.sqrt(pdx * pdx + pdy * pdy) <= r - 2) {
+                radarCtx.fillStyle = 'rgba(0,255,204,0.7)';
+                radarCtx.beginPath();
+                const triSize = 4;
+                const ta = Math.atan2(ppy - cy, ppx - cx) + Math.PI; // point toward sun
+                radarCtx.moveTo(ppx + Math.cos(ta) * triSize, ppy + Math.sin(ta) * triSize);
+                radarCtx.lineTo(ppx + Math.cos(ta + 2.4) * triSize * 0.7, ppy + Math.sin(ta + 2.4) * triSize * 0.7);
+                radarCtx.lineTo(ppx + Math.cos(ta - 2.4) * triSize * 0.7, ppy + Math.sin(ta - 2.4) * triSize * 0.7);
+                radarCtx.closePath(); radarCtx.fill();
+            }
+        }
     }
 
     /* ================================================================
@@ -1392,7 +1386,6 @@
             hudData.speed = launchAccel * config.deepSpaceSpeed;
             hudData.altitude = launchAccel * (earthSpawn.radius + 5000);
             hudData.heading = camYaw * 180 / Math.PI;
-            hudData.phase = t < 0.5 ? 'LAUNCH' : 'ASCENT';
             hudData.targetName = 'ORBIT'; hudData.targetDist = 0;
             hudData.nearPlanet = false; hudData.planets = [];
             updateHUD();
@@ -1591,16 +1584,19 @@
         hudData.targetName = closestP ? closestP.name : '---';
         hudData.targetDist = closestDist;
         hudData.nearPlanet = nearestPlanet !== null;
-        hudData.phase = landedPlanet ? 'LANDED' : isLocked ? 'APPROACH' : 'CRUISE';
 
-        // Radar data
+        // Radar data — sun-centered: planet positions relative to sun
+        const sunWorld = new THREE.Vector3();
+        planets[0].mesh.getWorldPosition(sunWorld); // SUN is index 0
         hudData.planets = planets.map(p => {
             const wp = new THREE.Vector3(); p.mesh.getWorldPosition(wp);
-            const dx = wp.x - camera.position.x, dz = wp.z - camera.position.z;
-            const cosY = Math.cos(-camYaw + Math.PI), sinY = Math.sin(-camYaw + Math.PI);
-            const rx = dx * cosY - dz * sinY, rz = dx * sinY + dz * cosY;
-            return { name: p.name, angle: Math.atan2(rz, rx), dist: Math.sqrt(dx * dx + dz * dz), isSun: p.name === 'SUN' };
+            const dx = wp.x - sunWorld.x, dz = wp.z - sunWorld.z;
+            return { name: p.name, angle: Math.atan2(dz, dx), dist: Math.sqrt(dx * dx + dz * dz), isSun: p.name === 'SUN' };
         });
+        // Player position relative to sun for radar triangle
+        const camDx = camera.position.x - sunWorld.x, camDz = camera.position.z - sunWorld.z;
+        hudData.playerRadarAngle = Math.atan2(camDz, camDx);
+        hudData.playerSunDist = Math.sqrt(camDx * camDx + camDz * camDz);
 
         updateHUD();
         renderer.render(scene, camera);
