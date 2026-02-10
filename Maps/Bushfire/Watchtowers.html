@@ -1650,27 +1650,68 @@
                 vectorSource.clear();
             }
 
-            var corsProxy = 'https://corsproxy.io/?';
             var feedUrl = 'https://publiccontent-gis-psba-qld-gov-au.s3.amazonaws.com/content/Feeds/BushfireCurrentIncidents/bushfireAlert_capau.xml';
-            
-            fetch(corsProxy + encodeURIComponent(feedUrl))
-                .then(function(response) {
-                    if (!response.ok) {
-                        throw new Error('HTTP ' + response.status);
-                    }
-                    return response.text();
-                })
-                .then(function(xmlText) {
-                    var data = parseCapXMLToGeoJSON(xmlText);
-                    processData(data);
-                })
-                .catch(function(error) {
-                    console.error('Error:', error);
+
+            // Multiple CORS proxies as fallback - free proxies are unreliable
+            var corsProxies = [
+                { name: 'allorigins', url: 'https://api.allorigins.win/raw?url=' },
+                { name: 'corsproxy.io', url: 'https://corsproxy.io/?' },
+                { name: 'corsproxy.org', url: 'https://corsproxy.org/?' }
+            ];
+
+            function tryProxy(index) {
+                if (index >= corsProxies.length) {
                     loading.classList.add('error');
-                    loading.textContent = 'Error loading QLD data: ' + error.message;
+                    loading.textContent = 'Error: All data sources failed. Try again later.';
                     setTimeout(function() {
                         loading.style.display = 'none';
                     }, 5000);
+                    return;
+                }
+
+                var proxy = corsProxies[index];
+                console.log('Trying CORS proxy: ' + proxy.name);
+                loading.textContent = 'Loading QLD bushfire data... (source ' + (index + 1) + '/' + corsProxies.length + ')';
+
+                fetch(proxy.url + encodeURIComponent(feedUrl))
+                    .then(function(response) {
+                        if (!response.ok) {
+                            throw new Error('HTTP ' + response.status);
+                        }
+                        return response.text();
+                    })
+                    .then(function(xmlText) {
+                        // Verify we got valid XML, not an error page
+                        if (xmlText.indexOf('<cap:alert') === -1 && xmlText.indexOf('urn:oasis:names:tc:emergency:cap') === -1) {
+                            throw new Error('Invalid response from proxy');
+                        }
+                        console.log('Successfully loaded data via ' + proxy.name);
+                        var data = parseCapXMLToGeoJSON(xmlText);
+                        processData(data);
+                    })
+                    .catch(function(error) {
+                        console.warn('Proxy ' + proxy.name + ' failed: ' + error.message);
+                        tryProxy(index + 1);
+                    });
+            }
+
+            // First try direct fetch (in case S3 bucket allows CORS)
+            fetch(feedUrl)
+                .then(function(response) {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.text();
+                })
+                .then(function(xmlText) {
+                    if (xmlText.indexOf('<cap:alert') === -1 && xmlText.indexOf('urn:oasis:names:tc:emergency:cap') === -1) {
+                        throw new Error('Invalid response');
+                    }
+                    console.log('Successfully loaded data directly (no proxy needed)');
+                    var data = parseCapXMLToGeoJSON(xmlText);
+                    processData(data);
+                })
+                .catch(function() {
+                    // Direct fetch failed (expected due to CORS), try proxies
+                    tryProxy(0);
                 });
         }
 
