@@ -21,7 +21,13 @@
             themeVariables: {
                 fontSize: '18px',
                 fontFamily: 'Arial, sans-serif'
-            }
+            },
+            themeCSS: `
+                .nodeLabel, .nodeLabel * { font-size: 18px !important; line-height: 1.4 !important; }
+                .edgeLabel, .edgeLabel * { font-size: 16px !important; font-weight: 600 !important; }
+                .label, .label * { font-size: 18px !important; }
+                foreignObject div { font-size: 18px !important; line-height: 1.4 !important; }
+            `
         });
     </script>
     <style>
@@ -260,8 +266,28 @@
         .instructions li { margin-bottom: 5px; }
         
         .mermaid .node rect { rx: 8px; ry: 8px; }
-        .mermaid .nodeLabel { font-size: 16px !important; }
-        .mermaid .edgeLabel { font-size: 15px !important; font-weight: 600 !important; }
+        /* Override Mermaid inline styles on HTML labels inside foreignObject */
+        .mermaid .nodeLabel,
+        .mermaid .nodeLabel *,
+        .mermaid .label,
+        .mermaid .label *,
+        .mermaid foreignObject div,
+        .mermaid foreignObject span,
+        .mermaid foreignObject p,
+        .mermaid foreignObject b,
+        .mermaid foreignObject i,
+        .mermaid foreignObject u {
+            font-size: 18px !important;
+            line-height: 1.4 !important;
+        }
+        .mermaid .edgeLabel,
+        .mermaid .edgeLabel *,
+        .mermaid .edgeLabel .label,
+        .mermaid .edgeLabel foreignObject div,
+        .mermaid .edgeLabel foreignObject span {
+            font-size: 16px !important;
+            font-weight: 600 !important;
+        }
         
         .footer {
             text-align: center;
@@ -854,29 +880,43 @@ flowchart TD
                         const sliceW = Math.min(sliceTotalPx, fullW - startX);
                         
                         const canvas = document.createElement('canvas');
-                        // Size canvas to match paper aspect ratio at good DPI
+                        let canvasW, canvasH;
                         if (cfg.paper.w >= cfg.paper.h) {
-                            // Landscape
-                            canvas.width = 2400;
-                            canvas.height = Math.round(2400 * (cfg.paper.h / cfg.paper.w));
+                            canvasW = 2400;
+                            canvasH = Math.round(2400 * (cfg.paper.h / cfg.paper.w));
                         } else {
-                            // Portrait
-                            canvas.height = 2400;
-                            canvas.width = Math.round(2400 * (cfg.paper.w / cfg.paper.h));
+                            canvasH = 2400;
+                            canvasW = Math.round(2400 * (cfg.paper.w / cfg.paper.h));
                         }
+                        canvas.width = canvasW;
+                        canvas.height = canvasH;
                         const ctx = canvas.getContext('2d');
                         
                         ctx.fillStyle = '#ffffff';
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.fillRect(0, 0, canvasW, canvasH);
                         
-                        // Scale the slice to fill the canvas
-                        const destH = canvas.height;
-                        const destW = (sliceW / fullH) * destH * (fullH / sliceW) * (canvas.width);
+                        // Preserve aspect ratio: fit source slice into canvas
+                        const srcAspect = sliceW / fullH;
+                        const pageAspect = canvasW / canvasH;
                         
-                        // Simple: draw source rect into full canvas
+                        let destW, destH, destX, destY;
+                        if (srcAspect >= pageAspect) {
+                            // Source wider than page — fit to width
+                            destW = canvasW;
+                            destH = canvasW / srcAspect;
+                            destX = 0;
+                            destY = (canvasH - destH) / 2;
+                        } else {
+                            // Source taller than page — fit to height, align left
+                            destH = canvasH;
+                            destW = canvasH * srcAspect;
+                            destX = 0;
+                            destY = 0;
+                        }
+                        
                         ctx.drawImage(img, 
-                            startX, 0, sliceW, fullH,  // source rect
-                            0, 0, canvas.width, canvas.height  // dest rect (fill page)
+                            startX, 0, sliceW, fullH,
+                            destX, destY, destW, destH
                         );
                         
                         sections.push({
@@ -918,7 +958,8 @@ flowchart TD
                                 .page img {
                                     width: 100%;
                                     height: 100%;
-                                    object-fit: fill;
+                                    object-fit: contain;
+                                    object-position: left top;
                                 }
                                 .page-label {
                                     position: absolute;
