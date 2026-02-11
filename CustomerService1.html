@@ -15,11 +15,11 @@
                 useMaxWidth: false,
                 htmlLabels: true,
                 curve: 'basis',
-                nodeSpacing: 50,
-                rankSpacing: 80
+                nodeSpacing: 60,
+                rankSpacing: 100
             },
             themeVariables: {
-                fontSize: '14px',
+                fontSize: '18px',
                 fontFamily: 'Arial, sans-serif'
             }
         });
@@ -260,6 +260,8 @@
         .instructions li { margin-bottom: 5px; }
         
         .mermaid .node rect { rx: 8px; ry: 8px; }
+        .mermaid .nodeLabel { font-size: 16px !important; }
+        .mermaid .edgeLabel { font-size: 15px !important; font-weight: 600 !important; }
         
         .footer {
             text-align: center;
@@ -306,9 +308,9 @@
                 padding: 3mm !important; width: 100% !important;
             }
             .mermaid {
-                transform: scale(0.45) !important;
+                transform: scale(0.35) !important;
                 transform-origin: top left !important;
-                width: 220% !important; max-width: none !important;
+                width: 280% !important; max-width: none !important;
             }
             .mermaid svg { max-width: none !important; overflow: visible !important; }
             .info-section { margin-top: 3mm !important; page-break-inside: avoid; }
@@ -364,8 +366,9 @@
             <div class="strip-row">
                 <label>Paper Size:</label>
                 <select id="stripPaperSize" onchange="updateStripPreview()">
-                    <option value="a4" selected>A4 Landscape</option>
+                    <option value="a4">A4 Landscape</option>
                     <option value="a3">A3 Landscape</option>
+                    <option value="a3p" selected>A3 Portrait (recommended)</option>
                 </select>
                 <label style="margin-left:10px;">Overlap:</label>
                 <select id="stripOverlap" onchange="updateStripPreview()">
@@ -719,8 +722,9 @@ flowchart TD
         
         // Paper dimensions in mm (landscape)
         const PAPER = {
-            a4: { w: 297, h: 210, label: 'A4 Landscape' },
-            a3: { w: 420, h: 297, label: 'A3 Landscape' }
+            a4: { w: 297, h: 210, label: 'A4 Landscape', orient: 'landscape' },
+            a3: { w: 420, h: 297, label: 'A3 Landscape', orient: 'landscape' },
+            a3p: { w: 297, h: 420, label: 'A3 Portrait', orient: 'portrait' }
         };
         
         function getStripConfig() {
@@ -782,14 +786,19 @@ flowchart TD
             infoEl.innerHTML = `Diagram ratio: <b>${cfg.aspectRatio.toFixed(1)}:1</b> (wide) → ` +
                 `<b>${cfg.numPages} × ${cfg.paper.label}</b> pages in a horizontal strip` +
                 (cfg.overlapMm > 0 ? ` (${cfg.overlapMm}mm overlap for taping)` : '') +
-                `<br/>Total poster size: <b>${(cfg.totalStripMm / 10).toFixed(0)}cm × ${(cfg.paper.h / 10).toFixed(0)}cm</b>`;
+                `<br/>Total poster size: <b>${(cfg.numPages * cfg.paper.w / 10).toFixed(0)}cm wide × ${(cfg.paper.h / 10).toFixed(0)}cm tall</b>`;
             
             // Update visual preview
             const previewEl = document.getElementById('stripPreview');
             previewEl.innerHTML = '';
+            const isPortrait = cfg.paper.h > cfg.paper.w;
             for (let i = 0; i < cfg.numPages; i++) {
                 const box = document.createElement('div');
                 box.className = 'page-box';
+                if (isPortrait) {
+                    box.style.width = '35px';
+                    box.style.height = '50px';
+                }
                 box.textContent = (i + 1);
                 previewEl.appendChild(box);
                 if (i < cfg.numPages - 1) {
@@ -845,9 +854,16 @@ flowchart TD
                         const sliceW = Math.min(sliceTotalPx, fullW - startX);
                         
                         const canvas = document.createElement('canvas');
-                        // Use aspect ratio of the paper for the output canvas
-                        canvas.width = 2400;  // ~A4/A3 landscape width at good DPI
-                        canvas.height = Math.round(2400 * (cfg.paper.h / cfg.paper.w));
+                        // Size canvas to match paper aspect ratio at good DPI
+                        if (cfg.paper.w >= cfg.paper.h) {
+                            // Landscape
+                            canvas.width = 2400;
+                            canvas.height = Math.round(2400 * (cfg.paper.h / cfg.paper.w));
+                        } else {
+                            // Portrait
+                            canvas.height = 2400;
+                            canvas.width = Math.round(2400 * (cfg.paper.w / cfg.paper.h));
+                        }
                         const ctx = canvas.getContext('2d');
                         
                         ctx.fillStyle = '#ffffff';
@@ -871,7 +887,10 @@ flowchart TD
                     
                     statusEl.textContent = '⏳ Opening print preview...';
                     
-                    const paperSize = document.getElementById('stripPaperSize').value.toUpperCase();
+                    const paperSize = document.getElementById('stripPaperSize').value;
+                    const paperLabel = cfg.paper.label;
+                    const paperBase = paperSize.replace('p', '').toUpperCase(); // A3 or A4
+                    const orientCSS = cfg.paper.orient;
                     const pw = cfg.paper.w + 'mm';
                     const ph = cfg.paper.h + 'mm';
                     
@@ -880,10 +899,10 @@ flowchart TD
                         <!DOCTYPE html>
                         <html>
                         <head>
-                            <title>SDRC Call Flow - ${cfg.numPages}× ${paperSize} Poster Strip</title>
+                            <title>SDRC Call Flow - ${cfg.numPages}× ${paperLabel} Poster Strip</title>
                             <style>
                                 @page {
-                                    size: ${paperSize} landscape;
+                                    size: ${paperBase} ${orientCSS};
                                     margin: 0;
                                 }
                                 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -976,7 +995,7 @@ flowchart TD
                         </head>
                         <body>
                             <div class="instructions-page">
-                                <h1>🖨️ ${cfg.numPages}× ${paperSize} Poster Strip</h1>
+                                <h1>🖨️ ${cfg.numPages}× ${paperLabel} Poster Strip</h1>
                                 <p><b>Instructions:</b> Print all ${cfg.numPages} pages, then arrange them left-to-right and tape together:</p>
                                 <div class="strip-diagram">
                                     ${sections.map((s, i) => 
@@ -985,13 +1004,13 @@ flowchart TD
                                 </div>
                                 <p><b>Print settings:</b></p>
                                 <ul style="margin-left: 20px; margin-bottom: 15px;">
-                                    <li>Paper size: <b>${paperSize}</b></li>
-                                    <li>Orientation: <b>Landscape</b></li>
+                                    <li>Paper size: <b>${paperBase}</b></li>
+                                    <li>Orientation: <b>${orientCSS.charAt(0).toUpperCase() + orientCSS.slice(1)}</b></li>
                                     <li>Margins: <b>None</b> or <b>Minimum</b></li>
                                     <li>Scale: <b>Fit to page</b></li>
                                     ${cfg.overlapMm > 0 ? `<li>Pages have <b>${cfg.overlapMm}mm overlap</b> for easier alignment when taping</li>` : ''}
                                 </ul>
-                                <p>Total poster size when assembled: <b>${(cfg.numPages * cfg.paper.w / 10).toFixed(0)}cm × ${(cfg.paper.h / 10).toFixed(0)}cm</b></p>
+                                <p>Total poster size when assembled: <b>${(cfg.numPages * cfg.paper.w / 10).toFixed(0)}cm wide × ${(cfg.paper.h / 10).toFixed(0)}cm tall</b></p>
                                 <button class="print-action-btn" onclick="window.print()">🖨️ Print All ${cfg.numPages} Pages</button>
                             </div>
                             
@@ -1006,7 +1025,7 @@ flowchart TD
                     `);
                     printWindow.document.close();
                     
-                    statusEl.textContent = `✅ ${cfg.numPages}-page strip ready! Check the new tab.`;
+                    statusEl.textContent = `✅ ${cfg.numPages}-page ${paperLabel} strip ready! Check the new tab.`;
                     setTimeout(() => { statusEl.textContent = ''; }, 5000);
                 };
                 
