@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Bubble Pop Game</title>
+    <title>TommyPop - Focus Bridge</title>
     <style>
         * {
             margin: 0;
@@ -17,6 +17,8 @@
             height: 100vh;
             overflow: hidden;
             touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
         .game-container {
@@ -73,6 +75,22 @@
             background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.8), transparent 50%);
         }
 
+        /* Holding Animation */
+        .fullscreen-bubble.holding::after {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: -5px;
+            right: -5px;
+            bottom: -5px;
+            border-radius: 50%;
+            border: 3px solid #FFF;
+            opacity: 0.8;
+            transform: scale(1);
+            clip-path: circle(var(--progress, 0%) at 50% 50%);
+            transition: none;
+        }
+
         .celebration {
             position: absolute;
             pointer-events: none;
@@ -92,31 +110,6 @@
             }
             100% { 
                 transform: scale(0.8) rotate(360deg);
-                opacity: 0;
-            }
-        }
-
-        .sparkle {
-            position: absolute;
-            pointer-events: none;
-            width: 4px;
-            height: 4px;
-            background: #FFD700;
-            border-radius: 50%;
-            animation: sparkle 0.8s ease-out forwards;
-        }
-
-        @keyframes sparkle {
-            0% { 
-                transform: scale(0);
-                opacity: 1;
-            }
-            50% {
-                transform: scale(1);
-                opacity: 1;
-            }
-            100% { 
-                transform: scale(0);
                 opacity: 0;
             }
         }
@@ -149,8 +142,15 @@
                 this.resizeCanvas();
                 
                 // Game settings
-                this.bubbleRadius = Math.min(this.canvas.width, this.canvas.height) * 0.04; // Responsive bubble size
+                this.bubbleRadius = Math.min(this.canvas.width, this.canvas.height) * 0.04;
                 this.bubbleColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#FF7F50', '#98D8C8'];
+                
+                // Audio Context
+                this.audioCtx = null;
+                
+                // Round Logic
+                this.roundsPlayed = 0;
+                this.maxRounds = 2; // Game stops regenerating after 2 rounds
                 
                 // Game objects
                 this.bubbles = [];
@@ -163,12 +163,47 @@
                 this.cannonAngle = -Math.PI / 2;
                 this.currentBubbleColor = this.getRandomColor();
                 
-                // Generate initial bubbles
+                // Generate initial bubbles (Round 1)
                 this.generateBubbles();
                 
                 this.setupEventListeners();
                 this.setupFullscreen();
                 this.gameLoop();
+            }
+            
+            initAudio() {
+                if (!this.audioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.audioCtx = new AudioContext();
+                }
+                if (this.audioCtx.state === 'suspended') {
+                    this.audioCtx.resume();
+                }
+            }
+
+            playPopSound() {
+                if (!this.audioCtx) return;
+
+                const oscillator = this.audioCtx.createOscillator();
+                const gainNode = this.audioCtx.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(this.audioCtx.destination);
+
+                // Sound design: A gentle "bloop" sine wave
+                oscillator.type = 'sine';
+                
+                // Pitch drop for "pop" effect
+                const now = this.audioCtx.currentTime;
+                oscillator.frequency.setValueAtTime(400, now);
+                oscillator.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+
+                // Volume envelope
+                gainNode.gain.setValueAtTime(0.3, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+
+                oscillator.start(now);
+                oscillator.stop(now + 0.15);
             }
             
             resizeCanvas() {
@@ -185,6 +220,7 @@
             generateBubbles() {
                 // Clear existing bubbles
                 this.bubbles = [];
+                this.roundsPlayed++;
                 
                 // Calculate grid dimensions based on screen size
                 const cols = Math.floor(this.canvas.width / (this.bubbleRadius * 2.2));
@@ -192,7 +228,7 @@
                 
                 for (let row = 0; row < rows; row++) {
                     for (let col = 0; col < cols; col++) {
-                        // Random chance to place a bubble (creates a more natural pattern)
+                        // Random chance to place a bubble
                         if (Math.random() > 0.3) {
                             const isEvenRow = row % 2 === 0;
                             const offsetX = isEvenRow ? 0 : this.bubbleRadius;
@@ -206,7 +242,7 @@
                                 y: y,
                                 color: this.getRandomColor(),
                                 radius: this.bubbleRadius,
-                                wobble: Math.random() * Math.PI * 2, // For gentle animation
+                                wobble: Math.random() * Math.PI * 2,
                                 wobbleSpeed: 0.02 + Math.random() * 0.02
                             });
                         }
@@ -245,7 +281,7 @@
                         if (progress >= 1) {
                             this.completeHold();
                         }
-                    }, 16); // ~60fps updates
+                    }, 16); 
                     
                     holdTimer = setTimeout(() => {
                         this.completeHold();
@@ -281,7 +317,6 @@
                     endHold();
                     this.toggleFullscreen();
                     
-                    // Add a little success feedback
                     fullscreenBubble.style.transform = 'scale(1.2)';
                     setTimeout(() => {
                         fullscreenBubble.style.transform = '';
@@ -298,12 +333,10 @@
                 fullscreenBubble.addEventListener('mouseup', endHold);
                 fullscreenBubble.addEventListener('mouseleave', endHold);
                 
-                // Prevent context menu on long press
                 fullscreenBubble.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
                 });
                 
-                // Listen for fullscreen changes to update the button
                 document.addEventListener('fullscreenchange', () => this.updateFullscreenButton());
                 document.addEventListener('webkitfullscreenchange', () => this.updateFullscreenButton());
                 document.addEventListener('mozfullscreenchange', () => this.updateFullscreenButton());
@@ -314,27 +347,15 @@
                 const elem = document.documentElement;
                 
                 if (!this.isFullscreen()) {
-                    // Enter fullscreen
-                    if (elem.requestFullscreen) {
-                        elem.requestFullscreen();
-                    } else if (elem.webkitRequestFullscreen) {
-                        elem.webkitRequestFullscreen();
-                    } else if (elem.mozRequestFullScreen) {
-                        elem.mozRequestFullScreen();
-                    } else if (elem.msRequestFullscreen) {
-                        elem.msRequestFullscreen();
-                    }
+                    if (elem.requestFullscreen) elem.requestFullscreen();
+                    else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+                    else if (elem.mozRequestFullScreen) elem.mozRequestFullScreen();
+                    else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
                 } else {
-                    // Exit fullscreen
-                    if (document.exitFullscreen) {
-                        document.exitFullscreen();
-                    } else if (document.webkitExitFullscreen) {
-                        document.webkitExitFullscreen();
-                    } else if (document.mozCancelFullScreen) {
-                        document.mozCancelFullScreen();
-                    } else if (document.msExitFullscreen) {
-                        document.msExitFullscreen();
-                    }
+                    if (document.exitFullscreen) document.exitFullscreen();
+                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                    else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
+                    else if (document.msExitFullscreen) document.msExitFullscreen();
                 }
             }
             
@@ -348,34 +369,35 @@
             updateFullscreenButton() {
                 const fullscreenBubble = document.getElementById('fullscreenBubble');
                 if (this.isFullscreen()) {
-                    fullscreenBubble.innerHTML = '🔲'; // Exit fullscreen icon
+                    fullscreenBubble.innerHTML = '🔲';
                     fullscreenBubble.title = 'Exit Full Screen';
                     fullscreenBubble.classList.remove('pulse');
                 } else {
-                    fullscreenBubble.innerHTML = '🔳'; // Enter fullscreen icon
+                    fullscreenBubble.innerHTML = '🔳';
                     fullscreenBubble.title = 'Full Screen';
                     fullscreenBubble.classList.add('pulse');
                 }
             }
             
             setupEventListeners() {
-                // Touch events for mobile
                 this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
                 this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
-                
-                // Mouse events for desktop
                 this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
                 
-                // Resize handler
                 window.addEventListener('resize', () => {
                     this.resizeCanvas();
                     this.bubbleRadius = Math.min(this.canvas.width, this.canvas.height) * 0.04;
-                    this.generateBubbles();
+                    // Only regenerate if we are still in active rounds and had bubbles
+                    if (this.bubbles.length > 0) {
+                         this.generateBubbles();
+                         this.roundsPlayed--; // Prevent accidental round skipping on resize
+                    }
                 });
             }
             
             handleTouchStart(e) {
                 e.preventDefault();
+                this.initAudio(); // Unlock audio on interaction
                 const touch = e.touches[0];
                 const rect = this.canvas.getBoundingClientRect();
                 const x = touch.clientX - rect.left;
@@ -388,6 +410,7 @@
             }
             
             handleMouseDown(e) {
+                this.initAudio(); // Unlock audio on interaction
                 const rect = this.canvas.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
@@ -395,17 +418,14 @@
             }
             
             aimAndShoot(targetX, targetY) {
-                // Calculate angle from cannon to target
                 const dx = targetX - this.cannonX;
                 const dy = targetY - this.cannonY;
                 this.cannonAngle = Math.atan2(dy, dx);
                 
-                // Limit angle to upward directions only
                 const minAngle = -Math.PI + 0.1;
                 const maxAngle = -0.1;
                 this.cannonAngle = Math.max(minAngle, Math.min(maxAngle, this.cannonAngle));
                 
-                // Shoot bubble
                 this.shootBubble();
             }
             
@@ -430,17 +450,19 @@
                 for (let i = this.cannonBubbles.length - 1; i >= 0; i--) {
                     const bubble = this.cannonBubbles[i];
                     
-                    // Move bubble
                     bubble.x += bubble.vx;
                     bubble.y += bubble.vy;
                     
-                    // Bounce off walls
                     if (bubble.x - bubble.radius <= 0 || bubble.x + bubble.radius >= this.canvas.width) {
                         bubble.vx = -bubble.vx;
                         bubble.x = Math.max(bubble.radius, Math.min(this.canvas.width - bubble.radius, bubble.x));
                     }
                     
-                    // Check collision with bubbles
+                    // Ceiling bounce (since bubbles might be gone, we need to contain cannon shots)
+                    if (bubble.y - bubble.radius <= 0) {
+                        bubble.vy = -bubble.vy;
+                    }
+                    
                     let collision = false;
                     for (let j = this.bubbles.length - 1; j >= 0; j--) {
                         const targetBubble = this.bubbles[j];
@@ -449,22 +471,28 @@
                         const distance = Math.sqrt(dx * dx + dy * dy);
                         
                         if (distance < bubble.radius + targetBubble.radius) {
-                            // Hit! Remove the target bubble and create celebration
+                            // Hit!
+                            this.playPopSound();
                             this.bubbles.splice(j, 1);
                             this.cannonBubbles.splice(i, 1);
-                            this.createCelebration(targetBubble.x, targetBubble.y);
+                            
+                            // Celebration: ONLY in Round 1
+                            if (this.roundsPlayed === 1) {
+                                this.createCelebration(targetBubble.x, targetBubble.y);
+                            }
+                            
                             collision = true;
                             break;
                         }
                     }
                     
-                    // Remove bubble if it goes off screen
-                    if (!collision && (bubble.y < -50 || bubble.y > this.canvas.height + 50)) {
+                    // Remove bubble if it goes off bottom screen
+                    if (!collision && (bubble.y > this.canvas.height + 50)) {
                         this.cannonBubbles.splice(i, 1);
                     }
                 }
                 
-                // Update bubble wobble animation
+                // Update bubble wobble
                 for (const bubble of this.bubbles) {
                     bubble.wobble += bubble.wobbleSpeed;
                 }
@@ -474,7 +502,7 @@
                     const particle = this.particles[i];
                     particle.x += particle.vx;
                     particle.y += particle.vy;
-                    particle.vy += 0.1; // Gravity
+                    particle.vy += 0.1;
                     particle.life--;
                     
                     if (particle.life <= 0) {
@@ -482,14 +510,15 @@
                     }
                 }
                 
-                // Regenerate bubbles if running low
-                if (this.bubbles.length < 10) {
+                // Regenerate Logic:
+                // Only regenerate if screen is empty AND we haven't reached max rounds
+                if (this.bubbles.length === 0 && this.roundsPlayed < this.maxRounds) {
                     this.generateBubbles();
                 }
+                // If bubbles == 0 and roundsPlayed == maxRounds, do nothing (empty screen)
             }
             
             createCelebration(x, y) {
-                // Create celebration emoji
                 const container = document.querySelector('.game-container');
                 const celebration = document.createElement('div');
                 celebration.className = 'celebration';
@@ -498,14 +527,12 @@
                 celebration.style.top = (y - 15) + 'px';
                 container.appendChild(celebration);
                 
-                // Remove after animation
                 setTimeout(() => {
                     if (celebration.parentNode) {
                         celebration.parentNode.removeChild(celebration);
                     }
                 }, 1000);
                 
-                // Create sparkle particles
                 for (let i = 0; i < 8; i++) {
                     this.particles.push({
                         x: x,
@@ -519,7 +546,6 @@
             }
             
             render() {
-                // Clear canvas with gradient background
                 const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
                 gradient.addColorStop(0, '#87CEEB');
                 gradient.addColorStop(0.5, '#98FB98');
@@ -527,7 +553,6 @@
                 this.ctx.fillStyle = gradient;
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
                 
-                // Draw bubbles with wobble animation
                 for (const bubble of this.bubbles) {
                     this.drawBubble(
                         bubble.x + Math.sin(bubble.wobble) * 2, 
@@ -537,12 +562,10 @@
                     );
                 }
                 
-                // Draw cannon bubbles
                 for (const bubble of this.cannonBubbles) {
                     this.drawBubble(bubble.x, bubble.y, bubble.radius, bubble.color);
                 }
                 
-                // Draw particles
                 for (const particle of this.particles) {
                     this.ctx.save();
                     this.ctx.globalAlpha = particle.life / 50;
@@ -553,20 +576,17 @@
                     this.ctx.restore();
                 }
                 
-                // Draw cannon
                 this.drawCannon();
             }
             
             drawBubble(x, y, radius, color) {
                 this.ctx.save();
                 
-                // Main bubble
                 this.ctx.fillStyle = color;
                 this.ctx.beginPath();
                 this.ctx.arc(x, y, radius, 0, Math.PI * 2);
                 this.ctx.fill();
                 
-                // Highlight for 3D effect
                 const gradient = this.ctx.createRadialGradient(
                     x - radius * 0.3, y - radius * 0.3, 0,
                     x, y, radius
@@ -580,7 +600,6 @@
                 this.ctx.arc(x, y, radius, 0, Math.PI * 2);
                 this.ctx.fill();
                 
-                // Outer glow
                 this.ctx.shadowColor = color;
                 this.ctx.shadowBlur = 10;
                 this.ctx.strokeStyle = color;
@@ -595,20 +614,17 @@
             drawCannon() {
                 this.ctx.save();
                 
-                // Cannon base
                 this.ctx.fillStyle = '#8B4513';
                 this.ctx.beginPath();
                 this.ctx.arc(this.cannonX, this.cannonY, this.bubbleRadius * 1.5, 0, Math.PI * 2);
                 this.ctx.fill();
                 
-                // Cannon barrel
                 this.ctx.translate(this.cannonX, this.cannonY);
                 this.ctx.rotate(this.cannonAngle);
                 this.ctx.fillStyle = '#654321';
                 this.ctx.fillRect(0, -this.bubbleRadius * 0.6, this.bubbleRadius * 2, this.bubbleRadius * 1.2);
                 this.ctx.restore();
                 
-                // Current bubble in cannon
                 this.drawBubble(this.cannonX, this.cannonY, this.bubbleRadius * 0.8, this.currentBubbleColor);
             }
             
@@ -619,7 +635,6 @@
             }
         }
         
-        // Start the game when page loads
         window.addEventListener('load', () => {
             new SimpleBubbleGame();
         });
