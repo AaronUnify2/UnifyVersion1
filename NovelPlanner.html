@@ -402,6 +402,20 @@
             color: #6b7280;
             font-size: 1rem;
             user-select: none;
+            cursor: grab;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            transition: color 0.2s ease, background 0.2s ease;
+            z-index: 2;
+        }
+
+        .drag-handle:hover {
+            color: #94a3b8;
+            background: rgba(99, 102, 241, 0.15);
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
         }
 
         .drop-zone {
@@ -646,6 +660,110 @@
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
         }
+
+        /* Picker styles for character/symbol selection */
+        .input-with-picker {
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-start;
+        }
+
+        .input-with-picker .form-input {
+            flex: 1;
+        }
+
+        .picker-btn {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            border: none;
+            color: white;
+            padding: 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .picker-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .picker-dropdown {
+            display: none;
+            background: rgba(30, 41, 59, 0.98);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            border-radius: 8px;
+            margin-top: 0.5rem;
+            max-height: 200px;
+            overflow-y: auto;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+        }
+
+        .picker-dropdown.show {
+            display: block;
+        }
+
+        .picker-item {
+            padding: 0.625rem 1rem;
+            cursor: pointer;
+            color: #cbd5e1;
+            font-size: 0.875rem;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+        }
+
+        .picker-item:last-child {
+            border-bottom: none;
+        }
+
+        .picker-item:hover {
+            background: rgba(59, 130, 246, 0.2);
+            color: #f1f5f9;
+        }
+
+        .picker-item.selected {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+        }
+
+        .picker-item-check {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(99, 102, 241, 0.4);
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.625rem;
+            flex-shrink: 0;
+        }
+
+        .picker-item.selected .picker-item-check {
+            background: #3b82f6;
+            border-color: #3b82f6;
+        }
+
+        .picker-empty {
+            padding: 1rem;
+            text-align: center;
+            color: #6b7280;
+            font-style: italic;
+            font-size: 0.875rem;
+        }
+
+        /* Drag placeholder styling */
+        .drag-placeholder {
+            border: 2px dashed rgba(59, 130, 246, 0.4);
+            background: rgba(59, 130, 246, 0.05);
+            border-radius: 8px;
+            margin: 0.5rem 0;
+            transition: height 0.2s ease;
+        }
     </style>
 </head>
 <body>
@@ -725,11 +843,19 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Characters (comma-separated)</label>
-                    <input type="text" id="scene-characters" class="form-input">
+                    <div class="input-with-picker">
+                        <input type="text" id="scene-characters" class="form-input">
+                        <button type="button" class="picker-btn" onclick="toggleCharacterPicker()">+ Pick</button>
+                    </div>
+                    <div id="character-picker" class="picker-dropdown"></div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Symbols (comma-separated)</label>
-                    <input type="text" id="scene-symbols" class="form-input">
+                    <div class="input-with-picker">
+                        <input type="text" id="scene-symbols" class="form-input">
+                        <button type="button" class="picker-btn" onclick="toggleSymbolPicker()">+ Pick</button>
+                    </div>
+                    <div id="symbol-picker" class="picker-dropdown"></div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Notes</label>
@@ -850,22 +976,35 @@
         let currentEditingChapter = null;
         let currentEditingCharacter = null;
         let currentEditingSymbol = null;
-        let draggedElement = null;
-        let draggedElementType = null;
-        let longPressTimer = null;
-        let isDragging = false;
+
+        // ===== DRAG AND DROP STATE =====
+        let dragState = {
+            active: false,
+            element: null,        // the original DOM element being dragged
+            type: null,           // 'scene' or 'chapter'
+            ghost: null,          // floating clone that follows pointer
+            placeholder: null,    // spacer inserted where element was
+            startX: 0,
+            startY: 0,
+            offsetX: 0,
+            offsetY: 0,
+            longPressTimer: null,
+            hasMoved: false,
+            sourceChapterId: null, // for scenes: which chapter it came from
+            sceneId: null,
+            chapterId: null
+        };
 
         // Initialize the application
         function init() {
             setupTabs();
-            setupTouch();
-            loadFromStorage(); // Load saved data first
+            setupDragAndDrop();
+            loadFromStorage();
             renderCurrentTab();
-            
+
             // Setup emotion slider
             const emotionSlider = document.getElementById('scene-emotion');
             const emotionValue = document.getElementById('emotion-value');
-            
             emotionSlider.addEventListener('input', function() {
                 emotionValue.textContent = this.value;
                 emotionValue.style.color = getEmotionColor(parseInt(this.value));
@@ -876,392 +1015,492 @@
             document.getElementById('chapter-form').addEventListener('submit', saveChapter);
             document.getElementById('character-form').addEventListener('submit', saveCharacter);
             document.getElementById('symbol-form').addEventListener('submit', saveSymbol);
-            
+
             // Show storage status
             showStorageStatus();
         }
 
-        // Tab management
+        // ===== TAB MANAGEMENT =====
         function setupTabs() {
-            const tabButtons = document.querySelectorAll('.tab-button');
-            tabButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    const tabName = button.dataset.tab;
-                    switchTab(tabName);
-                });
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', () => switchTab(button.dataset.tab));
             });
         }
 
         function switchTab(tabName) {
-            // Update tab buttons
-            document.querySelectorAll('.tab-button').forEach(btn => {
-                btn.classList.remove('active');
-            });
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
             document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-
-            // Update tab content
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.style.display = 'none';
-            });
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
             document.getElementById(`${tabName}-tab`).style.display = 'block';
-
             currentTab = tabName;
             renderCurrentTab();
         }
 
-        // Touch and drag setup
-        function setupTouch() {
-            // Prevent context menu on long press for draggable elements
+        // ===== IMPROVED DRAG AND DROP =====
+        function setupDragAndDrop() {
+            // Prevent context menu on drag handles
             document.addEventListener('contextmenu', function(e) {
-                if (e.target.closest('.scene-card, .chapter-mgmt-card')) {
-                    e.preventDefault();
-                }
+                if (e.target.closest('.drag-handle')) e.preventDefault();
             });
 
-            // Handle touch events for drag and drop
-            document.addEventListener('touchstart', handleTouchStart, { passive: false });
-            document.addEventListener('touchmove', handleTouchMove, { passive: false });
-            document.addEventListener('touchend', handleTouchEnd, { passive: false });
+            // --- TOUCH ---
+            document.addEventListener('touchstart', onPointerDown, { passive: false });
+            document.addEventListener('touchmove', onPointerMove, { passive: false });
+            document.addEventListener('touchend', onPointerUp, { passive: false });
+            document.addEventListener('touchcancel', onPointerUp, { passive: false });
+
+            // --- MOUSE ---
+            document.addEventListener('mousedown', onPointerDown);
+            document.addEventListener('mousemove', onPointerMove);
+            document.addEventListener('mouseup', onPointerUp);
         }
 
-        function handleTouchStart(e) {
-            const target = e.target.closest('.scene-card, .chapter-mgmt-card');
-            if (!target) return;
-
-            // Determine if we should handle drag based on current tab
-            if (currentTab === 'scenes' && !target.classList.contains('scene-card')) return;
-            if (currentTab === 'chapters' && !target.classList.contains('chapter-mgmt-card')) return;
-
-            const touch = e.touches[0];
-            target.startX = touch.clientX;
-            target.startY = touch.clientY;
-            target.moved = false;
-
-            // Start long press timer
-            longPressTimer = setTimeout(() => {
-                startDrag(target, e);
-            }, 700);
+        function getPointerPos(e) {
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            if (e.changedTouches && e.changedTouches.length > 0) {
+                return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
         }
 
-        function handleTouchMove(e) {
-            if (longPressTimer) {
-                const target = e.target.closest('.scene-card, .chapter-mgmt-card');
-                if (!target) return;
+        function onPointerDown(e) {
+            const handle = e.target.closest('.drag-handle');
+            if (!handle) return; // only start drag from handle
 
-                const touch = e.touches[0];
-                const deltaX = Math.abs(touch.clientX - target.startX);
-                const deltaY = Math.abs(touch.clientY - target.startY);
+            const card = handle.closest('.scene-card, .chapter-mgmt-card');
+            if (!card) return;
 
-                if (deltaX > 10 || deltaY > 10) {
-                    target.moved = true;
-                    clearTimeout(longPressTimer);
-                    longPressTimer = null;
-                }
+            const pos = getPointerPos(e);
+            dragState.startX = pos.x;
+            dragState.startY = pos.y;
+            dragState.hasMoved = false;
+            dragState.element = card;
+
+            if (card.classList.contains('scene-card')) {
+                dragState.type = 'scene';
+                dragState.sceneId = parseInt(card.dataset.sceneId);
+                const container = card.closest('.scenes-container');
+                dragState.sourceChapterId = container ? parseInt(container.dataset.chapterId) : null;
+            } else {
+                dragState.type = 'chapter';
+                dragState.chapterId = parseInt(card.dataset.chapterId);
             }
 
-            if (isDragging && draggedElement) {
+            // For touch: use a short delay to distinguish tap from drag
+            if (e.touches) {
+                dragState.longPressTimer = setTimeout(() => {
+                    beginDrag(e);
+                }, 200);
+            } else {
+                // Mouse: begin immediately
+                beginDrag(e);
                 e.preventDefault();
-                const touch = e.touches[0];
-                
-                // Create a visual drag element if it doesn't exist
-                let dragVisual = document.getElementById('drag-visual');
-                if (!dragVisual) {
-                    dragVisual = draggedElement.cloneNode(true);
-                    dragVisual.id = 'drag-visual';
-                    dragVisual.style.position = 'fixed';
-                    dragVisual.style.pointerEvents = 'none';
-                    dragVisual.style.zIndex = '2000';
-                    dragVisual.style.opacity = '0.8';
-                    dragVisual.style.transform = 'rotate(3deg) scale(1.05)';
-                    dragVisual.style.width = draggedElement.offsetWidth + 'px';
-                    document.body.appendChild(dragVisual);
-                }
-                
-                dragVisual.style.left = touch.clientX - draggedElement.offsetWidth/2 + 'px';
-                dragVisual.style.top = touch.clientY - 30 + 'px';
-
-                // Highlight drop zones
-                highlightDropZones(touch.clientX, touch.clientY);
             }
         }
 
-        function handleTouchEnd(e) {
-            if (longPressTimer) {
-                clearTimeout(longPressTimer);
-                longPressTimer = null;
-            }
+        function beginDrag(e) {
+            const card = dragState.element;
+            if (!card) return;
 
-            const target = e.target.closest('.scene-card, .chapter-mgmt-card');
-            
-            if (isDragging && draggedElement) {
-                endDrag(e);
-            } else if (target && !target.moved) {
-                // Handle normal click
-                if (target.classList.contains('scene-card')) {
-                    const sceneId = parseInt(target.dataset.sceneId);
-                    editScene(sceneId);
-                } else if (target.classList.contains('chapter-mgmt-card')) {
-                    // Check if click was on the header (for collapse) or elsewhere (for edit)
-                    const clickTarget = e.target || e.changedTouches[0].target;
-                    if (clickTarget.closest('.chapter-mgmt-header')) {
-                        // Header click - toggle handled by onclick in HTML
+            dragState.active = true;
+
+            // Create ghost
+            const rect = card.getBoundingClientRect();
+            const ghost = card.cloneNode(true);
+            ghost.id = 'drag-ghost';
+            ghost.style.cssText = `
+                position: fixed;
+                pointer-events: none;
+                z-index: 2000;
+                width: ${rect.width}px;
+                opacity: 0.85;
+                transform: rotate(2deg) scale(1.03);
+                box-shadow: 0 12px 35px rgba(0, 0, 0, 0.4);
+                transition: none;
+            `;
+            const pos = getPointerPos(e);
+            dragState.offsetX = pos.x - rect.left;
+            dragState.offsetY = pos.y - rect.top;
+            ghost.style.left = (pos.x - dragState.offsetX) + 'px';
+            ghost.style.top = (pos.y - dragState.offsetY) + 'px';
+            document.body.appendChild(ghost);
+            dragState.ghost = ghost;
+
+            // Create placeholder
+            const placeholder = document.createElement('div');
+            placeholder.className = 'drag-placeholder';
+            placeholder.style.height = rect.height + 'px';
+            card.parentNode.insertBefore(placeholder, card);
+            dragState.placeholder = placeholder;
+
+            // Hide original
+            card.style.display = 'none';
+
+            // Haptic feedback
+            if (navigator.vibrate) navigator.vibrate(30);
+        }
+
+        function onPointerMove(e) {
+            if (!dragState.element) return;
+
+            const pos = getPointerPos(e);
+
+            // If touch and long press hasn't fired yet, check if moved too far
+            if (dragState.longPressTimer) {
+                const dx = Math.abs(pos.x - dragState.startX);
+                const dy = Math.abs(pos.y - dragState.startY);
+                if (dx > 8 || dy > 8) {
+                    clearTimeout(dragState.longPressTimer);
+                    dragState.longPressTimer = null;
+                    // They scrolled instead - cancel
+                    if (!dragState.active) {
+                        resetDragState();
                         return;
-                    } else {
-                        // Click elsewhere on card - edit chapter
-                        const chapterId = parseInt(target.dataset.chapterId);
-                        editChapter(chapterId);
                     }
                 }
             }
-        }
 
-        function startDrag(element, e) {
-            isDragging = true;
-            draggedElement = element;
-            
-            if (element.classList.contains('scene-card')) {
-                draggedElementType = 'scene';
-            } else if (element.classList.contains('chapter-mgmt-card')) {
-                draggedElementType = 'chapter';
+            if (!dragState.active) return;
+            e.preventDefault();
+
+            dragState.hasMoved = true;
+
+            // Move ghost
+            if (dragState.ghost) {
+                dragState.ghost.style.left = (pos.x - dragState.offsetX) + 'px';
+                dragState.ghost.style.top = (pos.y - dragState.offsetY) + 'px';
             }
 
-            element.classList.add('dragging');
-            element.style.opacity = '0.3'; // Make original element semi-transparent
-            
-            // Haptic feedback
-            if (navigator.vibrate) {
-                navigator.vibrate([50, 25, 50]); // Double vibration to indicate drag start
+            // Move placeholder to show where item will land
+            updatePlaceholderPosition(pos.x, pos.y);
+
+            // Auto-scroll near edges
+            const scrollMargin = 60;
+            if (pos.y < scrollMargin) {
+                window.scrollBy(0, -8);
+            } else if (pos.y > window.innerHeight - scrollMargin) {
+                window.scrollBy(0, 8);
             }
-            
-            e.preventDefault(); // Prevent any default touch behavior
         }
 
-        function endDrag(e) {
-            if (!draggedElement) return;
+        function updatePlaceholderPosition(x, y) {
+            if (!dragState.placeholder) return;
 
-            const touch = e.changedTouches[0];
-            const dropTarget = document.elementFromPoint(touch.clientX, touch.clientY);
-            
-            if (draggedElementType === 'scene') {
-                handleSceneDrop(dropTarget, touch.clientX, touch.clientY);
-            } else if (draggedElementType === 'chapter') {
-                handleChapterDrop(dropTarget, touch.clientX, touch.clientY);
+            if (dragState.type === 'scene') {
+                // Find which scenes-container we're over
+                const containers = document.querySelectorAll('.scenes-container');
+                let bestContainer = null;
+                let bestInsertRef = null; // insert before this element, or null for end
+
+                // Temporarily show ghost as none so elementFromPoint works
+                if (dragState.ghost) dragState.ghost.style.display = 'none';
+                const elAtPoint = document.elementFromPoint(x, y);
+                if (dragState.ghost) dragState.ghost.style.display = '';
+
+                const targetContainer = elAtPoint ? elAtPoint.closest('.scenes-container') : null;
+
+                if (targetContainer) {
+                    bestContainer = targetContainer;
+                    const cards = Array.from(targetContainer.querySelectorAll('.scene-card:not([style*="display: none"])'));
+                    const placeholderEl = dragState.placeholder;
+
+                    bestInsertRef = null;
+                    for (const card of cards) {
+                        const rect = card.getBoundingClientRect();
+                        if (y < rect.top + rect.height / 2) {
+                            bestInsertRef = card;
+                            break;
+                        }
+                    }
+
+                    // Also consider placeholder's current position relative to add-scene-btn
+                    const addBtn = targetContainer.querySelector('.add-scene-btn');
+                    if (bestInsertRef) {
+                        targetContainer.insertBefore(placeholderEl, bestInsertRef);
+                    } else if (addBtn) {
+                        targetContainer.insertBefore(placeholderEl, addBtn);
+                    } else {
+                        targetContainer.appendChild(placeholderEl);
+                    }
+                }
+            } else if (dragState.type === 'chapter') {
+                const container = document.getElementById('chapters-container');
+                if (!container) return;
+
+                const cards = Array.from(container.querySelectorAll('.chapter-mgmt-card:not([style*="display: none"])'));
+                let insertRef = null;
+
+                for (const card of cards) {
+                    const rect = card.getBoundingClientRect();
+                    if (y < rect.top + rect.height / 2) {
+                        insertRef = card;
+                        break;
+                    }
+                }
+
+                if (insertRef) {
+                    container.insertBefore(dragState.placeholder, insertRef);
+                } else {
+                    container.appendChild(dragState.placeholder);
+                }
+            }
+        }
+
+        function onPointerUp(e) {
+            if (dragState.longPressTimer) {
+                clearTimeout(dragState.longPressTimer);
+                dragState.longPressTimer = null;
+            }
+
+            if (!dragState.active) {
+                // Wasn't a drag - could be a tap on handle, do nothing special
+                resetDragState();
+                return;
+            }
+
+            const pos = getPointerPos(e);
+            completeDrop(pos.x, pos.y);
+        }
+
+        function completeDrop(x, y) {
+            if (!dragState.placeholder || !dragState.element) {
+                cancelDrag();
+                return;
+            }
+
+            if (dragState.type === 'scene') {
+                completeSceneDrop();
+            } else if (dragState.type === 'chapter') {
+                completeChapterDrop();
             }
 
             // Clean up
-            const dragVisual = document.getElementById('drag-visual');
-            if (dragVisual) {
-                dragVisual.remove();
-            }
-            
-            draggedElement.classList.remove('dragging');
-            draggedElement.style.position = '';
-            draggedElement.style.left = '';
-            draggedElement.style.top = '';
-            draggedElement.style.zIndex = '';
-            draggedElement.style.opacity = ''; // Reset opacity
-            
-            removeDropZoneHighlights();
-            
-            isDragging = false;
-            draggedElement = null;
-            draggedElementType = null;
-        }
+            if (dragState.ghost) dragState.ghost.remove();
+            if (dragState.placeholder) dragState.placeholder.remove();
+            if (dragState.element) dragState.element.style.display = '';
+            dragState.element = null;
 
-        function highlightDropZones(x, y) {
-            removeDropZoneHighlights();
-            
-            if (draggedElementType === 'scene') {
-                // Highlight scene insertion points
-                document.querySelectorAll('.scenes-container').forEach(container => {
-                    const rect = container.getBoundingClientRect();
-                    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-                        container.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
-                        container.style.border = '2px dashed rgba(16, 185, 129, 0.5)';
-                        
-                        // Show insertion line
-                        const sceneCards = container.querySelectorAll('.scene-card:not(.dragging)');
-                        let insertAfter = null;
-                        
-                        for (let i = 0; i < sceneCards.length; i++) {
-                            const card = sceneCards[i];
-                            const cardRect = card.getBoundingClientRect();
-                            
-                            if (y < cardRect.top + cardRect.height / 2) {
-                                // Insert before this card
-                                showInsertionLine(card, 'before');
-                                break;
-                            } else if (i === sceneCards.length - 1) {
-                                // Insert after last card
-                                showInsertionLine(card, 'after');
-                            }
-                        }
-                        
-                        // If no cards, show insertion at container
-                        if (sceneCards.length === 0) {
-                            showInsertionLine(container, 'inside');
-                        }
-                    }
-                });
-            } else if (draggedElementType === 'chapter') {
-                // Highlight chapter insertion points
-                const chapterCards = document.querySelectorAll('.chapter-mgmt-card:not(.dragging)');
-                
-                for (let i = 0; i < chapterCards.length; i++) {
-                    const card = chapterCards[i];
-                    const rect = card.getBoundingClientRect();
-                    
-                    if (y < rect.top + rect.height / 2) {
-                        showInsertionLine(card, 'before');
-                        break;
-                    } else if (i === chapterCards.length - 1) {
-                        showInsertionLine(card, 'after');
-                    }
-                }
-            }
-        }
-
-        function showInsertionLine(element, position) {
-            const line = document.createElement('div');
-            line.className = 'insertion-line';
-            line.style.cssText = `
-                position: absolute;
-                left: 0;
-                right: 0;
-                height: 3px;
-                background: linear-gradient(90deg, #10b981, #3b82f6);
-                border-radius: 2px;
-                z-index: 1500;
-                box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
-            `;
-            
-            const rect = element.getBoundingClientRect();
-            
-            if (position === 'before') {
-                line.style.top = rect.top - 2 + window.scrollY + 'px';
-            } else if (position === 'after') {
-                line.style.top = rect.bottom - 1 + window.scrollY + 'px';
-            } else if (position === 'inside') {
-                line.style.top = rect.top + rect.height/2 + window.scrollY + 'px';
-            }
-            
-            document.body.appendChild(line);
-        }
-
-        function removeDropZoneHighlights() {
-            document.querySelectorAll('.scenes-container').forEach(container => {
-                container.style.border = '';
-                container.style.backgroundColor = '';
-            });
-            
-            document.querySelectorAll('.chapter-mgmt-card').forEach(card => {
-                card.style.borderColor = '';
-                card.style.backgroundColor = '';
-            });
-            
-            // Remove insertion lines
-            document.querySelectorAll('.insertion-line').forEach(line => {
-                line.remove();
-            });
-        }
-
-        function handleSceneDrop(dropTarget, x, y) {
-            if (!dropTarget) return;
-            
-            const sceneId = parseInt(draggedElement.dataset.sceneId);
-            const scene = findScene(sceneId);
-            if (!scene) return;
-
-            // Find the target chapter and position
-            const targetChapterContainer = dropTarget.closest('.scenes-container');
-            if (!targetChapterContainer) return;
-            
-            const targetChapterId = parseInt(targetChapterContainer.dataset.chapterId);
-            const targetChapter = chapters.find(c => c.id === targetChapterId);
-            if (!targetChapter) return;
-
-            // Remove scene from current chapter
-            const currentChapter = chapters.find(c => c.id === scene.chapterId);
-            if (currentChapter) {
-                currentChapter.scenes = currentChapter.scenes.filter(s => s.id !== sceneId);
-            }
-
-            // Determine insertion position
-            let insertIndex = targetChapter.scenes.length;
-            const sceneCards = targetChapterContainer.querySelectorAll('.scene-card:not(.dragging)');
-            
-            for (let i = 0; i < sceneCards.length; i++) {
-                const card = sceneCards[i];
-                const rect = card.getBoundingClientRect();
-                
-                if (y < rect.top + rect.height / 2) {
-                    insertIndex = i;
-                    break;
-                }
-            }
-
-            // Update scene's chapter ID and insert at correct position
-            scene.chapterId = targetChapterId;
-            targetChapter.scenes.splice(insertIndex, 0, scene);
-            
-            saveToStorage(); // Auto-save
+            resetDragState();
+            saveToStorage();
             renderCurrentTab();
         }
 
-        function handleChapterDrop(dropTarget, x, y) {
-            if (!dropTarget) return;
-            
-            const draggedChapterId = parseInt(draggedElement.dataset.chapterId);
-            const draggedChapterIndex = chapters.findIndex(c => c.id === draggedChapterId);
-            if (draggedChapterIndex === -1) return;
+        function completeSceneDrop() {
+            const placeholder = dragState.placeholder;
+            const container = placeholder.closest('.scenes-container');
+            if (!container) return;
 
-            // Find all chapter cards and determine insertion position
-            const chapterCards = document.querySelectorAll('.chapter-mgmt-card:not(.dragging)');
-            let insertIndex = chapters.length - 1; // Default to end
+            const targetChapterId = parseInt(container.dataset.chapterId);
+            const scene = findScene(dragState.sceneId);
+            if (!scene) return;
 
-            for (let i = 0; i < chapterCards.length; i++) {
-                const card = chapterCards[i];
-                const rect = card.getBoundingClientRect();
-                
-                if (y < rect.top + rect.height / 2) {
-                    const cardChapterId = parseInt(card.dataset.chapterId);
-                    insertIndex = chapters.findIndex(c => c.id === cardChapterId);
-                    break;
-                }
+            // Remove scene from its current chapter
+            const sourceChapter = chapters.find(c => c.scenes.some(s => s.id === dragState.sceneId));
+            if (sourceChapter) {
+                sourceChapter.scenes = sourceChapter.scenes.filter(s => s.id !== dragState.sceneId);
             }
 
-            // Adjust insert index if dragging from above
-            if (draggedChapterIndex < insertIndex) {
-                insertIndex--;
+            // Find insert index in target chapter
+            const targetChapter = chapters.find(c => c.id === targetChapterId);
+            if (!targetChapter) return;
+
+            // Count visible scene-cards before placeholder to determine index
+            const siblings = Array.from(container.children);
+            let insertIndex = 0;
+            for (const el of siblings) {
+                if (el === placeholder) break;
+                if (el.classList && el.classList.contains('scene-card')) insertIndex++;
             }
 
-            // Only reorder if position actually changed
-            if (insertIndex !== draggedChapterIndex) {
-                const draggedChapter = chapters.splice(draggedChapterIndex, 1)[0];
-                chapters.splice(insertIndex, 0, draggedChapter);
-                saveToStorage(); // Auto-save
-                renderCurrentTab();
+            scene.chapterId = targetChapterId;
+            targetChapter.scenes.splice(insertIndex, 0, scene);
+        }
+
+        function completeChapterDrop() {
+            const placeholder = dragState.placeholder;
+            const container = document.getElementById('chapters-container');
+            if (!container) return;
+
+            const draggedChapterId = dragState.chapterId;
+            const draggedIdx = chapters.findIndex(c => c.id === draggedChapterId);
+            if (draggedIdx === -1) return;
+
+            // Count visible chapter-mgmt-cards before placeholder
+            const siblings = Array.from(container.children);
+            let insertIndex = 0;
+            for (const el of siblings) {
+                if (el === placeholder) break;
+                if (el.classList && el.classList.contains('chapter-mgmt-card')) insertIndex++;
+            }
+
+            if (insertIndex !== draggedIdx) {
+                const chapter = chapters.splice(draggedIdx, 1)[0];
+                // Adjust insert index if we removed from before
+                if (draggedIdx < insertIndex) insertIndex--;
+                chapters.splice(insertIndex, 0, chapter);
             }
         }
 
-        // Rendering functions
+        function cancelDrag() {
+            if (dragState.ghost) dragState.ghost.remove();
+            if (dragState.placeholder) dragState.placeholder.remove();
+            if (dragState.element) {
+                dragState.element.style.display = '';
+                dragState.element.classList.remove('dragging');
+            }
+            resetDragState();
+        }
+
+        function resetDragState() {
+            dragState.active = false;
+            dragState.element = null;
+            dragState.type = null;
+            dragState.ghost = null;
+            dragState.placeholder = null;
+            dragState.hasMoved = false;
+            dragState.sceneId = null;
+            dragState.chapterId = null;
+            dragState.sourceChapterId = null;
+            if (dragState.longPressTimer) {
+                clearTimeout(dragState.longPressTimer);
+                dragState.longPressTimer = null;
+            }
+        }
+
+        // ===== CHARACTER & SYMBOL PICKERS =====
+        function getKnownCharacters() {
+            const names = new Set();
+            // From scenes
+            chapters.forEach(ch => {
+                ch.scenes.forEach(sc => {
+                    if (sc.characters) {
+                        sc.characters.split(',').forEach(c => {
+                            const n = c.trim();
+                            if (n) names.add(n);
+                        });
+                    }
+                });
+            });
+            // From character profiles
+            Object.keys(characters).forEach(n => names.add(n));
+            return Array.from(names).sort();
+        }
+
+        function getKnownSymbols() {
+            const names = new Set();
+            // From scenes
+            chapters.forEach(ch => {
+                ch.scenes.forEach(sc => {
+                    if (sc.symbols) {
+                        sc.symbols.split(',').forEach(s => {
+                            const n = s.trim();
+                            if (n) names.add(n);
+                        });
+                    }
+                });
+            });
+            // From symbol entries
+            symbols.forEach(s => names.add(s.title));
+            return Array.from(names).sort();
+        }
+
+        function getCurrentFieldItems(fieldId) {
+            const val = document.getElementById(fieldId).value;
+            return val.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        function toggleCharacterPicker() {
+            const picker = document.getElementById('character-picker');
+            if (picker.classList.contains('show')) {
+                picker.classList.remove('show');
+                return;
+            }
+
+            const known = getKnownCharacters();
+            const current = getCurrentFieldItems('scene-characters');
+
+            if (known.length === 0) {
+                picker.innerHTML = '<div class="picker-empty">No characters found yet. Type names in the field above.</div>';
+            } else {
+                picker.innerHTML = known.map(name => {
+                    const selected = current.includes(name);
+                    return `
+                        <div class="picker-item ${selected ? 'selected' : ''}" onclick="togglePickerItem('scene-characters', '${name.replace(/'/g, "\\'")}', this)">
+                            <div class="picker-item-check">${selected ? '✓' : ''}</div>
+                            <span>${name}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+            picker.classList.add('show');
+        }
+
+        function toggleSymbolPicker() {
+            const picker = document.getElementById('symbol-picker');
+            if (picker.classList.contains('show')) {
+                picker.classList.remove('show');
+                return;
+            }
+
+            const known = getKnownSymbols();
+            const current = getCurrentFieldItems('scene-symbols');
+
+            if (known.length === 0) {
+                picker.innerHTML = '<div class="picker-empty">No symbols found yet. Type names in the field above or add symbols in the Symbols tab.</div>';
+            } else {
+                picker.innerHTML = known.map(name => {
+                    const selected = current.includes(name);
+                    return `
+                        <div class="picker-item ${selected ? 'selected' : ''}" onclick="togglePickerItem('scene-symbols', '${name.replace(/'/g, "\\'")}', this)">
+                            <div class="picker-item-check">${selected ? '✓' : ''}</div>
+                            <span>${name}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+            picker.classList.add('show');
+        }
+
+        function togglePickerItem(fieldId, name, itemEl) {
+            const input = document.getElementById(fieldId);
+            let items = input.value.split(',').map(s => s.trim()).filter(Boolean);
+
+            const idx = items.indexOf(name);
+            if (idx >= 0) {
+                items.splice(idx, 1);
+                itemEl.classList.remove('selected');
+                itemEl.querySelector('.picker-item-check').textContent = '';
+            } else {
+                items.push(name);
+                itemEl.classList.add('selected');
+                itemEl.querySelector('.picker-item-check').textContent = '✓';
+            }
+
+            input.value = items.join(', ');
+        }
+
+        // Close pickers when clicking elsewhere
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#character-picker') && !e.target.closest('.picker-btn')) {
+                const cp = document.getElementById('character-picker');
+                if (cp) cp.classList.remove('show');
+            }
+            if (!e.target.closest('#symbol-picker') && !e.target.closest('.picker-btn')) {
+                const sp = document.getElementById('symbol-picker');
+                if (sp) sp.classList.remove('show');
+            }
+        });
+
+        // ===== RENDERING =====
         function renderCurrentTab() {
             switch(currentTab) {
-                case 'scenes':
-                    renderScenes();
-                    break;
-                case 'chapters':
-                    renderChapterManagement();
-                    break;
-                case 'characters':
-                    renderCharacters();
-                    break;
-                case 'emotion':
-                    renderEmotionChart();
-                    break;
-                case 'symbols':
-                    renderSymbols();
-                    break;
+                case 'scenes': renderScenes(); break;
+                case 'chapters': renderChapterManagement(); break;
+                case 'characters': renderCharacters(); break;
+                case 'emotion': renderEmotionChart(); break;
+                case 'symbols': renderSymbols(); break;
             }
         }
 
@@ -1286,8 +1525,8 @@
                     </div>
                     <div class="scenes-container" data-chapter-id="${chapter.id}">
                         ${chapter.scenes.map(scene => `
-                            <div class="scene-card" data-scene-id="${scene.id}">
-                                <div class="drag-handle">⋮⋮</div>
+                            <div class="scene-card" data-scene-id="${scene.id}" onclick="handleSceneClick(event, ${scene.id})">
+                                <div class="drag-handle" title="Drag to reorder">⋮⋮</div>
                                 <div class="scene-header">
                                     <div class="scene-title">${scene.title}</div>
                                     <div>
@@ -1308,9 +1547,17 @@
             `).join('');
         }
 
+        function handleSceneClick(e, sceneId) {
+            // Don't open editor if clicking drag handle
+            if (e.target.closest('.drag-handle')) return;
+            // Don't open editor if we just finished dragging
+            if (dragState.hasMoved) return;
+            editScene(sceneId);
+        }
+
         function renderChapterManagement() {
             const container = document.getElementById('chapters-container');
-            
+
             if (chapters.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -1322,47 +1569,47 @@
                 return;
             }
 
-            container.innerHTML = chapters.map(chapter => {
-                const sceneTypes = chapter.scenes.reduce((acc, scene) => {
-                    acc[scene.type] = (acc[scene.type] || 0) + 1;
-                    return acc;
-                }, {});
-
-                return `
-                    <div class="chapter-mgmt-card" data-chapter-id="${chapter.id}">
-                        <div class="drag-handle">⋮⋮</div>
-                        <div class="chapter-mgmt-header" onclick="toggleChapterScenes(${chapter.id})">
-                            <div class="chapter-mgmt-title">${chapter.title}</div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <div class="chapter-stats" style="font-size: 0.875rem; color: #94a3b8;">${chapter.scenes.length} scenes</div>
-                                <div class="collapse-arrow" id="arrow-${chapter.id}">▼</div>
-                            </div>
-                        </div>
-                        <div class="chapter-scenes-list" id="scenes-${chapter.id}" style="display: block;">
-                            ${chapter.scenes.length > 0 ? chapter.scenes.map(scene => `
-                                <div class="scene-preview">
-                                    <div class="scene-preview-header">
-                                        <div class="scene-preview-title">${scene.title}</div>
-                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                            <span class="scene-type-small">${scene.type}</span>
-                                            <span class="scene-emotion" style="background: ${getEmotionColor(scene.emotion)}"></span>
-                                        </div>
-                                    </div>
-                                    <div class="scene-preview-meta">
-                                        ${scene.characters ? `👥 ${scene.characters}` : 'No characters'}
-                                    </div>
-                                </div>
-                            `).join('') : '<div class="no-scenes">No scenes yet</div>'}
+            container.innerHTML = chapters.map(chapter => `
+                <div class="chapter-mgmt-card" data-chapter-id="${chapter.id}" onclick="handleChapterCardClick(event, ${chapter.id})">
+                    <div class="drag-handle" title="Drag to reorder">⋮⋮</div>
+                    <div class="chapter-mgmt-header" onclick="event.stopPropagation(); toggleChapterScenes(${chapter.id})">
+                        <div class="chapter-mgmt-title">${chapter.title}</div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div class="chapter-stats" style="font-size: 0.875rem; color: #94a3b8;">${chapter.scenes.length} scenes</div>
+                            <div class="collapse-arrow" id="arrow-${chapter.id}">▼</div>
                         </div>
                     </div>
-                `;
-            }).join('');
+                    <div class="chapter-scenes-list" id="scenes-${chapter.id}" style="display: block;">
+                        ${chapter.scenes.length > 0 ? chapter.scenes.map(scene => `
+                            <div class="scene-preview">
+                                <div class="scene-preview-header">
+                                    <div class="scene-preview-title">${scene.title}</div>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span class="scene-type-small">${scene.type}</span>
+                                        <span class="scene-emotion" style="background: ${getEmotionColor(scene.emotion)}"></span>
+                                    </div>
+                                </div>
+                                <div class="scene-preview-meta">
+                                    ${scene.characters ? `👥 ${scene.characters}` : 'No characters'}
+                                </div>
+                            </div>
+                        `).join('') : '<div class="no-scenes">No scenes yet</div>'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function handleChapterCardClick(e, chapterId) {
+            if (e.target.closest('.drag-handle')) return;
+            if (e.target.closest('.chapter-mgmt-header')) return;
+            if (dragState.hasMoved) return;
+            editChapter(chapterId);
         }
 
         function renderCharacters() {
             const container = document.getElementById('characters-container');
             const allCharacters = getAllCharacters();
-            
+
             if (allCharacters.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -1377,9 +1624,8 @@
             container.innerHTML = allCharacters.map(char => {
                 const appearances = getCharacterAppearances(char.name);
                 const hasProfile = characters[char.name];
-                
                 return `
-                    <div class="character-card" onclick="editCharacter('${char.name}')">
+                    <div class="character-card" onclick="editCharacter('${char.name.replace(/'/g, "\\'")}')">
                         <div class="character-name">
                             ${char.name} ${hasProfile ? '✨' : ''}
                         </div>
@@ -1395,11 +1641,9 @@
         function renderEmotionChart() {
             const canvas = document.getElementById('emotion-canvas');
             const ctx = canvas.getContext('2d');
-            
-            // Set canvas size
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
-            
+
             const allScenes = getAllScenesInOrder();
             if (allScenes.length === 0) {
                 ctx.fillStyle = '#94a3b8';
@@ -1412,18 +1656,14 @@
             const padding = 40;
             const chartWidth = canvas.width - padding * 2;
             const chartHeight = canvas.height - padding * 2;
-            
+
             // Draw axes
             ctx.strokeStyle = '#475569';
             ctx.lineWidth = 1;
-            
-            // X-axis
             ctx.beginPath();
             ctx.moveTo(padding, canvas.height - padding);
             ctx.lineTo(canvas.width - padding, canvas.height - padding);
             ctx.stroke();
-            
-            // Y-axis
             ctx.beginPath();
             ctx.moveTo(padding, padding);
             ctx.lineTo(padding, canvas.height - padding);
@@ -1434,16 +1674,11 @@
                 ctx.beginPath();
                 ctx.strokeStyle = '#3b82f6';
                 ctx.lineWidth = 3;
-                
                 allScenes.forEach((scene, index) => {
                     const x = padding + (index / (allScenes.length - 1)) * chartWidth;
                     const y = canvas.height - padding - ((scene.emotion + 5) / 10) * chartHeight;
-                    
-                    if (index === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
+                    if (index === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
                 });
                 ctx.stroke();
             }
@@ -1452,12 +1687,10 @@
             allScenes.forEach((scene, index) => {
                 const x = padding + (index / Math.max(1, allScenes.length - 1)) * chartWidth;
                 const y = canvas.height - padding - ((scene.emotion + 5) / 10) * chartHeight;
-                
                 ctx.fillStyle = getEmotionColor(scene.emotion);
                 ctx.beginPath();
                 ctx.arc(x, y, 6, 0, 2 * Math.PI);
                 ctx.fill();
-                
                 ctx.strokeStyle = '#1e293b';
                 ctx.lineWidth = 2;
                 ctx.stroke();
@@ -1467,20 +1700,16 @@
             ctx.fillStyle = '#94a3b8';
             ctx.font = '12px sans-serif';
             ctx.textAlign = 'right';
-            
             for (let i = -5; i <= 5; i += 5) {
                 const y = canvas.height - padding - ((i + 5) / 10) * chartHeight;
                 ctx.fillText(i.toString(), padding - 10, y + 4);
             }
 
             // Chapter boundaries
-            let currentChapterId = null;
             let sceneIndex = 0;
-            
             chapters.forEach(chapter => {
                 if (chapter.scenes.length > 0) {
                     const x = padding + (sceneIndex / Math.max(1, allScenes.length - 1)) * chartWidth;
-                    
                     ctx.strokeStyle = '#6366f1';
                     ctx.lineWidth = 1;
                     ctx.setLineDash([5, 5]);
@@ -1489,31 +1718,23 @@
                     ctx.lineTo(x, canvas.height - padding);
                     ctx.stroke();
                     ctx.setLineDash([]);
-                    
                     sceneIndex += chapter.scenes.length;
                 }
             });
 
-            // Render emotion stats
             renderEmotionStats(allScenes);
         }
 
         function renderEmotionStats(scenes) {
             const container = document.getElementById('emotion-stats');
-            if (scenes.length === 0) {
-                container.innerHTML = '';
-                return;
-            }
+            if (scenes.length === 0) { container.innerHTML = ''; return; }
 
-            const avgEmotion = scenes.reduce((sum, scene) => sum + scene.emotion, 0) / scenes.length;
+            const avgEmotion = scenes.reduce((sum, s) => sum + s.emotion, 0) / scenes.length;
             const emotionRange = Math.max(...scenes.map(s => s.emotion)) - Math.min(...scenes.map(s => s.emotion));
-            
             const chapterEmotions = chapters.map(chapter => {
-                const chapterScenes = chapter.scenes;
-                if (chapterScenes.length === 0) return { title: chapter.title, avg: 0 };
-                
-                const avg = chapterScenes.reduce((sum, scene) => sum + scene.emotion, 0) / chapterScenes.length;
-                return { title: chapter.title, avg: avg.toFixed(1) };
+                const cs = chapter.scenes;
+                if (cs.length === 0) return { title: chapter.title, avg: 0 };
+                return { title: chapter.title, avg: (cs.reduce((sum, s) => sum + s.emotion, 0) / cs.length).toFixed(1) };
             });
 
             container.innerHTML = `
@@ -1548,7 +1769,6 @@
 
         function renderSymbols() {
             const container = document.getElementById('symbols-container');
-            
             if (symbols.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -1573,7 +1793,7 @@
             `).join('');
         }
 
-        // Modal functions
+        // ===== MODAL FUNCTIONS =====
         function openModal(modalId) {
             document.getElementById(modalId).style.display = 'block';
         }
@@ -1584,12 +1804,16 @@
             currentEditingChapter = null;
             currentEditingCharacter = null;
             currentEditingSymbol = null;
+            // Close pickers
+            const cp = document.getElementById('character-picker');
+            const sp = document.getElementById('symbol-picker');
+            if (cp) cp.classList.remove('show');
+            if (sp) sp.classList.remove('show');
         }
 
-        // Scene functions
+        // ===== SCENE FUNCTIONS =====
         function addScene(chapterId) {
             currentEditingScene = null;
-            
             document.getElementById('scene-title').value = '';
             document.getElementById('scene-type').value = 'action';
             document.getElementById('scene-emotion').value = '0';
@@ -1599,9 +1823,7 @@
             document.getElementById('scene-characters').value = '';
             document.getElementById('scene-symbols').value = '';
             document.getElementById('scene-notes').value = '';
-            
             document.getElementById('delete-scene-btn').style.display = 'none';
-            
             document.getElementById('scene-form').dataset.chapterId = chapterId;
             openModal('scene-modal');
         }
@@ -1609,9 +1831,7 @@
         function editScene(sceneId) {
             const scene = findScene(sceneId);
             if (!scene) return;
-
             currentEditingScene = scene;
-            
             document.getElementById('scene-title').value = scene.title;
             document.getElementById('scene-type').value = scene.type;
             document.getElementById('scene-emotion').value = scene.emotion;
@@ -1621,15 +1841,12 @@
             document.getElementById('scene-characters').value = scene.characters;
             document.getElementById('scene-symbols').value = scene.symbols;
             document.getElementById('scene-notes').value = scene.notes;
-            
             document.getElementById('delete-scene-btn').style.display = 'block';
-            
             openModal('scene-modal');
         }
 
         function saveScene(e) {
             e.preventDefault();
-            
             const formData = {
                 title: document.getElementById('scene-title').value,
                 type: document.getElementById('scene-type').value,
@@ -1641,55 +1858,51 @@
             };
 
             if (currentEditingScene) {
-                // Update existing scene
                 Object.assign(currentEditingScene, formData);
             } else {
-                // Create new scene
                 const chapterId = parseInt(document.getElementById('scene-form').dataset.chapterId);
                 const chapter = chapters.find(c => c.id === chapterId);
                 if (chapter) {
-                    const newScene = {
-                        id: Date.now(),
-                        chapterId: chapterId,
-                        ...formData
-                    };
-                    chapter.scenes.push(newScene);
+                    chapter.scenes.push({ id: Date.now(), chapterId, ...formData });
                 }
             }
 
-            saveToStorage(); // Auto-save
+            saveToStorage();
             closeModal('scene-modal');
             renderCurrentTab();
         }
 
         function deleteScene() {
             if (!currentEditingScene) return;
-            
             if (confirm('Are you sure you want to delete this scene?')) {
                 const chapter = chapters.find(c => c.id === currentEditingScene.chapterId);
                 if (chapter) {
                     chapter.scenes = chapter.scenes.filter(s => s.id !== currentEditingScene.id);
                 }
-                saveToStorage(); // Auto-save
+                saveToStorage();
                 closeModal('scene-modal');
                 renderCurrentTab();
             }
         }
 
-        // Chapter functions
+        // ===== CHAPTER FUNCTIONS =====
         function addChapter() {
             currentEditingChapter = null;
-            
             document.getElementById('chapter-title').value = '';
             document.getElementById('delete-chapter-btn').style.display = 'none';
-            
             openModal('chapter-modal');
+        }
+
+        function toggleChapter(chapterId) {
+            const scenesContainer = document.querySelector(`.scenes-container[data-chapter-id="${chapterId}"]`);
+            if (scenesContainer) {
+                scenesContainer.style.display = scenesContainer.style.display === 'none' ? 'block' : 'none';
+            }
         }
 
         function toggleChapterScenes(chapterId) {
             const scenesList = document.getElementById(`scenes-${chapterId}`);
             const arrow = document.getElementById(`arrow-${chapterId}`);
-            
             if (scenesList.style.display === 'none') {
                 scenesList.style.display = 'block';
                 arrow.classList.remove('collapsed');
@@ -1702,88 +1915,65 @@
         function editChapter(chapterId) {
             const chapter = chapters.find(c => c.id === chapterId);
             if (!chapter) return;
-
             currentEditingChapter = chapter;
-            
             document.getElementById('chapter-title').value = chapter.title;
             document.getElementById('delete-chapter-btn').style.display = 'block';
-            
             openModal('chapter-modal');
         }
 
         function saveChapter(e) {
             e.preventDefault();
-            
             const title = document.getElementById('chapter-title').value;
-
             if (currentEditingChapter) {
-                // Update existing chapter
                 currentEditingChapter.title = title;
             } else {
-                // Create new chapter
-                const newChapter = {
-                    id: Date.now(),
-                    title: title,
-                    scenes: []
-                };
-                chapters.push(newChapter);
+                chapters.push({ id: Date.now(), title, scenes: [] });
             }
-
-            saveToStorage(); // Auto-save
+            saveToStorage();
             closeModal('chapter-modal');
             renderCurrentTab();
         }
 
         function deleteChapter() {
             if (!currentEditingChapter) return;
-            
             if (confirm('Are you sure you want to delete this chapter and all its scenes?')) {
                 chapters = chapters.filter(c => c.id !== currentEditingChapter.id);
-                saveToStorage(); // Auto-save
+                saveToStorage();
                 closeModal('chapter-modal');
                 renderCurrentTab();
             }
         }
 
-        // Character functions
+        // ===== CHARACTER FUNCTIONS =====
         function editCharacter(characterName) {
             currentEditingCharacter = characterName;
-            
             const character = characters[characterName] || { arc: '', appearance: '', notes: '' };
-            
             document.getElementById('character-name').value = characterName;
             document.getElementById('character-arc').value = character.arc;
             document.getElementById('character-appearance').value = character.appearance;
             document.getElementById('character-notes').value = character.notes;
-            
             openModal('character-modal');
         }
 
         function saveCharacter(e) {
             e.preventDefault();
-            
             const characterName = document.getElementById('character-name').value;
-            const characterData = {
+            characters[characterName] = {
                 arc: document.getElementById('character-arc').value,
                 appearance: document.getElementById('character-appearance').value,
                 notes: document.getElementById('character-notes').value
             };
-
-            characters[characterName] = characterData;
-            saveToStorage(); // Auto-save
-
+            saveToStorage();
             closeModal('character-modal');
             renderCurrentTab();
         }
 
-        // Symbol functions
+        // ===== SYMBOL FUNCTIONS =====
         function addSymbol() {
             currentEditingSymbol = null;
-            
             document.getElementById('symbol-title').value = '';
             document.getElementById('symbol-description').value = '';
             document.getElementById('delete-symbol-btn').style.display = 'none';
-            
             updateChapterCheckboxes([]);
             openModal('symbol-modal');
         }
@@ -1791,23 +1981,19 @@
         function editSymbol(symbolId) {
             const symbol = symbols.find(s => s.id === symbolId);
             if (!symbol) return;
-
             currentEditingSymbol = symbol;
-            
             document.getElementById('symbol-title').value = symbol.title;
             document.getElementById('symbol-description').value = symbol.description;
             document.getElementById('delete-symbol-btn').style.display = 'block';
-            
             updateChapterCheckboxes(symbol.connectedChapters);
             openModal('symbol-modal');
         }
 
         function updateChapterCheckboxes(connectedChapters = []) {
             const container = document.getElementById('chapter-checkboxes');
-            
             container.innerHTML = chapters.map(chapter => `
                 <div class="checkbox-item">
-                    <input type="checkbox" id="chapter-${chapter.id}" value="${chapter.id}" 
+                    <input type="checkbox" id="chapter-${chapter.id}" value="${chapter.id}"
                            ${connectedChapters.includes(chapter.id) ? 'checked' : ''}>
                     <label for="chapter-${chapter.id}" style="color: #cbd5e1;">${chapter.title}</label>
                 </div>
@@ -1816,43 +2002,33 @@
 
         function saveSymbol(e) {
             e.preventDefault();
-            
             const formData = {
                 title: document.getElementById('symbol-title').value,
                 description: document.getElementById('symbol-description').value,
                 connectedChapters: Array.from(document.querySelectorAll('#chapter-checkboxes input:checked'))
                     .map(input => parseInt(input.value))
             };
-
             if (currentEditingSymbol) {
-                // Update existing symbol
                 Object.assign(currentEditingSymbol, formData);
             } else {
-                // Create new symbol
-                const newSymbol = {
-                    id: Date.now(),
-                    ...formData
-                };
-                symbols.push(newSymbol);
+                symbols.push({ id: Date.now(), ...formData });
             }
-
-            saveToStorage(); // Auto-save
+            saveToStorage();
             closeModal('symbol-modal');
             renderCurrentTab();
         }
 
         function deleteSymbol() {
             if (!currentEditingSymbol) return;
-            
             if (confirm('Are you sure you want to delete this symbol?')) {
                 symbols = symbols.filter(s => s.id !== currentEditingSymbol.id);
-                saveToStorage(); // Auto-save
+                saveToStorage();
                 closeModal('symbol-modal');
                 renderCurrentTab();
             }
         }
 
-        // Utility functions
+        // ===== UTILITY FUNCTIONS =====
         function findScene(sceneId) {
             for (const chapter of chapters) {
                 const scene = chapter.scenes.find(s => s.id === sceneId);
@@ -1871,29 +2047,21 @@
 
         function getAllCharacters() {
             const characterCounts = {};
-            
             chapters.forEach(chapter => {
                 chapter.scenes.forEach(scene => {
                     if (scene.characters) {
                         scene.characters.split(',').forEach(char => {
                             const name = char.trim();
-                            if (name) {
-                                characterCounts[name] = (characterCounts[name] || 0) + 1;
-                            }
+                            if (name) characterCounts[name] = (characterCounts[name] || 0) + 1;
                         });
                     }
                 });
             });
-
-            return Object.keys(characterCounts).map(name => ({
-                name,
-                count: characterCounts[name]
-            }));
+            return Object.keys(characterCounts).map(name => ({ name, count: characterCounts[name] }));
         }
 
         function getCharacterAppearances(characterName) {
             const appearances = [];
-            
             chapters.forEach(chapter => {
                 chapter.scenes.forEach(scene => {
                     if (scene.characters && scene.characters.includes(characterName)) {
@@ -1901,13 +2069,11 @@
                     }
                 });
             });
-
             return appearances;
         }
 
         function getCharacterChapters(characterName) {
             const chapterIds = new Set();
-            
             chapters.forEach(chapter => {
                 chapter.scenes.forEach(scene => {
                     if (scene.characters && scene.characters.includes(characterName)) {
@@ -1915,42 +2081,34 @@
                     }
                 });
             });
-
             return Array.from(chapterIds);
         }
 
         function getUniqueCharacters(chapter) {
-            const characters = new Set();
-            
+            const chars = new Set();
             chapter.scenes.forEach(scene => {
                 if (scene.characters) {
-                    scene.characters.split(',').forEach(char => {
-                        const name = char.trim();
-                        if (name) characters.add(name);
+                    scene.characters.split(',').forEach(c => {
+                        const name = c.trim();
+                        if (name) chars.add(name);
                     });
                 }
             });
-
-            return Array.from(characters);
+            return Array.from(chars);
         }
 
         function getAllScenesInOrder() {
             const allScenes = [];
-            
             chapters.forEach(chapter => {
-                chapter.scenes.forEach(scene => {
-                    allScenes.push(scene);
-                });
+                chapter.scenes.forEach(scene => allScenes.push(scene));
             });
-
             return allScenes;
         }
 
-        // Tools functions
+        // ===== TOOLS =====
         function toggleTools() {
             const menu = document.getElementById('tools-menu');
             const arrow = document.getElementById('tools-arrow');
-            
             if (menu.classList.contains('show')) {
                 menu.classList.remove('show');
                 arrow.textContent = '▼';
@@ -1961,13 +2119,7 @@
         }
 
         function exportData() {
-            const data = {
-                chapters,
-                characters,
-                symbols,
-                timestamp: new Date().toISOString()
-            };
-
+            const data = { chapters, characters, symbols, timestamp: new Date().toISOString() };
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1977,7 +2129,6 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            
             toggleTools();
         }
 
@@ -1989,23 +2140,14 @@
         function handleImport(event) {
             const file = event.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
                     const data = JSON.parse(e.target.result);
-                    
-                    if (data.chapters && Array.isArray(data.chapters)) {
-                        chapters = data.chapters;
-                    }
-                    if (data.characters && typeof data.characters === 'object') {
-                        characters = data.characters;
-                    }
-                    if (data.symbols && Array.isArray(data.symbols)) {
-                        symbols = data.symbols;
-                    }
-                    
-                    saveToStorage(); // Auto-save imported data
+                    if (data.chapters && Array.isArray(data.chapters)) chapters = data.chapters;
+                    if (data.characters && typeof data.characters === 'object') characters = data.characters;
+                    if (data.symbols && Array.isArray(data.symbols)) symbols = data.symbols;
+                    saveToStorage();
                     renderCurrentTab();
                     alert('Data imported successfully!');
                 } catch (error) {
@@ -2013,8 +2155,6 @@
                 }
             };
             reader.readAsText(file);
-            
-            // Reset file input
             event.target.value = '';
         }
 
@@ -2024,28 +2164,21 @@
                     chapters = [];
                     characters = {};
                     symbols = [];
-                    saveToStorage(); // Auto-save cleared state
+                    saveToStorage();
                     renderCurrentTab();
                     toggleTools();
                 }
             }
         }
 
-        // Storage functions
+        // ===== STORAGE =====
         function saveToStorage() {
             try {
-                const data = {
-                    chapters,
-                    characters,
-                    symbols,
-                    timestamp: new Date().toISOString(),
-                    version: '1.0'
-                };
+                const data = { chapters, characters, symbols, timestamp: new Date().toISOString(), version: '1.0' };
                 localStorage.setItem('novel-storyboard-data', JSON.stringify(data));
                 showSaveIndicator();
             } catch (error) {
                 console.warn('Could not save to localStorage:', error);
-                // Fallback - still works without localStorage
             }
         }
 
@@ -2054,88 +2187,56 @@
                 const savedData = localStorage.getItem('novel-storyboard-data');
                 if (savedData) {
                     const data = JSON.parse(savedData);
-                    
-                    if (data.chapters && Array.isArray(data.chapters)) {
-                        chapters = data.chapters;
-                    }
-                    if (data.characters && typeof data.characters === 'object') {
-                        characters = data.characters;
-                    }
-                    if (data.symbols && Array.isArray(data.symbols)) {
-                        symbols = data.symbols;
-                    }
-                    
-                    console.log('Data loaded from localStorage');
+                    if (data.chapters && Array.isArray(data.chapters)) chapters = data.chapters;
+                    if (data.characters && typeof data.characters === 'object') characters = data.characters;
+                    if (data.symbols && Array.isArray(data.symbols)) symbols = data.symbols;
                     return true;
                 }
             } catch (error) {
                 console.warn('Could not load from localStorage:', error);
             }
-            
-            // Load sample data if no saved data exists
             loadSampleData();
             return false;
         }
 
         function showSaveIndicator() {
-            // Create a subtle save indicator
             let indicator = document.getElementById('save-indicator');
             if (!indicator) {
                 indicator = document.createElement('div');
                 indicator.id = 'save-indicator';
                 indicator.style.cssText = `
-                    position: fixed;
-                    top: 20px;
-                    right: 20px;
-                    background: rgba(16, 185, 129, 0.9);
-                    color: white;
-                    padding: 0.5rem 1rem;
-                    border-radius: 6px;
-                    font-size: 0.875rem;
-                    z-index: 2000;
-                    opacity: 0;
-                    transition: opacity 0.3s ease;
-                    pointer-events: none;
+                    position: fixed; top: 20px; right: 20px;
+                    background: rgba(16, 185, 129, 0.9); color: white;
+                    padding: 0.5rem 1rem; border-radius: 6px;
+                    font-size: 0.875rem; z-index: 2000;
+                    opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
                 `;
                 indicator.textContent = '✓ Saved';
                 document.body.appendChild(indicator);
             }
-            
             indicator.style.opacity = '1';
-            setTimeout(() => {
-                indicator.style.opacity = '0';
-            }, 1500);
+            setTimeout(() => { indicator.style.opacity = '0'; }, 1500);
         }
 
         function showStorageStatus() {
             try {
                 localStorage.setItem('test', 'test');
                 localStorage.removeItem('test');
-                
-                // Add storage status to header
                 const header = document.querySelector('.app-header');
                 const statusDiv = document.createElement('div');
-                statusDiv.style.cssText = `
-                    font-size: 0.75rem;
-                    color: #10b981;
-                    margin-top: 0.25rem;
-                `;
+                statusDiv.style.cssText = 'font-size: 0.75rem; color: #10b981; margin-top: 0.25rem;';
                 statusDiv.textContent = '✓ Auto-save enabled';
                 header.appendChild(statusDiv);
             } catch (error) {
-                // Add warning if localStorage not available
                 const header = document.querySelector('.app-header');
                 const statusDiv = document.createElement('div');
-                statusDiv.style.cssText = `
-                    font-size: 0.75rem;
-                    color: #f59e0b;
-                    margin-top: 0.25rem;
-                `;
+                statusDiv.style.cssText = 'font-size: 0.75rem; color: #f59e0b; margin-top: 0.25rem;';
                 statusDiv.textContent = '⚠ Auto-save not available - use Export/Import';
                 header.appendChild(statusDiv);
             }
         }
-        // Sample data for demonstration
+
+        // ===== SAMPLE DATA =====
         function loadSampleData() {
             chapters = [
                 {
@@ -2143,26 +2244,16 @@
                     title: "The Beginning",
                     scenes: [
                         {
-                            id: 1,
-                            title: "Opening Scene",
-                            type: "description",
-                            emotion: -2,
+                            id: 1, title: "Opening Scene", type: "description", emotion: -2,
                             description: "A dark and stormy night sets the mood for our story.",
-                            characters: "Protagonist, Mysterious Figure",
-                            symbols: "Storm, Darkness",
-                            notes: "Establish tone and atmosphere",
-                            chapterId: 1
+                            characters: "Protagonist, Mysterious Figure", symbols: "Storm, Darkness",
+                            notes: "Establish tone and atmosphere", chapterId: 1
                         },
                         {
-                            id: 2,
-                            title: "The Call",
-                            type: "dialogue",
-                            emotion: 1,
+                            id: 2, title: "The Call", type: "dialogue", emotion: 1,
                             description: "The protagonist receives an unexpected phone call that changes everything.",
-                            characters: "Protagonist, Voice on Phone",
-                            symbols: "Phone",
-                            notes: "Inciting incident",
-                            chapterId: 1
+                            characters: "Protagonist, Voice on Phone", symbols: "Phone",
+                            notes: "Inciting incident", chapterId: 1
                         }
                     ]
                 },
@@ -2171,15 +2262,10 @@
                     title: "The Journey",
                     scenes: [
                         {
-                            id: 3,
-                            title: "Departure",
-                            type: "action",
-                            emotion: 3,
+                            id: 3, title: "Departure", type: "action", emotion: 3,
                             description: "The protagonist leaves home and begins their adventure.",
-                            characters: "Protagonist",
-                            symbols: "Journey, Door",
-                            notes: "First plot point",
-                            chapterId: 2
+                            characters: "Protagonist", symbols: "Journey, Door",
+                            notes: "First plot point", chapterId: 2
                         }
                     ]
                 }
@@ -2195,15 +2281,14 @@
 
             symbols = [
                 {
-                    id: 1,
-                    title: "The Storm",
+                    id: 1, title: "The Storm",
                     description: "Represents internal conflict and chaos",
                     connectedChapters: [1]
                 }
             ];
         }
 
-        // Initialize the app when the page loads
+        // Initialize
         init();
     </script>
 </body>
