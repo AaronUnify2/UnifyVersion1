@@ -1487,6 +1487,133 @@
         ground.position.y = -0.5;
         scene.add(ground);
 
+        // ============================================
+        // SKY DOME — stars + stationary moon
+        // ============================================
+        const skyGroup = new THREE.Group();
+        scene.add(skyGroup);
+        
+        // Create sky canvas texture
+        const skyCanvas = document.createElement('canvas');
+        skyCanvas.width = 1024;
+        skyCanvas.height = 512;
+        const sctx = skyCanvas.getContext('2d');
+        
+        // Dark night sky gradient
+        const skyGrad = sctx.createLinearGradient(0, 0, 0, 512);
+        skyGrad.addColorStop(0, '#050510');
+        skyGrad.addColorStop(0.3, '#080818');
+        skyGrad.addColorStop(0.6, '#0c0c22');
+        skyGrad.addColorStop(0.85, '#111130');
+        skyGrad.addColorStop(1, '#1a1a2e');   // matches fog colour at horizon
+        sctx.fillStyle = skyGrad;
+        sctx.fillRect(0, 0, 1024, 512);
+        
+        // Subtle milky-way band (diagonal glow)
+        sctx.save();
+        sctx.translate(512, 200);
+        sctx.rotate(-0.35);
+        for (let i = 0; i < 5; i++) {
+            sctx.fillStyle = `rgba(160, 170, 210, ${0.018 - i * 0.003})`;
+            sctx.beginPath();
+            sctx.ellipse(0, 0, 520, 22 + i * 14, 0, 0, Math.PI * 2);
+            sctx.fill();
+        }
+        // Dense cluster stars along milky way
+        for (let i = 0; i < 350; i++) {
+            const a = (Math.random() - 0.5) * 1040;
+            const b = (Math.random() - 0.5) * 40;
+            const br = 0.15 + Math.random() * 0.45;
+            sctx.fillStyle = `rgba(200, 210, 240, ${br})`;
+            sctx.fillRect(a, b, 1, 1);
+        }
+        sctx.restore();
+        
+        // Dense dim starfield (tiny white dots everywhere above horizon)
+        for (let i = 0; i < 1800; i++) {
+            const x = Math.random() * 1024;
+            const y = Math.random() * 420;           // stop before horizon band
+            const brightness = 0.12 + Math.random() * 0.55;
+            const sz = Math.random() < 0.9 ? 1 : 1.5;
+            sctx.fillStyle = `rgba(255, 255, 255, ${brightness})`;
+            sctx.fillRect(x, y, sz, sz);
+        }
+        
+        // Medium-brightness stars
+        for (let i = 0; i < 120; i++) {
+            const x = Math.random() * 1024;
+            const y = Math.random() * 380;
+            sctx.fillStyle = `rgba(255, 255, 255, ${0.5 + Math.random() * 0.5})`;
+            sctx.fillRect(x, y, 2, 2);
+        }
+        
+        // Bright tinted stars (warm/cool colours for realism)
+        const starColors = [
+            'rgba(255, 245, 200,',   // warm white
+            'rgba(200, 220, 255,',   // cool blue
+            'rgba(255, 210, 160,',   // orange
+            'rgba(180, 200, 255,',   // blue-white
+            'rgba(255, 230, 180,',   // yellow
+        ];
+        for (let i = 0; i < 40; i++) {
+            const x = Math.random() * 1024;
+            const y = Math.random() * 350;
+            const col = starColors[Math.floor(Math.random() * starColors.length)];
+            // Star core
+            sctx.fillStyle = col + '0.9)';
+            sctx.fillRect(x, y, 2, 2);
+            // Tiny glow halo
+            sctx.fillStyle = col + '0.15)';
+            sctx.beginPath();
+            sctx.arc(x + 1, y + 1, 3, 0, Math.PI * 2);
+            sctx.fill();
+        }
+        
+        // Moon — painted onto the sky canvas for a fixed orientation point
+        // Positioned upper-right area so the player can use it as a compass
+        const mx = 780, my = 110, mr = 22;
+        // Moon glow (outer)
+        sctx.fillStyle = 'rgba(220, 220, 200, 0.04)';
+        sctx.beginPath(); sctx.arc(mx, my, mr + 30, 0, Math.PI * 2); sctx.fill();
+        sctx.fillStyle = 'rgba(220, 220, 200, 0.08)';
+        sctx.beginPath(); sctx.arc(mx, my, mr + 15, 0, Math.PI * 2); sctx.fill();
+        // Moon disc
+        sctx.fillStyle = '#e8e8d0';
+        sctx.beginPath(); sctx.arc(mx, my, mr, 0, Math.PI * 2); sctx.fill();
+        sctx.fillStyle = '#ddddc8';
+        sctx.beginPath(); sctx.arc(mx, my, mr - 1, 0, Math.PI * 2); sctx.fill();
+        // Craters (dark spots)
+        sctx.fillStyle = '#c5c5b0';
+        sctx.beginPath(); sctx.arc(mx - 7, my - 5, 5, 0, Math.PI * 2); sctx.fill();
+        sctx.beginPath(); sctx.arc(mx + 6, my + 7, 3.5, 0, Math.PI * 2); sctx.fill();
+        sctx.beginPath(); sctx.arc(mx + 3, my - 9, 3, 0, Math.PI * 2); sctx.fill();
+        sctx.beginPath(); sctx.arc(mx - 5, my + 8, 2.5, 0, Math.PI * 2); sctx.fill();
+        sctx.beginPath(); sctx.arc(mx + 10, my - 3, 2, 0, Math.PI * 2); sctx.fill();
+        // Crater inner shadows (adds depth)
+        sctx.fillStyle = '#b8b8a0';
+        sctx.beginPath(); sctx.arc(mx - 7, my - 4, 3, 0, Math.PI * 2); sctx.fill();
+        sctx.beginPath(); sctx.arc(mx + 6, my + 8, 2, 0, Math.PI * 2); sctx.fill();
+        // Moon bright edge highlight
+        sctx.strokeStyle = 'rgba(255, 255, 245, 0.25)';
+        sctx.lineWidth = 1.5;
+        sctx.beginPath(); sctx.arc(mx, my, mr - 2, -1.2, 1.2); sctx.stroke();
+        
+        // Build the sky dome mesh
+        const skyTex = new THREE.CanvasTexture(skyCanvas);
+        skyTex.magFilter = THREE.NearestFilter;
+        skyTex.minFilter = THREE.NearestFilter;
+        
+        const skyGeo = new THREE.SphereGeometry(95, 32, 16);
+        const skyMat = new THREE.MeshBasicMaterial({
+            map: skyTex,
+            side: THREE.BackSide,
+            fog: false,              // sky ignores scene fog
+            depthWrite: false        // renders behind everything
+        });
+        const skyDome = new THREE.Mesh(skyGeo, skyMat);
+        skyDome.renderOrder = -1;    // draw first (behind all objects)
+        skyGroup.add(skyDome);
+
         // Player visual
         const playerGroup = new THREE.Group();
         scene.add(playerGroup);
@@ -3277,6 +3404,10 @@
             // Update ground position to follow player
             ground.position.x = gameState.player.position.x;
             ground.position.z = gameState.player.position.z;
+            
+            // Sky dome follows player so it's always surrounding them
+            skyGroup.position.x = gameState.player.position.x;
+            skyGroup.position.z = gameState.player.position.z;
         }
 
         function animate() {
