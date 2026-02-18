@@ -122,83 +122,75 @@
             position: absolute;
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            width: 48px; height: 48px;
+            width: 44px; height: 44px;
             border: 2px solid rgba(255,120,0,0.85);
             border-radius: 50%;
             box-shadow: 0 0 12px rgba(255,120,0,0.6);
+            pointer-events: none;
         }
         #rocketReticle::before, #rocketReticle::after {
-            content: '';
-            position: absolute;
-            background: rgba(255,120,0,0.85);
+            content: ''; position: absolute; background: rgba(255,120,0,0.85);
         }
-        #rocketReticle::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
-        #rocketReticle::after  { height: 2px; width: 100%; top: 50%;  transform: translateY(-50%); }
+        #rocketReticle::before { width:2px; height:100%; left:50%; transform:translateX(-50%); }
+        #rocketReticle::after  { height:2px; width:100%; top:50%;  transform:translateY(-50%); }
 
-        /* speed lines */
+        /* speed lines vignette */
         #rocketSpeedLines {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             background: radial-gradient(ellipse at center, transparent 30%, rgba(255,80,0,0.08) 100%);
-        }
-
-        /* steering strip */
-        #rocketSteering {
-            position: absolute;
-            bottom: 18px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80%;
-            height: 52px;
-            background: rgba(0,0,0,0.55);
-            border: 1.5px solid rgba(255,120,0,0.6);
-            border-radius: 26px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: grab;
-            touch-action: none;
-        }
-        #rocketSteeringThumb {
-            width: 44px; height: 44px;
-            background: radial-gradient(circle, #ff6600, #cc2200);
-            border-radius: 50%;
-            position: absolute;
-            left: 50%; transform: translateX(-50%);
-            box-shadow: 0 0 14px rgba(255,100,0,0.8);
-            transition: left 0.05s;
             pointer-events: none;
         }
-        #rocketSteeringLabel {
-            color: rgba(255,150,80,0.7);
-            font-family: Arial, sans-serif;
-            font-size: 11px;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            pointer-events: none;
-            user-select: none;
-        }
-        #rocketTimer {
+        /* kill counter */
+        #rocketKillCount {
             position: absolute;
             top: 14px; left: 50%;
             transform: translateX(-50%);
-            color: #ff8844;
-            font-family: 'Courier New', monospace;
-            font-size: 22px;
-            font-weight: bold;
-            text-shadow: 0 0 8px rgba(255,100,0,0.8);
-            pointer-events: none;
-        }
-        #rocketKillCount {
-            position: absolute;
-            top: 50px; left: 50%;
-            transform: translateX(-50%);
             color: #ffcc44;
             font-family: 'Courier New', monospace;
-            font-size: 14px;
+            font-size: 16px; font-weight: bold;
             text-shadow: 0 0 6px rgba(255,200,0,0.7);
-            pointer-events: none;
+            pointer-events: none; white-space: nowrap;
         }
+        /* "TAP TO TURN" prompt */
+        #rocketPrompt {
+            position: absolute;
+            top: 46px; left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,200,100,0.92);
+            font-family: Arial, sans-serif;
+            font-size: 14px; letter-spacing: 2px;
+            text-shadow: 0 0 8px rgba(255,120,0,0.8);
+            pointer-events: none; white-space: nowrap;
+            animation: rocketPulse 0.9s ease-in-out infinite alternate;
+        }
+        @keyframes rocketPulse {
+            from { opacity: 0.6; } to { opacity: 1.0; }
+        }
+        /* L / R turn buttons */
+        #rocketBtnRow {
+            position: absolute;
+            bottom: 22px; left: 0; right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 18px; gap: 16px;
+        }
+        .rocketTurnBtn {
+            flex: 1; height: 72px;
+            background: rgba(0,0,0,0.6);
+            border: 2px solid rgba(255,120,0,0.7);
+            border-radius: 14px;
+            color: #ff8844; font-size: 32px;
+            cursor: pointer; touch-action: manipulation;
+            display: flex; align-items: center; justify-content: center;
+            user-select: none; -webkit-tap-highlight-color: transparent;
+            transition: background 0.1s, border-color 0.1s;
+        }
+        .rocketTurnBtn:active {
+            background: rgba(255,100,0,0.4);
+            border-color: #ff6600;
+        }
+        .rocketTurnBtn:disabled { opacity: 0.25; pointer-events: none; }
 
         #paddleCamButton {
             position: absolute;
@@ -436,11 +428,11 @@
     <div id="rocketHUD">
         <div id="rocketSpeedLines"></div>
         <div id="rocketReticle"></div>
-        <div id="rocketTimer">3.0s</div>
         <div id="rocketKillCount">💥 0 bricks</div>
-        <div id="rocketSteering">
-            <span id="rocketSteeringLabel">◀ STEER ▶</span>
-            <div id="rocketSteeringThumb"></div>
+        <div id="rocketPrompt">TAP TO TURN</div>
+        <div id="rocketBtnRow">
+            <button class="rocketTurnBtn" id="rocketBtnLeft">&#9664;</button>
+            <button class="rocketTurnBtn" id="rocketBtnRight">&#9654;</button>
         </div>
     </div>
     
@@ -3656,207 +3648,225 @@ function checkFungicideStatus() {
 }
 
     
-    // ── ROCKET POWERUP ─────────────────────────────────────────
-    // Pierces ALL bricks including indestructible X fortress walls
-    // ── STEERABLE ROCKET CAM ────────────────────────────────────────────────────
-    function activateRocket() {
-        // Build rocket mesh
-        const bodyGeom = new THREE.CylinderGeometry(0.18, 0.32, 1.8, 8);
-        const rocket   = new THREE.Mesh(bodyGeom, new THREE.MeshPhongMaterial({ color: 0xff6600, emissive: 0x330800 }));
-        const nose     = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.6, 8), new THREE.MeshPhongMaterial({ color: 0xff2200 }));
-        nose.position.y = 1.2; rocket.add(nose);
-        const finMat = new THREE.MeshPhongMaterial({ color: 0xcc3300 });
-        const finGeom = new THREE.BoxGeometry(0.55, 0.5, 0.1);
-        const finL = new THREE.Mesh(finGeom, finMat); finL.position.set(-0.36, -0.75, 0); rocket.add(finL);
-        const finR = new THREE.Mesh(finGeom, finMat); finR.position.set( 0.36, -0.75, 0); rocket.add(finR);
-        rocket.position.x = paddle.position.x;
-        rocket.position.y = bottomBound + 2.2;
-        scene.add(rocket);
+    // ── ROCKET POWERUP ─────────────────────────────────────────────────────────
+    // Flies up, player taps once to turn 90°, sweeps to wall, fireworks burst
 
-        activeRocketRef = rocket;
-        rocketSteerX    = 0;
+    function activateRocket() {
+        // Build rocket as a Group so rotation pivots the whole thing
+        const rkt = new THREE.Group();
+        rkt.add(Object.assign(
+            new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.32,1.8,8),
+                           new THREE.MeshPhongMaterial({color:0xff6600,emissive:0x330800}))
+        ));
+        const nose = new THREE.Mesh(new THREE.ConeGeometry(0.18,0.6,8),
+                                    new THREE.MeshPhongMaterial({color:0xff2200}));
+        nose.position.y = 1.2; rkt.add(nose);
+        const finMat = new THREE.MeshPhongMaterial({color:0xcc3300});
+        const finG   = new THREE.BoxGeometry(0.55,0.5,0.1);
+        const fL = new THREE.Mesh(finG,finMat); fL.position.set(-0.36,-0.75,0); rkt.add(fL);
+        const fR = new THREE.Mesh(finG,finMat); fR.position.set( 0.36,-0.75,0); rkt.add(fR);
+        rkt.position.set(paddle.position.x, bottomBound + 2.2, 0);
+        scene.add(rkt);
+
+        activeRocketRef = rkt;
         rocketKills     = 0;
 
         // Show HUD
-        const hud = document.getElementById('rocketHUD');
-        hud.classList.add('active');
+        document.getElementById('rocketHUD').classList.add('active');
         document.getElementById('rocketKillCount').textContent = '💥 0 bricks';
+        document.getElementById('rocketPrompt').style.display  = '';
 
-        // Wire up steering strip
-        _setupRocketSteering();
+        const btnL = document.getElementById('rocketBtnLeft');
+        const btnR = document.getElementById('rocketBtnRight');
+        btnL.disabled = false;
+        btnR.disabled = false;
 
-        // Countdown timer
-        let timeLeft = 10.0;
-        const timerEl = document.getElementById('rocketTimer');
-        timerEl.textContent = timeLeft.toFixed(1) + 's';
-        const timerInterval = setInterval(function() {
-            timeLeft -= 0.1;
-            timerEl.textContent = Math.max(0, timeLeft).toFixed(1) + 's';
-        }, 100);
-
-        // Activate rocket cam
         rocketCamActive = true;
 
-        // Brief ignition pause then launch
-        setTimeout(function() {
-            if (rocket.parent) {
-                _doLaunchRocket(rocket, timerInterval);
-            }
-        }, 300);
-    }
+        // ── state machine ──────────────────────────────────────────────────────
+        let phase        = 'up';   // 'up' | 'turning' | 'horizontal'
+        let turnDir      = 0;      // -1 = left, +1 = right
+        let turnProgress = 0;      // 0..1
 
-    function _setupRocketSteering() {
-        const strip = document.getElementById('rocketSteering');
-        const thumb = document.getElementById('rocketSteeringThumb');
-        const stripW = strip.offsetWidth || 300;
-        const thumbW = 44;
-        const maxOffset = (stripW - thumbW) / 2;  // px from centre
+        const TURN_FRAMES = 20;    // frames to complete the 90° pivot
+        const SPEED_UP    = 0.24;  // units/frame going upward
+        const SPEED_HORIZ = 0.40;  // units/frame going sideways
+        const HIT_RADIUS  = 0.36;
 
-        function setSteer(clientX) {
-            const rect = strip.getBoundingClientRect();
-            const centre = rect.left + rect.width / 2;
-            const rawOffset = clientX - centre;
-            const clamped   = Math.max(-maxOffset, Math.min(maxOffset, rawOffset));
-            rocketSteerX = clamped / maxOffset;   // -1..1
-            // Move thumb visually
-            thumb.style.left = (50 + (clamped / rect.width) * 100) + '%';
+        function doTurn(dir) {
+            if (phase !== 'up') return;
+            phase   = 'turning';
+            turnDir = dir;
+            btnL.disabled = true;
+            btnR.disabled = true;
+            document.getElementById('rocketPrompt').style.display = 'none';
         }
 
-        function onDown(e) {
-            e.preventDefault();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            setSteer(clientX);
-            function onMove(ev) {
-                ev.preventDefault();
-                const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
-                setSteer(cx);
+        // Wire up buttons — both click (desktop) and touchstart (mobile)
+        function onLeft(e)  { e.preventDefault(); doTurn(-1); }
+        function onRight(e) { e.preventDefault(); doTurn( 1); }
+        btnL.addEventListener('click',      onLeft);
+        btnR.addEventListener('click',      onRight);
+        btnL.addEventListener('touchstart', onLeft,  {passive:false});
+        btnR.addEventListener('touchstart', onRight, {passive:false});
+
+        // ── main flight loop ───────────────────────────────────────────────────
+        const iv = setInterval(function() {
+            if (!gameActive || !rkt.parent) {
+                _endRocket(rkt); clearInterval(iv); return;
             }
-            function onUp() {
-                rocketSteerX = 0;
-                thumb.style.left = '50%';
-                window.removeEventListener('mousemove', onMove);
-                window.removeEventListener('touchmove', onMove);
-                window.removeEventListener('mouseup', onUp);
-                window.removeEventListener('touchend', onUp);
-            }
-            window.addEventListener('mousemove', onMove, { passive: false });
-            window.addEventListener('touchmove', onMove, { passive: false });
-            window.addEventListener('mouseup', onUp);
-            window.addEventListener('touchend', onUp);
-        }
-        strip.addEventListener('mousedown',  onDown);
-        strip.addEventListener('touchstart', onDown, { passive: false });
-    }
+            if (gamePaused) return;
 
-    function _endRocketFlight(rocket, timerInterval) {
-        clearInterval(timerInterval);
-        rocketCamActive  = false;
-        activeRocketRef  = null;
-        rocketSteerX     = 0;
-        if (rocket && rocket.parent) { scene.remove(rocket); }
-        // Hide HUD
-        document.getElementById('rocketHUD').classList.remove('active');
-        document.getElementById('rocketSteeringThumb').style.left = '50%';
-        // Show score flash
-        const kills = rocketKills;
-        if (kills > 0) {
-            const flash = document.createElement('div');
-            flash.style.cssText = 'position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);color:#ffcc00;font-family:Arial;font-size:28px;font-weight:bold;text-shadow:0 0 12px orange;pointer-events:none;z-index:50;transition:opacity 1s;';
-            flash.textContent = '🚀 ' + kills + ' brick' + (kills === 1 ? '' : 's') + ' destroyed!';
-            document.getElementById('gameContainer').appendChild(flash);
-            setTimeout(function() { flash.style.opacity = '0'; setTimeout(function() { flash.parentNode && flash.parentNode.removeChild(flash); }, 1000); }, 1500);
-        }
-    }
-
-    function _doLaunchRocket(rocket, timerInterval) {
-        const SPEED_Y    = 0.22;   // slow enough to carve an S-curve
-        const SPEED_X    = 0.20;   // horizontal drift per frame
-        const DURATION   = 10000;  // 10 seconds — plenty of time to steer
-        const rR         = 0.32;
-        let elapsed      = 0;
-
-        const rocketInterval = setInterval(function() {
-            if (!gameActive || !rocket.parent) {
-                _endRocketFlight(rocket, timerInterval);
-                clearInterval(rocketInterval);
-                return;
-            }
-            if (gamePaused) { return; }
-
-            elapsed += 16;
-
-            // Apply steering — gradually tilt rocket body
-            const targetTilt = -rocketSteerX * 1.396;  // 80 degrees max tilt
-            rocket.rotation.z += (targetTilt - rocket.rotation.z) * 0.12;
-
-            // Move rocket: upward + steered horizontal drift
-            rocket.position.y += SPEED_Y;
-            rocket.position.x += rocketSteerX * SPEED_X;
-
-            // Clamp X inside field
-            rocket.position.x = Math.max(leftBound + 0.5, Math.min(rightBound - 0.5, rocket.position.x));
-
-            // Exhaust trail
-            if (Math.random() < 0.5) {
-                const trailGeom = new THREE.SphereGeometry(0.12, 5, 5);
-                const trailMat  = new THREE.MeshBasicMaterial({ color: Math.random() < 0.5 ? 0xff6600 : 0xffcc00, transparent: true, opacity: 0.9 });
-                const trail = new THREE.Mesh(trailGeom, trailMat);
-                trail.position.set(
-                    rocket.position.x + (Math.random()-0.5)*0.2,
-                    rocket.position.y - 1.1,
-                    0
-                );
-                scene.add(trail);
-                let op = 0.9;
-                const ft = setInterval(function() {
-                    op -= 0.08; trail.material.opacity = op; trail.position.y -= 0.05;
-                    if (op <= 0) { clearInterval(ft); scene.remove(trail); }
-                }, 18);
+            // --- PHASE: UP ---------------------------------------------------
+            if (phase === 'up') {
+                rkt.position.y += SPEED_UP;
+                _trail(rkt.position.x, rkt.position.y - 1.1, 0, -0.07);
+                if (rkt.position.y > topBound + 3) {          // missed — flew off top
+                    _endRocket(rkt); clearInterval(iv); return;
+                }
             }
 
-            // Time or bounds expired — end flight
-            if (elapsed >= DURATION || rocket.position.y > topBound + 2) {
-                _endRocketFlight(rocket, timerInterval);
-                clearInterval(rocketInterval);
-                return;
+            // --- PHASE: TURNING (smooth 90° rotation over TURN_FRAMES) -------
+            else if (phase === 'turning') {
+                turnProgress = Math.min(1, turnProgress + 1/TURN_FRAMES);
+                // ease-in-out for a natural pivot feel
+                const t     = turnProgress < 0.5
+                              ? 2*turnProgress*turnProgress
+                              : -1+(4-2*turnProgress)*turnProgress;
+                rkt.rotation.z = -(Math.PI/2) * turnDir * t;
+                if (turnProgress >= 1) phase = 'horizontal';
+                // small trail while turning
+                _trail(rkt.position.x, rkt.position.y, 0, 0);
             }
 
-            // Collision with bricks
+            // --- PHASE: HORIZONTAL -------------------------------------------
+            else if (phase === 'horizontal') {
+                rkt.position.x += SPEED_HORIZ * turnDir;
+                _trail(rkt.position.x - turnDir*1.0,
+                       rkt.position.y + (Math.random()-0.5)*0.3,
+                       -0.04*turnDir, 0);
+
+                // Store phase for the camera
+                rkt.userData.phase   = 'horizontal';
+                rkt.userData.turnDir = turnDir;
+
+                // Hit the side wall?
+                if ((turnDir > 0 && rkt.position.x >= rightBound - 0.3) ||
+                    (turnDir < 0 && rkt.position.x <= leftBound  + 0.3)) {
+                    _fireworks(rkt.position.clone());
+                    _endRocket(rkt); clearInterval(iv); return;
+                }
+            }
+
+            // --- BRICK COLLISION (all phases) ---------------------------------
             for (let j = bricks.length - 1; j >= 0; j--) {
-                const brick = bricks[j];
-                if (!brick.parent || brick.userData.isGhost) { continue; }
-                const bhw = brick.geometry.parameters.width  / 2;
-                const bhh = brick.geometry.parameters.height / 2;
-                if (rocket.position.x + rR > brick.position.x - bhw &&
-                    rocket.position.x - rR < brick.position.x + bhw &&
-                    rocket.position.y + rR > brick.position.y - bhh &&
-                    rocket.position.y - rR < brick.position.y + bhh) {
-                    createRocketHitEffect(brick.position.clone());
-                    scene.remove(brick);
+                const b = bricks[j];
+                if (!b.parent || b.userData.isGhost) continue;
+                const hw = b.geometry.parameters.width  / 2;
+                const hh = b.geometry.parameters.height / 2;
+                if (rkt.position.x + HIT_RADIUS > b.position.x - hw &&
+                    rkt.position.x - HIT_RADIUS < b.position.x + hw &&
+                    rkt.position.y + HIT_RADIUS > b.position.y - hh &&
+                    rkt.position.y - HIT_RADIUS < b.position.y + hh) {
+                    createRocketHitEffect(b.position.clone());
+                    scene.remove(b);
                     rocketKills++;
-                    document.getElementById('rocketKillCount').textContent = '💥 ' + rocketKills + ' brick' + (rocketKills === 1 ? '' : 's');
-                    score += brick.userData.indestructible ? 25 : (brick.userData.points || 10);
+                    document.getElementById('rocketKillCount').textContent =
+                        '💥 ' + rocketKills + ' brick' + (rocketKills === 1 ? '' : 's');
+                    score += b.userData.indestructible ? 25 : (b.userData.points || 10);
                     updateScore();
-                    if (brickBreakSound) { brickBreakSound(); }
-                    if (!brick.userData.fungus && !brick.userData.indestructible) { fungusBrickReact(); }
-                    bricks.filter(function(b) { return b.parent && b.userData.phaze; })
-                          .forEach(function(b) { updatePhazeBrickState(b); });
-                    const remaining = bricks.filter(function(b) { return b.parent && !b.userData.indestructible; });
+                    if (brickBreakSound) brickBreakSound();
+                    if (!b.userData.fungus && !b.userData.indestructible) fungusBrickReact();
+                    bricks.filter(x => x.parent && x.userData.phaze)
+                          .forEach(x => updatePhazeBrickState(x));
+                    const remaining = bricks.filter(x => x.parent && !x.userData.indestructible);
                     if (remaining.length === 0) {
-                        _endRocketFlight(rocket, timerInterval);
-                        clearInterval(rocketInterval);
-                        nextLevel();
-                        return;
+                        _endRocket(rkt); clearInterval(iv); nextLevel(); return;
                     }
                 }
             }
         }, 16);
     }
 
+    // Exhaust particle helper
+    function _trail(x, y, vx, vy) {
+        if (Math.random() > 0.55) return;
+        const p = new THREE.Mesh(
+            new THREE.SphereGeometry(0.11,5,5),
+            new THREE.MeshBasicMaterial({
+                color: Math.random()<0.5 ? 0xff6600 : 0xffcc00,
+                transparent:true, opacity:0.9
+            })
+        );
+        p.position.set(x+(Math.random()-0.5)*0.2, y, 0);
+        scene.add(p);
+        let op = 0.9;
+        const t = setInterval(function() {
+            op -= 0.09; p.material.opacity = op;
+            p.position.x += vx; p.position.y += vy;
+            if (op <= 0) { clearInterval(t); scene.remove(p); }
+        }, 18);
+    }
+
+    // Fireworks burst at the wall
+    function _fireworks(pos) {
+        const palette = [0xff4400,0xff8800,0xffcc00,0xffffff,0xff2288,0x88ffff,0xaaff44];
+        for (let i = 0; i < 52; i++) {
+            const p = new THREE.Mesh(
+                new THREE.SphereGeometry(0.10+Math.random()*0.20, 6, 6),
+                new THREE.MeshBasicMaterial({
+                    color: palette[Math.floor(Math.random()*palette.length)],
+                    transparent:true, opacity:1.0
+                })
+            );
+            p.position.copy(pos);
+            scene.add(p);
+            // Spread mostly inward (away from wall) and in all Y directions
+            const angle = (Math.random()-0.5) * Math.PI * 1.6;
+            const spd   = 0.18 + Math.random() * 0.45;
+            const vx = -Math.sign(pos.x) * Math.abs(Math.cos(angle)) * spd; // away from wall
+            const vy = Math.sin(angle) * spd;
+            let op = 1.0;
+            const t = setInterval(function() {
+                p.position.x += vx; p.position.y += vy;
+                p.scale.multiplyScalar(0.96);
+                op -= 0.022; p.material.opacity = op;
+                if (op <= 0) { clearInterval(t); scene.remove(p); }
+            }, 16);
+        }
+        // Screen flash
+        const container = document.getElementById('gameContainer');
+        const fl = document.createElement('div');
+        fl.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(255,150,50,0.5);pointer-events:none;z-index:5;transition:opacity 0.45s;';
+        container.appendChild(fl);
+        setTimeout(function() {
+            fl.style.opacity = '0';
+            setTimeout(function() { fl.parentNode && container.removeChild(fl); }, 450);
+        }, 50);
+    }
+
+    function _endRocket(rkt) {
+        rocketCamActive = false;
+        activeRocketRef = null;
+        rocketSteerX    = 0;
+        if (rkt && rkt.parent) scene.remove(rkt);
+        document.getElementById('rocketHUD').classList.remove('active');
+        if (rocketKills > 0) {
+            const el = document.createElement('div');
+            el.style.cssText = 'position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);color:#ffcc00;font-family:Arial;font-size:26px;font-weight:bold;text-shadow:0 0 12px orange;pointer-events:none;z-index:50;transition:opacity 1s;';
+            el.textContent = '🚀 ' + rocketKills + ' brick' + (rocketKills===1?'':'s') + ' destroyed!';
+            document.getElementById('gameContainer').appendChild(el);
+            setTimeout(function() {
+                el.style.opacity = '0';
+                setTimeout(function() { el.parentNode && el.parentNode.removeChild(el); }, 1000);
+            }, 1800);
+        }
+    }
+
     function createRocketHitEffect(position) {
         const flash = new THREE.Mesh(
-            new THREE.SphereGeometry(0.75, 10, 10),
-            new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.9 })
+            new THREE.SphereGeometry(0.75,10,10),
+            new THREE.MeshBasicMaterial({color:0xff6600,transparent:true,opacity:0.9})
         );
         flash.position.copy(position);
         scene.add(flash);
@@ -3867,7 +3877,7 @@ function checkFungicideStatus() {
         }, 22);
     }
 
-    function shootBallFromPaddle() {
+        function shootBallFromPaddle() {
         // Only shoot if the game is active and the ball has been launched
         if (!gameActive || !ballLaunched || gamePaused) return;
         
@@ -4359,22 +4369,22 @@ function gameOver() {
         
         // Always render the scene, even when paused
         if (rocketCamActive && activeRocketRef && activeRocketRef.parent) {
-            // Rocket-nose cam: sit just behind the nose, looking forward up the field
-            // Slight Z offset for depth, follows X tilt of rocket
-            const rkt = activeRocketRef;
-            // Camera sits just BEHIND the rocket nose in Y, at Z=-1 (inside the brick plane)
-            // so bricks rush toward the camera as the rocket climbs — true FPV feel
-            rocketCamera.position.set(
-                rkt.position.x + Math.sin(rkt.rotation.z) * 0.5,
-                rkt.position.y - 0.8,
-                -1.0
-            );
-            // Look ahead in the direction of travel + steer lean
-            rocketCamera.lookAt(
-                rkt.position.x + rocketSteerX * 4,
-                rkt.position.y + 14,
-                0
-            );
+            const rkt      = activeRocketRef;
+            const rPhase   = rkt.userData.phase   || 'up';
+            const rTurnDir = rkt.userData.turnDir  || 0;
+            if (rPhase === 'horizontal') {
+                // Side FPV: sit behind the rocket in X, look ahead in direction of travel
+                rocketCamera.position.set(
+                    rkt.position.x - rTurnDir * 2.0,
+                    rkt.position.y + 0.3,
+                    -1.0
+                );
+                rocketCamera.lookAt(rkt.position.x + rTurnDir * 16, rkt.position.y, 0);
+            } else {
+                // Upward phase: camera below the rocket, looking straight up
+                rocketCamera.position.set(rkt.position.x, rkt.position.y - 1.0, -1.0);
+                rocketCamera.lookAt(rkt.position.x, rkt.position.y + 16, 0);
+            }
             rocketCamera.aspect = renderer.domElement.clientWidth / renderer.domElement.clientHeight;
             rocketCamera.updateProjectionMatrix();
             renderer.render(scene, rocketCamera);
