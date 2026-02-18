@@ -388,135 +388,10 @@
     </div>
 </div>
 
-<div id="multiplayerStatus" style="position: absolute; top: 10px; left: 120px; color: white; font-family: Arial, sans-serif; font-size: 14px; z-index: 10;">Multiplayer Active</div>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     
 
-<script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app.js" type="module"></script>
 
-<script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-database.js" type="module"></script>
-
-<script type="module">
-  import { initializeApp }                                       from "https://www.gstatic.com/firebasejs/9.6.0/firebase-app.js";
-  import { getDatabase, ref, set, get, update, onValue, remove } from "https://www.gstatic.com/firebasejs/9.6.0/firebase-database.js";
-
-  const firebaseConfig = {
-    apiKey:            "AIzaSyDbI0twSQjdk-4CGNrsXDqmiXiT06F7mJo",
-    authDomain:        "brickswithfriends-fc742.firebaseapp.com",
-    databaseURL:       "https://brickswithfriends-fc742-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId:         "brickswithfriends-fc742",
-    storageBucket:     "brickswithfriends-fc742.firebasestorage.app",
-    messagingSenderId: "143374795435",
-    appId:             "1:143374795435:web:65a1a1f466deff53486dee",
-    measurementId:     "G-K7CNDPPF60"
-  };
-
-  const app      = initializeApp(firebaseConfig);
-  const db       = getDatabase(app);
-  const playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
-
-  const playerColors = [0x0088ff, 0xff8800, 0xff00ff, 0xffff00, 0x00ffaa];
-  const playerColor  = playerColors[Math.floor(Math.random() * playerColors.length)];
-
-  let currentRoomId = 'room_default';
-  const otherPlayerPaddles = {};
-
-  function updatePaddlePosition(x) {
-    set(ref(db, 'players/' + playerId), { x: x, color: playerColor, lastUpdate: Date.now() });
-  }
-
-  function cleanupPlayer() {
-    remove(ref(db, 'players/' + playerId));
-  }
-
-  function updateOtherPlayers(players) {
-    if (!window.scene || !window.paddle) { return; }
-    for (const id in otherPlayerPaddles) {
-      if (!players[id]) { window.scene.remove(otherPlayerPaddles[id]); delete otherPlayerPaddles[id]; }
-    }
-    for (const id in players) {
-      if (id === playerId) { continue; }
-      const pData = players[id];
-      if (!otherPlayerPaddles[id]) {
-        const mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(3.5, 0.5, 1),
-          new THREE.MeshPhongMaterial({ color: pData.color || 0x0088ff, transparent: true, opacity: 0.7 })
-        );
-        mesh.position.y = window.bottomBound - 0.8;
-        window.scene.add(mesh);
-        otherPlayerPaddles[id] = mesh;
-      }
-      otherPlayerPaddles[id].position.x = pData.x;
-    }
-  }
-
-  function setupRoom(levelNum) {
-    if (currentRoomId !== 'room_default') { cleanupPlayer(); }
-    currentRoomId = 'room_level_' + levelNum;
-    updatePaddlePosition(window.paddle ? window.paddle.position.x : 0);
-    get(ref(db, 'rooms/' + currentRoomId)).then(function(snapshot) {
-      const roomData = snapshot.val() || {};
-      if (!roomData.bricks && window.bricks && window.bricks.length > 0) {
-        const brickData = {};
-        window.bricks.forEach(function(brick, index) {
-          if (brick.parent) { brickData['brick_' + index] = { active: true, x: brick.position.x, y: brick.position.y, userData: brick.userData }; }
-        });
-        update(ref(db, 'rooms/' + currentRoomId), { bricks: brickData, level: levelNum, lastUpdate: Date.now() });
-      }
-    });
-    onValue(ref(db, 'rooms/' + currentRoomId + '/bricks'), function(snapshot) {
-      const brickData = snapshot.val();
-      if (!brickData) { return; }
-      syncBricks(brickData);
-    });
-    const statusElem = document.getElementById('multiplayerStatus');
-    if (statusElem) { statusElem.textContent = 'Multiplayer: Room ' + levelNum; statusElem.style.color = '#00ff00'; }
-  }
-
-  function reportBrickBreak(brickIndex) {
-    if (!currentRoomId) { return; }
-    if (window.bricks[brickIndex]) { window.bricks[brickIndex].userData.removedByMe = true; }
-    update(ref(db, 'rooms/' + currentRoomId + '/bricks/brick_' + brickIndex), { active: false, brokenBy: playerId, brokenAt: Date.now() });
-  }
-
-  function syncBricks(brickData) {
-    if (!window.bricks || !window.scene) { return; }
-    Object.keys(brickData).forEach(function(key) {
-      const serverBrick = brickData[key];
-      const brickIndex  = parseInt(key.split('_')[1]);
-      if (brickIndex >= window.bricks.length) { return; }
-      const localBrick = window.bricks[brickIndex];
-      if (!serverBrick.active && localBrick.parent) {
-        window.scene.remove(localBrick);
-        if (!localBrick.userData.removedByMe && localBrick.userData && localBrick.userData.points) {
-          window.score += Math.floor(localBrick.userData.points / 2);
-          if (window.updateScore)     { window.updateScore(); }
-          if (window.brickBreakSound) { window.brickBreakSound(); }
-        }
-      }
-    });
-  }
-
-  window.multiplayer = {
-    setupRoom: setupRoom, updatePaddlePosition: updatePaddlePosition,
-    cleanupPlayer: cleanupPlayer, updateOtherPlayers: updateOtherPlayers,
-    reportBrickBreak: reportBrickBreak, syncBricks: syncBricks,
-    otherPlayerPaddles: otherPlayerPaddles
-  };
-
-  onValue(ref(db, 'players'), function(snapshot) { updateOtherPlayers(snapshot.val() || {}); });
-
-  setInterval(function() {
-    const cutoff = Date.now() - 30000;
-    get(ref(db, 'players')).then(function(snapshot) {
-      const players = snapshot.val() || {};
-      for (const id in players) { if (players[id].lastUpdate < cutoff) { remove(ref(db, 'players/' + id)); } }
-    });
-  }, 10000);
-
-  window.addEventListener('beforeunload', cleanupPlayer);
-</script>
 
 <script>
 
@@ -1062,7 +937,7 @@ GGGGGGGGGGGGGGGGGGGGGGGGGGGGG      F
 function init() {
     // Scene setup
     scene = new THREE.Scene();
-    window.scene = scene; // Make scene accessible to multiplayer
+    window.scene = scene;
     scene.background = new THREE.Color(0x000033);
     
     // Get container dimensions for aspect ratio
@@ -1092,7 +967,7 @@ function init() {
     const paddleGeometry = new THREE.BoxGeometry(3.5, 0.5, 1);
     const paddleMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
     paddle = new THREE.Mesh(paddleGeometry, paddleMaterial);
-    window.paddle = paddle; // Make paddle accessible to multiplayer
+    window.paddle = paddle;
     paddle.position.y = bottomBound;
     scene.add(paddle);
     
@@ -2052,7 +1927,7 @@ function createFungusBrick(x, y) {
     // Always keep paddle at a fixed distance from bottom
     const paddleOffset = 15; // Distance from bottom edge to paddle
     bottomBound = -gameHeight/2 + paddleOffset;
-    window.bottomBound = bottomBound; // Make bottomBound accessible to multiplayer
+    window.bottomBound = bottomBound;
     
     // Adjust camera to fit the new game dimensions
     updateCameraForGameDimensions();
@@ -2532,10 +2407,7 @@ function createFungusBrick(x, y) {
             }
         }
         
-// Report the brick break to multiplayer system
-if (window.multiplayer && window.multiplayer.reportBrickBreak) {
-  window.multiplayer.reportBrickBreak(j);
-}
+
 
         // Move powerups
         movePowerups();
@@ -3897,10 +3769,6 @@ function checkFungicideStatus() {
         if (!ballLaunched && balls.length > 0) balls[0].position.x = paddle.position.x;
         touchX = newTouchX;
         
-        // Add this line to send paddle position to other players
-        if (window.multiplayer) {
-            window.multiplayer.updatePaddlePosition(paddle.position.x);
-        }
     }
 }
 
@@ -3920,10 +3788,6 @@ function gameOver() {
     // Clear all bombs
     clearBombs();
     
-    // Add this line to clean up multiplayer on game over
-    if (window.multiplayer) {
-        window.multiplayer.cleanupPlayer();
-    }
 }
 
     
@@ -3992,11 +3856,6 @@ function gameOver() {
 
     if (!ballLaunched && balls.length > 0) {
         balls[0].position.x = paddle.position.x;
-    }
-    
-    // Add this line to send paddle position to other players
-    if (window.multiplayer) {
-        window.multiplayer.updatePaddlePosition(paddle.position.x);
     }
 }
 
@@ -4151,36 +4010,6 @@ function gameOver() {
         }
     }
     
-// Add this function to your game code (outside the multiplayer object)
-function createTeamBreakEffect(position) {
-  // Create a visual indicator at the position of the broken brick
-  const effectGeometry = new THREE.SphereGeometry(0.6, 16, 16);
-  const effectMaterial = new THREE.MeshBasicMaterial({ 
-    color: 0x00ffff, 
-    transparent: true,
-    opacity: 0.7 
-  });
-  const effect = new THREE.Mesh(effectGeometry, effectMaterial);
-  effect.position.copy(position);
-  
-  // Add to scene
-  window.scene.add(effect);
-  
-  // Animate the effect
-  let scale = 1;
-  const expandInterval = setInterval(() => {
-    if (window.gamePaused) return;
-    
-    scale += 0.1;
-    effect.scale.set(scale, scale, scale);
-    effect.material.opacity -= 0.05;
-    
-    if (effect.material.opacity <= 0) {
-      clearInterval(expandInterval);
-      window.scene.remove(effect);
-    }
-  }, 30);
-}
 
     // Pause system functions
     function togglePause() {
