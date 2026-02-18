@@ -350,6 +350,20 @@
             <div class="item-cost">$10</div>
             <div class="item-name">10x Ball</div>
         </div>
+<div class="store-item" data-item="rocket" data-cost="12">
+    <div class="item-icon">
+        <svg width="32" height="32" viewBox="0 0 32 32">
+            <polygon points="16,3 20,14 16,12 12,14" fill="#ff6600"/>
+            <rect x="13" y="12" width="6" height="10" fill="#ff4400"/>
+            <polygon points="10,22 13,16 13,22" fill="#cc3300"/>
+            <polygon points="22,22 19,16 19,22" fill="#cc3300"/>
+            <ellipse cx="16" cy="23" rx="4" ry="2" fill="#ff9900" opacity="0.8"/>
+            <ellipse cx="16" cy="25" rx="3" ry="3" fill="#ffcc00" opacity="0.6"/>
+        </svg>
+    </div>
+    <div class="item-cost">$12</div>
+    <div class="item-name">Rocket &#x1F680;</div>
+</div>
 <div class="store-item" data-item="fungicide" data-cost="7">
     <div class="item-icon">
         <svg width="32" height="32" viewBox="0 0 32 32">
@@ -363,21 +377,6 @@
     </div>
     <div class="item-cost">$7</div>
     <div class="item-name">Fungicide</div>
-</div>
-
-<div class="store-item" data-item="rocket" data-cost="12">
-    <div class="item-icon">
-        <svg width="32" height="32" viewBox="0 0 32 32">
-            <polygon points="16,3 20,14 16,12 12,14" fill="#ff6600"/>
-            <rect x="13" y="12" width="6" height="10" fill="#ff4400"/>
-            <polygon points="10,22 13,16 13,22" fill="#cc3300"/>
-            <polygon points="22,22 19,16 19,22" fill="#cc3300"/>
-            <ellipse cx="16" cy="23" rx="4" ry="2" fill="#ff9900" opacity="0.8"/>
-            <ellipse cx="16" cy="25" rx="3" ry="3" fill="#ffcc00" opacity="0.6"/>
-        </svg>
-    </div>
-    <div class="item-cost">$12</div>
-    <div class="item-name">Rocket 🚀</div>
 </div>
 
     </div>
@@ -399,9 +398,6 @@
 <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-database.js" type="module"></script>
 
 <script type="module">
-  // ============================================================
-  // Firebase Multiplayer Module — clean rewrite
-  // ============================================================
   import { initializeApp }                                       from "https://www.gstatic.com/firebasejs/9.6.0/firebase-app.js";
   import { getDatabase, ref, set, get, update, onValue, remove } from "https://www.gstatic.com/firebasejs/9.6.0/firebase-database.js";
 
@@ -423,41 +419,30 @@
   const playerColors = [0x0088ff, 0xff8800, 0xff00ff, 0xffff00, 0x00ffaa];
   const playerColor  = playerColors[Math.floor(Math.random() * playerColors.length)];
 
-  // Room state — scoped to this module
   let currentRoomId = 'room_default';
   const otherPlayerPaddles = {};
 
-  // ── Paddle sync ──────────────────────────────────────────────
   function updatePaddlePosition(x) {
-    set(ref(db, 'players/' + playerId), {
-      x:          x,
-      color:      playerColor,
-      lastUpdate: Date.now()
-    });
+    set(ref(db, 'players/' + playerId), { x: x, color: playerColor, lastUpdate: Date.now() });
   }
 
   function cleanupPlayer() {
     remove(ref(db, 'players/' + playerId));
   }
 
-  // ── Other players' paddles ───────────────────────────────────
   function updateOtherPlayers(players) {
     if (!window.scene || !window.paddle) { return; }
-
     for (const id in otherPlayerPaddles) {
-      if (!players[id]) {
-        window.scene.remove(otherPlayerPaddles[id]);
-        delete otherPlayerPaddles[id];
-      }
+      if (!players[id]) { window.scene.remove(otherPlayerPaddles[id]); delete otherPlayerPaddles[id]; }
     }
-
     for (const id in players) {
       if (id === playerId) { continue; }
       const pData = players[id];
       if (!otherPlayerPaddles[id]) {
-        const geo  = new THREE.BoxGeometry(3.5, 0.5, 1);
-        const mat  = new THREE.MeshPhongMaterial({ color: pData.color || 0x0088ff, transparent: true, opacity: 0.7 });
-        const mesh = new THREE.Mesh(geo, mat);
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(3.5, 0.5, 1),
+          new THREE.MeshPhongMaterial({ color: pData.color || 0x0088ff, transparent: true, opacity: 0.7 })
+        );
         mesh.position.y = window.bottomBound - 0.8;
         window.scene.add(mesh);
         otherPlayerPaddles[id] = mesh;
@@ -466,43 +451,33 @@
     }
   }
 
-  // ── Room setup ───────────────────────────────────────────────
   function setupRoom(levelNum) {
     if (currentRoomId !== 'room_default') { cleanupPlayer(); }
     currentRoomId = 'room_level_' + levelNum;
     updatePaddlePosition(window.paddle ? window.paddle.position.x : 0);
-
     get(ref(db, 'rooms/' + currentRoomId)).then(function(snapshot) {
       const roomData = snapshot.val() || {};
       if (!roomData.bricks && window.bricks && window.bricks.length > 0) {
         const brickData = {};
         window.bricks.forEach(function(brick, index) {
-          if (brick.parent) {
-            brickData['brick_' + index] = { active: true, x: brick.position.x, y: brick.position.y, userData: brick.userData };
-          }
+          if (brick.parent) { brickData['brick_' + index] = { active: true, x: brick.position.x, y: brick.position.y, userData: brick.userData }; }
         });
         update(ref(db, 'rooms/' + currentRoomId), { bricks: brickData, level: levelNum, lastUpdate: Date.now() });
       }
     });
-
     onValue(ref(db, 'rooms/' + currentRoomId + '/bricks'), function(snapshot) {
       const brickData = snapshot.val();
       if (!brickData) { return; }
       syncBricks(brickData);
     });
-
     const statusElem = document.getElementById('multiplayerStatus');
     if (statusElem) { statusElem.textContent = 'Multiplayer: Room ' + levelNum; statusElem.style.color = '#00ff00'; }
-    console.log('Joined multiplayer room: ' + currentRoomId);
   }
 
-  // ── Brick sync ───────────────────────────────────────────────
   function reportBrickBreak(brickIndex) {
     if (!currentRoomId) { return; }
     if (window.bricks[brickIndex]) { window.bricks[brickIndex].userData.removedByMe = true; }
-    update(ref(db, 'rooms/' + currentRoomId + '/bricks/brick_' + brickIndex), {
-      active: false, brokenBy: playerId, brokenAt: Date.now()
-    });
+    update(ref(db, 'rooms/' + currentRoomId + '/bricks/brick_' + brickIndex), { active: false, brokenBy: playerId, brokenAt: Date.now() });
   }
 
   function syncBricks(brickData) {
@@ -518,36 +493,25 @@
           window.score += Math.floor(localBrick.userData.points / 2);
           if (window.updateScore)     { window.updateScore(); }
           if (window.brickBreakSound) { window.brickBreakSound(); }
-          if (typeof createTeamBreakEffect === 'function') { createTeamBreakEffect(localBrick.position); }
         }
       }
     });
   }
 
-  // ── Expose API to the main game script ───────────────────────
   window.multiplayer = {
-    setupRoom:            setupRoom,
-    updatePaddlePosition: updatePaddlePosition,
-    cleanupPlayer:        cleanupPlayer,
-    updateOtherPlayers:   updateOtherPlayers,
-    reportBrickBreak:     reportBrickBreak,
-    syncBricks:           syncBricks,
-    otherPlayerPaddles:   otherPlayerPaddles
+    setupRoom: setupRoom, updatePaddlePosition: updatePaddlePosition,
+    cleanupPlayer: cleanupPlayer, updateOtherPlayers: updateOtherPlayers,
+    reportBrickBreak: reportBrickBreak, syncBricks: syncBricks,
+    otherPlayerPaddles: otherPlayerPaddles
   };
 
-  // ── Live player listener ─────────────────────────────────────
-  onValue(ref(db, 'players'), function(snapshot) {
-    updateOtherPlayers(snapshot.val() || {});
-  });
+  onValue(ref(db, 'players'), function(snapshot) { updateOtherPlayers(snapshot.val() || {}); });
 
-  // ── Prune stale players every 10 s ───────────────────────────
   setInterval(function() {
     const cutoff = Date.now() - 30000;
     get(ref(db, 'players')).then(function(snapshot) {
       const players = snapshot.val() || {};
-      for (const id in players) {
-        if (players[id].lastUpdate < cutoff) { remove(ref(db, 'players/' + id)); }
-      }
+      for (const id in players) { if (players[id].lastUpdate < cutoff) { remove(ref(db, 'players/' + id)); } }
     });
   }, 10000);
 
@@ -613,7 +577,7 @@
             'X': { color: 0x888888, points: 0, indestructible: true }, // Gray (indestructible)
             'F': { color: 0x33cc33, points: 150, fungus: true }, // Green fungus brick
             'Z': { color: 0x8800bb, points: 200, phaze: true }, // Phaze brick - purple with blue tint
-            'K': { color: 0xffcc00, points: 50, starter: true }, // Starter brick - gold, always drops multiball
+            'K': { color: 0xffcc00, points: 50, starter: true }, // Gold starter brick — guaranteed multiball drop
             ' ': null  // Empty space (no brick)
         };
 // Pre-defined ASCII Levels (Optimized)
@@ -621,10 +585,7 @@ const asciiLevels = [
 
                    
 
-    // Level 1 - "The Grand Arena" — Three Phase Experience
-    // Phase 3 (Boss Zone): M bricks guarded by X fortress at top — need Rocket or skill shot through gap
-    // Phase 2 (Main Field): Dense brick rows — multiball powerups flood the field, becomes glorious chaos
-    // Phase 1 (Starter Zone): Gold K bricks at bottom — guaranteed multiball drops to kick things off
+    // Level 1 - The Hourglass (Tutorial Level with Galton Board)
     `
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XM M M M M M M M M M M M M M M MX
@@ -675,13 +636,6 @@ YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY
  K  K  K  K  K  K  K  K  K  K
    K  K  K  K  K  K  K  K  K
 `,
-
-
-
-
-
-
-
 
     // Level 2 - Fortress Layout (reduced size and 80% less fungus/phaze bricks)
     `
@@ -2256,38 +2210,22 @@ function createFungusBrick(x, y) {
                     });
                 }
                 
-                // Enhanced visual for starter K bricks — gold glow + star marker
+                // Gold glow + orbit dots for K starter bricks
                 if (brickInfo.starter) {
-                    // Bright gold pulsing outer glow
-                    const glowMaterial = new THREE.MeshBasicMaterial({
-                        color: 0xffcc00,
-                        transparent: true,
-                        opacity: 0.45
-                    });
-                    const glowMesh = new THREE.Mesh(
-                        new THREE.BoxGeometry(brickWidth * 1.35, brickHeight * 1.35, brickDepth),
-                        glowMaterial
-                    );
-                    brick.add(glowMesh);
-                    
-                    // White "MB" star burst — 5-point circle to suggest multiball
+                    const glowMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.45 });
+                    brick.add(new THREE.Mesh(new THREE.BoxGeometry(brickWidth * 1.35, brickHeight * 1.35, brickDepth), glowMat));
                     const starMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
-                    const starGeom = new THREE.CircleGeometry(0.22, 5);
-                    const star = new THREE.Mesh(starGeom, starMat);
+                    const star = new THREE.Mesh(new THREE.CircleGeometry(0.22, 5), starMat);
                     star.position.set(0, 0, 0.52);
                     brick.add(star);
-                    
-                    // Small white dots around the star to suggest orbiting balls
                     for (let d = 0; d < 3; d++) {
-                        const dotGeom = new THREE.CircleGeometry(0.07, 8);
-                        const dotMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
-                        const dot = new THREE.Mesh(dotGeom, dotMat);
-                        const angle = (d / 3) * Math.PI * 2;
-                        dot.position.set(Math.cos(angle) * 0.42, Math.sin(angle) * 0.22, 0.52);
+                        const dot = new THREE.Mesh(new THREE.CircleGeometry(0.07, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 }));
+                        const ang = (d / 3) * Math.PI * 2;
+                        dot.position.set(Math.cos(ang) * 0.42, Math.sin(ang) * 0.22, 0.52);
                         brick.add(dot);
                     }
                 }
-                
+
                 scene.add(brick);
                 bricks.push(brick);
             }
@@ -2434,17 +2372,12 @@ function createFungusBrick(x, y) {
             
             const ballRadius = 0.4;
             
-            // Wall collisions - clamp position AND force correct direction to prevent stuck oscillation
-            if (currentBall.position.x > rightBound - ballRadius) {
-                currentBall.direction.x = -Math.abs(currentBall.direction.x); // always bounce left
-                currentBall.position.x = rightBound - ballRadius;
-            } else if (currentBall.position.x < leftBound + ballRadius) {
-                currentBall.direction.x = Math.abs(currentBall.direction.x); // always bounce right
-                currentBall.position.x = leftBound + ballRadius;
+            // Wall collisions
+            if (currentBall.position.x > rightBound - ballRadius || currentBall.position.x < leftBound + ballRadius) {
+                currentBall.direction.x = -currentBall.direction.x;
             }
             if (currentBall.position.y > topBound - ballRadius) {
-                currentBall.direction.y = -Math.abs(currentBall.direction.y); // always bounce down
-                currentBall.position.y = topBound - ballRadius;
+                currentBall.direction.y = -currentBall.direction.y;
             }
             if (currentBall.position.y < bottomBound - 1) {
                 // For additional balls, just remove them
@@ -2495,11 +2428,6 @@ function createFungusBrick(x, y) {
                     currentBall.position.y + ballRadius > brick.position.y - brickHalfHeight &&
                     currentBall.position.y - ballRadius < brick.position.y + brickHalfHeight) {
                     
-                    // Handle ghost phaze bricks - ball passes through completely (check BEFORE bounce)
-                    if (brick.userData.isGhost) {
-                        continue; // Skip all collision response, ball passes through
-                    }
-                    
                     const dx = currentBall.position.x - brick.position.x;
                     const dy = currentBall.position.y - brick.position.y;
                     const absDx = Math.abs(dx);
@@ -2515,6 +2443,11 @@ function createFungusBrick(x, y) {
                     } else {
                         currentBall.direction.y = -currentBall.direction.y;
                         currentBall.position.y += (dy > 0) ? overlapY : -overlapY;
+                    }
+                    
+                    // Handle ghost phaze bricks - ball passes through
+                    if (brick.userData.isGhost) {
+                        continue; // Skip collision, ball passes through
                     }
                     
                     // Handle indestructible bricks
@@ -2556,14 +2489,14 @@ function createFungusBrick(x, y) {
                         });
                     }
                     
-                    // Starter K bricks always drop multiball AND give cash — fuelling Phase 2 chaos
+                    // K starter bricks: guaranteed multiball drop + cash
                     if (brick.userData.starter) {
                         spawnSpecificPowerup(brick.position.x, brick.position.y, 'multiball');
                         cash++;
                         updateCash();
                         updateStoreItemAvailability();
                     } else {
-                        // Regular bricks: higher powerup drop rate to keep chaos going
+                        // Regular bricks: boosted drop rate to fuel Phase 2 chaos
                         const powerupChance = brick.userData.points >= 80 ? 0.55 : 0.38;
                         if (Math.random() < powerupChance) {
                             spawnPowerup(brick.position.x, brick.position.y);
@@ -2759,19 +2692,20 @@ if (itemType === 'multiball') {
     { type: 'laser', color: 0xffff00 },
     { type: 'paddleMultiball', color: 0xaa00ff },
     { type: 'bomb', color: 0xcc0000 },
-    { type: 'fungicide', color: 0x00ff55 }  // New fungicide powerup - bright green
+    { type: 'fungicide', color: 0x00ff55 },  // Fungicide
+    { type: 'rocket',    color: 0xff6600 }   // Rocket — pierces indestructible bricks
 ];
         
-// Choose a powerup type with multiball-heavy weightings (drives Phase 2 chaos)
+// Choose a powerup type with weighted probabilities
 let powerupRoll = Math.random();
 let powerupInfo;
 
 if (powerupRoll < 0.42) {
-    powerupInfo = powerupTypes[0]; // 42% multiball — the engine of chaos
+    powerupInfo = powerupTypes[0]; // 42% multiball — engine of chaos
 } else if (powerupRoll < 0.57) {
     powerupInfo = powerupTypes[4]; // 15% paddleMultiball
 } else if (powerupRoll < 0.71) {
-    powerupInfo = powerupTypes[1]; // 14% extraCash (save up for rockets)
+    powerupInfo = powerupTypes[1]; // 14% extraCash (save for rockets)
 } else if (powerupRoll < 0.81) {
     powerupInfo = powerupTypes[2]; // 10% widePaddle
 } else if (powerupRoll < 0.89) {
@@ -2791,15 +2725,15 @@ if (powerupRoll < 0.42) {
         powerups.push(powerup);
     }
     
-    // Spawn a specific powerup type at a position (used for guaranteed drops)
+    // Spawn a guaranteed specific powerup type (used for K brick drops)
     function spawnSpecificPowerup(x, y, type) {
-        const powerupColors = {
+        const colorMap = {
             multiball: 0x00ffff, extraCash: 0x33cc33, widePaddle: 0xffffff,
             laser: 0xffff00, paddleMultiball: 0xaa00ff, bomb: 0xcc0000,
             fungicide: 0x00ff55, rocket: 0xff6600
         };
         const powerupGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.5);
-        const powerupMaterial = new THREE.MeshPhongMaterial({ color: powerupColors[type] || 0xffffff });
+        const powerupMaterial = new THREE.MeshPhongMaterial({ color: colorMap[type] || 0xffffff });
         const powerup = new THREE.Mesh(powerupGeometry, powerupMaterial);
         powerup.position.set(x, y, 0);
         powerup.rotation.set(0, 0, Math.PI/4);
@@ -2807,7 +2741,7 @@ if (powerupRoll < 0.42) {
         scene.add(powerup);
         powerups.push(powerup);
     }
-    
+
     function movePowerups() {
         const powerupSpeed = 0.05;
         const powerupSize = 0.4;
@@ -3666,148 +3600,92 @@ function checkFungicideStatus() {
     }
 }
 
-// ============================
-// ROCKET POWERUP — Pierces ALL bricks, including indestructible X fortress walls
-// Perfect for the Phase 3 boss zone challenge
-// ============================
-
-function activateRocket() {
-    // Orange flash to signal launch
-    const container = document.getElementById('gameContainer');
-    const flash = document.createElement('div');
-    flash.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(255,100,0,0.25);opacity:1;transition:opacity 0.4s;pointer-events:none;z-index:5;';
-    container.appendChild(flash);
-    setTimeout(() => { flash.style.opacity = '0'; setTimeout(() => container.removeChild(flash), 400); }, 150);
-
-    // Build rocket mesh — cylinder body + cone tip
-    const bodyGeom = new THREE.CylinderGeometry(0.18, 0.32, 1.8, 8);
-    const bodyMat  = new THREE.MeshPhongMaterial({ color: 0xff6600, emissive: 0x220800 });
-    const rocket   = new THREE.Mesh(bodyGeom, bodyMat);
-
-    const noseGeom = new THREE.ConeGeometry(0.18, 0.6, 8);
-    const noseMat  = new THREE.MeshPhongMaterial({ color: 0xff2200, emissive: 0x110000 });
-    const nose     = new THREE.Mesh(noseGeom, noseMat);
-    nose.position.y = 1.2;
-    rocket.add(nose);
-
-    // Fin left
-    const finGeom = new THREE.BoxGeometry(0.55, 0.5, 0.1);
-    const finMat  = new THREE.MeshPhongMaterial({ color: 0xcc3300 });
-    const finL = new THREE.Mesh(finGeom, finMat);
-    finL.position.set(-0.36, -0.75, 0);
-    rocket.add(finL);
-    const finR = finL.clone();
-    finR.position.set(0.36, -0.75, 0);
-    rocket.add(finR);
-
-    rocket.position.x = paddle.position.x;
-    rocket.position.y = bottomBound + 2.2;
-    rocket.userData.isRocket = true;
-    scene.add(rocket);
-
-    // Brief ignition pause, then launch
-    setTimeout(() => { if (rocket.parent) launchRocket(rocket); }, 280);
-}
-
-function launchRocket(rocket) {
-    const speed = 0.55; // Rockets are fast — faster than balls
-
-    const rocketInterval = setInterval(() => {
-        if (!gameActive || !rocket.parent || gamePaused) {
-            clearInterval(rocketInterval);
-            return;
-        }
-
-        rocket.position.y += speed;
-
-        // Exhaust trail particles
-        if (Math.random() < 0.45) {
-            const trailGeom = new THREE.SphereGeometry(0.13, 6, 6);
-            const trailMat  = new THREE.MeshBasicMaterial({
-                color: Math.random() < 0.5 ? 0xff6600 : 0xffcc00,
-                transparent: true, opacity: 0.85
-            });
-            const trail = new THREE.Mesh(trailGeom, trailMat);
-            trail.position.set(
-                rocket.position.x + (Math.random() - 0.5) * 0.28,
-                rocket.position.y - 1.1,
-                0
-            );
-            scene.add(trail);
-            let op = 0.85;
-            const ft = setInterval(() => {
-                op -= 0.09;
-                trail.material.opacity = op;
-                trail.position.y -= 0.04;
-                if (op <= 0) { clearInterval(ft); scene.remove(trail); }
-            }, 22);
-        }
-
-        // Off-screen check
-        if (rocket.position.y > topBound + 4) {
-            clearInterval(rocketInterval);
-            scene.remove(rocket);
-            return;
-        }
-
-        // Brick collision — rocket PIERCES ALL BRICKS including indestructible X walls!
-        const rRadius = 0.32;
-        for (let j = bricks.length - 1; j >= 0; j--) {
-            const brick = bricks[j];
-            if (!brick.parent) continue;
-            if (brick.userData.isGhost) continue;  // Ghost bricks are untouchable even to rockets
-
-            const bhw = brick.geometry.parameters.width  / 2;
-            const bhh = brick.geometry.parameters.height / 2;
-
-            if (rocket.position.x + rRadius > brick.position.x - bhw &&
-                rocket.position.x - rRadius < brick.position.x + bhw &&
-                rocket.position.y + rRadius > brick.position.y - bhh &&
-                rocket.position.y - rRadius < brick.position.y + bhh) {
-
-                // 💥 ROCKET DESTROYS EVERYTHING — indestructible walls included
-                createRocketHitEffect(brick.position.clone());
-                scene.remove(brick);
-
-                const pts = brick.userData.indestructible ? 25 : (brick.userData.points || 10);
-                score += pts;
-                updateScore();
-
-                if (brickBreakSound) brickBreakSound();
-
-                if (!brick.userData.fungus && !brick.userData.indestructible) {
-                    fungusBrickReact();
-                }
-
-                const phazeBricks = bricks.filter(b => b.parent && b.userData.phaze);
-                if (phazeBricks.length > 0) phazeBricks.forEach(b => updatePhazeBrickState(b));
-
-                // Check level complete (only non-indestructible count)
-                const remaining = bricks.filter(b => b.parent && !b.userData.indestructible);
-                if (remaining.length === 0) nextLevel();
-
-                // Rocket keeps piercing — no break here!
-            }
-        }
-    }, 16);
-}
-
-function createRocketHitEffect(position) {
-    const geom = new THREE.SphereGeometry(0.75, 10, 10);
-    const mat  = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.9 });
-    const flash = new THREE.Mesh(geom, mat);
-    flash.position.copy(position);
-    scene.add(flash);
-    let op = 0.9;
-    const fade = setInterval(() => {
-        op -= 0.10;
-        flash.material.opacity = op;
-        flash.scale.multiplyScalar(1.14);
-        if (op <= 0) { clearInterval(fade); scene.remove(flash); }
-    }, 22);
-}
-
     
+    // ── ROCKET POWERUP ─────────────────────────────────────────
+    // Pierces ALL bricks including indestructible X fortress walls
+    function activateRocket() {
+        const container = document.getElementById('gameContainer');
+        const flash = document.createElement('div');
+        flash.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(255,100,0,0.25);opacity:1;transition:opacity 0.4s;pointer-events:none;z-index:5;';
+        container.appendChild(flash);
+        setTimeout(function() { flash.style.opacity = '0'; setTimeout(function() { if (flash.parentNode) container.removeChild(flash); }, 400); }, 150);
+
+        const bodyGeom = new THREE.CylinderGeometry(0.18, 0.32, 1.8, 8);
+        const rocket   = new THREE.Mesh(bodyGeom, new THREE.MeshPhongMaterial({ color: 0xff6600, emissive: 0x220800 }));
+        const nose     = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.6, 8), new THREE.MeshPhongMaterial({ color: 0xff2200 }));
+        nose.position.y = 1.2;
+        rocket.add(nose);
+        const finGeom = new THREE.BoxGeometry(0.55, 0.5, 0.1);
+        const finMat  = new THREE.MeshPhongMaterial({ color: 0xcc3300 });
+        const finL = new THREE.Mesh(finGeom, finMat); finL.position.set(-0.36, -0.75, 0); rocket.add(finL);
+        const finR = new THREE.Mesh(finGeom, finMat); finR.position.set( 0.36, -0.75, 0); rocket.add(finR);
+        rocket.position.x = paddle.position.x;
+        rocket.position.y = bottomBound + 2.2;
+        rocket.userData.isRocket = true;
+        scene.add(rocket);
+        setTimeout(function() { if (rocket.parent) { launchRocket(rocket); } }, 280);
+    }
+
+    function launchRocket(rocket) {
+        const speed = 0.55;
+        const rocketInterval = setInterval(function() {
+            if (!gameActive || !rocket.parent || gamePaused) { clearInterval(rocketInterval); return; }
+            rocket.position.y += speed;
+
+            // Exhaust trail
+            if (Math.random() < 0.45) {
+                const trailGeom = new THREE.SphereGeometry(0.13, 6, 6);
+                const trailMat  = new THREE.MeshBasicMaterial({ color: Math.random() < 0.5 ? 0xff6600 : 0xffcc00, transparent: true, opacity: 0.85 });
+                const trail = new THREE.Mesh(trailGeom, trailMat);
+                trail.position.set(rocket.position.x + (Math.random()-0.5)*0.28, rocket.position.y - 1.1, 0);
+                scene.add(trail);
+                let op = 0.85;
+                const ft = setInterval(function() { op -= 0.09; trail.material.opacity = op; trail.position.y -= 0.04; if (op <= 0) { clearInterval(ft); scene.remove(trail); } }, 22);
+            }
+
+            if (rocket.position.y > topBound + 4) { clearInterval(rocketInterval); scene.remove(rocket); return; }
+
+            // Rocket pierces ALL bricks — including indestructible X walls
+            const rR = 0.32;
+            for (let j = bricks.length - 1; j >= 0; j--) {
+                const brick = bricks[j];
+                if (!brick.parent || brick.userData.isGhost) { continue; }
+                const bhw = brick.geometry.parameters.width  / 2;
+                const bhh = brick.geometry.parameters.height / 2;
+                if (rocket.position.x + rR > brick.position.x - bhw &&
+                    rocket.position.x - rR < brick.position.x + bhw &&
+                    rocket.position.y + rR > brick.position.y - bhh &&
+                    rocket.position.y - rR < brick.position.y + bhh) {
+                    createRocketHitEffect(brick.position.clone());
+                    scene.remove(brick);
+                    score += brick.userData.indestructible ? 25 : (brick.userData.points || 10);
+                    updateScore();
+                    if (brickBreakSound) { brickBreakSound(); }
+                    if (!brick.userData.fungus && !brick.userData.indestructible) { fungusBrickReact(); }
+                    const phazeBricks = bricks.filter(function(b) { return b.parent && b.userData.phaze; });
+                    phazeBricks.forEach(function(b) { updatePhazeBrickState(b); });
+                    const remaining = bricks.filter(function(b) { return b.parent && !b.userData.indestructible; });
+                    if (remaining.length === 0) { nextLevel(); }
+                }
+            }
+        }, 16);
+    }
+
+    function createRocketHitEffect(position) {
+        const flash = new THREE.Mesh(
+            new THREE.SphereGeometry(0.75, 10, 10),
+            new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.9 })
+        );
+        flash.position.copy(position);
+        scene.add(flash);
+        let op = 0.9;
+        const fade = setInterval(function() {
+            op -= 0.10; flash.material.opacity = op; flash.scale.multiplyScalar(1.14);
+            if (op <= 0) { clearInterval(fade); scene.remove(flash); }
+        }, 22);
+    }
+
+    function shootBallFromPaddle() {
         // Only shoot if the game is active and the ball has been launched
         if (!gameActive || !ballLaunched || gamePaused) return;
         
@@ -4374,8 +4252,8 @@ function detectAndFixStuckBalls() {
                     ball.userData.stuckData.possiblyStuck = true;
                     ball.userData.stuckData.stuckStartTime = currentTime;
                 } 
-                // If it's been possibly stuck for more than 100ms (was 1000ms)
-                else if (currentTime - ball.userData.stuckData.stuckStartTime > 100) {
+                // If it's been possibly stuck for more than 1 second
+                else if (currentTime - ball.userData.stuckData.stuckStartTime > 1000) {
                     console.log("Ball unstuck from top boundary");
                     
                     // Fix the ball position and direction
