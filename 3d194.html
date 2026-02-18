@@ -107,6 +107,99 @@
             border-radius: 5px;
         }
         /* New pause button styles */
+        /* ── Rocket cam HUD ────────────────────────────────── */
+        #rocketHUD {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 30;
+        }
+        #rocketHUD.active { display: block; pointer-events: auto; }
+
+        /* crosshair reticle */
+        #rocketReticle {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 48px; height: 48px;
+            border: 2px solid rgba(255,120,0,0.85);
+            border-radius: 50%;
+            box-shadow: 0 0 12px rgba(255,120,0,0.6);
+        }
+        #rocketReticle::before, #rocketReticle::after {
+            content: '';
+            position: absolute;
+            background: rgba(255,120,0,0.85);
+        }
+        #rocketReticle::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+        #rocketReticle::after  { height: 2px; width: 100%; top: 50%;  transform: translateY(-50%); }
+
+        /* speed lines */
+        #rocketSpeedLines {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(ellipse at center, transparent 30%, rgba(255,80,0,0.08) 100%);
+        }
+
+        /* steering strip */
+        #rocketSteering {
+            position: absolute;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 52px;
+            background: rgba(0,0,0,0.55);
+            border: 1.5px solid rgba(255,120,0,0.6);
+            border-radius: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            touch-action: none;
+        }
+        #rocketSteeringThumb {
+            width: 44px; height: 44px;
+            background: radial-gradient(circle, #ff6600, #cc2200);
+            border-radius: 50%;
+            position: absolute;
+            left: 50%; transform: translateX(-50%);
+            box-shadow: 0 0 14px rgba(255,100,0,0.8);
+            transition: left 0.05s;
+            pointer-events: none;
+        }
+        #rocketSteeringLabel {
+            color: rgba(255,150,80,0.7);
+            font-family: Arial, sans-serif;
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            pointer-events: none;
+            user-select: none;
+        }
+        #rocketTimer {
+            position: absolute;
+            top: 14px; left: 50%;
+            transform: translateX(-50%);
+            color: #ff8844;
+            font-family: 'Courier New', monospace;
+            font-size: 22px;
+            font-weight: bold;
+            text-shadow: 0 0 8px rgba(255,100,0,0.8);
+            pointer-events: none;
+        }
+        #rocketKillCount {
+            position: absolute;
+            top: 50px; left: 50%;
+            transform: translateX(-50%);
+            color: #ffcc44;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            text-shadow: 0 0 6px rgba(255,200,0,0.7);
+            pointer-events: none;
+        }
+
         #paddleCamButton {
             position: absolute;
             top: 10px;
@@ -331,6 +424,18 @@
         </select>
     </div>
     <button id="paddleCamButton">🎥 Paddle Cam</button>
+
+    <!-- Rocket cam HUD -->
+    <div id="rocketHUD">
+        <div id="rocketSpeedLines"></div>
+        <div id="rocketReticle"></div>
+        <div id="rocketTimer">3.0s</div>
+        <div id="rocketKillCount">💥 0 bricks</div>
+        <div id="rocketSteering">
+            <span id="rocketSteeringLabel">◀ STEER ▶</span>
+            <div id="rocketSteeringThumb"></div>
+        </div>
+    </div>
     <button id="pauseButton"><span class="pause-icon"></span>Pause</button>
     
     <div id="gameOver">Game Over</div>
@@ -425,6 +530,11 @@
      // Game variables
         let scene, camera, paddleCamera, renderer;
         let paddleCamActive = false;
+        let rocketCamActive = false;
+        let activeRocketRef = null;      // the current steerable rocket mesh
+        let rocketSteerX = 0;            // -1..1 steering input
+        let rocketKills = 0;             // bricks destroyed this rocket flight
+        let rocketCamera = null;
         let paddle, ball;
         let bricks = [];
         let powerups = [];
@@ -464,6 +574,7 @@
         // Game boundaries - WILL BE DYNAMICALLY ADJUSTED BASED ON LEVEL
         let gameWidth = 32;
         let gameHeight = 32;
+        const BALL_RADIUS = 0.4;  // single source of truth used everywhere
         let leftBound, rightBound, topBound, bottomBound;
         
         // ASCII Level Design
@@ -976,8 +1087,11 @@ function init() {
     camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
     camera.position.z = 10;
 
-    // Paddle cam — perspective camera sitting on top of the paddle, looking up the field
+    // Paddle cam
     paddleCamera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+
+    // Rocket cam — mounted just behind the rocket nose, steerable
+    rocketCamera = new THREE.PerspectiveCamera(80, container.clientWidth / container.clientHeight, 0.1, 1000);
     
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -1989,7 +2103,7 @@ function createFungusBrick(x, y) {
     // IMPORTANT: Make sure all balls stay within the new boundaries
     balls.forEach(ball => {
         // Adjust ball position if it's outside the new boundaries
-        const ballRadius = 0.4;
+        const ballRadius = BALL_RADIUS;
         ball.position.x = Math.max(
             leftBound + ballRadius, 
             Math.min(rightBound - ballRadius, ball.position.x)
@@ -2301,7 +2415,7 @@ function createFungusBrick(x, y) {
             currentBall.position.x += currentBall.direction.x * ballSpeed;
             currentBall.position.y += currentBall.direction.y * ballSpeed;
             
-            const ballRadius = 0.4;
+            const ballRadius = BALL_RADIUS;
             
             // Wall collisions
             if (currentBall.position.x > rightBound - ballRadius) {
@@ -2745,6 +2859,7 @@ function activateMultiball() {
                 
                 // Spawn at source ball but clamped safely inside boundaries
                 newBall.position.copy(sourceBall.position);
+                const ballRadius = BALL_RADIUS;
                 const safeMargin = ballRadius + 0.1;
                 newBall.position.x = Math.max(leftBound + safeMargin, Math.min(rightBound - safeMargin, newBall.position.x));
                 newBall.position.y = Math.min(topBound - safeMargin, newBall.position.y);
@@ -3540,50 +3655,170 @@ function checkFungicideStatus() {
     
     // ── ROCKET POWERUP ─────────────────────────────────────────
     // Pierces ALL bricks including indestructible X fortress walls
+    // ── STEERABLE ROCKET CAM ────────────────────────────────────────────────────
     function activateRocket() {
-        const container = document.getElementById('gameContainer');
-        const flash = document.createElement('div');
-        flash.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(255,100,0,0.25);opacity:1;transition:opacity 0.4s;pointer-events:none;z-index:5;';
-        container.appendChild(flash);
-        setTimeout(function() { flash.style.opacity = '0'; setTimeout(function() { if (flash.parentNode) container.removeChild(flash); }, 400); }, 150);
-
+        // Build rocket mesh
         const bodyGeom = new THREE.CylinderGeometry(0.18, 0.32, 1.8, 8);
-        const rocket   = new THREE.Mesh(bodyGeom, new THREE.MeshPhongMaterial({ color: 0xff6600, emissive: 0x220800 }));
+        const rocket   = new THREE.Mesh(bodyGeom, new THREE.MeshPhongMaterial({ color: 0xff6600, emissive: 0x330800 }));
         const nose     = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.6, 8), new THREE.MeshPhongMaterial({ color: 0xff2200 }));
-        nose.position.y = 1.2;
-        rocket.add(nose);
+        nose.position.y = 1.2; rocket.add(nose);
+        const finMat = new THREE.MeshPhongMaterial({ color: 0xcc3300 });
         const finGeom = new THREE.BoxGeometry(0.55, 0.5, 0.1);
-        const finMat  = new THREE.MeshPhongMaterial({ color: 0xcc3300 });
         const finL = new THREE.Mesh(finGeom, finMat); finL.position.set(-0.36, -0.75, 0); rocket.add(finL);
         const finR = new THREE.Mesh(finGeom, finMat); finR.position.set( 0.36, -0.75, 0); rocket.add(finR);
         rocket.position.x = paddle.position.x;
         rocket.position.y = bottomBound + 2.2;
-        rocket.userData.isRocket = true;
         scene.add(rocket);
-        setTimeout(function() { if (rocket.parent) { launchRocket(rocket); } }, 280);
+
+        activeRocketRef = rocket;
+        rocketSteerX    = 0;
+        rocketKills     = 0;
+
+        // Show HUD
+        const hud = document.getElementById('rocketHUD');
+        hud.classList.add('active');
+        document.getElementById('rocketKillCount').textContent = '💥 0 bricks';
+
+        // Wire up steering strip
+        _setupRocketSteering();
+
+        // Countdown timer
+        let timeLeft = 5.0;
+        const timerEl = document.getElementById('rocketTimer');
+        timerEl.textContent = timeLeft.toFixed(1) + 's';
+        const timerInterval = setInterval(function() {
+            timeLeft -= 0.1;
+            timerEl.textContent = Math.max(0, timeLeft).toFixed(1) + 's';
+        }, 100);
+
+        // Activate rocket cam
+        rocketCamActive = true;
+
+        // Brief ignition pause then launch
+        setTimeout(function() {
+            if (rocket.parent) {
+                _doLaunchRocket(rocket, timerInterval);
+            }
+        }, 300);
     }
 
-    function launchRocket(rocket) {
-        const speed = 0.55;
+    function _setupRocketSteering() {
+        const strip = document.getElementById('rocketSteering');
+        const thumb = document.getElementById('rocketSteeringThumb');
+        const stripW = strip.offsetWidth || 300;
+        const thumbW = 44;
+        const maxOffset = (stripW - thumbW) / 2;  // px from centre
+
+        function setSteer(clientX) {
+            const rect = strip.getBoundingClientRect();
+            const centre = rect.left + rect.width / 2;
+            const rawOffset = clientX - centre;
+            const clamped   = Math.max(-maxOffset, Math.min(maxOffset, rawOffset));
+            rocketSteerX = clamped / maxOffset;   // -1..1
+            // Move thumb visually
+            thumb.style.left = (50 + (clamped / rect.width) * 100) + '%';
+        }
+
+        function onDown(e) {
+            e.preventDefault();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            setSteer(clientX);
+            function onMove(ev) {
+                ev.preventDefault();
+                const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+                setSteer(cx);
+            }
+            function onUp() {
+                rocketSteerX = 0;
+                thumb.style.left = '50%';
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('touchmove', onMove);
+                window.removeEventListener('mouseup', onUp);
+                window.removeEventListener('touchend', onUp);
+            }
+            window.addEventListener('mousemove', onMove, { passive: false });
+            window.addEventListener('touchmove', onMove, { passive: false });
+            window.addEventListener('mouseup', onUp);
+            window.addEventListener('touchend', onUp);
+        }
+        strip.addEventListener('mousedown',  onDown);
+        strip.addEventListener('touchstart', onDown, { passive: false });
+    }
+
+    function _endRocketFlight(rocket, timerInterval) {
+        clearInterval(timerInterval);
+        rocketCamActive  = false;
+        activeRocketRef  = null;
+        rocketSteerX     = 0;
+        if (rocket && rocket.parent) { scene.remove(rocket); }
+        // Hide HUD
+        document.getElementById('rocketHUD').classList.remove('active');
+        document.getElementById('rocketSteeringThumb').style.left = '50%';
+        // Show score flash
+        const kills = rocketKills;
+        if (kills > 0) {
+            const flash = document.createElement('div');
+            flash.style.cssText = 'position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);color:#ffcc00;font-family:Arial;font-size:28px;font-weight:bold;text-shadow:0 0 12px orange;pointer-events:none;z-index:50;transition:opacity 1s;';
+            flash.textContent = '🚀 ' + kills + ' brick' + (kills === 1 ? '' : 's') + ' destroyed!';
+            document.getElementById('gameContainer').appendChild(flash);
+            setTimeout(function() { flash.style.opacity = '0'; setTimeout(function() { flash.parentNode && flash.parentNode.removeChild(flash); }, 1000); }, 1500);
+        }
+    }
+
+    function _doLaunchRocket(rocket, timerInterval) {
+        const SPEED_Y    = 0.52;
+        const SPEED_X    = 0.28;  // max horizontal drift per frame
+        const DURATION   = 5000;  // ms — same as timer
+        const rR         = 0.32;
+        let elapsed      = 0;
+
         const rocketInterval = setInterval(function() {
-            if (!gameActive || !rocket.parent || gamePaused) { clearInterval(rocketInterval); return; }
-            rocket.position.y += speed;
+            if (!gameActive || !rocket.parent) {
+                _endRocketFlight(rocket, timerInterval);
+                clearInterval(rocketInterval);
+                return;
+            }
+            if (gamePaused) { return; }
+
+            elapsed += 16;
+
+            // Apply steering — gradually tilt rocket body
+            const targetTilt = -rocketSteerX * 0.45;
+            rocket.rotation.z += (targetTilt - rocket.rotation.z) * 0.12;
+
+            // Move rocket: upward + steered horizontal drift
+            rocket.position.y += SPEED_Y;
+            rocket.position.x += rocketSteerX * SPEED_X;
+
+            // Clamp X inside field
+            rocket.position.x = Math.max(leftBound + 0.5, Math.min(rightBound - 0.5, rocket.position.x));
 
             // Exhaust trail
-            if (Math.random() < 0.45) {
-                const trailGeom = new THREE.SphereGeometry(0.13, 6, 6);
-                const trailMat  = new THREE.MeshBasicMaterial({ color: Math.random() < 0.5 ? 0xff6600 : 0xffcc00, transparent: true, opacity: 0.85 });
+            if (Math.random() < 0.5) {
+                const trailGeom = new THREE.SphereGeometry(0.12, 5, 5);
+                const trailMat  = new THREE.MeshBasicMaterial({ color: Math.random() < 0.5 ? 0xff6600 : 0xffcc00, transparent: true, opacity: 0.9 });
                 const trail = new THREE.Mesh(trailGeom, trailMat);
-                trail.position.set(rocket.position.x + (Math.random()-0.5)*0.28, rocket.position.y - 1.1, 0);
+                trail.position.set(
+                    rocket.position.x + (Math.random()-0.5)*0.2,
+                    rocket.position.y - 1.1,
+                    0
+                );
                 scene.add(trail);
-                let op = 0.85;
-                const ft = setInterval(function() { op -= 0.09; trail.material.opacity = op; trail.position.y -= 0.04; if (op <= 0) { clearInterval(ft); scene.remove(trail); } }, 22);
+                let op = 0.9;
+                const ft = setInterval(function() {
+                    op -= 0.08; trail.material.opacity = op; trail.position.y -= 0.05;
+                    if (op <= 0) { clearInterval(ft); scene.remove(trail); }
+                }, 18);
             }
 
-            if (rocket.position.y > topBound + 4) { clearInterval(rocketInterval); scene.remove(rocket); return; }
+            // Time or bounds expired — end flight
+            if (elapsed >= DURATION || rocket.position.y > topBound + 2) {
+                _endRocketFlight(rocket, timerInterval);
+                clearInterval(rocketInterval);
+                return;
+            }
 
-            // Rocket pierces ALL bricks — including indestructible X walls
-            const rR = 0.32;
+            // Collision with bricks
             for (let j = bricks.length - 1; j >= 0; j--) {
                 const brick = bricks[j];
                 if (!brick.parent || brick.userData.isGhost) { continue; }
@@ -3595,14 +3830,21 @@ function checkFungicideStatus() {
                     rocket.position.y - rR < brick.position.y + bhh) {
                     createRocketHitEffect(brick.position.clone());
                     scene.remove(brick);
+                    rocketKills++;
+                    document.getElementById('rocketKillCount').textContent = '💥 ' + rocketKills + ' brick' + (rocketKills === 1 ? '' : 's');
                     score += brick.userData.indestructible ? 25 : (brick.userData.points || 10);
                     updateScore();
                     if (brickBreakSound) { brickBreakSound(); }
                     if (!brick.userData.fungus && !brick.userData.indestructible) { fungusBrickReact(); }
-                    const phazeBricks = bricks.filter(function(b) { return b.parent && b.userData.phaze; });
-                    phazeBricks.forEach(function(b) { updatePhazeBrickState(b); });
+                    bricks.filter(function(b) { return b.parent && b.userData.phaze; })
+                          .forEach(function(b) { updatePhazeBrickState(b); });
                     const remaining = bricks.filter(function(b) { return b.parent && !b.userData.indestructible; });
-                    if (remaining.length === 0) { nextLevel(); }
+                    if (remaining.length === 0) {
+                        _endRocketFlight(rocket, timerInterval);
+                        clearInterval(rocketInterval);
+                        nextLevel();
+                        return;
+                    }
                 }
             }
         }, 16);
@@ -3889,6 +4131,10 @@ function gameOver() {
             paddleCamera.aspect = container.clientWidth / container.clientHeight;
             paddleCamera.updateProjectionMatrix();
         }
+        if (rocketCamera) {
+            rocketCamera.aspect = container.clientWidth / container.clientHeight;
+            rocketCamera.updateProjectionMatrix();
+        }
     }
     
    function movePaddle() {
@@ -4109,19 +4355,30 @@ function gameOver() {
         }
         
         // Always render the scene, even when paused
-        if (paddleCamActive && paddle) {
-            // Sit the camera right on top of the paddle, 0.8 units above it, looking up the field
+        if (rocketCamActive && activeRocketRef && activeRocketRef.parent) {
+            // Rocket-nose cam: sit just behind the nose, looking forward up the field
+            // Slight Z offset for depth, follows X tilt of rocket
+            const rkt = activeRocketRef;
+            rocketCamera.position.set(
+                rkt.position.x + Math.sin(rkt.rotation.z) * 0.4,
+                rkt.position.y + 0.6,
+                2.8
+            );
+            rocketCamera.lookAt(
+                rkt.position.x + rocketSteerX * 3,   // look slightly ahead of steer
+                rkt.position.y + 8,                   // look far up the field
+                0
+            );
+            rocketCamera.aspect = renderer.domElement.clientWidth / renderer.domElement.clientHeight;
+            rocketCamera.updateProjectionMatrix();
+            renderer.render(scene, rocketCamera);
+        } else if (paddleCamActive && paddle) {
             paddleCamera.position.set(
                 paddle.position.x,
                 paddle.position.y + 0.8,
-                1.5   // slight Z offset so the paddle itself is visible in the foreground
+                1.5
             );
-            // Look toward the top of the field, slightly tilted forward for drama
-            paddleCamera.lookAt(
-                paddle.position.x,
-                topBound,
-                0
-            );
+            paddleCamera.lookAt(paddle.position.x, topBound, 0);
             paddleCamera.aspect = renderer.domElement.clientWidth / renderer.domElement.clientHeight;
             paddleCamera.updateProjectionMatrix();
             renderer.render(scene, paddleCamera);
@@ -4136,7 +4393,7 @@ function detectAndFixStuckBalls() {
     if (gamePaused) return;
     
     // Define the "stuck zone" near the top boundary
-    const ballRadius = 0.4; // Make sure this matches your ball radius
+    const ballRadius = BALL_RADIUS;
     const stuckZoneThreshold = 0.1; // How close to the top boundary to check
     const stuckZone = topBound - ballRadius - stuckZoneThreshold;
     
