@@ -399,253 +399,159 @@
 <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-database.js" type="module"></script>
 
 <script type="module">
-  // Import Firebase modules
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.0/firebase-app.js";
-  import { getDatabase, ref, set, onValue, remove } from "https://www.gstatic.com/firebasejs/9.6.0/firebase-database.js";
+  // ============================================================
+  // Firebase Multiplayer Module — clean rewrite
+  // ============================================================
+  import { initializeApp }                                       from "https://www.gstatic.com/firebasejs/9.6.0/firebase-app.js";
+  import { getDatabase, ref, set, get, update, onValue, remove } from "https://www.gstatic.com/firebasejs/9.6.0/firebase-database.js";
 
-  // Your Firebase configuration - Replace with your actual Firebase project details
   const firebaseConfig = {
-
-  apiKey: "AIzaSyDbI0twSQjdk-4CGNrsXDqmiXiT06F7mJo",
-
-  authDomain: "brickswithfriends-fc742.firebaseapp.com",
-
-  databaseURL: "https://brickswithfriends-fc742-default-rtdb.asia-southeast1.firebasedatabase.app",
-
-  projectId: "brickswithfriends-fc742",
-
-  storageBucket: "brickswithfriends-fc742.firebasestorage.app",
-
-  messagingSenderId: "143374795435",
-
-  appId: "1:143374795435:web:65a1a1f466deff53486dee",
-
-  measurementId: "G-K7CNDPPF60"
-
-};
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
-  
-  // Generate a unique ID for this player
-  const playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
-  
-  // Available colors for other players' paddles
-  const playerColors = [
-    0x0088ff, // Blue
-    0xff8800, // Orange
-    0xff00ff, // Magenta
-    0xffff00, // Yellow
-    0x00ffaa  // Teal
-  ];
-  
-  // Select a random color for this player
-  const playerColorIndex = Math.floor(Math.random() * playerColors.length);
-  const playerColor = playerColors[playerColorIndex];
-
-  // Create the multiplayer functionality
-  window.multiplayer = {
-
-// Replace your existing setupRoom function with this enhanced version
-setupRoom: function(levelNum) {
-  // Clean up previous room if any
-  if (currentRoomId !== 'room_default') {
-    this.cleanupPlayer();
-  }
-  
-  // Generate room ID based on level
-  currentRoomId = `room_level_${levelNum}`;
-  
-  // Set up player in the new room
-  this.updatePaddlePosition(window.paddle.position.x);
-  
-  // Set up initial brick state in the room if we're the first player
-  const roomRef = ref(db, `rooms/${currentRoomId}`);
-  onValue(roomRef, (snapshot) => {
-    const roomData = snapshot.val() || {};
-    
-    // If there's no brick data and we have bricks, initialize it
-    if (!roomData.bricks && window.bricks && window.bricks.length > 0) {
-      const brickData = {};
-      window.bricks.forEach((brick, index) => {
-        if (brick.parent) { // Only include active bricks
-          brickData[`brick_${index}`] = {
-            active: true,
-            x: brick.position.x,
-            y: brick.position.y,
-            userData: brick.userData
-          };
-        }
-      });
-      
-      // Update the room with initial brick data
-      update(ref(db, `rooms/${currentRoomId}`), {
-        bricks: brickData,
-        level: levelNum,
-        lastUpdate: Date.now()
-      });
-    }
-  }, { onlyOnce: true });
-  
-  // Listen for brick state changes
-  const bricksRef = ref(db, `rooms/${currentRoomId}/bricks`);
-  onValue(bricksRef, (snapshot) => {
-    const brickData = snapshot.val();
-    if (!brickData) return;
-    
-    // Update our local bricks based on Firebase data
-    this.syncBricks(brickData);
-  });
-  
-  console.log(`Joined multiplayer room: ${currentRoomId}`);
-  
-  // Update the multiplayer status indicator
-  const statusElem = document.getElementById('multiplayerStatus');
-  if (statusElem) {
-    statusElem.textContent = `Multiplayer: Room ${levelNum}`;
-    statusElem.style.color = '#00ff00'; // Green to indicate active
-  }
-}
-
-    // Send paddle position to other players
-    updatePaddlePosition: function(x) {
-      const paddleRef = ref(db, 'players/' + playerId);
-      set(paddleRef, {
-        x: x,
-        color: playerColor,
-        lastUpdate: Date.now()
-      });
-    },
-    
-    // Remove player data when leaving
-    cleanupPlayer: function() {
-      const playerRef = ref(db, 'players/' + playerId);
-      remove(playerRef);
-    },
-    
-    // Initialize multiplayer objects
-    otherPlayerPaddles: {},
-    
-    // Update other players' paddles on screen
-    updateOtherPlayers: function(players) {
-      if (!window.scene || !window.paddle) return;
-      
-      // First remove paddles of players no longer in the game
-      for (let id in this.otherPlayerPaddles) {
-        if (!players[id]) {
-          window.scene.remove(this.otherPlayerPaddles[id]);
-          delete this.otherPlayerPaddles[id];
-        }
-      }
-      
-      // Then add/update paddles for all other players
-      for (let id in players) {
-        if (id !== playerId) {
-          const playerData = players[id];
-          
-          // If we don't have this player's paddle yet, create it
-          if (!this.otherPlayerPaddles[id]) {
-            const paddleGeometry = new THREE.BoxGeometry(3.5, 0.5, 1);
-            const paddleMaterial = new THREE.MeshPhongMaterial({ 
-              color: playerData.color || 0x0088ff,
-              transparent: true,
-              opacity: 0.7
-            });
-            const otherPaddle = new THREE.Mesh(paddleGeometry, paddleMaterial);
-            otherPaddle.position.y = window.bottomBound - 0.8; // Position below the player's paddle
-            window.scene.add(otherPaddle);
-            this.otherPlayerPaddles[id] = otherPaddle;
-          }
-          
-          // Update the paddle position
-          this.otherPlayerPaddles[id].position.x = playerData.x;
-        }
-      }
-    }
+    apiKey:            "AIzaSyDbI0twSQjdk-4CGNrsXDqmiXiT06F7mJo",
+    authDomain:        "brickswithfriends-fc742.firebaseapp.com",
+    databaseURL:       "https://brickswithfriends-fc742-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId:         "brickswithfriends-fc742",
+    storageBucket:     "brickswithfriends-fc742.firebasestorage.app",
+    messagingSenderId: "143374795435",
+    appId:             "1:143374795435:web:65a1a1f466deff53486dee",
+    measurementId:     "G-K7CNDPPF60"
   };
-  
-  // Listen for other players' movements
-  const playersRef = ref(db, 'players');
-  onValue(playersRef, (snapshot) => {
-    const players = snapshot.val() || {};
-    window.multiplayer.updateOtherPlayers(players);
-  });
-  
-  // Clean up inactive players (those who haven't updated in 30 seconds)
-  setInterval(() => {
-    const thirtySecondsAgo = Date.now() - 30000;
-    onValue(playersRef, (snapshot) => {
-      const players = snapshot.val() || {};
-      for (let id in players) {
-        if (players[id].lastUpdate < thirtySecondsAgo) {
-          const inactiveRef = ref(db, 'players/' + id);
-          remove(inactiveRef);
-        }
-      }
-    }, { onlyOnce: true });
-  }, 10000);
-  
-  // Clean up when window is closed
-  window.addEventListener('beforeunload', () => {
-    window.multiplayer.cleanupPlayer();
-  });
 
-// Enhanced reportBrickBreak function - properly attached to the multiplayer object
-window.multiplayer.reportBrickBreak = function(brickIndex) {
-  if (!currentRoomId) return;
-  
-  // Mark in our local model that we broke this brick
-  if (window.bricks[brickIndex]) {
-    window.bricks[brickIndex].userData.removedByMe = true;
+  const app      = initializeApp(firebaseConfig);
+  const db       = getDatabase(app);
+  const playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+
+  const playerColors = [0x0088ff, 0xff8800, 0xff00ff, 0xffff00, 0x00ffaa];
+  const playerColor  = playerColors[Math.floor(Math.random() * playerColors.length)];
+
+  // Room state — scoped to this module
+  let currentRoomId = 'room_default';
+  const otherPlayerPaddles = {};
+
+  // ── Paddle sync ──────────────────────────────────────────────
+  function updatePaddlePosition(x) {
+    set(ref(db, 'players/' + playerId), {
+      x:          x,
+      color:      playerColor,
+      lastUpdate: Date.now()
+    });
   }
-  
-  // Update the brick state in Firebase
-  const brickRef = ref(db, `rooms/${currentRoomId}/bricks/brick_${brickIndex}`);
-  update(brickRef, {
-    active: false,
-    brokenBy: playerId,
-    brokenAt: Date.now()
-  });
-}
 
-// Enhanced syncBricks function - properly attached to the multiplayer object
-window.multiplayer.syncBricks = function(brickData) {
-  if (!window.bricks || !window.scene) return;
-  
-  Object.keys(brickData).forEach(key => {
-    const serverBrick = brickData[key];
-    const brickIndex = parseInt(key.split('_')[1]);
-    
-    // Find the matching local brick
-    if (brickIndex < window.bricks.length) {
+  function cleanupPlayer() {
+    remove(ref(db, 'players/' + playerId));
+  }
+
+  // ── Other players' paddles ───────────────────────────────────
+  function updateOtherPlayers(players) {
+    if (!window.scene || !window.paddle) { return; }
+
+    for (const id in otherPlayerPaddles) {
+      if (!players[id]) {
+        window.scene.remove(otherPlayerPaddles[id]);
+        delete otherPlayerPaddles[id];
+      }
+    }
+
+    for (const id in players) {
+      if (id === playerId) { continue; }
+      const pData = players[id];
+      if (!otherPlayerPaddles[id]) {
+        const geo  = new THREE.BoxGeometry(3.5, 0.5, 1);
+        const mat  = new THREE.MeshPhongMaterial({ color: pData.color || 0x0088ff, transparent: true, opacity: 0.7 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.y = window.bottomBound - 0.8;
+        window.scene.add(mesh);
+        otherPlayerPaddles[id] = mesh;
+      }
+      otherPlayerPaddles[id].position.x = pData.x;
+    }
+  }
+
+  // ── Room setup ───────────────────────────────────────────────
+  function setupRoom(levelNum) {
+    if (currentRoomId !== 'room_default') { cleanupPlayer(); }
+    currentRoomId = 'room_level_' + levelNum;
+    updatePaddlePosition(window.paddle ? window.paddle.position.x : 0);
+
+    get(ref(db, 'rooms/' + currentRoomId)).then(function(snapshot) {
+      const roomData = snapshot.val() || {};
+      if (!roomData.bricks && window.bricks && window.bricks.length > 0) {
+        const brickData = {};
+        window.bricks.forEach(function(brick, index) {
+          if (brick.parent) {
+            brickData['brick_' + index] = { active: true, x: brick.position.x, y: brick.position.y, userData: brick.userData };
+          }
+        });
+        update(ref(db, 'rooms/' + currentRoomId), { bricks: brickData, level: levelNum, lastUpdate: Date.now() });
+      }
+    });
+
+    onValue(ref(db, 'rooms/' + currentRoomId + '/bricks'), function(snapshot) {
+      const brickData = snapshot.val();
+      if (!brickData) { return; }
+      syncBricks(brickData);
+    });
+
+    const statusElem = document.getElementById('multiplayerStatus');
+    if (statusElem) { statusElem.textContent = 'Multiplayer: Room ' + levelNum; statusElem.style.color = '#00ff00'; }
+    console.log('Joined multiplayer room: ' + currentRoomId);
+  }
+
+  // ── Brick sync ───────────────────────────────────────────────
+  function reportBrickBreak(brickIndex) {
+    if (!currentRoomId) { return; }
+    if (window.bricks[brickIndex]) { window.bricks[brickIndex].userData.removedByMe = true; }
+    update(ref(db, 'rooms/' + currentRoomId + '/bricks/brick_' + brickIndex), {
+      active: false, brokenBy: playerId, brokenAt: Date.now()
+    });
+  }
+
+  function syncBricks(brickData) {
+    if (!window.bricks || !window.scene) { return; }
+    Object.keys(brickData).forEach(function(key) {
+      const serverBrick = brickData[key];
+      const brickIndex  = parseInt(key.split('_')[1]);
+      if (brickIndex >= window.bricks.length) { return; }
       const localBrick = window.bricks[brickIndex];
-      
-      // If server says brick is gone but we still have it, remove it
       if (!serverBrick.active && localBrick.parent) {
         window.scene.remove(localBrick);
-        
-        // If this wasn't initiated by us, we should add points!
-        if (!localBrick.userData.removedByMe) {
-          // Award points for someone else breaking the brick
-          if (localBrick.userData && localBrick.userData.points) {
-            window.score += localBrick.userData.points / 2; // Half points for team breaks
-            window.updateScore();
-            
-            // Play brick break sound
-            if (window.brickBreakSound) {
-              window.brickBreakSound();
-            }
-            
-            // Create visual feedback that someone else broke this brick
-            createTeamBreakEffect(localBrick.position);
-          }
+        if (!localBrick.userData.removedByMe && localBrick.userData && localBrick.userData.points) {
+          window.score += Math.floor(localBrick.userData.points / 2);
+          if (window.updateScore)     { window.updateScore(); }
+          if (window.brickBreakSound) { window.brickBreakSound(); }
+          if (typeof createTeamBreakEffect === 'function') { createTeamBreakEffect(localBrick.position); }
         }
       }
-    }
-  });
-}
+    });
+  }
 
+  // ── Expose API to the main game script ───────────────────────
+  window.multiplayer = {
+    setupRoom:            setupRoom,
+    updatePaddlePosition: updatePaddlePosition,
+    cleanupPlayer:        cleanupPlayer,
+    updateOtherPlayers:   updateOtherPlayers,
+    reportBrickBreak:     reportBrickBreak,
+    syncBricks:           syncBricks,
+    otherPlayerPaddles:   otherPlayerPaddles
+  };
+
+  // ── Live player listener ─────────────────────────────────────
+  onValue(ref(db, 'players'), function(snapshot) {
+    updateOtherPlayers(snapshot.val() || {});
+  });
+
+  // ── Prune stale players every 10 s ───────────────────────────
+  setInterval(function() {
+    const cutoff = Date.now() - 30000;
+    get(ref(db, 'players')).then(function(snapshot) {
+      const players = snapshot.val() || {};
+      for (const id in players) {
+        if (players[id].lastUpdate < cutoff) { remove(ref(db, 'players/' + id)); }
+      }
+    });
+  }, 10000);
+
+  window.addEventListener('beforeunload', cleanupPlayer);
 </script>
 
 <script>
