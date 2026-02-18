@@ -107,6 +107,32 @@
             border-radius: 5px;
         }
         /* New pause button styles */
+        #paddleCamButton {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 180, 255, 0.25);
+            color: #00ccff;
+            border: 1.5px solid #00ccff;
+            border-radius: 6px;
+            padding: 5px 14px;
+            font-size: 13px;
+            font-family: Arial, sans-serif;
+            cursor: pointer;
+            z-index: 20;
+            transition: background 0.2s;
+            user-select: none;
+        }
+        #paddleCamButton:hover {
+            background: rgba(0, 180, 255, 0.45);
+        }
+        #paddleCamButton.active {
+            background: rgba(0, 255, 180, 0.35);
+            color: #00ffcc;
+            border-color: #00ffcc;
+        }
+
         #pauseButton {
             position: absolute;
             top: 10px;
@@ -304,6 +330,7 @@
             <option value="3">Level 3</option>
         </select>
     </div>
+    <button id="paddleCamButton">🎥 Paddle Cam</button>
     <button id="pauseButton"><span class="pause-icon"></span>Pause</button>
     
     <div id="gameOver">Game Over</div>
@@ -396,7 +423,8 @@
 <script>
 
      // Game variables
-        let scene, camera, renderer;
+        let scene, camera, paddleCamera, renderer;
+        let paddleCamActive = false;
         let paddle, ball;
         let bricks = [];
         let powerups = [];
@@ -947,6 +975,9 @@ function init() {
     // Create camera - will be properly adjusted in setupGameBoundaries()
     camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
     camera.position.z = 10;
+
+    // Paddle cam — perspective camera sitting on top of the paddle, looking up the field
+    paddleCamera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
     
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -1038,6 +1069,17 @@ function init() {
     
     // Pause button event listeners
     pauseButton.addEventListener('click', togglePause);
+
+    const paddleCamButton = document.getElementById('paddleCamButton');
+    paddleCamButton.addEventListener('click', function() {
+        paddleCamActive = !paddleCamActive;
+        paddleCamButton.classList.toggle('active', paddleCamActive);
+        paddleCamButton.textContent = paddleCamActive ? '🎥 Top View' : '🎥 Paddle Cam';
+        // Restore orthographic camera aspect on exit
+        if (!paddleCamActive) {
+            updateCameraForGameDimensions();
+        }
+    });
     resumeButton.addEventListener('click', resumeGame);
     
     launchButton.addEventListener('click', function(event) {
@@ -3843,6 +3885,10 @@ function gameOver() {
         
         // Recalculate the proper camera view on resize
         updateCameraForGameDimensions();
+        if (paddleCamera) {
+            paddleCamera.aspect = container.clientWidth / container.clientHeight;
+            paddleCamera.updateProjectionMatrix();
+        }
     }
     
    function movePaddle() {
@@ -4063,7 +4109,25 @@ function gameOver() {
         }
         
         // Always render the scene, even when paused
-        renderer.render(scene, camera);
+        if (paddleCamActive && paddle) {
+            // Sit the camera right on top of the paddle, 0.8 units above it, looking up the field
+            paddleCamera.position.set(
+                paddle.position.x,
+                paddle.position.y + 0.8,
+                1.5   // slight Z offset so the paddle itself is visible in the foreground
+            );
+            // Look toward the top of the field, slightly tilted forward for drama
+            paddleCamera.lookAt(
+                paddle.position.x,
+                topBound,
+                0
+            );
+            paddleCamera.aspect = renderer.domElement.clientWidth / renderer.domElement.clientHeight;
+            paddleCamera.updateProjectionMatrix();
+            renderer.render(scene, paddleCamera);
+        } else {
+            renderer.render(scene, camera);
+        }
     }
 }
     
