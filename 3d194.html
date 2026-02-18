@@ -2262,11 +2262,16 @@ function createFungusBrick(x, y) {
             const ballRadius = 0.4;
             
             // Wall collisions
-            if (currentBall.position.x > rightBound - ballRadius || currentBall.position.x < leftBound + ballRadius) {
-                currentBall.direction.x = -currentBall.direction.x;
+            if (currentBall.position.x > rightBound - ballRadius) {
+                currentBall.position.x = rightBound - ballRadius;
+                currentBall.direction.x = -Math.abs(currentBall.direction.x);
+            } else if (currentBall.position.x < leftBound + ballRadius) {
+                currentBall.position.x = leftBound + ballRadius;
+                currentBall.direction.x = Math.abs(currentBall.direction.x);
             }
             if (currentBall.position.y > topBound - ballRadius) {
-                currentBall.direction.y = -currentBall.direction.y;
+                currentBall.position.y = topBound - ballRadius;   // clamp inside boundary
+                currentBall.direction.y = -Math.abs(currentBall.direction.y); // always bounce DOWN
             }
             if (currentBall.position.y < bottomBound - 1) {
                 // For additional balls, just remove them
@@ -2696,14 +2701,18 @@ function activateMultiball() {
                 const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
                 const newBall = new THREE.Mesh(ballGeometry, ballMaterial);
                 
-                // Position the new ball at the position of the source ball
+                // Spawn at source ball but clamped safely inside boundaries
                 newBall.position.copy(sourceBall.position);
-                
-                // Give each new ball a different direction
+                const safeMargin = ballRadius + 0.1;
+                newBall.position.x = Math.max(leftBound + safeMargin, Math.min(rightBound - safeMargin, newBall.position.x));
+                newBall.position.y = Math.min(topBound - safeMargin, newBall.position.y);
+
+                // Give each new ball a different direction, but if near top always send downward
                 const angle = Math.PI * 2 * Math.random();
+                const nearTop = newBall.position.y > topBound - 3;
                 newBall.direction = new THREE.Vector3(
                     Math.sin(angle),
-                    Math.cos(angle),
+                    nearTop ? -Math.abs(Math.cos(angle)) : Math.cos(angle),
                     0
                 ).normalize();
                 
