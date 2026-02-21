@@ -246,6 +246,8 @@
         <select id="imgSize">
             <option value="1">Standard (1x)</option>
             <option value="2" selected>Large (2x)</option>
+            <option value="4">High Resolution (4x)</option>
+            <option value="6">Ultra High Resolution (6x) — slow</option>
         </select>
         <button onclick="saveImage()">💾 Download PNG</button>
         <button onclick="hideImgOptions()" class="cancel-btn">Cancel</button>
@@ -372,14 +374,7 @@
     
     Greeting --> Verify["<b>VERIFY &amp; IDENTIFY</b><br/>1. Listen to reason for calling<br/>2. Verify customer identity"]
     
-    Verify --> Category{"<b>SERVICE CATEGORY?</b>"}
-    
-    Category -->|Property| PropDecision{"<b>PROPERTY ISSUE?</b>"}
-    Category -->|Community| CommDecision{"<b>COMMUNITY?</b>"}
-    Category -->|Infrastructure| InfraDecision{"<b>INFRASTRUCTURE ISSUE?</b>"}
-    Category -->|Other| OtherDecision{"<b>OTHER ISSUE?</b>"}
-
-    %% =============================================`;
+    Verify --> Category{"<b>SERVICE CATEGORY?</b>"}`;
 
     const TAIL = `CustomerDetails["<b>CONFIRM DETAILS</b><br/>Name, Mobile, Email, Address"]
 
@@ -636,19 +631,72 @@
     async function saveImage() {
         const scale = parseFloat(document.getElementById('imgSize').value);
         const statusEl = document.getElementById('imgStatus');
-        statusEl.textContent = '⏳ Rendering...';
+        statusEl.textContent = '⏳ Preparing image' + (scale >= 4 ? ' — high-res may take up to 60 seconds...' : '...');
+
         try {
-            const el = document.getElementById('mermaidDiagram');
-            const orig = el.style.transform;
-            el.style.transform = 'none';
-            const dataUrl = await domtoimage.toPng(el, { quality: 1, bgcolor: '#ffffff', scale });
-            el.style.transform = orig;
-            const link = document.createElement('a');
-            link.download = 'SDRC_CallFlow_Filtered.png';
-            link.href = dataUrl;
-            link.click();
-            statusEl.textContent = '✅ Downloaded!';
+            const container = document.getElementById('mermaidDiagram');
+            const svg = container.querySelector('svg');
+            if (!svg) { statusEl.textContent = '⚠️ No diagram rendered yet.'; return; }
+
+            // Serialise the SVG as-is (already has correct viewBox from post-processing)
+            const serialiser = new XMLSerializer();
+            const origTransform = container.style.transform;
+            container.style.transform = 'none';
+
+            // Clone SVG and embed fonts/styles so it renders correctly off-screen
+            const svgClone = svg.cloneNode(true);
+            const svgWidth  = parseFloat(svg.getAttribute('width')  || svg.viewBox.baseVal.width  || 2000);
+            const svgHeight = parseFloat(svg.getAttribute('height') || svg.viewBox.baseVal.height || 3000);
+
+            svgClone.setAttribute('width',  svgWidth);
+            svgClone.setAttribute('height', svgHeight);
+
+            const svgString = serialiser.serializeToString(svgClone);
+            container.style.transform = origTransform;
+
+            // Convert SVG string → Blob → Image → Canvas
+            const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const url  = URL.createObjectURL(blob);
+
+            const img = await new Promise((resolve, reject) => {
+                const i = new Image();
+                i.onload  = () => resolve(i);
+                i.onerror = reject;
+                i.src = url;
+            });
+
+            const canvasW = Math.round(svgWidth  * scale);
+            const canvasH = Math.round(svgHeight * scale);
+
+            // Check canvas size limit (~268 million px for most browsers)
+            if (canvasW * canvasH > 268000000) {
+                statusEl.textContent = `⚠️ Canvas too large at ${scale}x (${canvasW}×${canvasH}px). Try a lower resolution or filter the diagram down first.`;
+                URL.revokeObjectURL(url);
+                return;
+            }
+
+            statusEl.textContent = `⏳ Drawing ${canvasW}×${canvasH}px canvas...`;
+            await new Promise(r => setTimeout(r, 50)); // let the UI update
+
+            const canvas = document.createElement('canvas');
+            canvas.width  = canvasW;
+            canvas.height = canvasH;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvasW, canvasH);
+            ctx.drawImage(img, 0, 0, canvasW, canvasH);
+            URL.revokeObjectURL(url);
+
+            canvas.toBlob(blob => {
+                const link = document.createElement('a');
+                link.download = `SDRC_CallFlow_${scale}x.png`;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                statusEl.textContent = `✅ Downloaded at ${scale}x (${canvasW}×${canvasH}px)!`;
+            }, 'image/png', 1.0);
+
         } catch(e) {
+            console.error(e);
             statusEl.textContent = '❌ Error: ' + e.message;
         }
     }
@@ -681,4 +729,3 @@
 </script>
 </body>
 </html>
-
