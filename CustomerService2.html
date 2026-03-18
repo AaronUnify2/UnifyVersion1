@@ -1,379 +1,813 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SDRC Customer Service Call Flow - New Hire Mode</title>
+    <title>SDRC Customer Service Call Flow Chart</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script type="module">
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({ 
-            startOnLoad: true,
-            theme: 'base',
+
+        window._mermaid = mermaid;
+
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
             flowchart: {
                 useMaxWidth: false,
                 htmlLabels: true,
                 curve: 'basis',
-                nodeSpacing: 40,
-                rankSpacing: 60,
-                padding: 20
+                nodeSpacing: 80,
+                rankSpacing: 120,
+                padding: 25
             },
             themeVariables: {
-                primaryColor: '#e3f2fd',
-                secondaryColor: '#fff3e0',
-                tertiaryColor: '#e8f5e9',
-                fontSize: '15px',
-                fontFamily: 'Segoe UI, Arial, sans-serif',
-                lineColor: '#546e7a'
+                fontSize: '32px',
+                fontFamily: 'Arial, sans-serif'
             }
         });
-        // Expose mermaid to window so we can access it if needed
-        window.mermaid = mermaid;
+
+        // Called after each render to apply font + alignment overrides
+        window.applyPostProcessing = function() {
+            const svg = document.querySelector('#mermaidDiagram svg');
+            if (!svg) return;
+
+            const styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+            styleEl.textContent = `
+                foreignObject div, foreignObject span, foreignObject p,
+                foreignObject b, foreignObject i, foreignObject u,
+                .nodeLabel, .nodeLabel * {
+                    font-size: 26px !important;
+                    line-height: 1.35 !important;
+                    font-family: Arial, sans-serif !important;
+                }
+                .nodeLabel { text-align: left !important; }
+                .nodeLabel * { text-align: left !important; }
+                .edgeLabel foreignObject div, .edgeLabel .nodeLabel, .edgeLabel .nodeLabel * {
+                    font-size: 22px !important;
+                    font-weight: 700 !important;
+                    text-align: center !important;
+                }
+            `;
+            svg.insertBefore(styleEl, svg.firstChild);
+
+            svg.querySelectorAll('text').forEach(el => { el.style.fontSize = '26px'; });
+
+            svg.querySelectorAll('.nodeLabel').forEach(label => {
+                const inner = label.querySelector('div') || label;
+                if (!inner) return;
+                const html = inner.innerHTML;
+                const m = html.match(/^(<b>.*?<\/b>)(<br\/>|<br>)?(.*)/s);
+                if (m) {
+                    inner.innerHTML =
+                        '<div style="text-align:center;font-weight:bold;margin-bottom:6px;">' + m[1] + '</div>' +
+                        '<div style="text-align:left;padding-left:8px;">' + (m[3]||'') + '</div>';
+                } else {
+                    inner.style.textAlign = 'left';
+                    inner.style.paddingLeft = '8px';
+                }
+            });
+
+            svg.querySelectorAll('foreignObject').forEach(fo => {
+                const div = fo.querySelector('div');
+                if (div) {
+                    const rect = div.getBoundingClientRect();
+                    fo.setAttribute('width', Math.ceil(rect.width) + 20);
+                    fo.setAttribute('height', Math.ceil(rect.height) + 20);
+                }
+            });
+
+            const bbox = svg.getBBox();
+            svg.setAttribute('viewBox', `${bbox.x-20} ${bbox.y-20} ${bbox.width+40} ${bbox.height+40}`);
+            svg.setAttribute('width', bbox.width + 40);
+            svg.setAttribute('height', bbox.height + 40);
+        };
+
+        window.renderDiagram = async function(source) {
+            const wrapper = document.getElementById('diagramContainer');
+
+            // Destroy the old element entirely and create a fresh one -
+            // reusing the same element causes Mermaid to carry over stale
+            // internal state on re-renders, resulting in collapsed node boxes.
+            const old = document.getElementById('mermaidDiagram');
+            if (old) old.remove();
+
+            const fresh = document.createElement('div');
+            fresh.className = 'mermaid';
+            fresh.id = 'mermaidDiagram';
+            fresh.textContent = source;
+            wrapper.appendChild(fresh);
+
+            await window._mermaid.run({ nodes: [fresh] });
+            window.applyPostProcessing();
+        };
+
+        // Initial render
+        window.addEventListener('load', () => {
+            window.rebuildDiagram();
+        });
     </script>
     <style>
+        @page { size: A3 landscape; margin: 8mm; }
         * { box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f6f8; height: 100vh; display: flex; flex-direction: column; }
-        
-        /* Header */
-        header { background: #2c3e50; color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        h1 { margin: 0; font-size: 22px; font-weight: 600; }
-        .subtitle { font-size: 13px; opacity: 0.8; }
-        
-        /* Layout */
-        .main-layout { display: flex; flex: 1; overflow: hidden; }
-        
-        /* Sidebar (Legend & Systems) */
-        .sidebar { width: 300px; background: white; border-right: 1px solid #e0e0e0; overflow-y: auto; display: flex; flex-direction: column; z-index: 10; }
-        .sidebar-section { padding: 20px; border-bottom: 1px solid #eee; }
-        .sidebar-title { font-size: 14px; font-weight: 700; color: #34495e; text-transform: uppercase; margin-bottom: 15px; letter-spacing: 0.5px; }
-        
-        /* System List */
-        .system-item { display: flex; align-items: baseline; margin-bottom: 12px; font-size: 13px; }
-        .system-name { font-weight: 700; color: #2980b9; width: 80px; flex-shrink: 0; }
-        .system-desc { color: #555; }
-        
-        /* Diagram Area */
-        .diagram-wrapper { flex: 1; position: relative; background-color: #f4f6f8; overflow: hidden; }
-        .diagram-container { width: 100%; height: 100%; overflow: hidden; cursor: grab; display: flex; align-items: center; justify-content: center; }
-        .diagram-container:active { cursor: grabbing; }
-        
-        /* Controls */
-        .controls-overlay { position: absolute; bottom: 30px; right: 30px; background: white; padding: 10px; border-radius: 50px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; gap: 10px; z-index: 100; }
-        .btn-control { width: 40px; height: 40px; border-radius: 50%; border: none; background: #fff; color: #555; font-size: 18px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .btn-control:hover { background: #2980b9; color: white; }
-        .btn-save { background: #e8f5e9; color: #2e7d32; }
-        .btn-save:hover { background: #2e7d32; color: white; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0; padding: 20px;
+            background: #f0f4f8;
+        }
+        .container {
+            max-width: 100%; background: white;
+            padding: 28px; border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 { color: #1a365d; text-align: center; margin-bottom: 4px; font-size: 26px; }
+        .subtitle { text-align: center; color: #4a5568; margin-bottom: 18px; font-size: 13px; }
 
-        /* Mermaid Specifics */
-        .mermaid { transform-origin: center center; }
-        
-        /* Instructions Panel (Bottom of sidebar) */
-        .quick-tips { background: #fff8e1; padding: 15px; margin: 20px; border-radius: 8px; border-left: 4px solid #ffb300; font-size: 13px; }
-        
+        /* Controls */
+        .controls {
+            display: flex; justify-content: center;
+            gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+        }
+        .controls button {
+            padding: 9px 18px; font-size: 13px; cursor: pointer;
+            border: 2px solid #3182ce; background: white; color: #3182ce;
+            border-radius: 6px; font-weight: 600; transition: all 0.2s;
+        }
+        .controls button:hover { background: #3182ce; color: white; }
+        .controls button.print-btn { border-color: #38a169; color: #38a169; }
+        .controls button.print-btn:hover { background: #38a169; color: white; }
+        .controls button.img-btn { border-color: #805ad5; color: #805ad5; }
+        .controls button.img-btn:hover { background: #805ad5; color: white; }
+        .zoom-info {
+            display: flex; align-items: center; padding: 9px 14px;
+            background: #ebf8ff; border-radius: 6px;
+            color: #2b6cb0; font-weight: 500; font-size: 13px;
+        }
+
+        /* Filter panel */
+        .filter-panel {
+            border: 2px solid #e2e8f0; border-radius: 10px;
+            padding: 16px; margin-bottom: 20px; background: #f8fafc;
+        }
+        .filter-title {
+            font-size: 13px; font-weight: 700; color: #4a5568;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            margin-bottom: 12px; text-align: center;
+        }
+        .filter-groups {
+            display: flex; gap: 10px; flex-wrap: wrap;
+        }
+        .cat-group {
+            flex: 1; min-width: 160px;
+            border: 2px solid; border-radius: 8px; padding: 10px 12px;
+        }
+        .cat-header {
+            display: flex; justify-content: space-between;
+            align-items: center; margin-bottom: 8px; font-size: 13px;
+        }
+        .mini-btn {
+            padding: 1px 7px; font-size: 11px; cursor: pointer;
+            border: 1.5px solid; background: white;
+            border-radius: 4px; font-weight: 600;
+            margin-left: 3px; transition: opacity 0.15s;
+        }
+        .mini-btn:hover { opacity: 0.7; }
+        .check-label {
+            display: flex; align-items: center; gap: 7px;
+            font-size: 13px; cursor: pointer; padding: 3px 4px;
+            border-radius: 5px; transition: background 0.12s;
+        }
+        .check-label:hover { background: rgba(0,0,0,0.04); }
+        .check-label input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+
+        /* Status bar */
+        .status-bar {
+            text-align: center; padding: 8px; margin-bottom: 12px;
+            font-size: 13px; color: #4a5568; background: #f0f4f8;
+            border-radius: 6px; display: none;
+        }
+        .status-bar.show { display: block; }
+
+        /* Save image panel */
+        .img-options {
+            display: none; justify-content: center; gap: 10px;
+            margin-bottom: 16px; padding: 12px 16px;
+            background: #f3e8ff; border: 2px solid #805ad5;
+            border-radius: 8px; flex-wrap: wrap; align-items: center;
+        }
+        .img-options.show { display: flex; }
+        .img-options label { font-weight: 600; color: #553c9a; font-size: 13px; }
+        .img-options select { padding: 6px 10px; font-size: 13px; border: 2px solid #805ad5; border-radius: 6px; color: #553c9a; }
+        .img-options button {
+            padding: 8px 16px; font-size: 13px; cursor: pointer;
+            border: 2px solid #805ad5; background: #805ad5;
+            color: white; border-radius: 6px; font-weight: 600;
+        }
+        .img-options .cancel-btn { background: white; color: #805ad5; }
+        .img-status { color: #553c9a; font-size: 13px; }
+
+        /* Diagram area */
+        .diagram-wrapper { border: 2px solid #e2e8f0; border-radius: 8px; overflow: hidden; background: #fafafa; }
+        .diagram-container {
+            width: 100%; height: 75vh; min-height: 600px;
+            overflow: auto; padding: 20px;
+            cursor: grab;
+        }
+        .diagram-container:active { cursor: grabbing; }
+        .mermaid { transform-origin: top left; transition: transform 0.2s ease; }
+
+        .rendering-msg {
+            display: flex; align-items: center; justify-content: center;
+            height: 200px; font-size: 16px; color: #718096;
+        }
+
+        /* Print */
+        @media print {
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            html, body { width: 420mm; height: 297mm; margin: 0 !important; padding: 0 !important; background: white !important; overflow: visible !important; }
+            body { padding: 4mm !important; }
+            .container { box-shadow: none !important; padding: 4mm !important; border-radius: 0 !important; page-break-inside: avoid; }
+            .controls, .filter-panel, .img-options, .status-bar { display: none !important; }
+            h1 { font-size: 18px !important; margin-bottom: 2mm !important; }
+            .subtitle { font-size: 10px !important; margin-bottom: 3mm !important; }
+            .diagram-wrapper { border: 1px solid #ccc !important; }
+            .diagram-container { height: auto !important; min-height: auto !important; overflow: visible !important; padding: 3mm !important; }
+            .mermaid { transform: scale(0.25) !important; transform-origin: top left !important; width: 400% !important; }
+            .mermaid svg { max-width: none !important; overflow: visible !important; }
+        }
     </style>
 </head>
 <body>
+<div class="container">
+    <h1>SDRC Customer Service Call Flow Chart</h1>
+    <p class="subtitle">Decision Tree Model – Autonomy-Focused Guidance</p>
 
-    <header>
-        <div>
-            <h1>SDRC Customer Service Flow</h1>
-            <div class="subtitle">Interactive Support Tool v2.0</div>
-        </div>
-        <div style="font-size: 13px; background: rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 20px;">
-            Current Zoom: <span id="zoomLevel">100</span>%
-        </div>
-    </header>
+    <div class="controls">
+        <button onclick="zoomIn()">➕ Zoom In</button>
+        <button onclick="zoomOut()">➖ Zoom Out</button>
+        <button onclick="resetZoom()">🔄 Reset View</button>
+        <button onclick="fitToScreen()">📐 Fit to Screen</button>
+        <button onclick="window.print()" class="print-btn">🖨️ Print A3</button>
+        <button onclick="saveSVG()" class="img-btn">⬇️ Download SVG</button>
+        <div class="zoom-info">Zoom: <span id="zoomLevel">100</span>%</div>
+        <span id="svgStatus" style="font-size:13px;color:#553c9a;align-self:center;"></span>
+    </div>
 
-    <div class="main-layout">
-        
-        <aside class="sidebar">
-            <div class="sidebar-section">
-                <div class="sidebar-title">🔑 Key Systems</div>
-                <div class="system-item"><span class="system-name">Merit</span> <span class="system-desc">Request Management (Logs & Tasks)</span></div>
-                <div class="system-item"><span class="system-name">TechOne</span> <span class="system-desc">Finance & Property Data</span></div>
-                <div class="system-item"><span class="system-name">Intramaps</span> <span class="system-desc">GIS / Maps / Zones</span></div>
-                <div class="system-item"><span class="system-name">ECM</span> <span class="system-desc">Document Management</span></div>
-                <div class="system-item"><span class="system-name">Aqualas</span> <span class="system-desc">Water Networks</span></div>
-                <div class="system-item"><span class="system-name">BPOINT</span> <span class="system-desc">Taking Payments</span></div>
-                <div class="system-item"><span class="system-name">Payreq</span> <span class="system-desc">Rates Notices</span></div>
-                <div class="system-item"><span class="system-name">Eli</span> <span class="system-desc">Internal Knowledge Base</span></div>
-                <div class="system-item"><span class="system-name">The Pulse</span> <span class="system-desc">Staff Directory</span></div>
-            </div>
+    <div class="img-options" id="imgOptions" style="display:none"></div>
 
-            <div class="sidebar-section">
-                <div class="sidebar-title">📞 Critical Numbers</div>
-                <div class="system-item"><span class="system-name">RSPCA</span> <span class="system-desc">1300 264 625</span></div>
-                <div class="system-item"><span class="system-name">QLD Rail</span> <span class="system-desc">13 16 17</span></div>
-                <div class="system-item"><span class="system-name">TMR</span> <span class="system-desc">13 20 80</span></div>
-                <div class="system-item"><span class="system-name">Vicki L.</span> <span class="system-desc">0427 026 216 (Washpool)</span></div>
-            </div>
+    <div class="filter-panel">
+        <div class="filter-title">🔍 Filter — uncheck services to remove them from the diagram</div>
+        <div class="filter-groups">
             
-            <div class="quick-tips">
-                <b>💡 New Hire Tips:</b>
-                <ul style="margin: 5px 0 0 0; padding-left: 20px;">
-                    <li>Never cold transfer. Announce the caller.</li>
-                    <li>Always verify identity for Rates/Private info.</li>
-                    <li>If unsure, ask to put customer on brief hold.</li>
-                </ul>
+        <div class="cat-group" style="border-color:#2563eb;background:#eff6ff">
+            <div class="cat-header" style="color:#2563eb">
+                <strong>Property</strong>
+                <span>
+                    <button class="mini-btn" style="color:#2563eb;border-color:#2563eb" onclick="toggleCat('Property',true)">All</button>
+                    <button class="mini-btn" style="color:#2563eb;border-color:#2563eb" onclick="toggleCat('Property',false)">None</button>
+                </span>
             </div>
-        </aside>
-
-        <div class="diagram-wrapper">
-            <div class="controls-overlay">
-                <button class="btn-control" onclick="zoomIn()" title="Zoom In">＋</button>
-                <button class="btn-control" onclick="resetZoom()" title="Reset View">⟲</button>
-                <button class="btn-control" onclick="zoomOut()" title="Zoom Out">－</button>
-                <div style="width: 1px; background: #eee; height: 25px;"></div>
-                <button class="btn-control btn-save" onclick="saveImage()" title="Save High-Res Image">📷</button>
+                <label class="check-label" style="--accent:#2563eb">
+                    <input type="checkbox" id="cb_rates" data-cat="Property" onchange="rebuildDiagram()">
+                    <span>💰 Rates</span>
+                </label>
+                <label class="check-label" style="--accent:#2563eb">
+                    <input type="checkbox" id="cb_building" data-cat="Property" onchange="rebuildDiagram()">
+                    <span>🏗️ Building</span>
+                </label>
+                <label class="check-label" style="--accent:#2563eb">
+                    <input type="checkbox" id="cb_buildingguide" data-cat="Property" onchange="rebuildDiagram()">
+                    <span>🏗️ Building Approval General Process</span>
+                </label>
+                <label class="check-label" style="--accent:#2563eb">
+                    <input type="checkbox" id="cb_plumbing" data-cat="Property" onchange="rebuildDiagram()">
+                    <span>🔧 Plumbing</span>
+                </label>
+                <label class="check-label" style="--accent:#2563eb">
+                    <input type="checkbox" id="cb_planning" data-cat="Property" onchange="rebuildDiagram()">
+                    <span>📐 Planning</span>
+                </label>
+                <label class="check-label" style="--accent:#2563eb">
+                    <input type="checkbox" id="cb_planningguide" data-cat="Property" onchange="rebuildDiagram()">
+                    <span>📐 Planning Application General Process</span>
+                </label>
+                <label class="check-label" style="--accent:#2563eb">
+                    <input type="checkbox" id="cb_water" data-cat="Property" onchange="rebuildDiagram()">
+                    <span>💧 Water</span>
+                </label>
+        </div>
+        <div class="cat-group" style="border-color:#16a34a;background:#f0fdf4">
+            <div class="cat-header" style="color:#16a34a">
+                <strong>Community</strong>
+                <span>
+                    <button class="mini-btn" style="color:#16a34a;border-color:#16a34a" onclick="toggleCat('Community',true)">All</button>
+                    <button class="mini-btn" style="color:#16a34a;border-color:#16a34a" onclick="toggleCat('Community',false)">None</button>
+                </span>
             </div>
-
-            <div class="diagram-container" id="diagramContainer">
-                <div class="mermaid" id="mermaidDiagram">
-flowchart TD
-    %% --- STYLING ---
-    classDef startNode fill:#2e7d32,stroke:#1b5e20,stroke-width:3px,color:white,font-size:16px,font-weight:bold;
-    classDef routerNode fill:#ff9800,stroke:#e65100,stroke-width:2px,color:white,font-weight:bold;
-    classDef subRouter fill:#ffe0b2,stroke:#f57c00,stroke-width:2px,color:#333;
-    classDef actionNode fill:#ffffff,stroke:#607d8b,stroke-width:1px,color:#333,text-align:left;
-    classDef stopNode fill:#c62828,stroke:#b71c1c,stroke-width:2px,color:white,font-weight:bold;
-    classDef systemNode fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#01579b;
-
-    %% --- THE FLOW ---
-
-    Start([Incoming Call]) --> Greeting["<b>🗣️ GREETING</b><br/><i>'SDRC, this is [Name] speaking.<br/>How can I help you today?'</i>"]
-    
-    Greeting --> Verify["<b>🕵️ VERIFY & IDENTIFY</b><br/>1. Listen to reason<br/>2. <b>Verify Identity</b>"]
-    
-    Verify --> MainRoute{CATEGORY?}
-
-    %% ==========================================
-    %% GROUP 1: ANIMALS (Broken down for clarity)
-    %% ==========================================
-    MainRoute -->|Animals| AnimalSplit{🐕 Issue Type?}
-    
-    subgraph SG_Animals [🐕 ANIMAL SERVICES]
-        direction TB
-        AnimalSplit --Lost/Impound--> Anim_Lost["<b>Lost & Found</b><br/>1. Add to <i>S:\Customer Service\Shared All\Animals – Lost/Found Register</i><br/>2. Notify CS Group + Local Laws<br/><br/><b>Impounded</b><br/>1. Check <i>S:\Shared All\Animals – Impoundments</i><br/>2. Contact Local Laws Officer<br/>3. Arrange collection & release fee"]
-        
-        AnimalSplit --Registration--> Anim_Reg["<b>Dog Registration</b><br/>• Email Form: <i>Application for Dog Registration</i><br/>• Request: Proof of Desexing, Pension Card, Breeder Supply #"]
-        
-        AnimalSplit --Barking--> Anim_Bark["<b>Barking Dogs (NEW)</b><br/>1. Encourage direct contact (letter template)<br/>2. Merit 'Barking' (Give #)<br/>3. Provide Fact Sheet + Diary<br/>4. Email diary to mail@sdrc.qld.gov.au<br/><br/><b>Barking (ONGOING)</b><br/>• Add note to Merit w/ return phone #"]
-        
-        AnimalSplit --Cruelty--> Anim_RSPCA["<b>Cruelty & Welfare</b><br/>🚨 Direct to <b>RSPCA: 1300 264 625</b>"]
-        
-        AnimalSplit --Attack--> Anim_Attack["<b>⚠️ DOG ATTACK</b><br/>Merit 'attack' — Record:<br/>• Danger present? Dog location?<br/>• Medical treatment needed?<br/>• Date/Time/Location<br/>📧 Email: <i>Statement of Dog Attack Form</i>"]
-        
-        AnimalSplit --Other--> Anim_Gen["<b>Straying:</b> Merit 'Stray' (Loc, Breed, Time)<br/><b>Pest Animals:</b> Search Website Factsheets<br/><b>Surrender:</b> Email 'Owners Consent' form + Take Fee"]
-    end
-
-    %% ==========================================
-    %% GROUP 2: PROPERTY & PLANNING
-    %% ==========================================
-    MainRoute -->|Building/Plumb| PropSplit{🏗️ Issue Type?}
-    
-    subgraph SG_Property [🏗️ PROPERTY & PLANNING]
-        direction TB
-        PropSplit --Building--> Prop_Build["<b>BUILDING</b><br/><b>New:</b> Factsheets + Callback (Merit 'Building')<br/><b>Existing:</b> Transfer to person OR Merit 'Building'<br/><b>Inspections:</b> Email <i>buildinginspections@sdrc</i>"]
-        
-        PropSplit --Plumbing--> Prop_Plumb["<b>PLUMBING</b><br/><b>New:</b> FAQ + Callback (Merit 'Plumbing')<br/><b>Existing:</b> Transfer OR Merit 'Plumbing'<br/><b>Inspections:</b> Check Cal -> Add -> Notify <i>plumbinginspections@sdrc</i>"]
-        
-        PropSplit --Water/Sewer--> Prop_Conn["<b>CONNECT WATER/SEWER</b><br/>Check <b>Intramaps</b> (Water Module)<br/><b>Standard?</b> (100m from main, Vacant charge, Catchment, Single lot)<br/>✅ YES: Email 'App for Water/Sewer'<br/>❌ NO: Email 'Private Works Water/Sewer'"]
-        
-        PropSplit --Leak--> Prop_Leak["<b>💧 WATER LEAK</b><br/>Check <b>Aqualas</b><br/><b>Council Side:</b> Merit 'Leak' -> Maint. Super<br/><b>Customer Side:</b> Advise Plumber"]
-    end
-    
-    MainRoute -->|Planning| Plan["<b>🗺️ PLANNING</b><br/><b>New:</b> Factsheets + Callback (Merit 'Planning')<br/><b>App/General:</b> Take Info -> Merit 'Planning' -> Transfer to <b>Duty Planner</b><br/><i>If unavail: Wait for callback (Max 5 days)</i>"]
-
-    %% ==========================================
-    %% GROUP 3: FINANCE & RATES
-    %% ==========================================
-    MainRoute -->|Rates/Pay| FinSplit{💰 Issue Type?}
-
-    subgraph SG_Finance [💰 FINANCE]
-        FinSplit --Rates--> Fin_Rates["<b>RATES (Check ID!)</b><br/><b>Pay:</b> Check TechOne Balance -> BPOINT<br/><b>Copy:</b> Intramaps ID -> Payreq -> Email PDF<br/><b>Direct Debit:</b> Email DD Request Form<br/><b>Pension:</b> Email Pension Subsidy App"]
-        
-        FinSplit --Payment--> Fin_Pay["<b>GENERAL PAYMENT</b><br/><b>BPOINT Fields:</b><br/>1. Name  2. Address  3. Purpose<br/>Ref: Property ID or Licence #<br/><i>Check fees in LivePro or TechOne</i>"]
-        
-        FinSplit --Licences--> Fin_Lic["<b>LICENCES</b><br/><b>Renew:</b> BPOINT (Ref: Lic #)<br/><b>Apply:</b> Eli 'Forms' -> Email to customer"]
-    end
-
-    %% ==========================================
-    %% GROUP 4: INFRASTRUCTURE & WASTE
-    %% ==========================================
-    MainRoute -->|Waste| WasteSplit{🗑️ Issue Type?}
-    
-    subgraph SG_Waste [🗑️ WASTE SERVICES]
-        WasteSplit --Bins--> Waste_Bins["<b>RESIDENTIAL BINS</b><br/><b>Missed/Broken:</b> Confirm details -> Lodge <b>Cleanaway</b> Request<br/><i>(Leave bin on curb)</i><br/><b>Missing:</b> Lodge Cleanaway Request"]
-        
-        WasteSplit --Public--> Waste_Public["<b>PUBLIC BINS</b><br/>Check Intramaps:<br/>• If Cleanaway icon: Lodge Cleanaway<br/>• If not: Merit 'Maintenance'"]
-        
-        WasteSplit --Complaint--> Waste_Comp["<b>COMPLAINTS</b><br/>Merit 'Complaint' -> Bins/Collection"]
-    end
-
-    MainRoute -->|Roads| Roads["<b>🛣️ ROADS</b><br/><b>Closures:</b> Check Disaster Dashboard<br/><b>Hwy:</b> TMR (13 20 80)<br/><b>Rail:</b> Qld Rail (13 16 17)<br/><b>Potholes:</b> Merit 'Pothole' (Sealed/Unsealed?)<br/><b>Road Kill:</b> >100kg (Merit 'Dead') / &lt;100kg (Cleanaway)"]
-
-    %% ==========================================
-    %% GROUP 5: GENERAL / OTHER
-    %% ==========================================
-    MainRoute -->|General| GenSplit{Other?}
-    
-    GenSplit --Camp/Cross--> Camp["<b>⛺ CAMPGROUNDS</b><br/><b>Washpool:</b> Eli 'Washpool' (Vicki: 0427 026 216)<br/><b>Connolly Dam:</b> Self-register on site<br/><b>Condamine Rd:</b> Check Disaster Dashboard"]
-    
-    GenSplit --Env Health--> Env["<b>🍃 ENV HEALTH</b><br/>1. Check Jurisdiction (Eli)<br/>2. If Council: Merit 'Environment'<br/>3. Ongoing? Email 'Nuisance Diary'"]
-    
-    GenSplit --Complaints--> Comp["<b>😡 COMPLAINTS</b><br/><b>Service:</b> Merit 'Complaint'<br/><b>Formal:</b> Email Form 'Complaint Form'<br/><b>Alt:</b> Email mail@sdrc (Attn: Name)"]
-    
-    GenSplit --Disputes--> Disp["<b>🤝 DISPUTES</b><br/><b>Noise/Smell:</b> See Env Health<br/><b>Animals:</b> See Animals<br/><b>Private:</b> Refer to QCAT"]
-    
-    GenSplit --Transfers--> Trans["<b>☎️ TRANSFERS</b><br/>1. Search <b>The Pulse</b> or <b>Eli</b><br/>2. Warm Transfer (announce caller)<br/>3. If unavail: Merit Callback"]
-
-    %% --- TERMINATORS ---
-    Anim_Lost & Anim_Reg & Anim_Bark & Anim_RSPCA & Anim_Attack & Anim_Gen --> Close(["<b>👋 CLOSE CALL</b><br/><i>'Is there anything else I can help with?'</i>"])
-    Prop_Build & Prop_Plumb & Prop_Conn & Prop_Leak & Plan --> Close
-    Fin_Rates & Fin_Pay & Fin_Lic --> Close
-    Waste_Bins & Waste_Public & Waste_Comp & Roads --> Close
-    Camp & Env & Comp & Disp & Trans --> Close
-
-    %% --- CLASS ASSIGNMENT ---
-    class Start startNode;
-    class MainRoute,AnimalSplit,PropSplit,FinSplit,WasteSplit,GenSplit routerNode;
-    class Close stopNode;
-    class Anim_Lost,Anim_Reg,Anim_Bark,Anim_RSPCA,Anim_Attack,Anim_Gen actionNode;
-    class Prop_Build,Prop_Plumb,Prop_Conn,Prop_Leak,Plan actionNode;
-    class Fin_Rates,Fin_Pay,Fin_Lic actionNode;
-    class Waste_Bins,Waste_Public,Waste_Comp,Roads actionNode;
-    class Camp,Env,Comp,Disp,Trans actionNode;
-                </div>
+                <label class="check-label" style="--accent:#16a34a">
+                    <input type="checkbox" id="cb_animals" data-cat="Community" onchange="rebuildDiagram()">
+                    <span>🐕 Animals</span>
+                </label>
+                <label class="check-label" style="--accent:#16a34a">
+                    <input type="checkbox" id="cb_environmental" data-cat="Community" onchange="rebuildDiagram()">
+                    <span>🌿 Environmental</span>
+                </label>
+                <label class="check-label" style="--accent:#16a34a">
+                    <input type="checkbox" id="cb_waste" data-cat="Community" onchange="rebuildDiagram()">
+                    <span>🗑️ Waste</span>
+                </label>
+                <label class="check-label" style="--accent:#16a34a">
+                    <input type="checkbox" id="cb_complaints" data-cat="Community" onchange="rebuildDiagram()">
+                    <span>📝 Complaints</span>
+                </label>
+                <label class="check-label" style="--accent:#16a34a">
+                    <input type="checkbox" id="cb_cemetery" data-cat="Community" onchange="rebuildDiagram()">
+                    <span>⚱️ Cemetery</span>
+                </label>
+                <label class="check-label" style="--accent:#16a34a">
+                    <input type="checkbox" id="cb_disputes" data-cat="Community" onchange="rebuildDiagram()">
+                    <span>🏠 Disputes</span>
+                </label>
+                <label class="check-label" style="--accent:#16a34a">
+                    <input type="checkbox" id="cb_venues" data-cat="Community" onchange="rebuildDiagram()">
+                    <span>🏛️ Venues</span>
+                </label>
+        </div>
+        <div class="cat-group" style="border-color:#d97706;background:#fffbeb">
+            <div class="cat-header" style="color:#d97706">
+                <strong>Infrastructure</strong>
+                <span>
+                    <button class="mini-btn" style="color:#d97706;border-color:#d97706" onclick="toggleCat('Infrastructure',true)">All</button>
+                    <button class="mini-btn" style="color:#d97706;border-color:#d97706" onclick="toggleCat('Infrastructure',false)">None</button>
+                </span>
             </div>
+                <label class="check-label" style="--accent:#d97706">
+                    <input type="checkbox" id="cb_roads" data-cat="Infrastructure" onchange="rebuildDiagram()">
+                    <span>🛣️ Roads</span>
+                </label>
+                <label class="check-label" style="--accent:#d97706">
+                    <input type="checkbox" id="cb_works" data-cat="Infrastructure" onchange="rebuildDiagram()">
+                    <span>🔨 Works</span>
+                </label>
+                <label class="check-label" style="--accent:#d97706">
+                    <input type="checkbox" id="cb_campgrounds" data-cat="Infrastructure" onchange="rebuildDiagram()">
+                    <span>🏕️ Campgrounds</span>
+                </label>
+        </div>
+        <div class="cat-group" style="border-color:#7c3aed;background:#faf5ff">
+            <div class="cat-header" style="color:#7c3aed">
+                <strong>Other</strong>
+                <span>
+                    <button class="mini-btn" style="color:#7c3aed;border-color:#7c3aed" onclick="toggleCat('Other',true)">All</button>
+                    <button class="mini-btn" style="color:#7c3aed;border-color:#7c3aed" onclick="toggleCat('Other',false)">None</button>
+                </span>
+            </div>
+                <label class="check-label" style="--accent:#7c3aed">
+                    <input type="checkbox" id="cb_licence" data-cat="Other" onchange="rebuildDiagram()">
+                    <span>📄 Licences</span>
+                </label>
+                <label class="check-label" style="--accent:#7c3aed">
+                    <input type="checkbox" id="cb_claims" data-cat="Other" onchange="rebuildDiagram()">
+                    <span>⚠️ Claims</span>
+                </label>
+        </div>
+
         </div>
     </div>
 
-    <script>
-        let currentZoom = 100;
-        const minZoom = 25;
-        const maxZoom = 200;
-        const zoomStep = 15;
-        
-        // Panning Variables
-        let isPanning = false;
-        let startX = 0;
-        let startY = 0;
-        let panX = 0;
-        let panY = 0;
+    <div class="status-bar" id="statusBar">⏳ Rebuilding diagram...</div>
 
-        function updateTransform() {
-            const mermaid = document.getElementById('mermaidDiagram');
-            mermaid.style.transform = `translate(${panX}px, ${panY}px) scale(${currentZoom / 100})`;
-            document.getElementById('zoomLevel').textContent = currentZoom;
-        }
-        
-        function zoomIn() {
-            if (currentZoom < maxZoom) {
-                currentZoom += zoomStep;
-                updateTransform();
-            }
-        }
-        
-        function zoomOut() {
-            if (currentZoom > minZoom) {
-                currentZoom -= zoomStep;
-                updateTransform();
-            }
-        }
-        
-        function resetZoom() {
-            currentZoom = 100;
-            panX = 0;
-            panY = 0;
-            updateTransform();
-        }
+    <div class="diagram-wrapper" style="position:relative">
+        <div style="position:absolute;bottom:14px;right:14px;z-index:10;display:flex;gap:6px;">
+            <button onclick="zoomIn()" title="Zoom In" style="width:34px;height:34px;font-size:18px;line-height:1;border:1px solid #ccc;border-radius:6px;background:rgba(255,255,255,0.92);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.15)">+</button>
+            <button onclick="zoomOut()" title="Zoom Out" style="width:34px;height:34px;font-size:18px;line-height:1;border:1px solid #ccc;border-radius:6px;background:rgba(255,255,255,0.92);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.15)">−</button>
+        </div>
+        <div class="diagram-container" id="diagramContainer">
+            <div class="mermaid" id="mermaidDiagram">
+            </div>
+        </div>
+    </div>
+</div>
 
-        // SAVE IMAGE FUNCTION
-        function saveImage() {
-            const mermaidDiv = document.querySelector('.mermaid');
-            const svg = mermaidDiv.querySelector('svg');
-            
-            if (!svg) {
-                alert('Diagram not loaded yet. Please wait a moment.');
+<script>
+    // ── Diagram source sections ──────────────────────────────────────────
+    const HEADER = `flowchart TD
+    Start(["📞 Incoming Call"]) --> Greeting["<b>GREETING</b><br/><i>Southern Downs Regional Council,<br/>this is Name speaking.<br/>How can I help you today?</i>"]
+    
+    Greeting --> Verify["<b>CALL OPEN</b><br/>1. Listen to the customer as they tell you their reason for calling - take notes as they speak<br/>2. Ask follow up questions until you are confident you understand the reason why they are calling<br/>3. Offer customer a service or information relevant to their reason for calling - allow customer to confirm before proceeding<br/>4. If necessary verify customer details: Name, Address, Mobile and Email - match details in TechOne"]
+    
+    Verify --> Category{"<b>SERVICE CATEGORY?</b>"}`;
+
+    const TAIL = `ActionDecision{"<b>ACTION?</b>"}
+    
+    ActionDecision -->|Lodge Merit| MeritBox["<b>📋 LODGE MERIT</b><br/><br/>1. Input appropriate keyword<br/>and follow process<br/>2. Description must include:<br/>Who, What, When, Where, Why<br/>3. Provide customer with<br/>Merit Req ID for follow-up<br/><br/>📌 Eli: Merit Process"]
+    
+    ActionDecision -->|Email Form| FormBox["<b>📧 EMAIL FORM</b><br/><br/>1. Find form: Eli FORMS<br/>2. Confirm customer email address<br/>3. Attach form to email<br/>4. Instruct customer: if emailing back,<br/>send to <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="ef828e8683af9c8b9d8cc19e838bc1888099c18e9a">[email&#160;protected]</a><br/>for records to process application<br/><br/>📌 Eli: FORMS"]
+    
+    ActionDecision -->|Process Payment| BPOINTBox["<b>💳 PROCESS PAYMENT - BPOINT</b><br/><br/>Ref 1: Customer Name<br/>Ref 2: Customer Address<br/>Ref 3: Reference Number<br/>(Application/Licence/Property ID)<br/>Merchant ID: Property ID<br/><br/>Email receipt to customer<br/>(confirm email address)<br/><br/>📌 Eli: BPOINT Guide"]
+    
+    ActionDecision -->|Transfer / Callback| TransferBox["<b>📲 TRANSFER / RETURN CALL</b><br/><br/>1. Establish context: Ask who &amp; why<br/><br/>2a. SDRC Staff/Department:<br/>By Name: Search The Pulse Staff List<br/>By Role: Eli Who to call - What they do<br/>Call to check availability<br/>If available: establish context, transfer<br/>If unavailable: arrange callback via<br/>Merit or email to staff/department<br/><br/>2b. Other Organisation:<br/>Provide contact details<br/>Eli Other Contacts<br/><br/>📌 Eli: Internal Directory"]
+    
+    ActionDecision -->|Info Provided| NoAction["<b>✅ INFO PROVIDED</b><br/><br/>Customer has answer<br/>or referral contact"]
+    
+    MeritBox --> Close
+    FormBox --> Close
+    BPOINTBox --> Close
+    TransferBox --> Close
+    NoAction --> Close
+    
+    Close(["✅ <b>CLOSE CALL</b><br/><br/><i>Is there anything else<br/>I can help you with today?</i>"])
+    
+    style Start fill:#d4edda,stroke:#28a745,stroke-width:2px
+    style Close fill:#d4edda,stroke:#28a745,stroke-width:2px
+    style Category fill:#fff3cd,stroke:#ffc107,stroke-width:2px
+    style ActionDecision fill:#fff3cd,stroke:#ffc107,stroke-width:2px
+    style BPOINTBox fill:#e8daef,stroke:#8e44ad,stroke-width:2px
+    style TransferBox fill:#d4edda,stroke:#28a745,stroke-width:2px
+    style MeritBox fill:#f8d7da,stroke:#dc3545,stroke-width:2px
+    style FormBox fill:#f8d7da,stroke:#dc3545,stroke-width:2px
+    style NoAction fill:#d1ecf1,stroke:#17a2b8,stroke-width:2px`;
+
+    const CAT_ENTRIES = {
+    'Property': `    Category -->|Property| PropDecision{"<b>PROPERTY ISSUE?</b>"}`,
+    'Community': `    Category -->|Community| CommDecision{"<b>COMMUNITY?</b>"}`,
+    'Infrastructure': `    Category -->|Infrastructure| InfraDecision{"<b>INFRASTRUCTURE ISSUE?</b>"}`,
+    'Other': `    Category -->|Other| OtherDecision{"<b>OTHER ISSUE?</b>"}`,
+    };
+
+    const SERVICE_CAT = { 'rates': 'Property', 'building': 'Property', 'plumbing': 'Property', 'planning': 'Property', 'planningguide': 'Property', 'animals': 'Community', 'environmental': 'Community', 'waste': 'Community', 'complaints': 'Community', 'cemetery': 'Community', 'disputes': 'Community', 'roads': 'Infrastructure', 'works': 'Infrastructure', 'campgrounds': 'Infrastructure', 'licence': 'Other', 'claims': 'Other', 'water': 'Property', 'venues': 'Community', 'buildingguide': 'Property' };
+
+    const SECTIONS = {
+    'rates': `    PropDecision -->|Rates| RatesDecision{"Balance/Payment,<br/>Admin, Property Sale,<br/>or Info?"}
+    RatesDecision -->|Property Sale| RatesSale["<b>💰 RATES - Property Sale</b><br/><br/><u>Settlement:</u><br/>During a typical settlement, solicitors adjust the sale price so the rates for the current period are shared between vendor and purchaser in proportion to their respective periods of ownership. Neither party needs to contact council — the transfer of name on the property is handled automatically by the Titles Office.<br/><br/><u>Bulk Assessed Properties:</u><br/>In rural zones it is common for a single Property ID to cover multiple lots. In Intramaps, the selected lot boundary shows in red and related bulk-assessed lots show in orange — these share a PID and appear on the same rates notice.<br/><br/>When land is bulk assessed, the Titles Office values it as a single large lot, resulting in a lower valuation and lower rates. When individual lots within a bulk-assessed property are sold, each sold lot receives a new PID and is revalued independently — typically resulting in a higher rates charge.<br/><br/>Because settlement contracts generally do not allow time for revaluation and a supplementary rates notice to be issued, the standard process is for the vendor to ensure all rates owing on the property are paid in full prior to settlement."]
+    RatesDecision -->|Balance / Payment| RatesBalPay["<b>💰 RATES - Balance &amp; Payment</b><br/><br/><u>Rates Balance:</u><br/>Look up property in TechOne - navigate to the rates tab and provide the Total Payable balance.<br/><br/>If customer queries the balance:<br/>[ ] Check the correct Property ID was pasted into TechOne<br/>[ ] Total Payable Balance reflects the total if the customer pays today<br/>[ ] Before the due date, the Total Payable balance includes the discount<br/>[ ] If customer has made payment via BPAY/direct debit/bank transfer it may take time to show - check most recent rates notice and transaction history<br/>[ ] Offer to provide a copy of the most recent rates notice<br/><br/><u>Rates Payment:</u><br/>1. Use Property ID in TechOne – verbally confirm Total Payable Balance<br/>2. Process payment in BPOINT<br/><br/>📌 Eli: Rates Process"]
+    RatesDecision -->|Admin| RatesAdmin["<b>💰 RATES - Admin</b><br/><br/><u>Payment Agreement:</u><br/>1. Look up property on TechOne<br/>2. Verify caller identity<br/>3. Check rate recovery code:<br/>[ ] General/FirstREM/FinalREM: proceed<br/>[ ] ARR: refer to R&amp;R: 1300 556 863<br/>[ ] Other: arrange callback from revenue department<br/>4. Generate spreadsheet - run XLOne report in TechOne<br/>5. Follow spreadsheet process with customer<br/>6. Save spreadsheet to pre-approved agreements folder: PID - SURNAME<br/>7. Email copy of spreadsheet to revenue (if customer rejected both payment options, inform revenue in email)<br/>8. Customer to await confirmation email from revenue<br/><br/><u>Copy of Rates Notice:</u><br/>1. Verify identity<br/>2. Search Property ID in Payreq<br/>3. Email most recent rates notice PDF to customer<br/>4. If customer requires rates notice from previous FY: look up fee in Fees &amp; Charges<br/><br/><u>Direct Debit:</u><br/>New: Email Form - Direct Debit Request<br/>Alter: Email Form - DD Alteration/Cancellation<br/><br/><u>Pensioner Rates Subsidy:</u><br/>1. Confirm address on pension card matches customer address in TechOne<br/>2. Email Form - Pension Subsidy Application - request customer attach a copy of pension card<br/>3. Customer may attend front counter to fill out form in person - we will photocopy their card<br/><br/><u>Sign up for Email Rates Notices:</u><br/>1. Refer customer to second page of rates notice - Go Paperless QR code<br/>2. Or search Go Paperless on SDRC website - create a Payreq account<br/>3. To sign up, customer must provide the name on the rates notice and their BPAY Reference number (found on most recent rates notice)<br/>4. Customer must ensure email address used to sign up for Payreq matches the one on file in TechOne<br/><br/>📌 Eli: Rates<br/>📌 Eli: Payment Agreement<br/>📌 Eli: Direct Debit<br/>📌 Eli: SDRC - Go Paperless"]
+
+    RatesDecision -->|Understanding Rates| RatesExplain["<b>💰 RATES - Understanding Your Rates</b><br/><br/>- <b>Water Access Charge:</b> Levied on all properties with the ability to connect to the water main, even if not currently connected<br/>- <b>Domestic &amp; Recycling Waste Collection:</b> Charge for the bin service<br/>- <b>Waste Management Charge:</b> Applied to all properties in the Southern Downs - covers council waste management facilities and rehabilitation of closed landfill sites<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/payments-services/property-rates-charges/rates-charges-explained' target='_blank'>Rates Charges Explained - SDRC</a>"]
+
+    RatesBalPay --> ActionDecision
+    RatesAdmin --> ActionDecision
+    RatesSale --> ActionDecision
+    RatesExplain --> ActionDecision`,
+    'building': `    PropDecision -->|Building| BuildingDecision{"New, Existing,<br/>Inspection, or Admin?"}
+    BuildingDecision -->|New| BuildingNew["<b>🏗️ BUILDING - New</b><br/><br/>New Enquiry<br/>1. Provide Factsheets:<br/>Building Info Sheets - SDRC<br/>2. Arrange callback:<br/>Merit Building - Follow Process<br/>Provide customer with Merit #<br/><br/>📌 <a href="https://www.sdrc.qld.gov.au/doing-business/planning-development/building/building-info-sheets" target="_blank">SDRC Website - Building info sheets</a><br/>📌 <a href="https://www.planning.qld.gov.au/planning-framework/development-assessment/development-assessment-process/forms-and-templates" target="_blank">DA Form 2 - With examples</a>"]
+    BuildingDecision -->|Existing| BuildingExist["<b>🏗️ BUILDING - Existing</b><br/><br/><u>Existing Application:</u><br/>1. Check if customer is using a private certifier - if so, refer them back to their certifier<br/>2. If no private certifier: look up BLD number, confirm query details, transfer to relevant person<br/>3. If unavailable - arrange callback:<br/>[ ] Merit Building - Follow Process<br/>[ ] Provide customer with Merit #<br/><br/>📌 Eli: Building Applications"]
+    BuildingDecision -->|Inspection| BuildingInspec["<b>🏗️ BUILDING - Inspection</b><br/><br/><u>Booking Building Inspections:</u><br/>1. Follow Email Template<br/>2. Notify inspectors by email<br/><br/>📌 Eli: Building Inspections"]
+
+    BuildingDecision -->|Admin| BuildingAdmin["<b>🏗️ BUILDING - Admin</b><br/><br/><u>Copy of House Plans:</u><br/>The property owner may request a copy of their house plans.<br/><br/>[ ] Check if council has plans on file - note: some properties in the area pre-date the modern building approval process and plans may not exist<br/>[ ] Obtain written permission from the copyright owner of the plans - note: the Estate of Len Rigg has provided standing permission for plans produced during his career to be shared with property owners<br/>[ ] Customer to pay applicable fee - refer to Fees &amp; Charges: Copy of Development Approval Documents<br/>[ ] Contact building team to release documents"]
+
+    BuildingInspec --> ActionDecision
+    BuildingExist --> ActionDecision
+    BuildingNew --> ActionDecision
+    BuildingAdmin --> ActionDecision`,
+    'buildingguide': `    PropDecision -->|Building Approval General Process| BuildingNewInfo["<b>🏗️ BUILDING - Building approval general process</b><br/><br/>Advise Customer: If you have a construction project in mind, a good starting point is to obtain a quote from multiple licenced contractors. A contractor can advise on the specific materials/methods they would use, provide a rough schedule for completion of the work, and provide a cost estimate.<br/><br/>Licenced contractors are bound by state legislation to complete work to a standard that will pass inspection. Getting a quote can assist you in identifying the most practical approach to the project which will assist with preparing your building application.<br/><br/>Note that no work of any description is to be commenced until your building application is approved.<br/><br/>Your application will require a DA Form 2, and depending on the nature of your build (e.g. dwelling, extension, shed, garage) multiple supporting documents.<br/>Offer to email the customer the relevant fact sheet + link to SDRC website.<br/><br/><u>A typical application includes:</u><br/>[ ] Completed DA Form 2 - this is the state government form commonly referred to as the building application<br/><br/><u>Plus supporting documents:</u><br/>[ ] Site Plan, Floor Plan, Elevations and Structural Details<br/>[ ] Footing/Slab Design and Form 15 (must be signed by RPEQ registered engineer)<br/>[ ] Energy Efficiency Report (Class 1a dwellings)<br/>[ ] Soil Test Report (Class 1a dwellings)<br/>[ ] QBCC Insurance Certificate: Mandatory insurance for residential construction valued over $3,300. Protects the owner if the builder fails to complete the work or produces defects.<br/>OR<br/>[ ] QBCC Owner Builder Permit (building yourself, value $11,000 or more): Legal permit allowing a property owner to act as their own Head Contractor. Requires completion of a short course through a Registered Training Organisation. Note: an owner builder permit may only be used once per 6-year period, though exceptions may apply.<br/>[ ] QLeave Payment Receipt (if value of building work over $150,000 excl. GST): QLeave manages portable long service leave for QLD construction workers. The project must be registered on the QLeave portal before construction begins. Council cannot issue Building Approval until this receipt is sighted.<br/><br/>Note that for certain applications it may also be necessary to provide information regarding bushfire attack level, flood zone, termite protection, lighting, water tanks etc.<br/><br/><u>Private Building Certifier:</u><br/>It is possible to engage a private building certifier to prepare and lodge the application on your behalf. Most customers undertaking larger projects choose this option.<br/><br/>The certifier will assist with producing the necessary documentation, and can subcontract additional professionals when required (architects, engineers, surveyors, soil tests, energy efficiency reports, bushfire attack level reports etc.).<br/><br/>Post lodgement, the certifier will liaise with council on your behalf and conduct on-site inspections throughout construction.<br/><br/><u>Construction Inspections:</u><br/>1. Footing/Foundation<br/>2. Slab<br/>3. Frame<br/>4. Final<br/><br/>Each stage must be signed off before the next commences. Once the final inspection is passed, a Form 21 Final Certificate is issued. In the case of new dwellings, the property may not be inhabited until this certificate has been issued.<br/><br/><u>If the build does not pass inspection:</u><br/>The QBCC can issue a formal Direction to Rectify, requiring the builder to fix the work at their own cost within a set timeframe. Non-compliance may result in significant fines and licence suspension. If a builder refuses or fails to rectify defective work, the QBCC can assist the homeowner through other means, including the Queensland Home Warranty Scheme.<br/><br/>SDRC customer service staff can assist in directing specific building queries to the council building team.<br/><br/>📌 <a href="https://www.sdrc.qld.gov.au/doing-business/planning-development/building/building-info-sheets" target="_blank">SDRC Website - Building info sheets</a><br/>📌 <a href="https://www.planning.qld.gov.au/planning-framework/development-assessment/development-assessment-process/forms-and-templates" target="_blank">DA Form 2 - With examples</a>"]
+    BuildingNewInfo --> ActionDecision`,
+    'plumbing': `    PropDecision -->|Plumbing| PlumbingDecision{"Type?"}
+    PlumbingDecision -->|Do I need approval?| PlumbNew["<b>🔧 PLUMBING - Do I need approval?</b><br/><br/>1. Unregulated work - No approval required: Homeowners may fix minor plumbing maintenance issues without requiring a licensed tradesperson or council approval.<br/>📌 <a href='https://www.sdrc.qld.gov.au/doing-business/plumbing---drainage/plumbing-approvals/unregulated-work' target='_blank'>SDRC - Unregulated Work</a><br/><br/>2. Minor work - No approval required: Minor work does not require council approval but must be performed by an appropriately licensed person.<br/>📌 <a href='https://www.sdrc.qld.gov.au/doing-business/plumbing-drainage/plumbing-approvals/minor-work-plumbing' target='_blank'>SDRC - Minor Work</a><br/><br/>3. Notifiable work - No approval required: Your licensed plumber will notify the council on your behalf.<br/><br/>4. Compliance assessable work - Yes, approval and inspections required: Typically a plumber or building certifier will submit the necessary applications.<br/><br/>5. If necessary arrange callback from plumbing team:<br/>[ ] Merit Plumbing - Follow Process<br/>[ ] Provide customer with Merit #<br/><br/>📌 Eli: Plumbing FAQ"]
+    PlumbingDecision -->|Existing| PlumbExist["<b>🔧 PLUMBING - Existing</b><br/><br/><u>Existing Application:</u><br/>1. Transfer to relevant person<br/>2. If unavailable - arrange callback:<br/>[ ] Merit Plumbing - Follow Process<br/>[ ] Provide customer with Merit #<br/><br/>📌 Eli: Plumbing Applications"]
+    PlumbingDecision -->|Water/Sewer| PlumbConnect["<b>🔧 PLUMBING - New Connections</b><br/><br/><u>Connect to Sewer/Water:</u><br/>1. Check Intramaps Water &amp; Sewerage Module<br/>2. Use Intramaps to determine standard or non-standard connection - all four must = YES for standard:<br/>[ ] Within 100m of 100mm main: use Water module + measurement tool in Intramaps<br/>[ ] In declared Catchment Area: use overlay in Waste Water module<br/>[ ] Has Vacant Access Charges: check water charge in property cadastre menu<br/>[ ] Single lot/duplex/secondary/subdivision<br/><br/>3. If Standard: Email Form - Application for Water or Sewer Services<br/>4. If Non-Standard: Email Form - Private Works (Water &amp; Sewerage Forms - SDRC)<br/><br/>📌 Eli: New Water/Sewer Connection"]
+    PlumbingDecision -->|Inspection| PlumbInspec["<b>🔧 PLUMBING - Inspection</b><br/><br/><u>Booking Plumbing Inspections:</u><br/>1. Obtain from customer:<br/>- PD number<br/>- Structure type<br/>- Location<br/>- Preferred start time<br/>- Inspection type:<br/>[ ] Under slab (sub-drain)<br/>[ ] Stack/elevated pipework to be covered<br/>[ ] Drainage (sanitary house drain)<br/>[ ] Water services (rough in)<br/>[ ] Final plumbing inspection<br/><br/>Also obtain:<br/>- Plumbing assessment/approval number<br/>- Responsible person name and contact details<br/><br/>2. Check plumbing inspector calendar for availability - allow 30 min between inspections for travel<br/>3. Add inspection to calendar<br/>4. Notify inspectors by email<br/><br/>📌 Eli: Plumbing Inspections"]
+
+    PlumbNew --> ActionDecision
+    PlumbExist --> ActionDecision
+    PlumbConnect --> ActionDecision
+    PlumbInspec --> ActionDecision`,
+    'planning': `    PropDecision -->|Planning| PlanningDecision{"Type?"}
+    PlanningDecision -->|Can I build?| PlanCanI["<b>📐 PLANNING - Can I build a dwelling / second dwelling / shed on this land?</b><br/><br/>There are two types of approvals for construction: building approval and planning approval.<br/><br/>Most new structures require building approval. Note: a shed less than 10m2 does not require building approval, but must still comply with siting and boundary clearance rules.<br/><br/>Whether planning approval is required depends on many factors. The most common reason is that the planned construction cannot meet the required setbacks of the Southern Downs Planning Scheme - the document prepared by council ensuring growth aligns with community and environmental considerations.<br/><br/><u>Common reasons that impact chosen building sites:</u><br/>- Underground infrastructure beneath the proposed site (e.g. sewer line)<br/>- Lack of constructed road access to the property<br/>- Bushfire Zone<br/>- Flood Zone<br/><br/><u>Setbacks - Dwellings:</u><br/>Residential and township zones: Queensland Development Code MP 1.2 applies. Generally 6m from the front boundary and 1.5m from side and rear boundaries.<br/>Rural zone: 60m from side and rear lot boundaries. 60m from any boundary with a gravel or unmade road reserve. 6m from a sealed road.<br/>Rural residential zone: Refer to the Southern Downs Planning Scheme.<br/><br/><u>Setbacks - Sheds:</u><br/>Residential and township zones: 6m from the front boundary, 1.5m from side and rear boundaries.<br/>Rural/specific zones: Setbacks may differ, often 4.5m to 6m. Refer to the Queensland Development Code.<br/><br/>If you cannot meet the setbacks a planning application is necessary. There are multiple other reasons why a planning application may be required.<br/><br/>Use the checklists below to determine whether planning approval is required, and provide the customer with the online mapping tool to check overlays. If time permits, assist the customer in working through the checklist.<br/><br/>Building a house in the Rural Zone: <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/527/Building%20a%20House%20in%20Rural%20Zone.pdf.aspx' target='_blank'>Checklist</a><br/>Dual occupancy (second dwelling) in the Rural Zone: <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/527/Dual%20occupancy%20(second%20dwelling)%20in%20the%20Rural%20Zone.pdf.aspx' target='_blank'>Checklist</a><br/>Dual Occupancy in the Residential and Rural Residential Zones: <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/527/Dual%20occupancy%20(Duplex)%20in%20the%20Residential%20and%20Rural%20residential%20Zones.pdf.aspx' target='_blank'>Checklist</a><br/><br/>For queries beyond the factsheet and checklist level, contact the Duty Planner.<br/><br/>📌 <a href='https://sdrc.spatial.t1cloud.com/spatial/intramaps/?configId=15145eaf-c419-4c91-aa46-f0b9d5637836&amp;project=Online%20Mapping' target='_blank'>Online Mapping</a><br/>📌 <a href='https://www.sdrc.qld.gov.au/doing-business/planning---development/strategic-planning' target='_blank'>Southern Downs Planning Scheme</a>"]
+    PlanningDecision -->|Existing| PlanExist["<b>📐 PLANNING - Existing</b><br/><br/><u>Existing Application:</u><br/>1. Take details of the query<br/>2. Transfer to the planner working on the application<br/>3. If unavailable: lodge Merit Planning - Follow Process, provide customer with Merit # and advise callback within max 5 business days<br/><br/>📌 Eli: Planning Applications"]
+    PlanningDecision -->|Payment| PlanPayment["<b>📐 PLANNING - Application Fee</b><br/><br/>Process payment in BPOINT<br/>Email receipt to planning team<br/><br/>📌 Eli: Planning Applications"]
+    PlanningDecision -->|Pre-Lodgement/Enquiry| PlanPreLodge["<b>📐 PLANNING - Pre-Lodgement Meeting &amp; Enquiries</b><br/><br/><u>General Enquiries (no fee):</u><br/>Members of the public may contact the planning team for general information, including:<br/>- Opportunities and constraints of a particular site<br/>- Clarifying the location of a building<br/>- Details regarding a potential use of a specific parcel of land<br/><br/><u>Pre-Lodgement Meeting ($300 – 60 min, RC192):</u><br/>An alternative paid service for people with a clear development goal who want tailored advice before lodging a formal Development Application.<br/><br/>The meeting aims to help applicants understand:<br/>- Key areas of assessment for their specific proposal<br/>- Required supporting documents<br/>- Any issues likely to arise before they formally lodge with Council<br/><br/>This service is intended for applicants who already know what and where they want to develop.<br/><br/>📌 Eli: Planning Applications"]
+    PlanningDecision -->|Objection| PlanObjection["<b>📐 PLANNING - Objection to Planning Application</b><br/><br/><u>Properly Made Submission requirements:</u><br/>To be considered a properly made submission, it must:<br/><br/>[ ] Be in writing and signed by each person making the submission<br/>[ ] Be received during the public notification period<br/>[ ] Include the name and address of all submitters<br/>[ ] Include the grounds of the submission, and the facts and circumstances relied upon in support of those grounds<br/>[ ] Include one (1) postal or electronic address for all submission-makers<br/>[ ] Be addressed to the assessment manager: Southern Downs Regional Council<br/><br/>Note: Submissions that do not meet all of the above criteria are not considered 'properly made' and submitters will not have third-party appeal rights.<br/><br/>📌 Eli: Planning Applications"]
+
+    PlanCanI --> ActionDecision
+    PlanNew --> ActionDecision
+    PlanExist --> ActionDecision
+    PlanPayment --> ActionDecision
+    PlanPreLodge --> ActionDecision
+    PlanObjection --> ActionDecision`,
+    'planningguide': `    PropDecision -->|Planning Application Process| PlanGTypes["<b>📐 PLANNING - Types of Development</b><br/><br/><u>Prohibited:</u><br/>Not permitted under any circumstances. Only the state government can designate development as prohibited.<br/><br/><u>Accepted:</u><br/>Development that can occur without any approval being required.<br/><br/><u>Assessable:</u><br/>Requires a development approval before it can proceed. Two sub-types:<br/><br/>- <b>Code Assessment:</b> Assessed against specific planning scheme codes. No public consultation required. Delivers expected development outcomes without undue delay.<br/><br/>- <b>Impact Assessment:</b> Applies to proposals that may impact the amenity of adjoining land uses. Broader assessment than code. Requires the application to be publicly notified."]
+    PlanGTypes --> PlanGPre["<b>📐 PRE-APPLICATION ACTIVITIES</b><br/><br/><u>General Enquiries (no fee):</u><br/>Members of the public can contact the planning team for general information of a 'general' nature, such as:<br/>- Opportunities and constraints of a specific site<br/>- Clarifying the location of a building<br/>- Details regarding a potential use of a parcel of land<br/><br/><u>Pre-Lodgement Meeting ($300 – 60 min, RC192):</u><br/>A paid service for applicants who have a clear development goal. Provides tailored advice on a specific proposal before a formal Development Application is lodged.<br/><br/>Helps applicants understand key areas of assessment and required supporting documents in advance."]
+    PlanGPre --> PlanGPart1["<b>📐 PART 1: APPLICATION</b><br/><i>Council has 10 business days to process</i><br/><br/>To be properly made, an application requires:<br/>[ ] Cover Letter<br/>[ ] DA Form 1<br/>[ ] Plans<br/>[ ] Assessment against Planning Scheme<br/>[ ] Owner's Consent<br/>[ ] Application Fee"]
+    PlanGPart1 -.->|If applicable| PlanGRef["<b>📐 PART 2: REFERRAL</b><br/><br/>State Assessment Referral Agency (SARA):<br/>Queensland's state government agency responsible for assessing and coordinating development applications that affect state interests.<br/><br/>Common referral triggers:<br/>- State Controlled Road<br/>- Regulated Vegetation"]
+    PlanGPart1 -.->|If applicable| PlanGIR["<b>📐 PART 3: INFORMATION REQUEST</b><br/><br/>Council may request any further information not included in the original application.<br/><br/>Example: Traffic impact assessment, engineering reports, or additional supporting documents."]
+    PlanGRef --> PlanGPart4
+    PlanGIR --> PlanGPart4
+    PlanGPart1 --> PlanGPart4["<b>📐 PART 4: PUBLIC NOTIFICATION</b><br/><i>Impact Assessment applications only</i><br/><br/>The applicant is responsible for undertaking public notification. Requirements:<br/>[ ] Sign on all frontages (signs provided by council)<br/>[ ] Notice in newspaper<br/>[ ] Notice to adjoining owners<br/><br/><u>If submissions are received:</u><br/>- Council issues a letter to all submitters acknowledging receipt<br/>- Applicant is sent all submissions and has 10 business days to provide a response to Council<br/>- Council's assessing officer reviews the application, submissions, and applicant's response before making a recommendation<br/>- Receiving submissions triggers the application going to Council (rather than delegated officer) for a decision"]
+    PlanGPart4 --> PlanGPart5["<b>📐 PART 5: DECISION</b><br/><br/><u>Delegated:</u><br/>Planning Department makes the decision.<br/><br/><u>Council Decision:</u><br/>Required where submissions have been received. Applicant may request a deputation at a Committee Information Session (CIS).<br/><br/>Customer receives a Decision Notice upon conclusion of the applicant's 20-business-day appeal period.<br/><br/><u>For submitters:</u><br/>- Properly made submission + approval: submitter has right of appeal to the Planning &amp; Environment Court<br/>- Refusal: all submitters notified after the decision is made and receive a copy of the Decision Notice"]
+    PlanGPart5 --> PlanGPost["<b>📐 POST DECISION ACTIVITIES</b><br/><br/>- Compliance with conditions of approval<br/>- Planning &amp; Environment Court appeal (if applicable)<br/>- Preparation of survey plans<br/><br/><u>Approval periods:</u><br/>- MCU (Material Change of Use): 6 years<br/>- RC (Reconfiguring a Lot): 4 years<br/>- BA + OPW (Building/Operational Works): 2 years"]
+    PlanGPost --> ActionDecision`,
+    'animals': `    CommDecision -->|Animals| AnimalType{"Issue Type?"}
+    AnimalType -->|Lost/Found/Stray/Impounded| AnimalLost["<b>🐕 ANIMALS - Lost / Found / Stray / Impounded</b><br/><br/><u>Lost &amp; Found - Cats, Dogs &amp; Other Animals:</u><br/>1. Add to spreadsheet register: S:\\Customer Service\\Shared All\\Animals - Lost and Found Register<br/>2. Notify CS Group + Local Laws via email<br/><br/><u>Straying Dog:</u><br/>1. Lodge Merit Stray - record: Location, Breed, Direction of travel, Time<br/>2. Call Local Laws Officer to report<br/><br/><u>Impounded:</u><br/>Customer may call because they noticed their dog is missing, or because Local Laws has contacted them to advise the dog is impounded.<br/>1. If customer has not been contacted: check register: S:\\Customer Service\\Shared All\\Animals - Impoundments - Warwick - from 1 Jan 2019<br/>2. Contact Local Laws Officer to:<br/>[ ] Arrange collection<br/>[ ] Confirm release fee<br/>[ ] Confirm if dog must be registered before release<br/><br/>📌 Eli: Impounded Animals<br/>📌 Shared Drive: Lost Animals Register<br/>📌 Eli: Stray Dog"]
+    AnimalType -->|Registration/Keeping| AnimalReg["<b>🐕 ANIMALS - Registration &amp; Keeping of Animals</b><br/><br/><u>Dog Registration:</u><br/>1. Email Form: Application for Dog Registration<br/>2. If applicable, request customer attach:<br/>[ ] Proof of desexing<br/>[ ] Pension card<br/>[ ] Dog Breeder Supply Number<br/>[ ] Proof of Service Dog status<br/><br/><u>Keeping of Animals:</u><br/>The number of animals permitted on a property is determined by local bylaws and the planning scheme and varies by property.<br/><br/>To determine the number of certain animals allowed: refer to the Keeping of Animals Factsheet<br/>📌 <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/702/Keeping_Animals_Fact_Sheet.pdf.aspx' target='_blank'>Keeping of Animals Factsheet</a><br/><br/>To keep additional animals beyond the permitted number, the customer must submit a Keeping of Animals Application. The Local Laws Coordinator will approve or deny.<br/><br/>📌 Eli: Dog Registration<br/>📌 Eli: Keeping Animals"]
+    AnimalType -->|Barking| BarkingType{"New or Ongoing?"}
+    BarkingType -->|New| BarkNew["<b>🐕 ANIMALS - Barking (New)</b><br/><br/>1. Strongly encourage the customer to make direct contact with the dog owner - a letter template is available from the Noise Nuisance Diary Factsheet<br/>2. Lodge Merit keyword: barking - follow process, provide customer with Merit #<br/>3. Provide Barking Dogs Factsheet and Noise Diary to customer<br/>4. Instruct customer to email completed diary to localgovernment@sdrc.qld.gov.au<br/>5. Advise: when diary is received, Local Laws will investigate - the dog owner will be given time to correct the behaviour<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/324/Barking%20Dog%20Noise%20Nuisance%20Diary%20Sheets%20and%20Guidance%20Notes.pdf.aspx' target='_blank'>Barking Dog Noise Nuisance Diary</a><br/>📌 Eli: Barking Dog"]
+    BarkingType -->|Ongoing| BarkOngo["<b>🐕 ANIMALS - Barking (Ongoing)</b><br/><br/>1. Add a note to the existing Merit that another complaint has been received<br/>2. Include customer return phone number<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/324/Barking%20Dog%20Noise%20Nuisance%20Diary%20Sheets%20and%20Guidance%20Notes.pdf.aspx' target='_blank'>Barking Dog Noise Nuisance Diary</a><br/>📌 Eli: Barking Dog"]
+    AnimalType -->|Surrender| AnimalSurrender["<b>🐕 ANIMALS - Surrender of Dogs/Cats</b><br/><br/>1. Email Form: Owners Consent to Privately Impound Dog or Cat<br/>2. Take impoundment fee over phone (Fees &amp; Charges: Private impounding)<br/>3. Email receipt to customer and to Local Laws<br/>4. Call Pound to arrange a mutually suitable surrender time<br/><br/>📌 Eli: Private Impoundment"]
+    AnimalType -->|Attack/Menacing| AnimalAttack["<b>🐕 ANIMALS - Dog Attack/Menacing</b><br/><br/>Lodge Merit Attack - record the following:<br/>- Is the customer still in danger of attack?<br/>- Is the dog still in the area?<br/>- Where exactly did the attack take place?<br/>- When did it occur? (date and time)<br/>- Was medical treatment required?<br/><br/>Email Form: Statement of Dog Attack Form<br/><br/>📌 Eli: Dog Attack Protocol"]
+    AnimalType -->|Wildlife/Cruelty| AnimalWildlife["<b>🐕 ANIMALS - Wildlife &amp; Cruelty</b><br/><br/><u>Animal Cruelty/Welfare:</u><br/>Direct customer to RSPCA: 1300 264 625<br/>or rspca.org.au/report-animal-cruelty<br/><br/><u>Wildlife Removal:</u><br/>Provide appropriate wildlife carer contact details to customer<br/><br/>📌 Eli: Wildlife Removal"]
+    AnimalType -->|Pest| AnimalKeepPest["<b>🐕 ANIMALS - Pest Animals</b><br/><br/>Search SDRC website for relevant pest animal factsheets<br/><br/>State Government resources: Invasive Animals Fact Sheets<br/><br/>📌 Eli: Keeping Animals"]
+
+    AnimalLost --> ActionDecision
+    AnimalReg --> ActionDecision
+    BarkNew --> ActionDecision
+    BarkOngo --> ActionDecision
+    AnimalSurrender --> ActionDecision
+    AnimalAttack --> ActionDecision
+    AnimalWildlife --> ActionDecision
+    AnimalKeepPest --> ActionDecision`,
+    'environmental': `    CommDecision -->|Environmental| EnvStart["<b>🌿 ENV NUISANCE - Initial Assessment</b><br/><br/>1. Determine whether council has jurisdiction - refer to Eli: Environmental Nuisance &amp; Pollution and the SDRC website<br/>2. If council does not have jurisdiction: direct customer to the appropriate authority<br/>3. If council has jurisdiction: encourage the customer to contact the polluter directly and attempt to resolve without council involvement first<br/><br/>📌 Eli: Jurisdiction Check"]
+    EnvStart --> EnvLodge["<b>🌿 ENV NUISANCE - Lodge</b><br/><br/>1. Lodge Merit Environment - select the appropriate option<br/>2. If the nuisance is ongoing, provide the Environmental Nuisance Diary for the customer to complete as evidence<br/>3. Instruct the customer to email the completed diary (after 14 days) quoting the Merit number in the subject line<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/1232/Environmental%20Nuisance%20Diary%20V1%20Nov%202022.pdf.aspx' target='_blank'>Environmental Nuisance Diary</a><br/>📌 Eli: Nuisance Diary"]
+
+    EnvLodge --> ActionDecision`,
+    'waste': `    CommDecision -->|Waste| WasteType{"Request Type?"}
+    WasteType -->|Bin Issues| WasteBin["<b>🗑️ WASTE - Bin Issues</b><br/><br/>All bin issues are lodged through the Cleanaway request portal.<br/><br/>- <b>Missed collection:</b> Lodge a Cleanaway request<br/>- <b>Damaged bin:</b> Lodge a Cleanaway request<br/>- <b>Missing/stolen bin:</b> Lodge a Cleanaway request<br/><br/>📌 Eli: Cleanaway Requests"]
+    WasteType -->|Waste Facilities| WasteFacilities["<b>🗑️ WASTE - Waste Facilities</b><br/><br/>For locations, trading hours and accepted materials refer to the Waste Facility Flyer.<br/><br/>For more specific guidance on individual materials refer to the Waste &amp; Recycling Fact Sheets.<br/><br/><b>Asbestos:</b> refer to the Asbestos Disposal Guidelines fact sheet<br/><br/>For items not covered by the above, contact the waste team for guidance.<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/279/Waste%20Facility%20Flyer.pdf.aspx?embed=Y' target='_blank'>Waste Facility Flyer</a><br/>📌 <a href='https://www.sdrc.qld.gov.au/living-here/environment-water-waste/waste-recycling/waste-recycling-fact-sheets' target='_blank'>Waste &amp; Recycling Fact Sheets</a><br/>📌 Asbestos Disposal Guidelines (link TBA)"]
+    WasteType -->|Public Place| WastePublic["<b>🗑️ WASTE - Public Place Bin</b><br/><br/>1. Confirm bin location with customer<br/>2. Check if bin is Council or Cleanaway:<br/>Intramaps - Environment &amp; Regulatory<br/>Check Cleanaway Public Place Bins Icon<br/>3. If Cleanaway: Lodge Cleanaway request<br/>4. If Council: Merit Maintenance<br/>Select Parks, Garden, Reserves<br/><br/>📌 Intramaps Guide"]
+    WasteType -->|Infirm| WasteInfirm["<b>🗑️ WASTE - Infirm Service</b><br/><br/>1. Customer to provide:<br/>Letter requesting infirm service<br/>Note from registered health care practitioner<br/>2. Send to records - records will task to waste team directly<br/><br/>📌 Infirm Process"]
+    WasteType -->|Complaint| WasteComplaint["<b>🗑️ WASTE - Cleanaway Complaint</b><br/><br/>Lodge Merit Complaint<br/>Select: Bins/Collection<br/><br/>📌 Eli: Complaint Process"]
+
+    WasteBin --> ActionDecision
+    WasteFacilities --> ActionDecision
+    WastePublic --> ActionDecision
+    WasteInfirm --> ActionDecision
+    WasteComplaint --> ActionDecision`,
+    'complaints': `    CommDecision -->|Complaints| ComplaintRoute["<b>📝 COMPLAINTS</b><br/><br/>For complaints about a council service:<br/><br/>Option 1: Merit Complaint<br/>Select appropriate option<br/><br/>Option 2: Email to <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="f499959d98b487908697da859890da939b82da9581">[email&#160;protected]</a><br/>Subject: ATTN: Name<br/>Records will allocate to relevant person<br/><br/>Option 3: Email Form - Complaint Form<br/><br/>📌 Eli: Complaint Process"]
+
+    ComplaintRoute --> ActionDecision`,
+    'cemetery': `    CommDecision -->|Cemetery| CemeteryType{"Type?"}
+    CemeteryType -->|Reserve/Plaque| CemeteryRes["<b>⚱️ CEMETERY - Reserve/Plaque</b><br/><br/>New Reserve:<br/>Email Form: Reserve Application<br/><br/>📌 Eli: Cemetery Reserve"]
+    CemeteryType -->|Memorial| CemeteryMemorial["<b>⚱️ CEMETERY - Roadside Memorial</b><br/><br/>Email Form:<br/>Roadside Memorial Application (SDRC Website)<br/><br/>📌 Eli: Roadside Memorials"]
+    CemeteryType -->|Location/Interment| CemeteryLoc["<b>⚱️ CEMETERY - Location/Interment</b><br/><br/>1. Transfer to Cemetery staff<br/>2. If unavailable: schedule callback<br/>3. Cemetery Database - Location of<br/>Buried Person:<br/>S:\\Shared All\\Cemetery\\Cemetery Database<br/><br/>📌 Eli: Cemetery Database"]
+
+    CemeteryRes --> ActionDecision
+    CemeteryMemorial --> ActionDecision
+    CemeteryLoc --> ActionDecision`,
+    'disputes': `    CommDecision -->|Disputes| DisputeType{"Jurisdiction?"}
+    DisputeType -->|Council| DisputeCouncil["<b>🏠 NEIGHBOURLY DISPUTES - Council</b><br/><br/>Dust/Smoke/Noise/Light/Odour/<br/>Water Pollution:<br/>See ENV NUISANCE<br/><br/>Keeping of Animals/Barking/<br/>Dangerous Dogs: See ANIMALS<br/><br/>Illegal Use of Caravan/Tents/Buses,<br/>Illegal Use of Building,<br/>Unauthorised Building Works:<br/>Merit Building<br/><br/>Unlawful Land Use:<br/>Merit Planning<br/><br/>📌 Eli: Disputes Guide"]
+    DisputeType -->|Private| DisputePrivate["<b>🏠 NEIGHBOURLY DISPUTES - Private</b><br/><br/>Generally refer to QCAT<br/>QLD Gov: Housing &amp; Neighbours<br/><br/>Parking complaints outside<br/>Warwick CBD: Refer to Police<br/>Eli: Regulated Parking<br/><br/>📌 QCAT Referral"]
+
+    %% =============================================
+
+    DisputeCouncil --> ActionDecision
+    DisputePrivate --> ActionDecision`,
+    'venues': `    CommDecision -->|Venues| VenuesNode["<b>🏛️ VENUES - Hall Hire</b><br/><br/><u>Availability:</u><br/>- Stanthorpe Civic Centre and Warwick Town Hall are available for hire<br/>- Allora Community Hall and Fred Rogers Camp are currently unavailable for hire<br/><br/><u>Making a Booking:</u><br/>1. Provide customer with the relevant Hirer's Agreement Form (Civic Centre or Warwick Town Hall) - must be returned within 7 days to hold the booking<br/>2. Create a TENTATIVE appointment in Microsoft Outlook Calendar:<br/>- Subject: TENTATIVE - [Hirer's Name]<br/>- Location: Room allocation (Main Auditorium / Whole Building / Supper Room)<br/>- Start/End Time: as per Hirer's Agreement<br/>- Notes: Contact name, phone number, booked by [name] on [date and time]<br/>3. Advise the customer that the booking will be confirmed upon receipt of the completed Hirer's Agreement Form<br/><br/><u>Key Conditions:</u><br/>- Stanthorpe Civic Centre must be vacated no later than 1:00am<br/>- Licensed bar must be closed no later than 12:30am<br/>- Hirers must organise their own Liquor Licence - RSA certification alone is not sufficient<br/><br/><u>Confirmation &amp; Next Steps</u> - refer to Eli: Stanthorpe Civic Centre for:<br/>[ ] Receiving completed application form<br/>[ ] Issue of keys<br/>[ ] Return of keys<br/>[ ] Refund of bond<br/><br/>📌 Eli: Stanthorpe Civic Centre"]
+
+    VenuesNode --> ActionDecision`,
+
+        'roads': `    InfraDecision -->|Roads| RoadType{"Issue Type?"}
+    RoadType -->|Pothole| RoadPot["<b>🛣️ ROADS - Pothole</b><br/><br/>1. Merit Pothole<br/>2. Confirm: sealed or unsealed road<br/>3. Record exact location<br/><br/>📌 Eli: Pothole Reporting"]
+    RoadType -->|Road Kill| RoadKill["<b>🛣️ ROADS - Roadkill</b><br/><br/><u>Within a Defined Waste Collection Area</u> (check Intramaps to confirm)<br/><br/>On a road or road reserve:<br/>Cleanaway collect animal carcasses within standard and opt-in/opt-out domestic waste collection areas. Create a request in the Cleanaway system - ensure the correct animal type is recorded so SDRC is charged correctly.<br/><br/>Cleanaway will NOT collect if:<br/>- The carcass is outside the current collection area<br/>- The carcass exceeds 100kg - refer to Works Department or TMR depending on road type (see below)<br/><br/>On private land:<br/>Cleanaway does not remove animals from private properties.<br/><br/><u>Outside a Defined Waste Collection Area</u><br/><br/>On a Council controlled road or road reserve:<br/>- Council will not remove animals from rural road reserves where they pose no risk to traffic<br/>- Council will remove carcasses within rural township areas and within the road corridor (on road or shoulder)<br/>- Lodge Merit - keyword: Carcass<br/><br/>On a TMR controlled road or road reserve:<br/>- If within the road corridor (on road or shoulder): advise customer to contact Roadtek: 4699 9350<br/>- If within the RMPC area: treat as Council controlled road (see above)<br/><br/>On private land:<br/>Council does not remove dead animals from private properties.<br/><br/>📌 Eli: Roadkill"]
+    RoadType -->|Closure| RoadClose["<b>🛣️ ROADS - Closure</b><br/><br/>1. Check Disaster Dashboard<br/>2. Provide link to customer<br/>for real-time updates<br/><br/>📌 Disaster Dashboard Link"]
+    RoadType -->|Rail/HWY| RoadRef["<b>🛣️ ROADS - Rail/Highway</b><br/><br/>Train Tracks / Railway Crossings:<br/>QLD Rail: 13 16 17<br/><br/>Highway:<br/>TMR: 13 20 80<br/><br/>📌 Referral Contacts"]
+
+    RoadPot --> ActionDecision
+    RoadKill --> ActionDecision
+    RoadClose --> ActionDecision
+    RoadRef --> ActionDecision`,
+    'works': `    InfraDecision -->|Works| WorksType{"Type?"}
+    WorksType -->|Minor| WorksMinor["<b>🔨 WORKS - Minor Works</b><br/><br/>Minor Works Within a Road Reserve<br/><br/>See Eli: Roads &amp; Works Forms<br/>for application requirements<br/><br/>📌 Eli: Minor Works Process"]
+    WorksType -->|Private| WorksPriv["<b>🔨 WORKS - Private Works</b><br/><br/>Member of public engages council<br/>to conduct works on private property<br/><br/>Roads &amp; Works Forms - SDRC<br/><br/>📌 Eli: Private Works Forms"]
+    WorksType -->|Operational| WorksOp["<b>🔨 WORKS - Operational Works</b><br/><br/>Operational Works inquiry<br/><br/>Merit Works + provide details<br/><br/>📌 Eli: Operational Works"]
+
+    WorksMinor --> ActionDecision
+    WorksPriv --> ActionDecision
+    WorksOp --> ActionDecision`,
+    'campgrounds': `    InfraDecision -->|Campgrounds| CampType{"Facility?"}
+    CampType -->|Washpool| CampWash["<b>🏕️ WASHPOOL</b><br/><br/>Enquiries: Eli Washpool<br/>Additional info: Caretaker<br/>Vicki Lynam 0427 026 216<br/>Price: Fees &amp; Charges CTRL+F 523<br/><br/>Bookings:<br/>Refer to Vicki Lynam 0427 026 216<br/>Instruct to leave voicemail if no answer<br/><br/>📌 Eli: Washpool Guide"]
+    CampType -->|Connolly Dam| CampConn["<b>🏕️ CONNOLLY DAM</b><br/><br/>Enquiries: Eli Connolly Dam Camping<br/>Price: Fees &amp; Charges CTRL+F 523<br/><br/>Bookings:<br/>Self-Registration on site<br/>Payment: Cash, cheque, or credit card<br/>Yellow permit on windscreen<br/><br/>📌 Eli: Connolly Dam"]
+    CampType -->|River Road| CampRiver["<b>🏕️ CONDAMINE RIVER ROAD</b><br/><br/>1. Check Disaster Dashboard<br/>2. If rain forecasted: link customer<br/>to dashboard for most current info<br/><br/>📌 Disaster Dashboard"]
+
+    %% =============================================
+
+    CampWash --> ActionDecision
+    CampConn --> ActionDecision
+    CampRiver --> ActionDecision`,
+    'licence': `    OtherDecision -->|Licence| LicenseType{"Action?"}
+    LicenseType -->|Pay| LicensePay["<b>📄 LICENCE - Pay/Renew</b><br/><br/>Gather info, process via BPOINT ECM<br/>Customer email needed for receipt<br/><br/>📌 Eli: Licence Renewal"]
+    LicenseType -->|Apply| LicenseApply["<b>📄 LICENCE - Apply</b><br/><br/>1. Find Form via:<br/>Eli FORMS - Quick Links<br/>OR SDRC Website: Permits &amp; Licences<br/>2. Email Form to customer<br/><br/>📌 Eli: Licence Forms"]
+
+    LicensePay --> ActionDecision
+    LicenseApply --> ActionDecision`,
+    'claims': `    OtherDecision -->|Claims| ClaimsRoute["<b>⚠️ DAMAGE OR INJURY CLAIMS</b><br/><br/>Instruct customer to include:<br/>Name, Time, Location of incident,<br/>Nature of injury/damage,<br/>Evidence: photos, witnesses, etc.<br/><br/>Send Letter of Demand:<br/>Personal/Property Damage:<br/>Subject - ATTN: CEO<br/><br/>Road Related Damage:<br/>Subject - ATTN: Governance<br/><br/>📌 Eli: Claims Process"]
+
+    %% =============================================
+
+    ClaimsRoute --> ActionDecision`,
+
+    'water': `    PropDecision -->|Water| WaterType{"Type?"}
+    WaterType -->|Aqualas Portal| WaterAqualas["<b>💧 WATER - Water Usage &amp; Aqualas Portal</b><br/><br/>[ ] Customers can sign up for the Aqualas customer portal to monitor their own water usage<br/><br/>[ ] Real estate agents can be granted access to monitor water usage on behalf of a property owner<br/><br/>[ ] Customers can set a custom leak detection threshold within the portal to receive alerts"]
+    WaterType -->|Leak| WaterLeaks["<b>💧 WATER - Plumbing Leak</b><br/><br/>1. Determine if the leak is on the customer or council side of the meter.<br/><br/>[ ] If the customer can visually detect water leaking at the footpath it may be a water meter leak. Search the PID in Aqualas and check whether the water usage chart shows periods of 0L/hour. If usage returns to 0L/hour and a visible leak is present: lodge a Merit Leak (keyword: leak) and contact the maintenance supervisor.<br/><br/>[ ] If water usage is consistently above 0L/hour, the leak is within the customer's plumbing infrastructure.<br/><br/>[ ] While awaiting repairs, advise the customer to shut off water at the meter if practical. The Water and Sewerage Module in Intramaps shows the exact meter location. If further clarification is needed, Aqualas contains photos taken at the time of meter installation.<br/><br/>[ ] If the property has multiple meters, provide the customer with the relevant meter number so they can isolate which pipes are affected. If the customer is unsure which pipes connect to that meter, check ECM for building plans. In older buildings it can sometimes be easier to shut off the meter and identify which taps stop running.<br/><br/><u>Basic leak finding techniques:</u><br/><br/>Internal:<br/>- If the leak is substantial but no wet areas are visible, water may be leaking into a drain<br/>- Check for: running toilets, washing machine leaks, dripping taps/showers<br/><br/>External:<br/>- Garden timers and hose guns can fail and cause substantial leaks - check anything left running<br/>- Underground pipes and fittings can fail - look for unusually green or boggy patches of ground<br/>- Underground pipes can fail without leaving a wet surface - water seeps into cracks and the water table. Plumbers can pump air into pipes to test if a section is not holding pressure<br/><br/>If the leak is not obvious, advise the customer to contact a licensed plumber.<br/><br/>📌 Eli: Water Leak Procedure"]
+    WaterType -->|Waterways| WaterWays["<b>💧 WATER - Waterways</b><br/><br/>Queries regarding waterway permits and licences are managed by the Department of Natural Resources.<br/><br/>Common queries include:<br/>- Can I dig a dam?<br/>- Can I pump from a creek?<br/>- Can I install a bore?<br/><br/>Refer customer to Department of Natural Resources: 13 74 68"]
+
+    WaterAqualas --> ActionDecision
+    WaterLeaks --> ActionDecision
+    WaterWays --> ActionDecision`,
+
+    };
+
+    // ── Rebuild & render ─────────────────────────────────────────────────
+    let renderTimer = null;
+
+    window.rebuildDiagram = function() {
+        clearTimeout(renderTimer);
+        document.getElementById('statusBar').classList.add('show');
+
+        renderTimer = setTimeout(async () => {
+            const checked = Object.keys(SECTIONS).filter(k => {
+                const cb = document.getElementById('cb_' + k);
+                return cb && cb.checked;
+            });
+
+            if (checked.length === 0) {
+                document.getElementById('mermaidDiagram').innerHTML =
+                    '<div class="rendering-msg">☑️ Select at least one service to display the diagram.</div>';
+                document.getElementById('statusBar').classList.remove('show');
                 return;
             }
 
-            // Get SVG data
-            const serializer = new XMLSerializer();
-            let source = serializer.serializeToString(svg);
+            // Which categories are needed?
+            const neededCats = [...new Set(checked.map(k => SERVICE_CAT[k]))];
+            const catLines = neededCats.map(c => CAT_ENTRIES[c]).join('\n');
 
-            // Add namespaces if missing (prevents some browser errors)
-            if(!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)){
-                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
-            }
-            if(!source.match(/^<svg[^>]+xmlns:xlink="http\:\/\/www\.w3\.org\/1999\/xlink"/)){
-                source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
-            }
+            // Build body sections
+            const bodyLines = checked.map(k => SECTIONS[k]).join('\n\n');
 
-            // Prepare Canvas
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            const svgSize = svg.getBoundingClientRect();
-            
-            // SCALE FACTOR (increase this for higher resolution)
-            const scaleFactor = 3; 
+            const source = HEADER + '\n' + catLines + '\n\n' + bodyLines + '\n\n' + TAIL;
 
-            canvas.width = svgSize.width * scaleFactor;
-            canvas.height = svgSize.height * scaleFactor;
+            await window.renderDiagram(source);
+            document.getElementById('statusBar').classList.remove('show');
+            initialFit();
+        }, 300);
+    };
 
-            const img = new Image();
-            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(source)));
+    // ── Category toggle ──────────────────────────────────────────────────
+    window.toggleCat = function(cat, state) {
+        document.querySelectorAll(`input[data-cat="${cat}"]`).forEach(cb => {
+            cb.checked = state;
+        });
+        rebuildDiagram();
+    };
 
-            img.onload = function() {
-                // Fill white background (otherwise it's transparent)
-                context.fillStyle = '#ffffff';
-                context.fillRect(0, 0, canvas.width, canvas.height);
-                
-                // Draw image scaled
-                context.drawImage(img, 0, 0, canvas.width, canvas.height);
-                
-                // Trigger Download
-                const a = document.createElement('a');
-                a.download = 'SDRC_Call_Flow.png';
-                a.href = canvas.toDataURL('image/png');
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            };
+    // ── Zoom ─────────────────────────────────────────────────────────────
+    let currentZoom = 100;
+    const zoomStep = 15;
+
+    function updateZoom() {
+        const el = document.getElementById('mermaidDiagram');
+        el.style.transform = `scale(${currentZoom / 100})`;
+        document.getElementById('zoomLevel').textContent = currentZoom;
+    }
+    function zoomIn()    { if (currentZoom < 200) { currentZoom += zoomStep; updateZoom(); } }
+    function zoomOut()   { if (currentZoom > 25)  { currentZoom -= zoomStep; updateZoom(); } }
+    function resetZoom() { currentZoom = 100; updateZoom(); }
+    function fitToScreen() { initialFit(); }
+    function initialFit() {
+        const dc = document.getElementById('diagramContainer');
+        const svg = document.querySelector('#mermaidDiagram svg');
+
+        if (!svg) {
+            currentZoom = 25;
+            updateZoom();
+            dc.scrollTop = 0;
+            dc.scrollLeft = 0;
+            return;
         }
 
-        // Mouse Wheel Zoom
-        document.getElementById('diagramContainer').addEventListener('wheel', function(e) {
-            if (e.ctrlKey || e.metaKey) {
-                e.preventDefault();
-                if (e.deltaY < 0) zoomIn();
-                else zoomOut();
-            }
-        });
+        // Get the true rendered dimensions of the SVG content
+        const svgW = parseFloat(svg.getAttribute('width')  || 800);
+        const svgH = parseFloat(svg.getAttribute('height') || 600);
+        const containerW = dc.clientWidth  || 800;
+        const containerH = dc.clientHeight || 600;
 
-        // Panning Logic
-        const container = document.getElementById('diagramContainer');
+        // Calculate zoom so the full diagram width fits with a little padding,
+        // capped between 15% and 100%
+        const padding = 40;
+        const zoomByWidth  = Math.floor(((containerW - padding) / svgW) * 100);
+        const zoomByHeight = Math.floor(((containerH - padding) / svgH) * 100);
+        const autoZoom = Math.max(15, Math.min(100, Math.min(zoomByWidth, zoomByHeight)));
 
-        container.addEventListener('mousedown', (e) => {
-            isPanning = true;
-            startX = e.clientX - panX;
-            startY = e.clientY - panY;
-            container.style.cursor = 'grabbing';
-        });
+        currentZoom = autoZoom;
+        updateZoom();
 
-        window.addEventListener('mouseup', () => {
-            isPanning = false;
-            container.style.cursor = 'grab';
-        });
+        // Scroll to top-left so the Start node is the first thing visible
+        dc.scrollTop  = 0;
+        dc.scrollLeft = 0;
 
-        window.addEventListener('mousemove', (e) => {
-            if (!isPanning) return;
-            e.preventDefault();
-            panX = e.clientX - startX;
-            panY = e.clientY - startY;
-            updateTransform();
-        });
-    </script>
+        document.getElementById('zoomLevel').textContent = currentZoom;
+    }
+
+    // ── Save as image ────────────────────────────────────────────────────
+    function showImgOptions() { document.getElementById('imgOptions').classList.add('show'); }
+    function hideImgOptions() {
+        document.getElementById('imgOptions').classList.remove('show');
+        document.getElementById('imgStatus').textContent = '';
+    }
+    // Shared helper: get SVG clone + dimensions
+    function getSvgData() {
+        const container = document.getElementById('mermaidDiagram');
+        const svg = container.querySelector('svg');
+        if (!svg) return null;
+        const origTransform = container.style.transform;
+        container.style.transform = 'none';
+        const svgClone = svg.cloneNode(true);
+        const svgWidth  = parseFloat(svg.getAttribute('width')  || svg.viewBox.baseVal.width  || 2000);
+        const svgHeight = parseFloat(svg.getAttribute('height') || svg.viewBox.baseVal.height || 3000);
+        svgClone.setAttribute('width',  svgWidth);
+        svgClone.setAttribute('height', svgHeight);
+        container.style.transform = origTransform;
+        return { svgClone, svgWidth, svgHeight };
+    }
+
+    // SVG download — vector, no size limit, perfect for printing
+    function saveSVG() {
+        const statusEl = document.getElementById('svgStatus');
+        const data = getSvgData();
+        if (!data) { statusEl.textContent = '⚠️ No diagram rendered yet.'; return; }
+        const { svgClone } = data;
+        const serialiser = new XMLSerializer();
+        const svgString = serialiser.serializeToString(svgClone);
+        const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const link = document.createElement('a');
+        link.download = 'SDRC_CallFlow.svg';
+        link.href = URL.createObjectURL(blob);
+        link.click();
+        statusEl.textContent = '✅ SVG downloaded! Open in Chrome to print, or in Inkscape/Illustrator to export PNG at any size.';
+    }
+
+    // PNG download — auto-scales to max canvas limit if needed
+    async function saveImage() {
+        const scale = parseFloat(document.getElementById('imgSize').value);
+        const statusEl = document.getElementById('imgStatus');
+        statusEl.textContent = '⏳ Preparing image' + (scale >= 4 ? ' — high-res may take 20-60 seconds...' : '...');
+
+        const container = document.getElementById('mermaidDiagram');
+        const svg = container.querySelector('svg');
+        if (!svg) { statusEl.textContent = '\u26a0\ufe0f No diagram rendered yet.'; return; }
+
+        // Temporarily remove transform so html2canvas captures at natural size
+        const origTransform = container.style.transform;
+        container.style.transform = 'none';
+
+        try {
+            // html2canvas re-renders the live DOM, bypassing the SVG foreignObject tainted canvas restriction
+            const canvas = await html2canvas(container, {
+                scale: scale,
+                backgroundColor: '#ffffff',
+                useCORS: true,
+                allowTaint: false,
+                logging: false,
+                width:  container.scrollWidth,
+                height: container.scrollHeight
+            });
+
+            container.style.transform = origTransform;
+
+            const w = canvas.width;
+            const h = canvas.height;
+            statusEl.textContent = `\u23f3 Encoding ${w}\xd7${h}px image...`;
+            await new Promise(r => setTimeout(r, 30));
+
+            canvas.toBlob(blob => {
+                const link = document.createElement('a');
+                link.download = `SDRC_CallFlow_${scale}x.png`;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                statusEl.textContent = `\u2705 Downloaded at ${scale}x (${w}\xd7${h}px)!`;
+            }, 'image/png', 1.0);
+
+        } catch(e) {
+            container.style.transform = origTransform;
+            console.error(e);
+            statusEl.textContent = '\u274c Error: ' + e.message;
+        }
+    }
+
+    // ── Pan & scroll ─────────────────────────────────────────────────────
+    const dc = document.getElementById('diagramContainer');
+    let isDragging = false, startX, startY, scrollLeft, scrollTop;
+    dc.addEventListener('mousedown', e => {
+        isDragging = true;
+        startX = e.pageX - dc.offsetLeft; startY = e.pageY - dc.offsetTop;
+        scrollLeft = dc.scrollLeft; scrollTop = dc.scrollTop;
+    });
+    dc.addEventListener('mouseleave', () => isDragging = false);
+    dc.addEventListener('mouseup',    () => isDragging = false);
+    dc.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        e.preventDefault();
+        dc.scrollLeft = scrollLeft - (e.pageX - dc.offsetLeft - startX) * 1.5;
+        dc.scrollTop  = scrollTop  - (e.pageY - dc.offsetTop  - startY) * 1.5;
+    });
+    dc.addEventListener('wheel', e => {
+        if (e.ctrlKey) { e.preventDefault(); e.deltaY < 0 ? zoomIn() : zoomOut(); }
+    }, { passive: false });
+
+    document.addEventListener('keydown', e => {
+        if (e.ctrlKey && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoomIn(); }
+        if (e.ctrlKey && e.key === '-') { e.preventDefault(); zoomOut(); }
+        if (e.ctrlKey && e.key === '0') { e.preventDefault(); resetZoom(); }
+    });
+</script>
 </body>
-</html>
-
+                        </html>
