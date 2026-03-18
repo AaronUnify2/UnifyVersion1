@@ -113,7 +113,7 @@
             // ── Attach toggle listeners to all <details> panels ─────────────
             svg.querySelectorAll('details').forEach(d => {
                 d.addEventListener('toggle', () => {
-                    if (window._isRerendering) return;  // ignore programmatic toggles during restore
+                    if (window._isRerendering) return;
                     const key = d.querySelector('summary')?.textContent?.trim();
                     if (!key) return;
                     if (!window._openDetails) window._openDetails = new Set();
@@ -122,27 +122,30 @@
                     } else {
                         window._openDetails.delete(key);
                     }
-                    // Re-render to properly size the node; preserve scroll position
                     if (window._lastDiagramSource) {
                         const dc = document.getElementById('diagramContainer');
                         const scrollLeft = dc.scrollLeft;
                         const scrollTop  = dc.scrollTop;
-                        window.renderDiagram(window._lastDiagramSource).then(() => {
-                            dc.scrollLeft = scrollLeft;
-                            dc.scrollTop  = scrollTop;
-                        });
+                        // Defer completely out of the event call stack, and use
+                        // render lock to discard any duplicate toggle firings
+                        if (window._renderLock) return;
+                        window._renderLock = true;
+                        setTimeout(() => {
+                            window.renderDiagram(window._lastDiagramSource).then(() => {
+                                dc.scrollLeft = scrollLeft;
+                                dc.scrollTop  = scrollTop;
+                                window._renderLock = false;
+                            });
+                        }, 0);
                     }
                 });
             });
         };
 
         window.renderDiagram = async function(source) {
-            window._lastDiagramSource = source;   // remember for details toggle re-renders
+            window._lastDiagramSource = source;
             const wrapper = document.getElementById('diagramContainer');
 
-            // Destroy the old element entirely and create a fresh one -
-            // reusing the same element causes Mermaid to carry over stale
-            // internal state on re-renders, resulting in collapsed node boxes.
             const old = document.getElementById('mermaidDiagram');
             if (old) old.remove();
 
@@ -152,8 +155,13 @@
             fresh.textContent = source;
             wrapper.appendChild(fresh);
 
-            await window._mermaid.run({ nodes: [fresh] });
-            window.applyPostProcessing();
+            try {
+                await window._mermaid.run({ nodes: [fresh] });
+                window.applyPostProcessing();
+            } catch(e) {
+                console.error('Mermaid render error:', e);
+                window._renderLock = false;
+            }
         };
 
         // Initial render
@@ -674,7 +682,8 @@
     window.rebuildDiagram = function() {
         clearTimeout(renderTimer);
         document.getElementById('statusBar').classList.add('show');
-        window._openDetails = new Set(); // reset open panels when diagram content changes
+        window._openDetails = new Set();
+        window._renderLock = false;
 
         renderTimer = setTimeout(async () => {
             const checked = Object.keys(SECTIONS).filter(k => {
