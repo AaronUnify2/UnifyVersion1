@@ -82,9 +82,59 @@
             svg.setAttribute('viewBox', `${bbox.x-20} ${bbox.y-20} ${bbox.width+40} ${bbox.height+40}`);
             svg.setAttribute('width', bbox.width + 40);
             svg.setAttribute('height', bbox.height + 40);
+
+            // ── Restore any previously-open <details> panels ────────────────
+            if (window._openDetails && window._openDetails.size > 0) {
+                svg.querySelectorAll('details').forEach(d => {
+                    const key = d.querySelector('summary')?.textContent?.trim();
+                    if (key && window._openDetails.has(key)) {
+                        d.open = true;
+                        // Re-measure foreignObject now that content is expanded
+                        const fo = d.closest('foreignObject');
+                        if (fo) {
+                            const inner = fo.querySelector('div');
+                            if (inner) {
+                                // Brief delay so browser can lay out the expanded content
+                                requestAnimationFrame(() => {
+                                    fo.setAttribute('height', Math.ceil(inner.getBoundingClientRect().height) + 20);
+                                    const newBbox = svg.getBBox();
+                                    svg.setAttribute('viewBox', `${newBbox.x-20} ${newBbox.y-20} ${newBbox.width+40} ${newBbox.height+40}`);
+                                    svg.setAttribute('width',  newBbox.width  + 40);
+                                    svg.setAttribute('height', newBbox.height + 40);
+                                });
+                            }
+                        }
+                    }
+                });
+            }
+
+            // ── Attach toggle listeners to all <details> panels ─────────────
+            svg.querySelectorAll('details').forEach(d => {
+                d.addEventListener('toggle', () => {
+                    const key = d.querySelector('summary')?.textContent?.trim();
+                    if (!key) return;
+                    if (!window._openDetails) window._openDetails = new Set();
+                    if (d.open) {
+                        window._openDetails.add(key);
+                    } else {
+                        window._openDetails.delete(key);
+                    }
+                    // Re-render to properly size the node; preserve scroll position
+                    if (window._lastDiagramSource) {
+                        const dc = document.getElementById('diagramContainer');
+                        const scrollLeft = dc.scrollLeft;
+                        const scrollTop  = dc.scrollTop;
+                        window.renderDiagram(window._lastDiagramSource).then(() => {
+                            dc.scrollLeft = scrollLeft;
+                            dc.scrollTop  = scrollTop;
+                        });
+                    }
+                });
+            });
         };
 
         window.renderDiagram = async function(source) {
+            window._lastDiagramSource = source;   // remember for details toggle re-renders
             const wrapper = document.getElementById('diagramContainer');
 
             // Destroy the old element entirely and create a fresh one -
@@ -621,6 +671,7 @@
     window.rebuildDiagram = function() {
         clearTimeout(renderTimer);
         document.getElementById('statusBar').classList.add('show');
+        window._openDetails = new Set(); // reset open panels when diagram content changes
 
         renderTimer = setTimeout(async () => {
             const checked = Object.keys(SECTIONS).filter(k => {
