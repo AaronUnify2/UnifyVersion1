@@ -82,70 +82,14 @@
             svg.setAttribute('viewBox', `${bbox.x-20} ${bbox.y-20} ${bbox.width+40} ${bbox.height+40}`);
             svg.setAttribute('width', bbox.width + 40);
             svg.setAttribute('height', bbox.height + 40);
-
-            // ── Restore any previously-open <details> panels ────────────────
-            if (window._openDetails && window._openDetails.size > 0) {
-                window._isRerendering = true;   // suppress toggle events during restore
-                svg.querySelectorAll('details').forEach(d => {
-                    const key = d.querySelector('summary')?.textContent?.trim();
-                    if (key && window._openDetails.has(key)) {
-                        d.open = true;
-                        // Re-measure foreignObject now that content is expanded
-                        const fo = d.closest('foreignObject');
-                        if (fo) {
-                            const inner = fo.querySelector('div');
-                            if (inner) {
-                                // Brief delay so browser can lay out the expanded content
-                                requestAnimationFrame(() => {
-                                    fo.setAttribute('height', Math.ceil(inner.getBoundingClientRect().height) + 20);
-                                    const newBbox = svg.getBBox();
-                                    svg.setAttribute('viewBox', `${newBbox.x-20} ${newBbox.y-20} ${newBbox.width+40} ${newBbox.height+40}`);
-                                    svg.setAttribute('width',  newBbox.width  + 40);
-                                    svg.setAttribute('height', newBbox.height + 40);
-                                });
-                            }
-                        }
-                    }
-                });
-                window._isRerendering = false;  // restore events now safe
-            }
-
-            // ── Attach toggle listeners to all <details> panels ─────────────
-            svg.querySelectorAll('details').forEach(d => {
-                d.addEventListener('toggle', () => {
-                    if (window._isRerendering) return;
-                    const key = d.querySelector('summary')?.textContent?.trim();
-                    if (!key) return;
-                    if (!window._openDetails) window._openDetails = new Set();
-                    if (d.open) {
-                        window._openDetails.add(key);
-                    } else {
-                        window._openDetails.delete(key);
-                    }
-                    if (window._lastDiagramSource) {
-                        const dc = document.getElementById('diagramContainer');
-                        const scrollLeft = dc.scrollLeft;
-                        const scrollTop  = dc.scrollTop;
-                        // Defer completely out of the event call stack, and use
-                        // render lock to discard any duplicate toggle firings
-                        if (window._renderLock) return;
-                        window._renderLock = true;
-                        setTimeout(() => {
-                            window.renderDiagram(window._lastDiagramSource).then(() => {
-                                dc.scrollLeft = scrollLeft;
-                                dc.scrollTop  = scrollTop;
-                                window._renderLock = false;
-                            });
-                        }, 0);
-                    }
-                });
-            });
         };
 
         window.renderDiagram = async function(source) {
-            window._lastDiagramSource = source;
             const wrapper = document.getElementById('diagramContainer');
 
+            // Destroy the old element entirely and create a fresh one -
+            // reusing the same element causes Mermaid to carry over stale
+            // internal state on re-renders, resulting in collapsed node boxes.
             const old = document.getElementById('mermaidDiagram');
             if (old) old.remove();
 
@@ -155,13 +99,8 @@
             fresh.textContent = source;
             wrapper.appendChild(fresh);
 
-            try {
-                await window._mermaid.run({ nodes: [fresh] });
-                window.applyPostProcessing();
-            } catch(e) {
-                console.error('Mermaid render error:', e);
-                window._renderLock = false;
-            }
+            await window._mermaid.run({ nodes: [fresh] });
+            window.applyPostProcessing();
         };
 
         // Initial render
@@ -682,8 +621,6 @@
     window.rebuildDiagram = function() {
         clearTimeout(renderTimer);
         document.getElementById('statusBar').classList.add('show');
-        window._openDetails = new Set();
-        window._renderLock = false;
 
         renderTimer = setTimeout(async () => {
             const checked = Object.keys(SECTIONS).filter(k => {
@@ -882,4 +819,4 @@
     });
 </script>
 </body>
-                        </html>
+    </html>
