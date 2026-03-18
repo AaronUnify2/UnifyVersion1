@@ -713,6 +713,62 @@
 
     };
 
+    // ── Auto line-wrap ───────────────────────────────────────────────────
+    // Wraps plain text inside Mermaid node labels at word boundaries so no
+    // single visual line exceeds maxLen characters. Skips HTML tags and any
+    // segment that contains a URL (href=) so links are never broken.
+
+    function wrapTextSegment(segment, maxLen) {
+        if (segment.length <= maxLen) return segment;
+        if (/href=/.test(segment)) return segment; // never break URL lines
+
+        const tokens = segment.split(/(<[^>]+>)/); // split on HTML tags
+        let output = '';
+        let lineLen = 0;
+
+        for (const tok of tokens) {
+            if (tok.startsWith('<')) {
+                output += tok; // tag — output as-is, don't count length
+            } else {
+                const words = tok.split(' ');
+                for (let w = 0; w < words.length; w++) {
+                    const word = words[w];
+                    if (!word) {
+                        if (lineLen > 0) { output += ' '; lineLen++; }
+                        continue;
+                    }
+                    const addSpace = lineLen > 0;
+                    const needed = word.length + (addSpace ? 1 : 0);
+                    if (lineLen > 0 && lineLen + needed > maxLen) {
+                        output += '<br/>';
+                        lineLen = 0;
+                        output += word;
+                        lineLen = word.length;
+                    } else {
+                        if (addSpace) { output += ' '; lineLen++; }
+                        output += word;
+                        lineLen += word.length;
+                    }
+                }
+            }
+        }
+        return output;
+    }
+
+    function wrapHtmlLines(html, maxLen) {
+        // Split preserving existing <br/> tags, then wrap each segment
+        const parts = html.split(/(<br\s*\/?>)/i);
+        return parts.map(p => /<br\s*\/?>/i.test(p) ? p : wrapTextSegment(p, maxLen)).join('');
+    }
+
+    function wrapSource(source, maxLen) {
+        maxLen = maxLen || 72;
+        // Match node label content between [" and "]
+        return source.replace(/\["([\s\S]*?)"\]/g, (match, content) =>
+            '["' + wrapHtmlLines(content, maxLen) + '"]'
+        );
+    }
+
     // ── Rebuild & render ─────────────────────────────────────────────────
     let renderTimer = null;
 
@@ -761,7 +817,7 @@
                     });
                 }
 
-                const source = HEADER + '\n' + catLines + '\n\n' + bodyLines + '\n\n' + TAIL;
+                const source = wrapSource(HEADER + '\n' + catLines + '\n\n' + bodyLines + '\n\n' + TAIL);
 
                 await window.renderDiagram(source);
                 document.getElementById('statusBar').classList.remove('show');
