@@ -97,7 +97,7 @@
                     const dc = document.getElementById('diagramContainer');
                     const scrollLeft = dc.scrollLeft;
                     const scrollTop  = dc.scrollTop;
-                    window.rebuildDiagram().then(() => {
+                    window.rebuildDiagram({ preserveView: true }).then(() => {
                         dc.scrollLeft = scrollLeft;
                         dc.scrollTop  = scrollTop;
                     });
@@ -218,6 +218,9 @@
         .img-status { color: #553c9a; font-size: 13px; }
 
         .diagram-wrapper { border: 2px solid #e2e8f0; border-radius: 8px; overflow: hidden; background: #fafafa; }
+        .main-layout { display: flex; gap: 16px; align-items: flex-start; }
+        .diagram-col { flex: 1; min-width: 0; }
+        .sidebar { width: 260px; flex-shrink: 0; }
         .diagram-container {
             width: 100%; height: 75vh; min-height: 600px;
             overflow: auto; padding: 20px;
@@ -251,7 +254,21 @@
     <h1>SDRC Customer Service Call Flow Chart</h1>
     <p class="subtitle">Decision Tree Model – Autonomy-Focused Guidance</p>
 
-    <div class="controls">
+    <div class="main-layout">
+      <div class="diagram-col">
+        <div class="status-bar" id="statusBar">⏳ Rebuilding diagram...</div>
+        <div class="diagram-wrapper" style="position:relative">
+        <div style="position:absolute;top:14px;left:14px;z-index:10;display:flex;gap:6px;align-items:center;">
+            <button onclick="zoomIn()" title="Zoom In" style="width:34px;height:34px;font-size:18px;line-height:1;border:1px solid #ccc;border-radius:6px;background:rgba(255,255,255,0.92);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.15)">+</button>
+            <button onclick="zoomOut()" title="Zoom Out" style="width:34px;height:34px;font-size:18px;line-height:1;border:1px solid #ccc;border-radius:6px;background:rgba(255,255,255,0.92);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.15)">−</button>
+            <span id="overlayZoomLevel" style="background:rgba(255,255,255,0.92);border:1px solid #ccc;border-radius:6px;padding:0 10px;height:34px;display:flex;align-items:center;font-size:13px;font-weight:600;color:#4a5568;box-shadow:0 1px 4px rgba(0,0,0,0.15)">30%</span>
+        </div>
+        <div class="diagram-container" id="diagramContainer">
+            <div class="mermaid" id="mermaidDiagram"></div>
+        </div>
+    </div>
+
+    <div class="controls" style="margin-top:16px;">
         <button onclick="zoomIn()">➕ Zoom In</button>
         <button onclick="zoomOut()">➖ Zoom Out</button>
         <button onclick="resetZoom()">🔄 Reset View</button>
@@ -261,12 +278,13 @@
         <div class="zoom-info">Zoom: <span id="zoomLevel">100</span>%</div>
         <span id="svgStatus" style="font-size:13px;color:#553c9a;align-self:center;"></span>
     </div>
+    <div class="img-options" id="imgOptions" style="display:none;margin-top:10px;"></div>
+      </div><!-- /.diagram-col -->
 
-    <div class="img-options" id="imgOptions" style="display:none"></div>
-
-    <div class="filter-panel">
-        <div class="filter-title">🔍 Filter — uncheck services to remove them from the diagram</div>
-        <div class="filter-groups">
+      <div class="sidebar">
+        <div class="filter-panel" style="margin-bottom:0;">
+        <div class="filter-title">🔍 Filter</div>
+        <div class="filter-groups" style="flex-direction:column;">
 
         <div class="cat-group" style="border-color:#2563eb;background:#eff6ff">
             <div class="cat-header" style="color:#2563eb">
@@ -286,7 +304,7 @@
                 </label>
                 <label class="check-label" style="--accent:#2563eb">
                     <input type="checkbox" id="cb_buildingguide" data-cat="Property" onchange="rebuildFresh()">
-                    <span>🏗️ Building Approval General Process</span>
+                    <span>🏗️ Building Approval Process</span>
                 </label>
                 <label class="check-label" style="--accent:#2563eb">
                     <input type="checkbox" id="cb_plumbing" data-cat="Property" onchange="rebuildFresh()">
@@ -298,7 +316,7 @@
                 </label>
                 <label class="check-label" style="--accent:#2563eb">
                     <input type="checkbox" id="cb_planningguide" data-cat="Property" onchange="rebuildFresh()">
-                    <span>📐 Planning Application General Process</span>
+                    <span>📐 Planning Application Process</span>
                 </label>
                 <label class="check-label" style="--accent:#2563eb">
                     <input type="checkbox" id="cb_water" data-cat="Property" onchange="rebuildFresh()">
@@ -385,20 +403,9 @@
         </div>
 
         </div>
-    </div>
-
-    <div class="status-bar" id="statusBar">⏳ Rebuilding diagram...</div>
-
-    <div class="diagram-wrapper" style="position:relative">
-        <div style="position:absolute;bottom:14px;right:14px;z-index:10;display:flex;gap:6px;">
-            <button onclick="zoomIn()" title="Zoom In" style="width:34px;height:34px;font-size:18px;line-height:1;border:1px solid #ccc;border-radius:6px;background:rgba(255,255,255,0.92);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.15)">+</button>
-            <button onclick="zoomOut()" title="Zoom Out" style="width:34px;height:34px;font-size:18px;line-height:1;border:1px solid #ccc;border-radius:6px;background:rgba(255,255,255,0.92);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.15)">−</button>
         </div>
-        <div class="diagram-container" id="diagramContainer">
-            <div class="mermaid" id="mermaidDiagram"></div>
-        </div>
-    </div>
-</div>
+      </div><!-- /.sidebar -->
+    </div><!-- /.main-layout -->
 
 <script>
     // ── Open context state ───────────────────────────────────────────────
@@ -425,6 +432,46 @@
             parentId: 'PlanObjection',
             nodeId: 'PlanObjection_ctx',
             label: `<b>📖 Why this matters — Appeal rights</b><br/><br/>Submissions that do not meet all of the checklist criteria are <b>not considered properly made</b> and submitters will not have third-party appeal rights.<br/><br/>If a submission is properly made and Council approves the application, the submitter has the right to appeal Council's decision in the Planning and Environment Court.<br/><br/>If Council refuses the application, all submitters (properly made or not) are notified after the decision is made and receive a copy of the Decision Notice.`
+        },
+        'AnimalAttack': {
+            parentId: 'AnimalAttack',
+            nodeId: 'AnimalAttack_ctx',
+            label: `<b>📖 After a Dog Attack — Possible outcomes</b><br/><br/>Following a reported attack, Local Laws officers will investigate. Possible outcomes:<br/><br/><b>Dangerous Dog Declaration:</b><br/>May be issued where a dog has attacked, bitten, or rushed at a person or animal. Requirements imposed on the owner include: microchipping, desexing, approved enclosure, muzzle in public, and a warning sign on the premises. The owner may appeal within 28 days to the Magistrates Court.<br/><br/><b>Destruction Order:</b><br/>May be issued in severe or repeat cases, or where the owner fails to comply with a Dangerous Dog Declaration.<br/><br/><b>Advising the victim:</b><br/>- Seek medical attention if injured<br/>- A police report may be appropriate for serious incidents<br/>- Retain evidence: photos, witness details, and vet reports if a pet was also injured`
+        },
+        'BarkNew': {
+            parentId: 'BarkNew',
+            nodeId: 'BarkNew_ctx',
+            label: `<b>📖 Why we require a diary — Legal framework</b><br/><br/>Council needs documented evidence before taking enforcement action. A single complaint without a diary rarely results in formal action.<br/><br/>The diary establishes a pattern of nuisance over time, which is required to demonstrate an ongoing problem under local laws.<br/><br/><b>Escalation path:</b><br/>1. Customer encouraged to contact the dog owner directly first<br/>2. Customer completes diary over 14 days and emails to Local Laws<br/>3. Local Laws contacts dog owner and issues written warning<br/>4. If behaviour continues: infringement notice may be issued<br/>5. Non-compliance: prosecution or court action<br/><br/>Set realistic expectations with the customer — the process takes time and council's primary goal is behavioural correction, not punishment.`
+        },
+        'RatesSale': {
+            parentId: 'RatesSale',
+            nodeId: 'RatesSale_ctx',
+            label: `<b>📖 Property Valuations — Background</b><br/><br/>Properties are valued by the State Government (Department of Resources), not council. Valuations are updated annually and form the basis of the General Rate calculation.<br/><br/>Owners who believe their valuation is incorrect have 60 days from the date of their valuation notice to lodge a formal objection with the Department of Resources. Council cannot intervene in this process.<br/><br/><u>Why rates increase after subdivision or sale of bulk-assessed land:</u><br/>When bulk-assessed lots are sold individually, each receives its own Property ID and is independently valued. The per-lot valuation is typically higher than a proportional share of the bulk-assessed value, resulting in a higher rates charge.<br/><br/>This is a State Government valuation outcome — council has no discretion to reduce it. Customers who dispute their new valuation should contact the Department of Resources.`
+        },
+        'RatesPayAgree': {
+            parentId: 'RatesPayAgree',
+            nodeId: 'RatesPayAgree_ctx',
+            label: `<b>📖 Payment Agreements — Policy context</b><br/><br/><b>If a customer defaults:</b><br/>If the customer fails to maintain agreed payments, the payment agreement is void and all outstanding rates become immediately payable. Council may proceed to debt recovery, including referral to an external collector and ultimately a caveat on the property.<br/><br/><b>Customers in genuine hardship:</b><br/>Customers experiencing ongoing financial difficulty beyond a standard payment agreement should be encouraged to contact the revenue team directly. Customer service should not make commitments beyond the standard process.<br/><br/><b>Rate recovery codes — what they mean:</b><br/>- General: standard account in good standing<br/>- FirstREM / FinalREM: reminder notice issued, account overdue<br/>- ARR: referred to external debt recovery (Recoveries &amp; Reconstructions) — do not negotiate, transfer to R&amp;R: 1300 556 863`
+        },
+        'BuildingNew': {
+            parentId: 'BuildingNew',
+            nodeId: 'BuildingNew_ctx',
+            label: `<b>📖 What building work requires approval?</b><br/><br/><u>Generally requires building approval:</u><br/>New dwellings, extensions, garages, carports, sheds over 10m2, swimming pools, retaining walls over 1m, patios/decks attached to the dwelling, and most commercial construction.<br/><br/><u>Generally does not require building approval:</u><br/>Garden sheds under 10m2, some fencing, some landscaping. However, even exempt structures must still comply with siting and boundary setback requirements under the Queensland Development Code.<br/><br/><u>Private Certifier vs Council:</u><br/>Customers may engage a private building certifier who manages the application, arranges inspections, and liaises with council on their behalf. Most customers undertaking larger projects choose this route. Council fees are the same either way — the certifier charges their own fee on top.`
+        },
+        'BuildingAdmin': {
+            parentId: 'BuildingAdmin',
+            nodeId: 'BuildingAdmin_ctx',
+            label: `<b>📖 Building plan copyright — Background</b><br/><br/>Building plans are a creative work protected by copyright. The copyright belongs to whoever created the plans (architect, draftsperson, or design team) — not the property owner, even if the owner paid for construction.<br/><br/>Copyright lasts for the creator's lifetime plus 70 years. Council cannot release plans without written consent from the copyright owner, or until the copyright has expired.<br/><br/><u>Common scenarios:</u><br/>- Plans by a known draftsperson or firm: contact that person or their estate for consent<br/>- Plans drawn by Len Rigg: standing permission has been granted by his estate — council may release these<br/>- Plans with unknown or long-deceased creator: copyright may have expired — seek guidance from the building team before releasing<br/><br/>The property owner's right to maintain their property does not transfer copyright ownership.`
+        },
+        'WasteBin': {
+            parentId: 'WasteBin',
+            nodeId: 'WasteBin_ctx',
+            label: `<b>📖 Cleanaway contract — Background</b><br/><br/>Cleanaway is contracted by SDRC to provide domestic waste and recycling collection. Council does not directly manage collection operations — Cleanaway is the point of contact for all standard service issues.<br/><br/>All bin service requests go through the Cleanaway portal. Do not lodge a Merit for standard bin issues (missed pickup, damaged bin, missing bin) — these must go through Cleanaway directly.<br/><br/><u>Collection day queries:</u><br/>Customers can check their collection day on the SDRC website or Cleanaway app. Days may change during public holidays — direct customers to the Cleanaway website for updated holiday schedules.<br/><br/><u>If Cleanaway is unresponsive:</u><br/>If a Cleanaway request goes unresolved, lodge a Merit Complaint so council can follow up with Cleanaway on the customer's behalf.`
+        },
+        'WasteFacilities': {
+            parentId: 'WasteFacilities',
+            nodeId: 'WasteFacilities_ctx',
+            label: `<b>📖 Facility charges &amp; accepted materials</b><br/><br/><u>Generally accepted at no charge:</u><br/>Green/garden waste, clean recyclables (paper, cardboard, glass, plastics 1 and 2), and e-waste at designated sites.<br/><br/><u>Fees typically apply to:</u><br/>General household waste, mattresses, tyres, large whitegoods. Fees are set annually in the Fees &amp; Charges schedule.<br/><br/><u>Asbestos — special requirements:</u><br/>Asbestos must be double-bagged in 200-micron plastic, clearly labelled, and the customer must pre-book with council before attending the facility. Facility staff cannot accept asbestos that has not been pre-booked. Direct customers to the Asbestos Disposal Guidelines for full requirements.<br/><br/><u>Landfill levy:</u><br/>A State Government charge included in the cost of general waste disposal. Council must pass this on and has no discretion to waive it.`
         }
     };
 
@@ -467,7 +514,7 @@
     style NoAction fill:#d1ecf1,stroke:#17a2b8,stroke-width:2px`;
 
     const CAT_ENTRIES = {
-        'Property':       `    Category -->|Property| PropDecision{"<b>PROPERTY ISSUE?</b>"}`,
+        'Property':       `    Category -->|Property| PropDecision{"<b>Property</b>"}`,
         'Community':      `    Category -->|Community| CommDecision{"<b>COMMUNITY?</b>"}`,
         'Infrastructure': `    Category -->|Infrastructure| InfraDecision{"<b>INFRASTRUCTURE ISSUE?</b>"}`,
         'Other':          `    Category -->|Other| OtherDecision{"<b>OTHER ISSUE?</b>"}`,
@@ -484,30 +531,42 @@
 
     const SECTIONS = {
 
-    'rates': `    PropDecision -->|Rates| RatesDecision{"Balance/Payment,<br/>Admin, Property Sale,<br/>or Info?"}
-    RatesDecision -->|Property Sale| RatesSale["<b>💰 RATES - Property Sale</b><br/><br/><u>Settlement:</u><br/>During a typical settlement, solicitors adjust the sale price so the rates for the current period are shared between vendor and purchaser in proportion to their respective periods of ownership. Neither party needs to contact council — the transfer of name on the property is handled automatically by the Titles Office.<br/><br/><u>Bulk Assessed Properties:</u><br/>In rural zones it is common for a single Property ID to cover multiple lots. In Intramaps, the selected lot boundary shows in red and related bulk-assessed lots show in orange — these share a PID and appear on the same rates notice.<br/><br/>When land is bulk assessed, the Titles Office values it as a single large lot, resulting in a lower valuation and lower rates. When individual lots within a bulk-assessed property are sold, each sold lot receives a new PID and is revalued independently — typically resulting in a higher rates charge.<br/><br/>Because settlement contracts generally do not allow time for revaluation and a supplementary rates notice to be issued, the standard process is for the vendor to ensure all rates owing on the property are paid in full prior to settlement."]
+    'rates': `    PropDecision -->|Rates| RatesDecision{"Balance/Payment,<br/>Agreement, Admin,<br/>Property Sale, or Info?"}
+    RatesDecision -->|Property Sale| RatesSale["<b>💰 RATES - Property Sale</b><br/><br/><u>Settlement:</u><br/>During a typical settlement, solicitors adjust the sale price so the rates for the current period are shared between vendor and purchaser in proportion to their respective periods of ownership. Neither party needs to contact council — the transfer of name on the property is handled automatically by the Titles Office.<br/><br/><u>Bulk Assessed Properties:</u><br/>In rural zones it is common for a single Property ID to cover multiple lots. In Intramaps, the selected lot boundary shows in red and related bulk-assessed lots show in orange — these share a PID and appear on the same rates notice.<br/><br/>When land is bulk assessed, the Titles Office values it as a single large lot, resulting in a lower valuation and lower rates. When individual lots within a bulk-assessed property are sold, each sold lot receives a new PID and is revalued independently — typically resulting in a higher rates charge.<br/><br/>Because settlement contracts generally do not allow time for revaluation and a supplementary rates notice to be issued, the standard process is for the vendor to ensure all rates owing on the property are paid in full prior to settlement.<br/><br/><span data-context='RatesSale' style='display:inline-block;margin-top:10px;padding:3px 10px;background:#eff6ff;border:1px solid #93c5fd;border-radius:4px;color:#1d4ed8;'>📖 Valuations explained</span>"]
     RatesDecision -->|Balance / Payment| RatesBalPay["<b>💰 RATES - Balance &amp; Payment</b><br/><br/><u>Rates Balance:</u><br/>Look up property in TechOne - navigate to the rates tab and provide the Total Payable balance.<br/><br/>If customer queries the balance:<br/>[ ] Check the correct Property ID was pasted into TechOne<br/>[ ] Total Payable Balance reflects the total if the customer pays today<br/>[ ] Before the due date, the Total Payable balance includes the discount<br/>[ ] If customer has made payment via BPAY/direct debit/bank transfer it may take time to show - check most recent rates notice and transaction history<br/>[ ] Offer to provide a copy of the most recent rates notice<br/><br/><u>Rates Payment:</u><br/>1. Use Property ID in TechOne - verbally confirm Total Payable Balance<br/>2. Process payment in BPOINT<br/><br/>📌 Eli: Rates Process"]
-    RatesDecision -->|Admin| RatesAdmin["<b>💰 RATES - Admin</b><br/><br/><u>Payment Agreement:</u><br/>1. Look up property on TechOne<br/>2. Verify caller identity<br/>3. Check rate recovery code:<br/>[ ] General/FirstREM/FinalREM: proceed<br/>[ ] ARR: refer to R&amp;R: 1300 556 863<br/>[ ] Other: arrange callback from revenue department<br/>4. Generate spreadsheet - run XLOne report in TechOne<br/>5. Follow spreadsheet process with customer<br/>6. Save spreadsheet to pre-approved agreements folder: PID - SURNAME<br/>7. Email copy of spreadsheet to revenue (if customer rejected both payment options, inform revenue in email)<br/>8. Customer to await confirmation email from revenue<br/><br/><u>Copy of Rates Notice:</u><br/>1. Verify identity<br/>2. Search Property ID in Payreq<br/>3. Email most recent rates notice PDF to customer<br/>4. If customer requires rates notice from previous FY: look up fee in Fees &amp; Charges<br/><br/><u>Direct Debit:</u><br/>New: Email Form - Direct Debit Request<br/>Alter: Email Form - DD Alteration/Cancellation<br/><br/><u>Pensioner Rates Subsidy:</u><br/>1. Confirm address on pension card matches customer address in TechOne<br/>2. Email Form - Pension Subsidy Application - request customer attach a copy of pension card<br/>3. Customer may attend front counter to fill out form in person - we will photocopy their card<br/><br/><u>Sign up for Email Rates Notices:</u><br/>1. Refer customer to second page of rates notice - Go Paperless QR code<br/>2. Or search Go Paperless on SDRC website - create a Payreq account<br/>3. To sign up, customer must provide the name on the rates notice and their BPAY Reference number (found on most recent rates notice)<br/>4. Customer must ensure email address used to sign up for Payreq matches the one on file in TechOne<br/><br/>📌 Eli: Rates<br/>📌 Eli: Payment Agreement<br/>📌 Eli: Direct Debit<br/>📌 Eli: SDRC - Go Paperless"]
+    RatesDecision -->|Payment Agreement| RatesPayAgree["<b>💰 RATES - Payment Agreement</b><br/><br/>1. Look up property on TechOne<br/>2. Verify caller identity<br/>3. Check rate recovery code:<br/>[ ] General/FirstREM/FinalREM: proceed<br/>[ ] ARR: refer to R&amp;R: 1300 556 863<br/>[ ] Other: arrange callback from revenue department<br/>4. Generate spreadsheet - run XLOne report in TechOne<br/>5. Follow spreadsheet process with customer<br/>6. Save spreadsheet to pre-approved agreements folder: PID - SURNAME<br/>7. Email copy of spreadsheet to revenue (if customer rejected both payment options, inform revenue in email)<br/>8. Customer to await confirmation email from revenue<br/><br/>📌 Eli: Payment Agreement<br/><br/><span data-context='RatesPayAgree' style='display:inline-block;margin-top:10px;padding:3px 10px;background:#eff6ff;border:1px solid #93c5fd;border-radius:4px;color:#1d4ed8;'>📖 Payment agreement policy</span>"]
+    RatesDecision -->|Admin| RatesAdmin["<b>💰 RATES - Admin</b><br/><br/><u>Copy of Rates Notice:</u><br/>1. Verify identity<br/>2. Search Property ID in Payreq<br/>3. Email most recent rates notice PDF to customer<br/>4. If customer requires rates notice from previous FY: look up fee in Fees &amp; Charges<br/><br/><u>Direct Debit:</u><br/>New: Email Form - Direct Debit Request<br/>Alter: Email Form - DD Alteration/Cancellation<br/><br/><u>Pensioner Rates Subsidy:</u><br/>1. Confirm address on pension card matches customer address in TechOne<br/>2. Email Form - Pension Subsidy Application - request customer attach a copy of pension card<br/>3. Customer may attend front counter to fill out form in person - we will photocopy their card<br/><br/><u>Sign up for Email Rates Notices:</u><br/>1. Refer customer to second page of rates notice - Go Paperless QR code<br/>2. Or search Go Paperless on SDRC website - create a Payreq account<br/>3. Customer must provide the name on the rates notice and their BPAY Reference number<br/>4. Customer must ensure email address used to sign up for Payreq matches the one on file in TechOne<br/><br/>📌 Eli: Rates<br/>📌 Eli: Direct Debit<br/>📌 Eli: SDRC - Go Paperless"]
     RatesDecision -->|Understanding Rates| RatesExplain["<b>💰 RATES - Understanding Your Rates</b><br/><br/>- <b>Water Access Charge:</b> Levied on all properties with the ability to connect to the water main, even if not currently connected<br/>- <b>Domestic &amp; Recycling Waste Collection:</b> Charge for the bin service<br/>- <b>Waste Management Charge:</b> Applied to all properties in the Southern Downs - covers council waste management facilities and rehabilitation of closed landfill sites<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/payments-services/property-rates-charges/rates-charges-explained' target='_blank'>Rates Charges Explained - SDRC</a>"]
 
     RatesBalPay --> ActionDecision
+    RatesPayAgree --> ActionDecision
     RatesAdmin --> ActionDecision
     RatesSale --> ActionDecision
     RatesExplain --> ActionDecision`,
 
-    'building': `    PropDecision -->|Building| BuildingDecision{"New, Existing,<br/>Inspection, or Admin?"}
-    BuildingDecision -->|New| BuildingNew["<b>🏗️ BUILDING - New</b><br/><br/>New Enquiry<br/>1. Provide Factsheets:<br/>Building Info Sheets - SDRC<br/>2. Arrange callback:<br/>Merit Building - Follow Process<br/>Provide customer with Merit #<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/doing-business/planning-development/building/building-info-sheets' target='_blank'>SDRC Website - Building info sheets</a><br/>📌 <a href='https://www.planning.qld.gov.au/planning-framework/development-assessment/development-assessment-process/forms-and-templates' target='_blank'>DA Form 2 - With examples</a>"]
-    BuildingDecision -->|Existing| BuildingExist["<b>🏗️ BUILDING - Existing</b><br/><br/><u>Existing Application:</u><br/>1. Check if customer is using a private certifier - if so, refer them back to their certifier<br/>2. If no private certifier: look up BLD number, confirm query details, transfer to relevant person<br/>3. If unavailable - arrange callback:<br/>[ ] Merit Building - Follow Process<br/>[ ] Provide customer with Merit #<br/><br/>📌 Eli: Building Applications"]
-    BuildingDecision -->|Inspection| BuildingInspec["<b>🏗️ BUILDING - Inspection</b><br/><br/><u>Booking Building Inspections:</u><br/>1. Follow Email Template<br/>2. Notify inspectors by email<br/><br/>📌 Eli: Building Inspections"]
-    BuildingDecision -->|Admin| BuildingAdmin["<b>🏗️ BUILDING - Admin</b><br/><br/><u>Copy of House Plans:</u><br/>The property owner may request a copy of their house plans.<br/><br/>[ ] Check if council has plans on file - note: some properties in the area pre-date the modern building approval process and plans may not exist<br/>[ ] Obtain written permission from the copyright owner of the plans - note: the Estate of Len Rigg has provided standing permission for plans produced during his career to be shared with property owners<br/>[ ] Customer to pay applicable fee - refer to Fees &amp; Charges: Copy of Development Approval Documents<br/>[ ] Contact building team to release documents"]
+    'building': `    PropDecision -->|Building| BuildingDecision{"New, Existing,<br/>Inspection, or Plans?"}
+    BuildingDecision -->|New| BuildingNew["<b>🏗️ BUILDING - New</b><br/><br/>New Enquiry<br/>1. Provide Factsheets:<br/>Building Info Sheets - SDRC<br/>2. Arrange callback:<br/>Merit Building - Follow Process<br/>Provide customer with Merit #<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/doing-business/planning-development/building/building-info-sheets' target='_blank'>SDRC Website - Building info sheets</a><br/>📌 <a href='https://www.planning.qld.gov.au/planning-framework/development-assessment/development-assessment-process/forms-and-templates' target='_blank'>DA Form 2 - With examples</a><br/><br/><span data-context='BuildingNew' style='display:inline-block;margin-top:10px;padding:3px 10px;background:#eff6ff;border:1px solid #93c5fd;border-radius:4px;color:#1d4ed8;'>📖 What needs approval?</span>"]
+    BuildingDecision -->|Existing| BuildingExist["<b>🏗️ BUILDING - Existing</b><br/><br/>1. Check if customer is using a private certifier - if so, refer them back to their certifier<br/>2. If no private certifier: look up BLD number in ECM/TechOne to find most recent correspondence<br/>Transfer to relevant person:<br/>- Question regarding application: Built Environment Technical Officer<br/>- Question regarding certification or inspection: Building Certifier<br/>3. If unavailable - arrange callback:<br/>Merit Building - Follow Process, provide customer with Merit #<br/><br/>📌 Eli: Building Applications"]
+    BuildingDecision -->|Inspection| BuildingInspec["<b>🏗️ BUILDING - Inspection</b><br/><br/>Determine inspection type:<br/>1. Footing/Foundation<br/>2. Slab<br/>3. Frame<br/>4. Final<br/><br/>Follow email template to notify Building Certifier<br/><br/>📌 Eli: Building Inspections"]
+    BuildingDecision -->|Plans| BuildingPlans["<b>🏗️ BUILDING - Copy of House Plans</b><br/><br/>Only the property owner may request a copy of their house plans. Plans are only released with permission from the copyright owner.<br/><br/>1. Check if council has plans on file — note: some properties pre-date the modern building approval process and plans may not exist<br/>2. Obtain written permission from the copyright owner — note: the Estate of Len Rigg has provided standing permission for plans produced during his career<br/>3. Customer to pay applicable fee — refer to Fees &amp; Charges: Copy of Development Approval Documents<br/>4. Contact building team to release documents<br/><br/><span data-context='BuildingAdmin' style='display:inline-block;margin-top:10px;padding:3px 10px;background:#eff6ff;border:1px solid #93c5fd;border-radius:4px;color:#1d4ed8;'>📖 Plan copyright</span>"]
 
     BuildingInspec --> ActionDecision
     BuildingExist --> ActionDecision
     BuildingNew --> ActionDecision
-    BuildingAdmin --> ActionDecision`,
+    BuildingPlans --> ActionDecision`,
 
-    'buildingguide': `    PropDecision -->|Building Approval General Process| BuildingNewInfo["<b>🏗️ BUILDING - Building approval general process</b><br/><br/>Advise Customer: If you have a construction project in mind, a good starting point is to obtain a quote from multiple licenced contractors. A contractor can advise on the specific materials/methods they would use, provide a rough schedule for completion of the work, and provide a cost estimate.<br/><br/>Licenced contractors are bound by state legislation to complete work to a standard that will pass inspection. Getting a quote can assist you in identifying the most practical approach to the project which will assist with preparing your building application.<br/><br/>Note that no work of any description is to be commenced until your building application is approved.<br/><br/>Your application will require a DA Form 2, and depending on the nature of your build (e.g. dwelling, extension, shed, garage) multiple supporting documents.<br/>Offer to email the customer the relevant fact sheet + link to SDRC website.<br/><br/><u>A typical application includes:</u><br/>[ ] Completed DA Form 2 - this is the state government form commonly referred to as the building application<br/><br/><u>Plus supporting documents:</u><br/>[ ] Site Plan, Floor Plan, Elevations and Structural Details<br/>[ ] Footing/Slab Design and Form 15 (must be signed by RPEQ registered engineer)<br/>[ ] Energy Efficiency Report (Class 1a dwellings)<br/>[ ] Soil Test Report (Class 1a dwellings)<br/>[ ] QBCC Insurance Certificate: Mandatory insurance for residential construction valued over $3,300. Protects the owner if the builder fails to complete the work or produces defects.<br/>OR<br/>[ ] QBCC Owner Builder Permit (building yourself, value $11,000 or more): Legal permit allowing a property owner to act as their own Head Contractor. Requires completion of a short course through a Registered Training Organisation. Note: an owner builder permit may only be used once per 6-year period, though exceptions may apply.<br/>[ ] QLeave Payment Receipt (if value of building work over $150,000 excl. GST): QLeave manages portable long service leave for QLD construction workers. The project must be registered on the QLeave portal before construction begins. Council cannot issue Building Approval until this receipt is sighted.<br/><br/>Note that for certain applications it may also be necessary to provide information regarding bushfire attack level, flood zone, termite protection, lighting, water tanks etc.<br/><br/><u>Private Building Certifier:</u><br/>It is possible to engage a private building certifier to prepare and lodge the application on your behalf. Most customers undertaking larger projects choose this option.<br/><br/>The certifier will assist with producing the necessary documentation, and can subcontract additional professionals when required (architects, engineers, surveyors, soil tests, energy efficiency reports, bushfire attack level reports etc.).<br/><br/>Post lodgement, the certifier will liaise with council on your behalf and conduct on-site inspections throughout construction.<br/><br/><u>Construction Inspections:</u><br/>1. Footing/Foundation<br/>2. Slab<br/>3. Frame<br/>4. Final<br/><br/>Each stage must be signed off before the next commences. Once the final inspection is passed, a Form 21 Final Certificate is issued. In the case of new dwellings, the property may not be inhabited until this certificate has been issued.<br/><br/><u>If the build does not pass inspection:</u><br/>The QBCC can issue a formal Direction to Rectify, requiring the builder to fix the work at their own cost within a set timeframe. Non-compliance may result in significant fines and licence suspension. If a builder refuses or fails to rectify defective work, the QBCC can assist the homeowner through other means, including the Queensland Home Warranty Scheme.<br/><br/>SDRC customer service staff can assist in directing specific building queries to the council building team.<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/doing-business/planning-development/building/building-info-sheets' target='_blank'>SDRC Website - Building info sheets</a><br/>📌 <a href='https://www.planning.qld.gov.au/planning-framework/development-assessment/development-assessment-process/forms-and-templates' target='_blank'>DA Form 2 - With examples</a>"]
-    BuildingNewInfo --> ActionDecision`,
+    'buildingguide': `    PropDecision -->|Building Approval General Process| BGuide1["<b>📚 BUILDING GUIDE - Before You Begin</b><br/><br/>If you have a construction project in mind, a good starting point is to obtain quotes from multiple licensed contractors. A contractor can advise on materials and methods, provide a rough schedule, and give a cost estimate.<br/><br/>Licensed contractors are bound by state legislation to complete work to a standard that will pass inspection. Getting a quote can help identify the most practical approach, which will assist with preparing your building application.<br/><br/>Note: No work of any description is to be commenced until your building application is approved."]
+    BGuide1 --> BGuide2["<b>📚 BUILDING GUIDE - Application Requirements</b><br/><br/>Your application will require a <b>DA Form 2</b>, plus supporting documents. Offer to email the customer the relevant fact sheet.<br/><br/>Typical supporting documents:<br/>[ ] Site Plan, Floor Plan, Elevations and Structural Details<br/>[ ] Footing/Slab Design and Form 15 (signed by RPEQ registered engineer)<br/>[ ] Energy Efficiency Report (Class 1a dwellings)<br/>[ ] Soil Test Report (Class 1a dwellings)<br/>[ ] QBCC Insurance Certificate — mandatory for residential construction valued over $3,300<br/>OR QBCC Owner Builder Permit — if building yourself, value $11,000 or more (once per 6-year period)<br/>[ ] QLeave Payment Receipt — if value of building work over $150,000 excl. GST. Must be registered before construction begins. Council cannot issue Building Approval until this receipt is sighted.<br/><br/>Note: Additional information may be required for bushfire attack level, flood zone, termite protection, lighting, water tanks etc.<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/doing-business/planning-development/building/building-info-sheets' target='_blank'>SDRC Website - Building info sheets</a><br/>📌 <a href='https://www.planning.qld.gov.au/planning-framework/development-assessment/development-assessment-process/forms-and-templates' target='_blank'>DA Form 2 - With examples</a>"]
+    BGuide2 --> BGuide3["<b>📚 BUILDING GUIDE - Private Building Certifier</b><br/><br/>It is possible to engage a private building certifier to prepare and lodge the application on your behalf. Most customers undertaking larger projects choose this option.<br/><br/>The certifier will assist with documentation and can subcontract additional professionals as required (architects, engineers, surveyors, soil tests, energy efficiency reports, bushfire attack level reports etc.).<br/><br/>Post-lodgement, the certifier will liaise with council on your behalf and conduct on-site inspections throughout construction."]
+    BGuide3 --> BGuide4["<b>📚 BUILDING GUIDE - Construction Inspections</b><br/><br/>Inspections are required at each of the following stages:<br/>1. Footing/Foundation<br/>2. Slab<br/>3. Frame<br/>4. Final<br/><br/>Each stage must be signed off before the next commences.<br/><br/>Once the final inspection is passed, a Form 21 Final Certificate is issued. In the case of new dwellings, the property may not be inhabited until this certificate has been issued."]
+    BGuide4 --> BGuide5["<b>📚 BUILDING GUIDE - Failed Inspection / Defective Work</b><br/><br/>The QBCC can issue a formal Direction to Rectify, requiring the builder to fix the work at their own cost within a set timeframe. Non-compliance may result in significant fines and licence suspension.<br/><br/>If a builder refuses or fails to rectify defective work, the QBCC can assist the homeowner through other means, including the Queensland Home Warranty Scheme.<br/><br/>SDRC customer service staff can assist in directing specific building queries to the council building team."]
+
+    style BGuide1 fill:#fef9c3,stroke:#d97706,stroke-width:2px
+    style BGuide2 fill:#fef9c3,stroke:#d97706,stroke-width:2px
+    style BGuide3 fill:#fef9c3,stroke:#d97706,stroke-width:2px
+    style BGuide4 fill:#fef9c3,stroke:#d97706,stroke-width:2px
+    style BGuide5 fill:#fef9c3,stroke:#d97706,stroke-width:2px
+    BGuide5 --> ActionDecision`,
 
     'plumbing': `    PropDecision -->|Plumbing| PlumbingDecision{"Type?"}
     PlumbingDecision -->|Do I need approval?| PlumbNew["<b>🔧 PLUMBING - Do I need approval?</b><br/><br/>1. Unregulated work - No approval required: Homeowners may fix minor plumbing maintenance issues without requiring a licensed tradesperson or council approval.<br/>📌 <a href='https://www.sdrc.qld.gov.au/doing-business/plumbing---drainage/plumbing-approvals/unregulated-work' target='_blank'>SDRC - Unregulated Work</a><br/><br/>2. Minor work - No approval required: Minor work does not require council approval but must be performed by an appropriately licensed person.<br/>📌 <a href='https://www.sdrc.qld.gov.au/doing-business/plumbing-drainage/plumbing-approvals/minor-work-plumbing' target='_blank'>SDRC - Minor Work</a><br/><br/>3. Notifiable work - No approval required: Your licensed plumber will notify the council on your behalf.<br/><br/>4. Compliance assessable work - Yes, approval and inspections required: Typically a plumber or building certifier will submit the necessary applications.<br/><br/>5. If necessary arrange callback from plumbing team:<br/>[ ] Merit Plumbing - Follow Process<br/>[ ] Provide customer with Merit #<br/><br/>📌 Eli: Plumbing FAQ"]
@@ -543,7 +602,6 @@
     PlanGPart1 --> PlanGPart4["<b>📚 PLANNING GUIDE - Part 4: Public Notification</b><br/><i>Impact Assessment applications only</i><br/><br/>The applicant is responsible for undertaking public notification. Requirements:<br/>[ ] Sign on all frontages (signs provided by council)<br/>[ ] Notice in newspaper<br/>[ ] Notice to adjoining owners<br/><br/><u>If submissions are received:</u><br/>- Council issues a letter to all submitters acknowledging receipt<br/>- Applicant is sent all submissions and has 10 business days to provide a response to Council<br/>- Council's assessing officer reviews the application, submissions, and applicant's response before making a recommendation<br/>- Receiving submissions triggers the application going to Council (rather than delegated officer) for a decision"]
     PlanGPart4 --> PlanGPart5["<b>📚 PLANNING GUIDE - Part 5: Decision</b><br/><br/><u>Delegated:</u><br/>Planning Department makes the decision.<br/><br/><u>Council Decision:</u><br/>Required where submissions have been received. Applicant may request a deputation at a Committee Information Session (CIS).<br/><br/>Customer receives a Decision Notice upon conclusion of the applicant's 20-business-day appeal period.<br/><br/><u>For submitters:</u><br/>- Properly made submission + approval: submitter has right of appeal to the Planning &amp; Environment Court<br/>- Refusal: all submitters notified after the decision is made and receive a copy of the Decision Notice"]
     PlanGPart5 --> PlanGPost["<b>📚 PLANNING GUIDE - Post Decision</b><br/><br/>- Compliance with conditions of approval<br/>- Planning &amp; Environment Court appeal (if applicable)<br/>- Preparation of survey plans<br/><br/><u>Approval periods:</u><br/>- MCU (Material Change of Use): 6 years<br/>- RC (Reconfiguring a Lot): 4 years<br/>- BA + OPW (Building/Operational Works): 2 years"]
-    PlanGPost --> ActionDecision
 
     style PlanGTypes fill:#fef9c3,stroke:#d97706,stroke-width:2px
     style PlanGPre fill:#fef9c3,stroke:#d97706,stroke-width:2px
@@ -552,16 +610,17 @@
     style PlanGIR fill:#fef9c3,stroke:#d97706,stroke-width:2px
     style PlanGPart4 fill:#fef9c3,stroke:#d97706,stroke-width:2px
     style PlanGPart5 fill:#fef9c3,stroke:#d97706,stroke-width:2px
-    style PlanGPost fill:#fef9c3,stroke:#d97706,stroke-width:2px`,
+    style PlanGPost fill:#fef9c3,stroke:#d97706,stroke-width:2px
+    PlanGPost --> ActionDecision`,
 
     'animals': `    CommDecision -->|Animals| AnimalType{"Issue Type?"}
     AnimalType -->|Lost/Found/Stray/Impounded| AnimalLost["<b>🐕 ANIMALS - Lost / Found / Stray / Impounded</b><br/><br/><u>Lost &amp; Found - Cats, Dogs &amp; Other Animals:</u><br/>1. Add to spreadsheet register: S:\\Customer Service\\Shared All\\Animals - Lost and Found Register<br/>2. Notify CS Group + Local Laws via email<br/><br/><u>Straying Dog:</u><br/>1. Lodge Merit Stray - record: Location, Breed, Direction of travel, Time<br/>2. Call Local Laws Officer to report<br/><br/><u>Impounded:</u><br/>Customer may call because they noticed their dog is missing, or because Local Laws has contacted them to advise the dog is impounded.<br/>1. If customer has not been contacted: check register: S:\\Customer Service\\Shared All\\Animals - Impoundments - Warwick - from 1 Jan 2019<br/>2. Contact Local Laws Officer to:<br/>[ ] Arrange collection<br/>[ ] Confirm release fee<br/>[ ] Confirm if dog must be registered before release<br/><br/>📌 Eli: Impounded Animals<br/>📌 Shared Drive: Lost Animals Register<br/>📌 Eli: Stray Dog"]
     AnimalType -->|Registration/Keeping| AnimalReg["<b>🐕 ANIMALS - Registration &amp; Keeping of Animals</b><br/><br/><u>Dog Registration:</u><br/>1. Email Form: Application for Dog Registration<br/>2. If applicable, request customer attach:<br/>[ ] Proof of desexing<br/>[ ] Pension card<br/>[ ] Dog Breeder Supply Number<br/>[ ] Proof of Service Dog status<br/><br/><u>Keeping of Animals:</u><br/>The number of animals permitted on a property is determined by local bylaws and the planning scheme and varies by property.<br/><br/>To determine the number of certain animals allowed: refer to the Keeping of Animals Factsheet<br/>📌 <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/702/Keeping_Animals_Fact_Sheet.pdf.aspx' target='_blank'>Keeping of Animals Factsheet</a><br/><br/>To keep additional animals beyond the permitted number, the customer must submit a Keeping of Animals Application. The Local Laws Coordinator will approve or deny.<br/><br/>📌 Eli: Dog Registration<br/>📌 Eli: Keeping Animals"]
     AnimalType -->|Barking| BarkingType{"New or Ongoing?"}
-    BarkingType -->|New| BarkNew["<b>🐕 ANIMALS - Barking (New)</b><br/><br/>1. Strongly encourage the customer to make direct contact with the dog owner - a letter template is available from the Noise Nuisance Diary Factsheet<br/>2. Lodge Merit keyword: barking - follow process, provide customer with Merit #<br/>3. Provide Barking Dogs Factsheet and Noise Diary to customer<br/>4. Instruct customer to email completed diary to localgovernment@sdrc.qld.gov.au<br/>5. Advise: when diary is received, Local Laws will investigate - the dog owner will be given time to correct the behaviour<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/324/Barking%20Dog%20Noise%20Nuisance%20Diary%20Sheets%20and%20Guidance%20Notes.pdf.aspx' target='_blank'>Barking Dog Noise Nuisance Diary</a><br/>📌 Eli: Barking Dog"]
+    BarkingType -->|New| BarkNew["<b>🐕 ANIMALS - Barking (New)</b><br/><br/>1. Strongly encourage the customer to make direct contact with the dog owner - a letter template is available from the Noise Nuisance Diary Factsheet<br/>2. Lodge Merit keyword: barking - follow process, provide customer with Merit #<br/>3. Provide Barking Dogs Factsheet and Noise Diary to customer<br/>4. Instruct customer to email completed diary to localgovernment@sdrc.qld.gov.au<br/>5. Advise: when diary is received, Local Laws will investigate - the dog owner will be given time to correct the behaviour<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/324/Barking%20Dog%20Noise%20Nuisance%20Diary%20Sheets%20and%20Guidance%20Notes.pdf.aspx' target='_blank'>Barking Dog Noise Nuisance Diary</a><br/>📌 Eli: Barking Dog<br/><br/><span data-context='BarkNew' style='display:inline-block;margin-top:10px;padding:3px 10px;background:#eff6ff;border:1px solid #93c5fd;border-radius:4px;color:#1d4ed8;'>📖 Why we require a diary</span>"]
     BarkingType -->|Ongoing| BarkOngo["<b>🐕 ANIMALS - Barking (Ongoing)</b><br/><br/>1. Add a note to the existing Merit that another complaint has been received<br/>2. Include customer return phone number<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/324/Barking%20Dog%20Noise%20Nuisance%20Diary%20Sheets%20and%20Guidance%20Notes.pdf.aspx' target='_blank'>Barking Dog Noise Nuisance Diary</a><br/>📌 Eli: Barking Dog"]
     AnimalType -->|Surrender| AnimalSurrender["<b>🐕 ANIMALS - Surrender of Dogs/Cats</b><br/><br/>1. Email Form: Owners Consent to Privately Impound Dog or Cat<br/>2. Take impoundment fee over phone (Fees &amp; Charges: Private impounding)<br/>3. Email receipt to customer and to Local Laws<br/>4. Call Pound to arrange a mutually suitable surrender time<br/><br/>📌 Eli: Private Impoundment"]
-    AnimalType -->|Attack/Menacing| AnimalAttack["<b>🐕 ANIMALS - Dog Attack/Menacing</b><br/><br/>Lodge Merit Attack - record the following:<br/>- Is the customer still in danger of attack?<br/>- Is the dog still in the area?<br/>- Where exactly did the attack take place?<br/>- When did it occur? (date and time)<br/>- Was medical treatment required?<br/><br/>Email Form: Statement of Dog Attack Form<br/><br/>📌 Eli: Dog Attack Protocol"]
+    AnimalType -->|Attack/Menacing| AnimalAttack["<b>🐕 ANIMALS - Dog Attack/Menacing</b><br/><br/>Lodge Merit Attack - record the following:<br/>- Is the customer still in danger of attack?<br/>- Is the dog still in the area?<br/>- Where exactly did the attack take place?<br/>- When did it occur? (date and time)<br/>- Was medical treatment required?<br/><br/>Email Form: Statement of Dog Attack Form<br/><br/>📌 Eli: Dog Attack Protocol<br/><br/><span data-context='AnimalAttack' style='display:inline-block;margin-top:10px;padding:3px 10px;background:#eff6ff;border:1px solid #93c5fd;border-radius:4px;color:#1d4ed8;'>📖 After an attack</span>"]
     AnimalType -->|Wildlife/Cruelty| AnimalWildlife["<b>🐕 ANIMALS - Wildlife &amp; Cruelty</b><br/><br/><u>Animal Cruelty/Welfare:</u><br/>Direct customer to RSPCA: 1300 264 625<br/>or rspca.org.au/report-animal-cruelty<br/><br/><u>Wildlife Removal:</u><br/>Provide appropriate wildlife carer contact details to customer<br/><br/>📌 Eli: Wildlife Removal"]
     AnimalType -->|Pest| AnimalKeepPest["<b>🐕 ANIMALS - Pest Animals</b><br/><br/>Search SDRC website for relevant pest animal factsheets<br/><br/>State Government resources: Invasive Animals Fact Sheets<br/><br/>📌 Eli: Keeping Animals"]
 
@@ -580,8 +639,8 @@
     EnvLodge --> ActionDecision`,
 
     'waste': `    CommDecision -->|Waste| WasteType{"Request Type?"}
-    WasteType -->|Bin Issues| WasteBin["<b>🗑️ WASTE - Bin Issues</b><br/><br/>All bin issues are lodged through the Cleanaway request portal.<br/><br/>- <b>Missed collection:</b> Lodge a Cleanaway request<br/>- <b>Damaged bin:</b> Lodge a Cleanaway request<br/>- <b>Missing/stolen bin:</b> Lodge a Cleanaway request<br/><br/>📌 Eli: Cleanaway Requests"]
-    WasteType -->|Waste Facilities| WasteFacilities["<b>🗑️ WASTE - Waste Facilities</b><br/><br/>For locations, trading hours and accepted materials refer to the Waste Facility Flyer.<br/><br/>For more specific guidance on individual materials refer to the Waste &amp; Recycling Fact Sheets.<br/><br/><b>Asbestos:</b> refer to the Asbestos Disposal Guidelines fact sheet<br/><br/>For items not covered by the above, contact the waste team for guidance.<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/279/Waste%20Facility%20Flyer.pdf.aspx?embed=Y' target='_blank'>Waste Facility Flyer</a><br/>📌 <a href='https://www.sdrc.qld.gov.au/living-here/environment-water-waste/waste-recycling/waste-recycling-fact-sheets' target='_blank'>Waste &amp; Recycling Fact Sheets</a><br/>📌 Asbestos Disposal Guidelines (link TBA)"]
+    WasteType -->|Bin Issues| WasteBin["<b>🗑️ WASTE - Bin Issues</b><br/><br/>All bin issues are lodged through the Cleanaway request portal.<br/><br/>- <b>Missed collection:</b> Lodge a Cleanaway request<br/>- <b>Damaged bin:</b> Lodge a Cleanaway request<br/>- <b>Missing/stolen bin:</b> Lodge a Cleanaway request<br/><br/>📌 Eli: Cleanaway Requests<br/><br/><span data-context='WasteBin' style='display:inline-block;margin-top:10px;padding:3px 10px;background:#eff6ff;border:1px solid #93c5fd;border-radius:4px;color:#1d4ed8;'>📖 Cleanaway contract</span>"]
+    WasteType -->|Waste Facilities| WasteFacilities["<b>🗑️ WASTE - Waste Facilities</b><br/><br/>For locations, trading hours and accepted materials refer to the Waste Facility Flyer.<br/><br/>For more specific guidance on individual materials refer to the Waste &amp; Recycling Fact Sheets.<br/><br/><b>Asbestos:</b> refer to the Asbestos Disposal Guidelines fact sheet<br/><br/>For items not covered by the above, contact the waste team for guidance.<br/><br/>📌 <a href='https://www.sdrc.qld.gov.au/ArticleDocuments/279/Waste%20Facility%20Flyer.pdf.aspx?embed=Y' target='_blank'>Waste Facility Flyer</a><br/>📌 <a href='https://www.sdrc.qld.gov.au/living-here/environment-water-waste/waste-recycling/waste-recycling-fact-sheets' target='_blank'>Waste &amp; Recycling Fact Sheets</a><br/>📌 Asbestos Disposal Guidelines (link TBA)<br/><br/><span data-context='WasteFacilities' style='display:inline-block;margin-top:10px;padding:3px 10px;background:#eff6ff;border:1px solid #93c5fd;border-radius:4px;color:#1d4ed8;'>📖 Charges &amp; materials</span>"]
     WasteType -->|Public Place| WastePublic["<b>🗑️ WASTE - Public Place Bin</b><br/><br/>1. Confirm bin location with customer<br/>2. Check if bin is Council or Cleanaway:<br/>Intramaps - Environment &amp; Regulatory<br/>Check Cleanaway Public Place Bins Icon<br/>3. If Cleanaway: Lodge Cleanaway request<br/>4. If Council: Merit Maintenance<br/>Select Parks, Garden, Reserves<br/><br/>📌 Intramaps Guide"]
     WasteType -->|Infirm| WasteInfirm["<b>🗑️ WASTE - Infirm Service</b><br/><br/>1. Customer to provide:<br/>Letter requesting infirm service<br/>Note from registered health care practitioner<br/>2. Send to records - records will task to waste team directly<br/><br/>📌 Infirm Process"]
     WasteType -->|Complaint| WasteComplaint["<b>🗑️ WASTE - Cleanaway Complaint</b><br/><br/>Lodge Merit Complaint<br/>Select: Bins/Collection<br/><br/>📌 Eli: Complaint Process"]
@@ -673,6 +732,62 @@
 
     };
 
+    // ── Auto line-wrap ───────────────────────────────────────────────────
+    // Wraps plain text inside Mermaid node labels at word boundaries so no
+    // single visual line exceeds maxLen characters. Skips HTML tags and any
+    // segment that contains a URL (href=) so links are never broken.
+
+    function wrapTextSegment(segment, maxLen) {
+        if (segment.length <= maxLen) return segment;
+        if (/href=/.test(segment)) return segment; // never break URL lines
+
+        const tokens = segment.split(/(<[^>]+>)/); // split on HTML tags
+        let output = '';
+        let lineLen = 0;
+
+        for (const tok of tokens) {
+            if (tok.startsWith('<')) {
+                output += tok; // tag — output as-is, don't count length
+            } else {
+                const words = tok.split(' ');
+                for (let w = 0; w < words.length; w++) {
+                    const word = words[w];
+                    if (!word) {
+                        if (lineLen > 0) { output += ' '; lineLen++; }
+                        continue;
+                    }
+                    const addSpace = lineLen > 0;
+                    const needed = word.length + (addSpace ? 1 : 0);
+                    if (lineLen > 0 && lineLen + needed > maxLen) {
+                        output += '<br/>';
+                        lineLen = 0;
+                        output += word;
+                        lineLen = word.length;
+                    } else {
+                        if (addSpace) { output += ' '; lineLen++; }
+                        output += word;
+                        lineLen += word.length;
+                    }
+                }
+            }
+        }
+        return output;
+    }
+
+    function wrapHtmlLines(html, maxLen) {
+        // Split preserving existing <br/> tags, then wrap each segment
+        const parts = html.split(/(<br\s*\/?>)/i);
+        return parts.map(p => /<br\s*\/?>/i.test(p) ? p : wrapTextSegment(p, maxLen)).join('');
+    }
+
+    function wrapSource(source, maxLen) {
+        maxLen = maxLen || 72;
+        // Match node label content between [" and "]
+        return source.replace(/\["([\s\S]*?)"\]/g, (match, content) =>
+            '["' + wrapHtmlLines(content, maxLen) + '"]'
+        );
+    }
+
     // ── Rebuild & render ─────────────────────────────────────────────────
     let renderTimer = null;
 
@@ -683,7 +798,8 @@
     };
 
     // rebuildDiagram: returns a Promise so callers can chain .then()
-    window.rebuildDiagram = function() {
+    window.rebuildDiagram = function(opts) {
+        opts = opts || {};
         clearTimeout(renderTimer);
         document.getElementById('statusBar').classList.add('show');
 
@@ -716,16 +832,17 @@
                         if (ctx) {
                             bodyLines += `\n    ${ctx.nodeId}["${ctx.label}"]`;
                             bodyLines += `\n    ${ctx.parentId} -.->|context| ${ctx.nodeId}`;
+                            bodyLines += `\n    ${ctx.nodeId} -.-> ActionDecision`;
                             bodyLines += `\n    style ${ctx.nodeId} fill:#eff6ff,stroke:#93c5fd,stroke-width:2px`;
                         }
                     });
                 }
 
-                const source = HEADER + '\n' + catLines + '\n\n' + bodyLines + '\n\n' + TAIL;
+                const source = wrapSource(HEADER + '\n' + catLines + '\n\n' + bodyLines + '\n\n' + TAIL);
 
                 await window.renderDiagram(source);
                 document.getElementById('statusBar').classList.remove('show');
-                initialFit();
+                if (!opts.preserveView) initialFit();
                 resolve();
             }, 300);
         });
@@ -747,6 +864,8 @@
         const el = document.getElementById('mermaidDiagram');
         el.style.transform = `scale(${currentZoom / 100})`;
         document.getElementById('zoomLevel').textContent = currentZoom;
+        const ov = document.getElementById('overlayZoomLevel');
+        if (ov) ov.textContent = currentZoom + '%';
     }
     function zoomIn()    { if (currentZoom < 200) { currentZoom += zoomStep; updateZoom(); } }
     function zoomOut()   { if (currentZoom > 25)  { currentZoom -= zoomStep; updateZoom(); } }
@@ -754,32 +873,10 @@
     function fitToScreen() { initialFit(); }
     function initialFit() {
         const dc = document.getElementById('diagramContainer');
-        const svg = document.querySelector('#mermaidDiagram svg');
-
-        if (!svg) {
-            currentZoom = 25;
-            updateZoom();
-            dc.scrollTop = 0;
-            dc.scrollLeft = 0;
-            return;
-        }
-
-        const svgW = parseFloat(svg.getAttribute('width')  || 800);
-        const svgH = parseFloat(svg.getAttribute('height') || 600);
-        const containerW = dc.clientWidth  || 800;
-        const containerH = dc.clientHeight || 600;
-
-        const padding = 40;
-        const zoomByWidth  = Math.floor(((containerW - padding) / svgW) * 100);
-        const zoomByHeight = Math.floor(((containerH - padding) / svgH) * 100);
-        const autoZoom = Math.max(15, Math.min(100, Math.min(zoomByWidth, zoomByHeight)));
-
-        currentZoom = autoZoom;
+        currentZoom = 30;
         updateZoom();
-
         dc.scrollTop  = 0;
         dc.scrollLeft = 0;
-
         document.getElementById('zoomLevel').textContent = currentZoom;
     }
 
