@@ -45,6 +45,7 @@
         .sidebar-scroll {
             flex: 1;
             overflow-y: auto;
+            min-height: 0;
             padding: 10px;
             display: flex;
             flex-direction: column;
@@ -473,6 +474,27 @@
         .modal-content button { background: #3182ce; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; }
         .modal-content button:hover { background: #2b6cb0; }
 
+        /* ── Watchtower placement hint ───────────────────────────── */
+        .placement-hint {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1a365d;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            z-index: 1500;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .placement-hint.show { display: block; }
+
         /* ── Mobile ──────────────────────────────────────────────── */
         @media (max-width: 767px) {
             body { display: block; }
@@ -525,6 +547,8 @@
         </div>
     </div>
 
+    <div id="placement-hint" class="placement-hint">🗼 Tap the map to place your watchtower</div>
+
     <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="closeSidebar()"></div>
     <button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()" title="Open menu">☰</button>
 
@@ -555,6 +579,9 @@
                         </div>
                     </div>
                     <div class="last-update">Updated: <span id="last-update">—</span></div>
+                    <button class="control-btn" id="btn-refresh" onclick="loadBushfireData()" style="margin-top:8px;">
+                        🔄 Refresh Data
+                    </button>
                 </div>
             </div>
 
@@ -567,10 +594,7 @@
 
                     <div class="control-section-label">QFS Incidents</div>
                     <button class="control-btn active" id="btn-qfsfire" onclick="cycleQFSFire()">
-                        🔴 QFS Fires <span class="mode-pill" id="qfsfire-mode-pill">All types</span>
-                    </button>
-                    <button class="control-btn" id="btn-refresh" onclick="loadBushfireData()">
-                        🔄 Refresh Data
+                        🔴 QFS Fires <span class="mode-pill" id="qfsfire-mode-pill"></span>
                     </button>
                     <button class="control-btn" id="btn-watchtower" onclick="toggleAddWatchtower()">
                         🗼 Add Watchtower
@@ -784,7 +808,7 @@
             if (qfsFireMode === 0) {
                 btn.className  = 'control-btn active';
                 btn.childNodes[0].nodeValue = '🔴 QFS Fires ';
-                pill.textContent = 'All types';
+                pill.textContent = '';
                 vectorLayer.setVisible(true);
                 applyQFSFireMode();
             } else if (qfsFireMode === 1) {
@@ -987,13 +1011,14 @@
             Promise.all(promises).then(function() { drawWindOverlayForWatchtowers(); });
         }
 
-        function drawArrow(coords, windDir, windSpeed, color, overlayArray) {
+        function drawArrow(coords, windDir, windSpeed, color, overlayArray, arrowType) {
+            var featureType = arrowType || 'windArrow';
             var len = windSpeed * 1000;
             var rad = (90 - windDir) * Math.PI / 180;
             var ex = coords[0] + len * Math.cos(rad);
             var ey = coords[1] + len * Math.sin(rad);
 
-            var wf = new ol.Feature({ geometry: new ol.geom.LineString([coords, [ex, ey]]), type: 'windArrow' });
+            var wf = new ol.Feature({ geometry: new ol.geom.LineString([coords, [ex, ey]]), type: featureType });
             wf.setStyle(new ol.style.Style({ stroke: new ol.style.Stroke({ color: color, width: 4 }) }));
             measureSource.addFeature(wf);
 
@@ -1070,7 +1095,7 @@
             clearNASAWindOverlay();
             Object.keys(nasaWindData).forEach(function(k) {
                 var d = nasaWindData[k];
-                drawArrow(d.coords, d.windDirection, d.windSpeed, '#e65100', nasaWindOverlays);
+                drawArrow(d.coords, d.windDirection, d.windSpeed, '#e65100', nasaWindOverlays, 'nasaWindArrow');
             });
         }
 
@@ -1280,8 +1305,10 @@
 
         function toggleAddWatchtower() {
             addingWatchtower = !addingWatchtower;
-            var btn = document.getElementById('btn-watchtower');
+            var btn  = document.getElementById('btn-watchtower');
+            var hint = document.getElementById('placement-hint');
             btn.classList.toggle('active', addingWatchtower);
+            hint.classList.toggle('show', addingWatchtower);
             map.getTargetElement().style.cursor = addingWatchtower ? 'crosshair' : '';
         }
 
@@ -1307,6 +1334,7 @@
 
             addingWatchtower = false;
             document.getElementById('btn-watchtower').classList.remove('active');
+            document.getElementById('placement-hint').classList.remove('show');
             map.getTargetElement().style.cursor = '';
             updateWarnings();
         }
@@ -1569,7 +1597,7 @@
                 map = new ol.Map({
                     target: 'map',
                     layers: [osmLayer, satelliteLayer, firmsLayer, vectorLayer, measureLayer],
-                    view: new ol.View({ center: ol.proj.fromLonLat([145.0, -20.0]), zoom: 6 })
+                    view: new ol.View({ center: ol.proj.fromLonLat([144.5, -22.5]), zoom: 5 })
                 });
 
                 // Popup
