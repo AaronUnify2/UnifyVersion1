@@ -204,6 +204,23 @@
         .incident-vehicle   { background-color: #6a1b9a; }
         .incident-other     { background-color: #607d8b; }
 
+        .firms-high    { background-color: #ff1744; }
+        .firms-nominal { background-color: #ff6d00; }
+        .firms-low     { background-color: #ffd600; }
+
+        .legend-divider {
+            border-top: 1px solid #e0e0e0;
+            margin: 8px 0 6px 0;
+        }
+        .legend-subtitle {
+            font-size: 11px;
+            font-weight: 700;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
         .ol-popup {
             position: absolute;
             background-color: white;
@@ -404,7 +421,10 @@
             💨 Wind
         </button>
         <button class="control-btn" id="btn-satellite" title="Toggle satellite view">
-            🛰️ Satellite
+            🗺️ Satellite
+        </button>
+        <button class="control-btn" id="btn-firms" title="Toggle NASA satellite fire hotspots">
+            🛰️ Sat. Fires
         </button>
     </div>
 
@@ -420,7 +440,7 @@
         </div>
         <div class="legend-item">
             <div class="legend-color incident-rescue"></div>
-            <span>🆘 Rescue</span>
+            <span>🚨 Rescue</span>
         </div>
         <div class="legend-item">
             <div class="legend-color incident-hazmat"></div>
@@ -432,7 +452,21 @@
         </div>
         <div class="legend-item">
             <div class="legend-color incident-other"></div>
-            <span>🚨 Other</span>
+            <span>⭕ Other</span>
+        </div>
+        <div class="legend-divider"></div>
+        <div class="legend-subtitle">NASA Satellite Hotspots</div>
+        <div class="legend-item">
+            <div class="legend-color firms-high"></div>
+            <span>High confidence</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color firms-nominal"></div>
+            <span>Nominal confidence</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color firms-low"></div>
+            <span>Low confidence</span>
         </div>
     </div>
 
@@ -457,6 +491,10 @@
         var windOverlays = [];
         var fireWindData = {};
         var popupOverlay;
+        var firmsSource;
+        var firmsLayer;
+        var firmsEnabled = false;
+        var FIRMS_KEY = '577b0590cbd4f45bb0cfdbfbca871a11';
 
         window.addEventListener('load', function() {
             try {
@@ -492,9 +530,15 @@
                     })
                 });
 
+                firmsSource = new ol.source.Vector();
+                firmsLayer = new ol.layer.Vector({
+                    source: firmsSource,
+                    visible: false
+                });
+
                 map = new ol.Map({
                     target: 'map',
-                    layers: [osmLayer, satelliteLayer, vectorLayer, measureLayer],
+                    layers: [osmLayer, satelliteLayer, firmsLayer, vectorLayer, measureLayer],
                     view: new ol.View({
                         center: ol.proj.fromLonLat([145.0, -20.0]),
                         zoom: 6
@@ -556,7 +600,37 @@
                                 console.error('Error getting weather for fire:', error);
                             });
                     } else {
-                        popupOverlay.setPosition(undefined);
+                        var firmsFeature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; }, {
+                            hitTolerance: 8,
+                            layerFilter: function(layer) { return layer === firmsLayer; }
+                        });
+                        if (firmsFeature) {
+                            var fp = firmsFeature.get('firmsProps');
+                            var confLabel = fp.confidence === 'h' ? 'High' : fp.confidence === 'l' ? 'Low' : 'Nominal';
+                            var confColor = fp.confidence === 'h' ? '#ff1744' : fp.confidence === 'l' ? '#f9a825' : '#ff6d00';
+                            var satNames = { 'N': 'Suomi-NPP', '1': 'NOAA-20', '2': 'NOAA-21' };
+                            var satName = satNames[fp.satellite] || fp.satellite || fp.instrument || '—';
+                            var rawTime = fp.acq_time || '';
+                            var formattedTime = rawTime.length >= 3
+                                ? rawTime.slice(0, -2).padStart(2, '0') + ':' + rawTime.slice(-2)
+                                : rawTime;
+                            var frpVal = parseFloat(fp.frp);
+                            var frpLabel = isNaN(frpVal) ? '—' : frpVal < 10 ? 'Low (' + frpVal + ' MW)' :
+                                           frpVal < 50 ? 'Moderate (' + frpVal + ' MW)' :
+                                           frpVal < 200 ? 'High (' + frpVal + ' MW)' :
+                                           'Extreme (' + frpVal + ' MW)';
+                            var html = '<h3 style="display:flex;align-items:center;gap:8px;">🛰️ NASA Satellite Hotspot';
+                            html += '<span class="alert-badge" style="background:' + confColor + '">' + confLabel + ' confidence</span></h3>';
+                            html += '<div class="detail"><strong>FRP:</strong> ' + frpLabel + '</div>';
+                            html += '<div class="detail"><strong>Detected:</strong> ' + fp.acq_date + ' at ' + formattedTime + ' UTC</div>';
+                            html += '<div class="detail"><strong>Satellite:</strong> ' + satName + ' (VIIRS)</div>';
+                            html += '<div class="detail"><strong>Pass:</strong> ' + (fp.daynight === 'D' ? '☀️ Daytime' : '🌙 Nighttime') + '</div>';
+                            html += '<div class="detail" style="margin-top:8px;padding:6px 8px;background:#fff8e1;border-radius:4px;font-size:11px;color:#795548;">⚠️ Thermal hotspot from satellite imagery — not a confirmed fire report.</div>';
+                            content.innerHTML = html;
+                            popupOverlay.setPosition(evt.coordinate);
+                        } else {
+                            popupOverlay.setPosition(undefined);
+                        }
                     }
                 });
 
@@ -565,6 +639,7 @@
                 document.getElementById('btn-measure').addEventListener('click', toggleMeasure);
                 document.getElementById('btn-wind').addEventListener('click', toggleWind);
                 document.getElementById('btn-satellite').addEventListener('click', toggleSatellite);
+                document.getElementById('btn-firms').addEventListener('click', toggleFIRMS);
 
                 loadBushfireData();
                 setInterval(loadBushfireData, 5 * 60 * 1000);
@@ -947,10 +1022,10 @@
             var t = (groupedType || '').toLowerCase();
             if (t.indexOf('bush') !== -1 || t.indexOf('grass') !== -1 || t.indexOf('vegetation') !== -1) return '🔥';
             if (t.indexOf('structure') !== -1 || t.indexOf('building') !== -1) return '🏠';
-            if (t.indexOf('rescue') !== -1) return '🆘';
+            if (t.indexOf('rescue') !== -1) return '🚨';
             if (t.indexOf('hazmat') !== -1 || t.indexOf('chemical') !== -1) return '☢️';
             if (t.indexOf('vehicle') !== -1 || t.indexOf('motor') !== -1 || t.indexOf('crash') !== -1) return '🚗';
-            return '🚨';
+            return '⭕';
         }
 
         function getIncidentBadgeClass(groupedType) {
@@ -1043,6 +1118,108 @@
             }));
 
             vectorSource.addFeature(circleFeature);
+        }
+
+        function toggleFIRMS() {
+            firmsEnabled = !firmsEnabled;
+            var btn = document.getElementById('btn-firms');
+            if (firmsEnabled) {
+                btn.classList.add('active');
+                firmsLayer.setVisible(true);
+                if (firmsSource.getFeatures().length === 0) {
+                    loadFIRMSData();
+                }
+            } else {
+                btn.classList.remove('active');
+                firmsLayer.setVisible(false);
+            }
+        }
+
+        function loadFIRMSData() {
+            var loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            loading.classList.remove('error');
+            loading.textContent = 'Loading NASA satellite hotspots...';
+
+            var bbox = '138,-29,154,-10';
+            var url = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/' +
+                      FIRMS_KEY + '/VIIRS_SNPP_NRT/' + bbox + '/1';
+
+            fetch(url)
+                .then(function(response) {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.text();
+                })
+                .then(function(csvText) {
+                    var lines = csvText.trim().split('\n');
+                    if (lines.length < 2) {
+                        loading.textContent = 'No satellite hotspots found for today.';
+                        setTimeout(function() { loading.style.display = 'none'; }, 3000);
+                        return;
+                    }
+
+                    var headers = lines[0].split(',');
+                    var getCol = function(row, name) {
+                        var i = headers.indexOf(name);
+                        return i >= 0 ? row[i] : '';
+                    };
+
+                    firmsSource.clear();
+                    var count = 0;
+
+                    for (var i = 1; i < lines.length; i++) {
+                        var row = lines[i].split(',');
+                        var lat = parseFloat(getCol(row, 'latitude'));
+                        var lon = parseFloat(getCol(row, 'longitude'));
+                        if (isNaN(lat) || isNaN(lon)) continue;
+
+                        var conf = (getCol(row, 'confidence') || 'n').toLowerCase().charAt(0);
+                        var frp  = getCol(row, 'frp');
+
+                        var color;
+                        if (conf === 'h') {
+                            color = [255, 23, 68, 0.85];
+                        } else if (conf === 'l') {
+                            color = [255, 214, 0, 0.85];
+                        } else {
+                            color = [255, 109, 0, 0.85];
+                        }
+
+                        var feature = new ol.Feature({
+                            geometry: new ol.geom.Point(ol.proj.fromLonLat([lon, lat])),
+                            firmsProps: {
+                                confidence: conf,
+                                frp:        frp,
+                                acq_date:   getCol(row, 'acq_date'),
+                                acq_time:   getCol(row, 'acq_time'),
+                                satellite:  getCol(row, 'satellite'),
+                                instrument: getCol(row, 'instrument'),
+                                daynight:   getCol(row, 'daynight')
+                            }
+                        });
+
+                        feature.setStyle(new ol.style.Style({
+                            image: new ol.style.Circle({
+                                radius: 10,
+                                fill:   new ol.style.Fill({ color: color }),
+                                stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 })
+                            })
+                        }));
+
+                        firmsSource.addFeature(feature);
+                        count++;
+                    }
+
+                    console.log('FIRMS: plotted', count, 'hotspots');
+                    loading.textContent = 'Loaded ' + count + ' satellite hotspots.';
+                    setTimeout(function() { loading.style.display = 'none'; }, 2000);
+                })
+                .catch(function(err) {
+                    console.error('FIRMS fetch failed:', err);
+                    loading.classList.add('error');
+                    loading.textContent = 'Error loading satellite hotspots. Check MAP_KEY or try again.';
+                    setTimeout(function() { loading.style.display = 'none'; }, 5000);
+                });
         }
 
         function loadBushfireData() {
