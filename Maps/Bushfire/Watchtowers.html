@@ -1500,89 +1500,82 @@
         }
 
         function parseCapXMLToGeoJSON(xmlText) {
+            // The QLD bushfire feed is Atom/GeoRSS format (not CAP).
+            // Each <entry> has a <georss:point> "lat lon" and
+            // a <category term="..."> indicating the alert level.
             var parser = new DOMParser();
             var xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-            
-            var alerts = xmlDoc.getElementsByTagNameNS('urn:oasis:names:tc:emergency:cap:1.2', 'alert');
-            
-            if (alerts.length === 0) {
-                alerts = xmlDoc.getElementsByTagName('cap:alert');
-            }
-            
-            console.log('Found', alerts.length, 'CAP alerts');
+
+            var entries = xmlDoc.getElementsByTagName('entry');
+            console.log('Found', entries.length, 'Atom feed entries');
             
             var features = [];
-            
-            for (var i = 0; i < alerts.length; i++) {
-                var alert = alerts[i];
-                
-                var info = alert.getElementsByTagName('cap:info')[0];
-                if (!info) continue;
-                
-                var area = info.getElementsByTagName('cap:area')[0];
-                if (!area) continue;
-                
-                var getElementText = function(parent, tagName) {
-                    var elem = parent.getElementsByTagName(tagName)[0];
-                    return elem ? elem.textContent.trim() : '';
-                };
-                
-                var polygon = area.getElementsByTagName('cap:polygon')[0];
-                var circle = area.getElementsByTagName('cap:circle')[0];
-                
-                var geometry = null;
-                
-                if (polygon) {
-                    var coordsText = polygon.textContent.trim();
-                    var points = coordsText.split(/\s+/);
-                    var coordinates = [];
-                    
-                    for (var j = 0; j < points.length; j++) {
-                        var parts = points[j].split(',');
-                        if (parts.length === 2) {
-                            coordinates.push([parseFloat(parts[1]), parseFloat(parts[0])]);
-                        }
-                    }
-                    
-                    if (coordinates.length > 0) {
-                        geometry = {
-                            type: 'Polygon',
-                            coordinates: [coordinates]
-                        };
-                    }
-                } else if (circle) {
-                    var circleText = circle.textContent.trim();
-                    var parts = circleText.split(/\s+/);
-                    var centerParts = parts[0].split(',');
-                    
-                    geometry = {
-                        type: 'Point',
-                        coordinates: [parseFloat(centerParts[1]), parseFloat(centerParts[0])]
-                    };
+
+            for (var i = 0; i < entries.length; i++) {
+                var entry = entries[i];
+
+                // georss:point must be fetched via namespace
+                var pointEl = entry.getElementsByTagNameNS('http://www.georss.org/georss', 'point')[0];
+                if (!pointEl) continue;
+
+                var latLon = pointEl.textContent.trim().split(/\s+/);
+                if (latLon.length < 2) continue;
+
+                var lat = parseFloat(latLon[0]);
+                var lon = parseFloat(latLon[1]);
+                if (isNaN(lat) || isNaN(lon)) continue;
+
+                // Alert level from <category term="..."/>
+                var categoryEl = entry.getElementsByTagName('category')[0];
+                var categoryTerm = categoryEl ? (categoryEl.getAttribute('term') || '') : '';
+
+                // Map QLD alert levels to values getAlertColor() understands
+                var severity;
+                var termLower = categoryTerm.toLowerCase();
+                if (termLower.indexOf('emergency') !== -1) {
+                    severity = 'extreme';
+                } else if (termLower.indexOf('watch') !== -1) {
+                    severity = 'moderate';
+                } else if (termLower.indexOf('information') !== -1) {
+                    severity = 'minor';
+                } else {
+                    severity = categoryTerm || 'Unknown';
                 }
-                
-                if (!geometry) continue;
-                
+
+                function getEntryText(tag) {
+                    var el = entry.getElementsByTagName(tag)[0];
+                    return el ? el.textContent.trim() : '';
+                }
+
+                var title = getEntryText('title');
+                // Title is "AlertLevel - LOCATION" — extract location part
+                var areaDesc = title.indexOf(' - ') !== -1 ? title.split(' - ').slice(1).join(' - ') : title;
+                var description = getEntryText('content') || getEntryText('summary');
+                var published   = getEntryText('published') || getEntryText('updated');
+
                 features.push({
                     type: 'Feature',
-                    geometry: geometry,
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [lon, lat]  // GeoJSON order: [lon, lat]
+                    },
                     properties: {
-                        event: getElementText(info, 'cap:event'),
-                        category: getElementText(info, 'cap:category'),
-                        severity: getElementText(info, 'cap:severity'),
-                        certainty: getElementText(info, 'cap:certainty'),
-                        headline: getElementText(info, 'cap:headline'),
-                        description: getElementText(info, 'cap:description'),
-                        instruction: getElementText(info, 'cap:instruction'),
-                        areaDesc: getElementText(area, 'cap:areaDesc'),
-                        effective: getElementText(info, 'cap:effective'),
-                        expires: getElementText(info, 'cap:expires')
+                        headline:    title,
+                        severity:    severity,
+                        category:    categoryTerm,
+                        areaDesc:    areaDesc,
+                        description: description,
+                        instruction: '',
+                        certainty:   '',
+                        event:       'Bushfire',
+                        effective:   published,
+                        expires:     ''
                     }
                 });
             }
-            
-            console.log('Parsed', features.length, 'features from CAP XML');
-            
+
+            console.log('Parsed', features.length, 'features from Atom/GeoRSS feed');
+
             return {
                 type: 'FeatureCollection',
                 features: features
@@ -1650,59 +1643,14 @@
                 vectorSource.clear();
             }
 
-            var feedUrl = 'https://publiccontent-gis-psba-qld-gov-au.s3.amazonaws.com/content/Feeds/BushfireCurrentIncidents/bushfireAlert_capau.xml';
+            var feedUrl = 'https://publiccontent-gis-psba-qld-gov-au.s3.amazonaws.com/content/Feeds/BushfireCurrentIncidents/bushfireAlert.xml';
 
-            // CORS proxy list with correct 2025 URL formats and fallbacks.
-            // corsproxy.io changed their API from /?<url> to /?url=<encoded>.
-            // allorigins /get returns a JSON wrapper { contents: "..." } which is more reliable than /raw.
+            // Multiple CORS proxies as fallback - free proxies are unreliable
             var corsProxies = [
-                {
-                    name: 'corsproxy.io',
-                    buildUrl: function(u) { return 'https://corsproxy.io/?url=' + encodeURIComponent(u); },
-                    parse: function(text) { return text; }
-                },
-                {
-                    name: 'allorigins-json',
-                    buildUrl: function(u) { return 'https://api.allorigins.win/get?url=' + encodeURIComponent(u); },
-                    parse: function(text) {
-                        try { var j = JSON.parse(text); return j.contents || text; } catch(e) { return text; }
-                    }
-                },
-                {
-                    name: 'allorigins-raw',
-                    buildUrl: function(u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); },
-                    parse: function(text) { return text; }
-                },
-                {
-                    name: 'codetabs',
-                    buildUrl: function(u) { return 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u); },
-                    parse: function(text) { return text; }
-                },
-                {
-                    name: 'thingproxy',
-                    buildUrl: function(u) { return 'https://thingproxy.freeboard.io/fetch/' + u; },
-                    parse: function(text) { return text; }
-                }
+                { name: 'allorigins', url: 'https://api.allorigins.win/raw?url=' },
+                { name: 'corsproxy.io', url: 'https://corsproxy.io/?' },
+                { name: 'corsproxy.org', url: 'https://corsproxy.org/?' }
             ];
-
-            function isValidXml(text) {
-                return text && (
-                    text.indexOf('<cap:alert') !== -1 ||
-                    text.indexOf('urn:oasis:names:tc:emergency:cap') !== -1 ||
-                    text.indexOf('<alert') !== -1 ||
-                    text.indexOf('BushfireAlert') !== -1 ||
-                    text.indexOf('bushfireAlert') !== -1
-                );
-            }
-
-            // Wrap fetch with an 8-second timeout so a hanging proxy doesn't stall the chain
-            function fetchWithTimeout(url, ms) {
-                var controller = new AbortController();
-                var tid = setTimeout(function() { controller.abort(); }, ms);
-                return fetch(url, { signal: controller.signal })
-                    .then(function(r) { clearTimeout(tid); return r; })
-                    .catch(function(e) { clearTimeout(tid); throw e; });
-            }
 
             function tryProxy(index) {
                 if (index >= corsProxies.length) {
@@ -1718,16 +1666,16 @@
                 console.log('Trying CORS proxy: ' + proxy.name);
                 loading.textContent = 'Loading QLD bushfire data... (source ' + (index + 1) + '/' + corsProxies.length + ')';
 
-                fetchWithTimeout(proxy.buildUrl(feedUrl), 8000)
+                fetch(proxy.url + encodeURIComponent(feedUrl))
                     .then(function(response) {
                         if (!response.ok) {
                             throw new Error('HTTP ' + response.status);
                         }
                         return response.text();
                     })
-                    .then(function(rawText) {
-                        var xmlText = proxy.parse(rawText);
-                        if (!isValidXml(xmlText)) {
+                    .then(function(xmlText) {
+                        // Verify we got valid XML, not an error page
+                        if (xmlText.indexOf('<entry') === -1 && xmlText.indexOf('georss') === -1) {
                             throw new Error('Invalid response from proxy');
                         }
                         console.log('Successfully loaded data via ' + proxy.name);
@@ -1740,14 +1688,14 @@
                     });
             }
 
-            // First try direct fetch (works if the S3 bucket has CORS headers enabled)
-            fetchWithTimeout(feedUrl, 8000)
+            // First try direct fetch (in case S3 bucket allows CORS)
+            fetch(feedUrl)
                 .then(function(response) {
                     if (!response.ok) throw new Error('HTTP ' + response.status);
                     return response.text();
                 })
                 .then(function(xmlText) {
-                    if (!isValidXml(xmlText)) {
+                    if (xmlText.indexOf('<entry') === -1 && xmlText.indexOf('georss') === -1) {
                         throw new Error('Invalid response');
                     }
                     console.log('Successfully loaded data directly (no proxy needed)');
