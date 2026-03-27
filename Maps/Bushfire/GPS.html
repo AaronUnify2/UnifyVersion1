@@ -1009,93 +1009,153 @@
             return html;
         }
 
+        // Namespace-agnostic helper: finds elements by local name regardless of prefix
+        function getElemsByLocalName(parent, localName) {
+            // Try prefixed variants first, then no-prefix, then namespace-aware
+            var result = parent.getElementsByTagName('cap:' + localName);
+            if (result.length === 0) result = parent.getElementsByTagName(localName);
+            if (result.length === 0) result = parent.getElementsByTagNameNS('*', localName);
+            return result;
+        }
+
+        function getElemText(parent, localName) {
+            var elems = getElemsByLocalName(parent, localName);
+            return elems.length > 0 ? elems[0].textContent.trim() : '';
+        }
+
         function parseCapXMLToGeoJSON(xmlText) {
             var parser = new DOMParser();
             var xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-            
-            var alerts = xmlDoc.getElementsByTagNameNS('urn:oasis:names:tc:emergency:cap:1.2', 'alert');
-            
-            if (alerts.length === 0) {
-                alerts = xmlDoc.getElementsByTagName('cap:alert');
+
+            // Check for XML parse error
+            var parseErr = xmlDoc.getElementsByTagName('parsererror');
+            if (parseErr.length > 0) {
+                console.warn('XML parse error:', parseErr[0].textContent);
+                return { type: 'FeatureCollection', features: [] };
             }
-            
+
+            // Find all <alert> elements regardless of namespace prefix
+            var alerts = getElemsByLocalName(xmlDoc, 'alert');
             console.log('Found', alerts.length, 'CAP alerts');
-            
+
             var features = [];
-            
+
             for (var i = 0; i < alerts.length; i++) {
                 var alert = alerts[i];
-                
-                var info = alert.getElementsByTagName('cap:info')[0];
-                if (!info) continue;
-                
-                var area = info.getElementsByTagName('cap:area')[0];
-                if (!area) continue;
-                
-                var getElementText = function(parent, tagName) {
-                    var elem = parent.getElementsByTagName(tagName)[0];
-                    return elem ? elem.textContent.trim() : '';
-                };
-                
-                var polygon = area.getElementsByTagName('cap:polygon')[0];
-                var circle = area.getElementsByTagName('cap:circle')[0];
-                
+
+                var infos = getElemsByLocalName(alert, 'info');
+                if (infos.length === 0) continue;
+                var info = infos[0];
+
+                var areas = getElemsByLocalName(info, 'area');
+                if (areas.length === 0) continue;
+                var area = areas[0];
+
+                var polygonElems = getElemsByLocalName(area, 'polygon');
+                var circleElems  = getElemsByLocalName(area, 'circle');
+
                 var geometry = null;
-                
-                if (polygon) {
-                    var coordsText = polygon.textContent.trim();
+
+                if (polygonElems.length > 0) {
+                    var coordsText = polygonElems[0].textContent.trim();
                     var points = coordsText.split(/\s+/);
                     var coordinates = [];
-                    
                     for (var j = 0; j < points.length; j++) {
                         var parts = points[j].split(',');
-                        if (parts.length === 2) {
-                            coordinates.push([parseFloat(parts[1]), parseFloat(parts[0])]);
+                        if (parts.length >= 2) {
+                            var lat = parseFloat(parts[0]);
+                            var lon = parseFloat(parts[1]);
+                            if (!isNaN(lat) && !isNaN(lon)) {
+                                coordinates.push([lon, lat]);
+                            }
                         }
                     }
-                    
-                    if (coordinates.length > 0) {
-                        geometry = {
-                            type: 'Polygon',
-                            coordinates: [coordinates]
-                        };
+                    if (coordinates.length >= 3) {
+                        geometry = { type: 'Polygon', coordinates: [coordinates] };
                     }
-                } else if (circle) {
-                    var circleText = circle.textContent.trim();
-                    var parts = circleText.split(/\s+/);
-                    var centerParts = parts[0].split(',');
-                    
-                    geometry = {
-                        type: 'Point',
-                        coordinates: [parseFloat(centerParts[1]), parseFloat(centerParts[0])]
-                    };
+                } else if (circleElems.length > 0) {
+                    var circleText = circleElems[0].textContent.trim();
+                    var cp = circleText.split(/[\s,]+/);
+                    if (cp.length >= 2) {
+                        var clat = parseFloat(cp[0]);
+                        var clon = parseFloat(cp[1]);
+                        if (!isNaN(clat) && !isNaN(clon)) {
+                            geometry = { type: 'Point', coordinates: [clon, clat] };
+                        }
+                    }
                 }
-                
+
                 if (!geometry) continue;
-                
+
                 features.push({
                     type: 'Feature',
                     geometry: geometry,
                     properties: {
-                        event: getElementText(info, 'cap:event'),
-                        category: getElementText(info, 'cap:category'),
-                        severity: getElementText(info, 'cap:severity'),
-                        certainty: getElementText(info, 'cap:certainty'),
-                        headline: getElementText(info, 'cap:headline'),
-                        description: getElementText(info, 'cap:description'),
-                        instruction: getElementText(info, 'cap:instruction'),
-                        areaDesc: getElementText(area, 'cap:areaDesc'),
-                        effective: getElementText(info, 'cap:effective'),
-                        expires: getElementText(info, 'cap:expires')
+                        event:       getElemText(info, 'event'),
+                        category:    getElemText(info, 'category'),
+                        severity:    getElemText(info, 'severity'),
+                        certainty:   getElemText(info, 'certainty'),
+                        headline:    getElemText(info, 'headline'),
+                        description: getElemText(info, 'description'),
+                        instruction: getElemText(info, 'instruction'),
+                        areaDesc:    getElemText(area, 'areaDesc'),
+                        effective:   getElemText(info, 'effective'),
+                        expires:     getElemText(info, 'expires')
                     }
                 });
             }
-            
+
             console.log('Parsed', features.length, 'features from CAP XML');
-            
+            return { type: 'FeatureCollection', features: features };
+        }
+
+        // Parse the QLD GeoJSON/JSON feed format and normalise to the same
+        // property names the rest of the code expects.
+        function parseJsonFeed(jsonText) {
+            var raw = JSON.parse(jsonText);
+
+            // Already a FeatureCollection?
+            if (raw.type === 'FeatureCollection') {
+                raw.features = (raw.features || []).map(normaliseJsonFeature);
+                return raw;
+            }
+            // Array of features?
+            if (Array.isArray(raw)) {
+                return { type: 'FeatureCollection', features: raw.map(normaliseJsonFeature) };
+            }
+            // Wrapped e.g. { features: [...] }
+            if (raw.features) {
+                return { type: 'FeatureCollection', features: raw.features.map(normaliseJsonFeature) };
+            }
+            console.warn('Unrecognised JSON feed structure');
+            return { type: 'FeatureCollection', features: [] };
+        }
+
+        function normaliseJsonFeature(f) {
+            var p = f.properties || {};
+
+            // Map QLD gov property names (any casing) to the expected names.
+            // The STATUS field uses "Emergency Warning" / "Watch and Act" / "Advice"
+            // which the existing getAlertColor() already handles via .includes().
+            var status = p.STATUS || p.status || p.ALERT_LEVEL || p.alertLevel || '';
+            var name   = p.FIRE_NAME || p.fireName || p.NAME || p.name
+                      || p.LOCATION || p.location || p.DESCRIPTION || p.description || '';
+
             return {
-                type: 'FeatureCollection',
-                features: features
+                type: 'Feature',
+                geometry: f.geometry,
+                properties: {
+                    event:       p.FIRE_TYPE   || p.fireType   || p.TYPE || p.type || 'Bushfire',
+                    category:    'Met',
+                    severity:    status,
+                    certainty:   p.CERTAINTY   || p.certainty  || 'Observed',
+                    headline:    name || status,
+                    description: p.DESCRIPTION || p.description || p.COMMENTS || p.comments || '',
+                    instruction: p.INSTRUCTION || p.instruction || '',
+                    areaDesc:    name,
+                    effective:   p.UPDATED     || p.updated    || p.START_DATE || p.startDate || '',
+                    expires:     p.END_DATE     || p.endDate    || p.EXPIRES    || p.expires   || ''
+                }
             };
         }
 
@@ -1160,52 +1220,37 @@
                 vectorSource.clear();
             }
 
-            var feedUrl = 'https://publiccontent-gis-psba-qld-gov-au.s3.amazonaws.com/content/Feeds/BushfireCurrentIncidents/bushfireAlert_capau.xml';
+            var jsonUrl   = 'https://publiccontent-gis-psba-qld-gov-au.s3.amazonaws.com/content/Feeds/BushfireCurrentIncidents/bushfireAlert.json';
+            var capXmlUrl = 'https://publiccontent-gis-psba-qld-gov-au.s3.amazonaws.com/content/Feeds/BushfireCurrentIncidents/bushfireAlert_capau.xml';
 
-            // CORS proxy list with correct 2025 URL formats and fallbacks.
-            // corsproxy.io changed their API from /?<url> to /?url=<encoded>.
-            // allorigins /get returns a JSON wrapper { contents: "..." } which is more reliable than /raw.
-            var corsProxies = [
-                {
-                    name: 'corsproxy.io',
-                    buildUrl: function(u) { return 'https://corsproxy.io/?url=' + encodeURIComponent(u); },
-                    parse: function(text) { return text; }
-                },
-                {
-                    name: 'allorigins-json',
-                    buildUrl: function(u) { return 'https://api.allorigins.win/get?url=' + encodeURIComponent(u); },
-                    parse: function(text) {
-                        try { var j = JSON.parse(text); return j.contents || text; } catch(e) { return text; }
-                    }
-                },
-                {
-                    name: 'allorigins-raw',
-                    buildUrl: function(u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); },
-                    parse: function(text) { return text; }
-                },
-                {
-                    name: 'codetabs',
-                    buildUrl: function(u) { return 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u); },
-                    parse: function(text) { return text; }
-                },
-                {
-                    name: 'thingproxy',
-                    buildUrl: function(u) { return 'https://thingproxy.freeboard.io/fetch/' + u; },
-                    parse: function(text) { return text; }
-                }
+            // Proxy list with correct 2025 URL formats.
+            // Each entry: buildUrl(targetUrl) → proxy URL string.
+            var proxies = [
+                function(u) { return 'https://corsproxy.io/?url=' + encodeURIComponent(u); },
+                function(u) { return 'https://api.allorigins.win/get?url=' + encodeURIComponent(u); },
+                function(u) { return 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u); },
+                function(u) { return 'https://thingproxy.freeboard.io/fetch/' + u; },
+                function(u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); }
             ];
 
-            function isValidXml(text) {
-                return text && (
-                    text.indexOf('<cap:alert') !== -1 ||
-                    text.indexOf('urn:oasis:names:tc:emergency:cap') !== -1 ||
-                    text.indexOf('<alert') !== -1 ||
-                    text.indexOf('BushfireAlert') !== -1 ||
-                    text.indexOf('bushfireAlert') !== -1
-                );
+            // Build the full attempt list: JSON via each proxy, then XML via each proxy.
+            // Direct (no proxy) is tried first for each format.
+            var attempts = [];
+
+            // Direct attempts first (work if S3 CORS policy allows it)
+            attempts.push({ url: jsonUrl,   fmt: 'json', label: 'JSON direct' });
+            attempts.push({ url: capXmlUrl, fmt: 'xml',  label: 'XML direct'  });
+
+            // Proxy attempts
+            for (var pi = 0; pi < proxies.length; pi++) {
+                (function(makeUrl, idx) {
+                    attempts.push({ url: makeUrl(jsonUrl),   fmt: 'json', label: 'JSON proxy-' + idx });
+                    attempts.push({ url: makeUrl(capXmlUrl), fmt: 'xml',  label: 'XML proxy-'  + idx });
+                })(proxies[pi], pi);
             }
 
-            // Wrap fetch with an 8-second timeout so a hanging proxy doesn't stall the chain
+            var attemptIndex = 0;
+
             function fetchWithTimeout(url, ms) {
                 var controller = new AbortController();
                 var tid = setTimeout(function() { controller.abort(); }, ms);
@@ -1214,60 +1259,60 @@
                     .catch(function(e) { clearTimeout(tid); throw e; });
             }
 
-            function tryProxy(index) {
-                if (index >= corsProxies.length) {
+            function tryNext() {
+                if (attemptIndex >= attempts.length) {
                     loading.classList.add('error');
                     loading.textContent = 'Error: All data sources failed. Try again later.';
-                    setTimeout(function() {
-                        loading.style.display = 'none';
-                    }, 5000);
+                    setTimeout(function() { loading.style.display = 'none'; }, 5000);
                     return;
                 }
 
-                var proxy = corsProxies[index];
-                console.log('Trying CORS proxy: ' + proxy.name);
-                loading.textContent = 'Loading QLD bushfire data... (source ' + (index + 1) + '/' + corsProxies.length + ')';
+                var attempt = attempts[attemptIndex++];
+                var isJsonAttempt = (Math.floor((attemptIndex - 1) / 2)) + 1;
+                loading.textContent = 'Loading QLD bushfire data... (' + attemptIndex + '/' + attempts.length + ')';
+                console.log('Trying:', attempt.label);
 
-                fetchWithTimeout(proxy.buildUrl(feedUrl), 8000)
+                fetchWithTimeout(attempt.url, 8000)
                     .then(function(response) {
-                        if (!response.ok) {
-                            throw new Error('HTTP ' + response.status);
-                        }
+                        if (!response.ok) throw new Error('HTTP ' + response.status);
                         return response.text();
                     })
-                    .then(function(rawText) {
-                        var xmlText = proxy.parse(rawText);
-                        if (!isValidXml(xmlText)) {
-                            throw new Error('Invalid response from proxy');
+                    .then(function(text) {
+                        // allorigins /get wraps in JSON: { contents: "..." }
+                        var body = text;
+                        if (attempt.url.indexOf('allorigins.win/get') !== -1) {
+                            try {
+                                var j = JSON.parse(text);
+                                body = j.contents || text;
+                            } catch(e) {}
                         }
-                        console.log('Successfully loaded data via ' + proxy.name);
-                        var data = parseCapXMLToGeoJSON(xmlText);
+
+                        if (!body || body.length < 20) throw new Error('Empty response');
+
+                        var data;
+                        if (attempt.fmt === 'json') {
+                            // Reject if it looks like an XML error or HTML page
+                            if (body.trim().charAt(0) === '<') throw new Error('Got XML/HTML from JSON endpoint');
+                            data = parseJsonFeed(body);
+                        } else {
+                            // Reject if it looks like a plain HTML error page
+                            if (body.trim().toLowerCase().indexOf('<!doctype html') !== -1 ||
+                                body.trim().toLowerCase().indexOf('<html') !== -1) {
+                                throw new Error('Got HTML error page from XML endpoint');
+                            }
+                            data = parseCapXMLToGeoJSON(body);
+                        }
+
+                        console.log('Success via', attempt.label, '—', (data.features || []).length, 'features');
                         processData(data);
                     })
-                    .catch(function(error) {
-                        console.warn('Proxy ' + proxy.name + ' failed: ' + error.message);
-                        tryProxy(index + 1);
+                    .catch(function(err) {
+                        console.warn(attempt.label, 'failed:', err.message);
+                        tryNext();
                     });
             }
 
-            // First try direct fetch (works if the S3 bucket has CORS headers enabled)
-            fetchWithTimeout(feedUrl, 8000)
-                .then(function(response) {
-                    if (!response.ok) throw new Error('HTTP ' + response.status);
-                    return response.text();
-                })
-                .then(function(xmlText) {
-                    if (!isValidXml(xmlText)) {
-                        throw new Error('Invalid response');
-                    }
-                    console.log('Successfully loaded data directly (no proxy needed)');
-                    var data = parseCapXMLToGeoJSON(xmlText);
-                    processData(data);
-                })
-                .catch(function() {
-                    // Direct fetch failed (expected due to CORS), try proxies
-                    tryProxy(0);
-                });
+            tryNext();
         }
 
         function processData(data) {
