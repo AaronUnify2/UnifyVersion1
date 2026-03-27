@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEQ Live Train Map</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            background: #0a0f1e;
+        }
+
+        #map { width: 100vw; height: 100vh; }
+
+        /* Scanline overlay for that retro-transit-board feel */
+        #map::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.03) 2px,
+                rgba(0,0,0,0.03) 4px
+            );
+            pointer-events: none;
+            z-index: 500;
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(10, 15, 30, 0.92);
+            border: 1px solid rgba(255, 220, 50, 0.4);
+            padding: 16px 20px;
+            border-radius: 4px;
+            z-index: 1000;
+            max-width: 280px;
+            backdrop-filter: blur(8px);
+        }
+
+        .info-panel h2 {
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: #ffdc32;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: #ffdc32;
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+            flex-shrink: 0;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.7); }
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            font-size: 11px;
+        }
+
+        .stat-row:last-of-type { border-bottom: none; }
+
+        .stat-label {
+            color: rgba(255,255,255,0.45);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .stat-value.highlight { color: #ffdc32; }
+
+        .refresh-bar {
+            margin-top: 12px;
+            height: 2px;
+            background: rgba(255,220,50,0.15);
+            border-radius: 1px;
+            overflow: hidden;
+        }
+
+        .refresh-progress {
+            height: 100%;
+            background: #ffdc32;
+            width: 100%;
+            transform-origin: left;
+            animation: countdown 30s linear infinite;
+        }
+
+        @keyframes countdown {
+            from { transform: scaleX(1); }
+            to   { transform: scaleX(0); }
+        }
+
+        .nav-btn {
+            display: block;
+            margin-top: 12px;
+            padding: 8px 12px;
+            background: transparent;
+            border: 1px solid rgba(255,220,50,0.4);
+            color: rgba(255,220,50,0.8);
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+            font-family: inherit;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            text-align: center;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .nav-btn:hover {
+            background: rgba(255,220,50,0.1);
+            border-color: #ffdc32;
+            color: #ffdc32;
+        }
+
+        /* Control panel */
+        .control-panel {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .control-btn {
+            background: rgba(10, 15, 30, 0.92);
+            border: 1px solid rgba(255,220,50,0.3);
+            color: rgba(255,255,255,0.8);
+            padding: 10px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            font-family: inherit;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            backdrop-filter: blur(8px);
+            white-space: nowrap;
+        }
+
+        .control-btn:hover {
+            background: rgba(255,220,50,0.1);
+            border-color: #ffdc32;
+            color: #ffdc32;
+        }
+
+        .control-btn.active {
+            background: rgba(255,220,50,0.2);
+            border-color: #ffdc32;
+            color: #ffdc32;
+        }
+
+        /* Popup */
+        .ol-popup {
+            position: absolute;
+            background: rgba(10, 15, 30, 0.96);
+            border: 1px solid rgba(255, 220, 50, 0.5);
+            padding: 14px 16px;
+            border-radius: 4px;
+            bottom: 14px;
+            left: -120px;
+            min-width: 240px;
+            max-width: 300px;
+            backdrop-filter: blur(12px);
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .ol-popup:after {
+            top: 100%;
+            border: solid transparent;
+            content: " ";
+            height: 0; width: 0;
+            position: absolute;
+            pointer-events: none;
+            border-top-color: rgba(255,220,50,0.5);
+            border-width: 8px;
+            left: 120px;
+            margin-left: -8px;
+        }
+
+        .ol-popup-closer {
+            text-decoration: none;
+            position: absolute;
+            top: 6px;
+            right: 10px;
+            font-size: 14px;
+            color: rgba(255,220,50,0.6);
+            line-height: 1;
+        }
+
+        .ol-popup-closer:after { content: "✕"; }
+        .ol-popup-closer:hover { color: #ffdc32; }
+
+        .popup-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #ffdc32;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            padding-right: 16px;
+        }
+
+        .popup-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+            font-size: 10px;
+        }
+
+        .popup-row:last-child { border-bottom: none; }
+        .popup-key { color: rgba(255,255,255,0.4); letter-spacing: 0.08em; text-transform: uppercase; }
+        .popup-val { color: #ffffff; font-weight: 600; }
+
+        /* Loading */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 15, 30, 0.95);
+            border: 1px solid rgba(255,220,50,0.4);
+            padding: 24px 32px;
+            border-radius: 4px;
+            z-index: 2000;
+            font-size: 12px;
+            font-family: 'Courier New', Courier, monospace;
+            color: rgba(255,255,255,0.7);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            text-align: center;
+        }
+
+        .loading .loading-title {
+            color: #ffdc32;
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .loading.error {
+            border-color: rgba(255, 80, 80, 0.5);
+            color: rgba(255,120,120,0.9);
+        }
+
+        .loading.error .loading-title { color: #ff6060; }
+
+        /* Legend */
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 12px;
+            background: rgba(10, 15, 30, 0.92);
+            border: 1px solid rgba(255,220,50,0.3);
+            padding: 12px 14px;
+            border-radius: 4px;
+            z-index: 1000;
+            backdrop-filter: blur(8px);
+        }
+
+        .legend-title {
+            font-size: 9px;
+            font-family: 'Courier New', Courier, monospace;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: rgba(255,220,50,0.7);
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 5px 0;
+            font-size: 10px;
+            font-family: 'Courier New', Courier, monospace;
+            color: rgba(255,255,255,0.6);
+            letter-spacing: 0.05em;
+        }
+
+        .legend-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.3);
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <div id="popup" class="ol-popup">
+        <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+        <div id="popup-content"></div>
+    </div>
+
+    <div class="info-panel">
+        <h2><span class="pulse-dot"></span>SEQ Live Trains</h2>
+        <div class="stat-row">
+            <span class="stat-label">Trains tracked</span>
+            <span class="stat-value highlight" id="train-count">—</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">Last updated</span>
+            <span class="stat-value" id="last-update">—</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">Source</span>
+            <span class="stat-value">Translink GTFS-RT</span>
+        </div>
+        <div class="refresh-bar">
+            <div class="refresh-progress" id="refresh-progress"></div>
+        </div>
+        <a href="https://aaronunify2.github.io/UnifyVersion1/Maps/Bushfire/Watchtowers.html" class="nav-btn">
+            🗼 Switch to Incident Map
+        </a>
+    </div>
+
+    <div class="control-panel">
+        <button class="control-btn" id="btn-refresh">⟳ Refresh now</button>
+        <button class="control-btn" id="btn-satellite">🛰 Satellite</button>
+    </div>
+
+    <div class="legend">
+        <div class="legend-title">Train Status</div>
+        <div class="legend-item">
+            <div class="legend-dot" style="background:#ffdc32;border-color:#ffdc32;"></div>
+            In transit
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot" style="background:#4fc3f7;border-color:#4fc3f7;"></div>
+            At station
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot" style="background:#a5d6a7;border-color:#a5d6a7;"></div>
+            Approaching
+        </div>
+    </div>
+
+    <div id="loading" class="loading">
+        <div class="loading-title">🚆 Loading trains</div>
+        <div>Connecting to Translink GTFS-RT...</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/protobufjs@7/dist/protobuf.min.js"></script>
+
+    <script>
+    // ── Minimal GTFS-RT protobuf schema (VehiclePositions only) ─────────────
+    var GTFS_RT_JSON = {
+        nested: {
+            transit_realtime: {
+                nested: {
+                    FeedMessage: {
+                        fields: {
+                            header: { rule: 'required', type: 'transit_realtime.FeedHeader', id: 1 },
+                            entity: { rule: 'repeated', type: 'transit_realtime.FeedEntity', id: 2 }
+                        }
+                    },
+                    FeedHeader: {
+                        fields: {
+                            gtfs_realtime_version: { rule: 'required', type: 'string', id: 1 },
+                            incrementality:        { type: 'int32',  id: 2 },
+                            timestamp:             { type: 'uint64', id: 3 }
+                        }
+                    },
+                    FeedEntity: {
+                        fields: {
+                            id:         { rule: 'required', type: 'string', id: 1 },
+                            is_deleted: { type: 'bool',    id: 2 },
+                            vehicle:    { type: 'transit_realtime.VehiclePosition', id: 4 }
+                        }
+                    },
+                    VehiclePosition: {
+                        fields: {
+                            trip:                  { type: 'transit_realtime.TripDescriptor',   id: 1 },
+                            vehicle:               { type: 'transit_realtime.VehicleDescriptor', id: 2 },
+                            position:              { type: 'transit_realtime.Position',          id: 3 },
+                            current_stop_sequence: { type: 'uint32', id: 4 },
+                            stop_id:               { type: 'string', id: 5 },
+                            current_status:        { type: 'int32',  id: 6 },
+                            timestamp:             { type: 'uint64', id: 7 },
+                            congestion_level:      { type: 'int32',  id: 8 },
+                            occupancy_status:      { type: 'int32',  id: 9 }
+                        }
+                    },
+                    Position: {
+                        fields: {
+                            latitude:  { rule: 'required', type: 'float',  id: 1 },
+                            longitude: { rule: 'required', type: 'float',  id: 2 },
+                            bearing:   { type: 'float',  id: 3 },
+                            odometer:  { type: 'double', id: 4 },
+                            speed:     { type: 'float',  id: 5 }
+                        }
+                    },
+                    TripDescriptor: {
+                        fields: {
+                            trip_id:      { type: 'string', id: 1 },
+                            start_time:   { type: 'string', id: 2 },
+                            start_date:   { type: 'string', id: 3 },
+                            route_id:     { type: 'string', id: 5 },
+                            direction_id: { type: 'uint32', id: 6 }
+                        }
+                    },
+                    VehicleDescriptor: {
+                        fields: {
+                            id:            { type: 'string', id: 1 },
+                            label:         { type: 'string', id: 2 },
+                            license_plate: { type: 'string', id: 3 }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    // ── Status helpers ───────────────────────────────────────────────────────
+    // VehicleStopStatus: 0=INCOMING_AT, 1=STOPPED_AT, 2=IN_TRANSIT_TO
+    function getStatusLabel(status) {
+        if (status === 0) return 'Approaching';
+        if (status === 1) return 'At station';
+        return 'In transit';
+    }
+
+    function getStatusColor(status) {
+        if (status === 0) return [165, 214, 167, 0.95];   // green — approaching
+        if (status === 1) return [79,  195, 247, 0.95];   // blue  — stopped at
+        return [255, 220, 50,  0.95];                      // yellow — in transit
+    }
+
+    function bearingToCompass(deg) {
+        if (deg === undefined || deg === null) return '—';
+        var dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+        return dirs[Math.round(deg / 22.5) % 16];
+    }
+
+    // ── Map setup ────────────────────────────────────────────────────────────
+    var vectorSource = new ol.source.Vector();
+    var vectorLayer  = new ol.layer.Vector({ source: vectorSource });
+
+    var osmLayer = new ol.layer.Tile({ source: new ol.source.OSM() });
+
+    var satelliteLayer = new ol.layer.Tile({
+        source: new ol.source.XYZ({
+            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            attributions: 'Tiles © Esri'
+        }),
+        visible: false
+    });
+
+    var map = new ol.Map({
+        target: 'map',
+        layers: [osmLayer, satelliteLayer, vectorLayer],
+        view: new ol.View({
+            center: ol.proj.fromLonLat([153.025, -27.47]),  // Brisbane CBD
+            zoom: 10
+        })
+    });
+
+    // ── Popup ────────────────────────────────────────────────────────────────
+    var popupEl      = document.getElementById('popup');
+    var popupContent = document.getElementById('popup-content');
+    var popupCloser  = document.getElementById('popup-closer');
+
+    var popupOverlay = new ol.Overlay({
+        element: popupEl,
+        autoPan: true,
+        autoPanAnimation: { duration: 200 }
+    });
+    map.addOverlay(popupOverlay);
+
+    popupCloser.onclick = function() {
+        popupOverlay.setPosition(undefined);
+        return false;
+    };
+
+    map.on('click', function(evt) {
+        var feature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; }, {
+            hitTolerance: 12,
+            layerFilter: function(l) { return l === vectorLayer; }
+        });
+        if (feature) {
+            var p = feature.get('trainData');
+            var status = p.current_status !== undefined ? p.current_status : 2;
+            var pos    = p.position || {};
+            var trip   = p.trip    || {};
+            var veh    = p.vehicle || {};
+
+            var routeId  = trip.route_id  || '—';
+            var tripId   = trip.trip_id   || '—';
+            var vehicleId = veh.label || veh.id || '—';
+            var speed    = pos.speed     !== undefined ? Math.round(pos.speed * 3.6) + ' km/h' : '—';
+            var bearing  = pos.bearing   !== undefined ? Math.round(pos.bearing) + '° (' + bearingToCompass(pos.bearing) + ')' : '—';
+            var stopSeq  = p.current_stop_sequence || '—';
+            var stopId   = p.stop_id || '—';
+            var ts       = p.timestamp ? new Date(p.timestamp * 1000).toLocaleTimeString() : '—';
+
+            popupContent.innerHTML =
+                '<div class="popup-title">🚆 ' + (routeId !== '—' ? routeId : 'Train') + '</div>' +
+                '<div class="popup-row"><span class="popup-key">Status</span><span class="popup-val">' + getStatusLabel(status) + '</span></div>' +
+                '<div class="popup-row"><span class="popup-key">Vehicle</span><span class="popup-val">' + vehicleId + '</span></div>' +
+                '<div class="popup-row"><span class="popup-key">Route</span><span class="popup-val">' + routeId + '</span></div>' +
+                '<div class="popup-row"><span class="popup-key">Trip ID</span><span class="popup-val" style="font-size:9px">' + tripId + '</span></div>' +
+                '<div class="popup-row"><span class="popup-key">Speed</span><span class="popup-val">' + speed + '</span></div>' +
+                '<div class="popup-row"><span class="popup-key">Bearing</span><span class="popup-val">' + bearing + '</span></div>' +
+                '<div class="popup-row"><span class="popup-key">Stop seq</span><span class="popup-val">' + stopSeq + '</span></div>' +
+                '<div class="popup-row"><span class="popup-key">Stop ID</span><span class="popup-val">' + stopId + '</span></div>' +
+                '<div class="popup-row"><span class="popup-key">Updated</span><span class="popup-val">' + ts + '</span></div>';
+
+            popupOverlay.setPosition(evt.coordinate);
+        } else {
+            popupOverlay.setPosition(undefined);
+        }
+    });
+
+    map.on('pointermove', function(evt) {
+        var hit = map.hasFeatureAtPixel(evt.pixel, {
+            layerFilter: function(l) { return l === vectorLayer; }
+        });
+        map.getTargetElement().style.cursor = hit ? 'pointer' : '';
+    });
+
+    // ── Satellite toggle ─────────────────────────────────────────────────────
+    var isSat = false;
+    document.getElementById('btn-satellite').addEventListener('click', function() {
+        isSat = !isSat;
+        osmLayer.setVisible(!isSat);
+        satelliteLayer.setVisible(isSat);
+        this.classList.toggle('active', isSat);
+    });
+
+    // ── Add a train feature to the map ───────────────────────────────────────
+    function addTrainFeature(vehicleData) {
+        var pos = vehicleData.position;
+        if (!pos || pos.latitude === undefined || pos.longitude === undefined) return;
+
+        var status = vehicleData.current_status !== undefined ? vehicleData.current_status : 2;
+        var color  = getStatusColor(status);
+        var coords = ol.proj.fromLonLat([pos.longitude, pos.latitude]);
+
+        var trip = vehicleData.trip   || {};
+        var veh  = vehicleData.vehicle || {};
+        var label = (veh.label || veh.id || trip.route_id || '').toString().substring(0, 6);
+
+        // Rotation: bearing -> radians (OL uses radians, 0=north, clockwise)
+        var rotation = pos.bearing !== undefined
+            ? (pos.bearing * Math.PI / 180)
+            : 0;
+
+        var feature = new ol.Feature({
+            geometry:  new ol.geom.Point(coords),
+            trainData: vehicleData
+        });
+
+        feature.setStyle(new ol.style.Style({
+            image: new ol.style.Circle({
+                radius: 9,
+                fill:   new ol.style.Fill({ color: color }),
+                stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0.6)', width: 1.5 })
+            }),
+            text: new ol.style.Text({
+                text:           '🚆',
+                font:           '11px sans-serif',
+                offsetY:        0,
+                textAlign:      'center',
+                rotation:       0
+            })
+        }));
+
+        vectorSource.addFeature(feature);
+    }
+
+    // ── Protobuf decode ───────────────────────────────────────────────────────
+    var pbRoot       = protobuf.Root.fromJSON(GTFS_RT_JSON);
+    var FeedMessage  = pbRoot.lookupType('transit_realtime.FeedMessage');
+
+    function decodeProtobuf(buffer) {
+        var msg = FeedMessage.decode(new Uint8Array(buffer));
+        return msg.entity || [];
+    }
+
+    // ── Fetch with timeout ────────────────────────────────────────────────────
+    function fetchWithTimeout(url, ms) {
+        var ctrl  = new AbortController();
+        var timer = setTimeout(function() { ctrl.abort(); }, ms);
+        return fetch(url, { signal: ctrl.signal })
+            .then(function(r) { clearTimeout(timer); return r; })
+            .catch(function(e) { clearTimeout(timer); throw e; });
+    }
+
+    // ── Load train data ───────────────────────────────────────────────────────
+    function loadTrains() {
+        var loading = document.getElementById('loading');
+        loading.style.display = 'block';
+        loading.classList.remove('error');
+        loading.innerHTML = '<div class="loading-title">🚆 Loading trains</div><div>Fetching Translink GTFS-RT...</div>';
+
+        vectorSource.clear();
+        popupOverlay.setPosition(undefined);
+
+        var feedUrl = 'https://gtfsrt.api.translink.com.au/api/realtime/SEQ/VehiclePositions/Rail';
+
+        // The GTFS-RT feed is binary protobuf + no CORS headers.
+        // We race all three proxies and take the first that returns valid data.
+        var proxies = [
+            { name: 'allorigins', url: 'https://api.allorigins.win/raw?url=' },
+            { name: 'corsproxy',  url: 'https://corsproxy.io/?' },
+            { name: 'corsproxy2', url: 'https://corsproxy.org/?' }
+        ];
+
+        function tryProxy(proxy) {
+            return fetchWithTimeout(proxy.url + encodeURIComponent(feedUrl), 10000)
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.arrayBuffer();
+                })
+                .then(function(buf) {
+                    if (buf.byteLength < 10) throw new Error('Empty response from ' + proxy.name);
+                    var entities = decodeProtobuf(buf);
+                    if (!entities.length) throw new Error('No entities from ' + proxy.name);
+                    console.log(proxy.name + ' returned ' + entities.length + ' entities');
+                    return entities;
+                });
+        }
+
+        Promise.any(proxies.map(tryProxy))
+            .then(function(entities) {
+                var count = 0;
+                entities.forEach(function(entity) {
+                    if (entity.vehicle && entity.vehicle.position) {
+                        addTrainFeature(entity.vehicle);
+                        count++;
+                    }
+                });
+
+                document.getElementById('train-count').textContent = count;
+                document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+
+                // Restart the refresh progress bar animation
+                var bar = document.getElementById('refresh-progress');
+                bar.style.animation = 'none';
+                bar.offsetHeight; // reflow
+                bar.style.animation = 'countdown 30s linear infinite';
+
+                loading.style.display = 'none';
+
+                console.log('Plotted', count, 'trains');
+            })
+            .catch(function(err) {
+                console.error('All proxies failed:', err);
+                loading.classList.add('error');
+                loading.innerHTML = '<div class="loading-title">⚠ Connection failed</div><div>All data sources failed. Retrying in 30s...</div>';
+                setTimeout(function() { loading.style.display = 'none'; }, 6000);
+            });
+    }
+
+    // ── Controls ──────────────────────────────────────────────────────────────
+    document.getElementById('btn-refresh').addEventListener('click', function() {
+        loadTrains();
+    });
+
+    // ── Init + auto-refresh every 30s ─────────────────────────────────────────
+    loadTrains();
+    setInterval(loadTrains, 30000);
+
+    </script>
+</body>
+</html>
