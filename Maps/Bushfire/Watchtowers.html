@@ -874,13 +874,32 @@
                         if (firmsFeature) {
                             var fp = firmsFeature.get('firmsProps');
                             var confLabel = fp.confidence === 'h' ? 'High' : fp.confidence === 'l' ? 'Low' : 'Nominal';
-                            var html = '<h3>🛰️ NASA Satellite Hotspot</h3>';
-                            html += '<div class="detail"><strong>Confidence:</strong> ' + confLabel + '</div>';
-                            html += '<div class="detail"><strong>FRP:</strong> ' + (fp.frp || '—') + ' MW</div>';
-                            html += '<div class="detail"><strong>Detected:</strong> ' + fp.acq_date + ' ' + fp.acq_time + ' UTC</div>';
-                            html += '<div class="detail"><strong>Satellite:</strong> ' + (fp.satellite || fp.instrument || '—') + '</div>';
-                            html += '<div class="detail"><strong>Day/Night:</strong> ' + (fp.daynight === 'D' ? 'Day' : 'Night') + '</div>';
-                            html += '<div class="detail" style="margin-top:8px;font-size:11px;color:#888;">This is a thermal hotspot from satellite imagery, not a confirmed fire report.</div>';
+                            var confColor = fp.confidence === 'h' ? '#ff1744' : fp.confidence === 'l' ? '#f9a825' : '#ff6d00';
+
+                            // Decode satellite abbreviation
+                            var satNames = { 'N': 'Suomi-NPP', '1': 'NOAA-20', '2': 'NOAA-21' };
+                            var satName = satNames[fp.satellite] || fp.satellite || fp.instrument || '—';
+
+                            // Format HHMM time string → HH:MM
+                            var rawTime = fp.acq_time || '';
+                            var formattedTime = rawTime.length >= 3
+                                ? rawTime.slice(0, -2).padStart(2, '0') + ':' + rawTime.slice(-2)
+                                : rawTime;
+
+                            // FRP intensity label
+                            var frpVal = parseFloat(fp.frp);
+                            var frpLabel = isNaN(frpVal) ? '—' : frpVal < 10 ? 'Low (' + frpVal + ' MW)' :
+                                           frpVal < 50 ? 'Moderate (' + frpVal + ' MW)' :
+                                           frpVal < 200 ? 'High (' + frpVal + ' MW)' :
+                                           'Extreme (' + frpVal + ' MW)';
+
+                            var html = '<h3 style="display:flex;align-items:center;gap:8px;">🛰️ NASA Satellite Hotspot';
+                            html += '<span class="alert-badge" style="background:' + confColor + '">' + confLabel + ' confidence</span></h3>';
+                            html += '<div class="detail"><strong>FRP:</strong> ' + frpLabel + '</div>';
+                            html += '<div class="detail"><strong>Detected:</strong> ' + fp.acq_date + ' at ' + formattedTime + ' UTC</div>';
+                            html += '<div class="detail"><strong>Satellite:</strong> ' + satName + ' (VIIRS)</div>';
+                            html += '<div class="detail"><strong>Pass:</strong> ' + (fp.daynight === 'D' ? '☀️ Daytime' : '🌙 Nighttime') + '</div>';
+                            html += '<div class="detail" style="margin-top:8px;padding:6px 8px;background:#fff8e1;border-radius:4px;font-size:11px;color:#795548;">⚠️ Thermal hotspot from satellite imagery — not a confirmed fire report.</div>';
                             content.innerHTML = html;
                             popupOverlay.setPosition(evt.coordinate);
                         } else {
@@ -1703,9 +1722,9 @@
 
                         feature.setStyle(new ol.style.Style({
                             image: new ol.style.Circle({
-                                radius: 5,
+                                radius: 10,
                                 fill:   new ol.style.Fill({ color: color }),
-                                stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0.4)', width: 1 })
+                                stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 })
                             })
                         }));
 
