@@ -1652,12 +1652,57 @@
 
             var feedUrl = 'https://publiccontent-gis-psba-qld-gov-au.s3.amazonaws.com/content/Feeds/BushfireCurrentIncidents/bushfireAlert_capau.xml';
 
-            // Multiple CORS proxies as fallback - free proxies are unreliable
+            // CORS proxy list with correct 2025 URL formats and fallbacks.
+            // corsproxy.io changed their API from /?<url> to /?url=<encoded>.
+            // allorigins /get returns a JSON wrapper { contents: "..." } which is more reliable than /raw.
             var corsProxies = [
-                { name: 'allorigins', url: 'https://api.allorigins.win/raw?url=' },
-                { name: 'corsproxy.io', url: 'https://corsproxy.io/?' },
-                { name: 'corsproxy.org', url: 'https://corsproxy.org/?' }
+                {
+                    name: 'corsproxy.io',
+                    buildUrl: function(u) { return 'https://corsproxy.io/?url=' + encodeURIComponent(u); },
+                    parse: function(text) { return text; }
+                },
+                {
+                    name: 'allorigins-json',
+                    buildUrl: function(u) { return 'https://api.allorigins.win/get?url=' + encodeURIComponent(u); },
+                    parse: function(text) {
+                        try { var j = JSON.parse(text); return j.contents || text; } catch(e) { return text; }
+                    }
+                },
+                {
+                    name: 'allorigins-raw',
+                    buildUrl: function(u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); },
+                    parse: function(text) { return text; }
+                },
+                {
+                    name: 'codetabs',
+                    buildUrl: function(u) { return 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u); },
+                    parse: function(text) { return text; }
+                },
+                {
+                    name: 'thingproxy',
+                    buildUrl: function(u) { return 'https://thingproxy.freeboard.io/fetch/' + u; },
+                    parse: function(text) { return text; }
+                }
             ];
+
+            function isValidXml(text) {
+                return text && (
+                    text.indexOf('<cap:alert') !== -1 ||
+                    text.indexOf('urn:oasis:names:tc:emergency:cap') !== -1 ||
+                    text.indexOf('<alert') !== -1 ||
+                    text.indexOf('BushfireAlert') !== -1 ||
+                    text.indexOf('bushfireAlert') !== -1
+                );
+            }
+
+            // Wrap fetch with an 8-second timeout so a hanging proxy doesn't stall the chain
+            function fetchWithTimeout(url, ms) {
+                var controller = new AbortController();
+                var tid = setTimeout(function() { controller.abort(); }, ms);
+                return fetch(url, { signal: controller.signal })
+                    .then(function(r) { clearTimeout(tid); return r; })
+                    .catch(function(e) { clearTimeout(tid); throw e; });
+            }
 
             function tryProxy(index) {
                 if (index >= corsProxies.length) {
@@ -1673,16 +1718,16 @@
                 console.log('Trying CORS proxy: ' + proxy.name);
                 loading.textContent = 'Loading QLD bushfire data... (source ' + (index + 1) + '/' + corsProxies.length + ')';
 
-                fetch(proxy.url + encodeURIComponent(feedUrl))
+                fetchWithTimeout(proxy.buildUrl(feedUrl), 8000)
                     .then(function(response) {
                         if (!response.ok) {
                             throw new Error('HTTP ' + response.status);
                         }
                         return response.text();
                     })
-                    .then(function(xmlText) {
-                        // Verify we got valid XML, not an error page
-                        if (xmlText.indexOf('<cap:alert') === -1 && xmlText.indexOf('urn:oasis:names:tc:emergency:cap') === -1) {
+                    .then(function(rawText) {
+                        var xmlText = proxy.parse(rawText);
+                        if (!isValidXml(xmlText)) {
                             throw new Error('Invalid response from proxy');
                         }
                         console.log('Successfully loaded data via ' + proxy.name);
@@ -1695,14 +1740,14 @@
                     });
             }
 
-            // First try direct fetch (in case S3 bucket allows CORS)
-            fetch(feedUrl)
+            // First try direct fetch (works if the S3 bucket has CORS headers enabled)
+            fetchWithTimeout(feedUrl, 8000)
                 .then(function(response) {
                     if (!response.ok) throw new Error('HTTP ' + response.status);
                     return response.text();
                 })
                 .then(function(xmlText) {
-                    if (xmlText.indexOf('<cap:alert') === -1 && xmlText.indexOf('urn:oasis:names:tc:emergency:cap') === -1) {
+                    if (!isValidXml(xmlText)) {
                         throw new Error('Invalid response');
                     }
                     console.log('Successfully loaded data directly (no proxy needed)');
