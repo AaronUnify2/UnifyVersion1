@@ -3,112 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QLD Bushfire Monitor - Watchtower Edition</title>
+    <title>QLD Incident Monitor - Watchtower Edition</title>
     
     <!-- OpenLayers CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
     
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        /* ── Layout ─────────────────────────────────────────────── */
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            height: 100vh;
             overflow: hidden;
         }
 
         #map {
-            width: 100vw;
+            flex: 1;
             height: 100vh;
+            min-width: 0;
         }
 
-        .info-panel {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: white;
-            padding: 15px 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 1000;
-            max-width: 300px;
-        }
-
-        .info-panel h2 {
-            font-size: 16px;
-            margin-bottom: 10px;
-            color: #333;
-        }
-
-        .info-panel .stats {
-            font-size: 13px;
-            color: #666;
-        }
-
-        .info-panel .stat-item {
-            margin: 5px 0;
-        }
-
-        .info-panel .stat-label {
-            font-weight: 600;
-        }
-
-        .weather-info {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #e0e0e0;
-            font-size: 12px;
-        }
-
-        .weather-info .weather-item {
-            margin: 4px 0;
-            display: flex;
-            align-items: center;
-        }
-
-        .wind-arrow {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            margin-left: 5px;
-            font-size: 16px;
-        }
-
-        .control-panel {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: white;
-            padding: 10px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 1000;
+        /* ── Sidebar ─────────────────────────────────────────────── */
+        .sidebar {
+            width: 280px;
+            flex-shrink: 0;
+            height: 100vh;
+            background: #f8fafc;
+            border-left: 1px solid #e2e8f0;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            overflow: hidden;
+            z-index: 1000;
+            box-shadow: -2px 0 12px rgba(0,0,0,0.1);
         }
 
-        .control-btn {
+        .sidebar-header {
+            background: #1a365d;
+            color: white;
+            padding: 14px 16px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header h2 {
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+        }
+
+        .sidebar-header .subtitle {
+            font-size: 11px;
+            opacity: 0.75;
+            margin-top: 2px;
+        }
+
+        .sidebar-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* ── Sidebar sections ────────────────────────────────────── */
+        .sidebar-section {
             background: white;
-            border: 2px solid #ddd;
-            padding: 10px 15px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .section-title {
+            font-size: 10px;
+            font-weight: 700;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 8px 12px 6px;
+            background: #f0f4f8;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .section-body {
+            padding: 10px 12px;
+        }
+
+        /* ── Stats ───────────────────────────────────────────────── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+
+        .stat-card {
+            background: #f0f4f8;
+            border-radius: 6px;
+            padding: 8px 10px;
+            text-align: center;
+        }
+
+        .stat-card .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a365d;
+            line-height: 1;
+        }
+
+        .stat-card .stat-label {
+            font-size: 10px;
+            color: #718096;
+            margin-top: 3px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .last-update {
+            font-size: 11px;
+            color: #a0aec0;
+            text-align: center;
+            margin-top: 6px;
+        }
+
+        /* ── Control buttons ─────────────────────────────────────── */
+        .control-btn {
+            width: 100%;
+            background: white;
+            border: 1.5px solid #e2e8f0;
+            padding: 9px 12px;
             border-radius: 6px;
             cursor: pointer;
             font-size: 13px;
             font-weight: 600;
-            transition: all 0.2s;
+            transition: all 0.15s;
             display: flex;
             align-items: center;
             gap: 8px;
-            white-space: nowrap;
+            color: #2d3748;
+            margin-bottom: 6px;
+            text-align: left;
         }
 
+        .control-btn:last-child { margin-bottom: 0; }
+
         .control-btn:hover {
-            background: #f0f0f0;
-            border-color: #999;
+            background: #ebf8ff;
+            border-color: #3182ce;
+            color: #2b6cb0;
         }
 
         .control-btn.active {
@@ -117,201 +160,307 @@
             border-color: #2196F3;
         }
 
-        .control-btn:active {
-            transform: scale(0.95);
-        }
+        .control-btn:active { transform: scale(0.97); }
 
-        .legend {
-            position: absolute;
-            bottom: 20px;
-            left: 10px;
-            background: white;
-            padding: 12px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 1000;
-        }
-
-        .legend h3 {
-            font-size: 13px;
-            margin-bottom: 8px;
-            color: #333;
-        }
-
+        /* ── Legend ──────────────────────────────────────────────── */
         .legend-item {
             display: flex;
             align-items: center;
-            margin: 4px 0;
-            font-size: 11px;
+            margin: 5px 0;
+            font-size: 12px;
+            color: #2d3748;
         }
 
         .legend-color {
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
-            margin-right: 6px;
-            border: 2px solid rgba(0,0,0,0.3);
+            margin-right: 8px;
+            flex-shrink: 0;
+            border: 1.5px solid rgba(0,0,0,0.2);
         }
 
+        .legend-divider {
+            border-top: 1px solid #e2e8f0;
+            margin: 8px 0 6px;
+        }
+
+        .legend-subtitle {
+            font-size: 10px;
+            font-weight: 700;
+            color: #a0aec0;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            margin-bottom: 5px;
+        }
+
+        /* Incident colours */
+        .incident-bushfire  { background-color: #d32f2f; }
+        .incident-structure { background-color: #e64a19; }
+        .incident-rescue    { background-color: #1565c0; }
+        .incident-hazmat    { background-color: #558b2f; }
+        .incident-vehicle   { background-color: #6a1b9a; }
+        .incident-other     { background-color: #607d8b; }
+        .firms-high         { background-color: #ff1744; }
+        .firms-nominal      { background-color: #ff6d00; }
+        .firms-low          { background-color: #ffd600; }
+
+        /* ── Watchtower list ─────────────────────────────────────── */
+        .watchtower-list {
+            max-height: 160px;
+            overflow-y: auto;
+        }
+
+        .watchtower-item {
+            display: flex;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px solid #f0f4f8;
+            gap: 6px;
+        }
+
+        .watchtower-item:last-child { border-bottom: none; }
+
+        .watchtower-name-input {
+            flex: 1;
+            padding: 4px 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: inherit;
+            background: #f8fafc;
+        }
+
+        .watchtower-name-input:focus {
+            outline: none;
+            border-color: #3182ce;
+            background: white;
+        }
+
+        .watchtower-remove {
+            background: #fed7d7;
+            color: #c53030;
+            border: none;
+            padding: 3px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .watchtower-remove:hover { background: #fc8181; color: white; }
+
+        .watchtower-empty {
+            font-size: 12px;
+            color: #a0aec0;
+            text-align: center;
+            padding: 8px 0;
+            font-style: italic;
+        }
+
+        /* ── Nav button ──────────────────────────────────────────── */
+        .nav-btn {
+            display: block;
+            padding: 10px 12px;
+            background: #276749;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            text-align: center;
+            transition: background 0.15s;
+        }
+
+        .nav-btn:hover { background: #22543d; }
+
+        /* ── Mobile toggle button ────────────────────────────────── */
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            z-index: 1200;
+            background: #1a365d;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            width: 42px;
+            height: 42px;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ── Floating map overlays ───────────────────────────────── */
         .loading {
-            position: absolute;
+            position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
             background: white;
-            padding: 20px 30px;
+            padding: 16px 24px;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
             z-index: 2000;
             font-size: 14px;
+            font-weight: 500;
             text-align: center;
-            max-width: 400px;
+            max-width: 360px;
         }
 
-        .error {
-            background: #fee;
-            color: #c00;
+        .error { background: #fff5f5; color: #c53030; }
+
+        .warning-panel {
+            position: fixed;
+            bottom: 16px;
+            left: 16px;
+            background: white;
+            padding: 10px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1100;
+            max-width: 320px;
+            display: none;
         }
 
-        .incident-bushfire {
-            background-color: #d32f2f;
+        .warning-panel.show { display: block; }
+
+        .warning-item {
+            padding: 7px 10px;
+            margin: 4px 0;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
-        .incident-structure {
-            background-color: #e64a19;
-        }
+        .warning-fire  { background: #d32f2f; color: white; }
+        .warning-ember { background: #f57c00; color: white; }
 
-        .incident-rescue {
-            background-color: #1565c0;
-        }
-
-        .incident-hazmat {
-            background-color: #558b2f;
-        }
-
-        .incident-vehicle {
-            background-color: #6a1b9a;
-        }
-
-        .incident-other {
-            background-color: #607d8b;
-        }
-
-        .firms-high    { background-color: #ff1744; }
-        .firms-nominal { background-color: #ff6d00; }
-        .firms-low     { background-color: #ffd600; }
-
-        .legend-divider {
-            border-top: 1px solid #e0e0e0;
-            margin: 8px 0 6px 0;
-        }
-        .legend-subtitle {
-            font-size: 11px;
-            font-weight: 700;
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 4px;
-        }
+        /* ── Popup ───────────────────────────────────────────────── */
         .ol-popup {
             position: absolute;
             background-color: white;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-            padding: 15px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+            padding: 14px;
             border-radius: 10px;
-            border: 1px solid #cccccc;
+            border: 1px solid #e2e8f0;
             bottom: 12px;
             left: -50px;
-            min-width: 320px;
-            max-width: 400px;
+            min-width: 300px;
+            max-width: 380px;
         }
 
         .ol-popup:after, .ol-popup:before {
             top: 100%;
             border: solid transparent;
             content: " ";
-            height: 0;
-            width: 0;
+            height: 0; width: 0;
             position: absolute;
             pointer-events: none;
         }
 
-        .ol-popup:after {
-            border-top-color: white;
-            border-width: 10px;
-            left: 48px;
-            margin-left: -10px;
-        }
-
-        .ol-popup:before {
-            border-top-color: #cccccc;
-            border-width: 11px;
-            left: 48px;
-            margin-left: -11px;
-        }
+        .ol-popup:after  { border-top-color: white;   border-width: 10px; left: 48px; margin-left: -10px; }
+        .ol-popup:before { border-top-color: #e2e8f0; border-width: 11px; left: 48px; margin-left: -11px; }
 
         .ol-popup-closer {
             text-decoration: none;
             position: absolute;
-            top: 2px;
-            right: 8px;
+            top: 2px; right: 8px;
             font-size: 20px;
-            color: #999;
+            color: #a0aec0;
         }
 
-        .ol-popup-closer:after {
-            content: "✖";
-        }
+        .ol-popup-closer:after { content: "✖"; }
 
         .popup-content h3 {
-            margin-bottom: 10px;
-            color: #333;
+            margin-bottom: 8px;
+            color: #1a365d;
             font-size: 14px;
+            padding-right: 20px;
         }
 
         .popup-content .detail {
-            margin: 5px 0;
+            margin: 4px 0;
             font-size: 12px;
+            color: #2d3748;
         }
 
         .popup-content .detail strong {
             display: inline-block;
             min-width: 70px;
+            color: #4a5568;
         }
 
         .popup-content .alert-badge {
             display: inline-block;
-            padding: 3px 8px;
+            padding: 2px 8px;
             border-radius: 4px;
             font-size: 11px;
-            font-weight: bold;
+            font-weight: 700;
             color: white;
-            margin-left: 5px;
+            margin-left: 6px;
         }
 
-        .badge-bushfire   { background-color: #d32f2f; }
-        .badge-structure  { background-color: #e64a19; }
-        .badge-rescue     { background-color: #1565c0; }
-        .badge-hazmat     { background-color: #558b2f; }
-        .badge-vehicle    { background-color: #6a1b9a; }
-        .badge-other      { background-color: #607d8b; }
+        .badge-bushfire  { background-color: #d32f2f; }
+        .badge-structure { background-color: #e64a19; }
+        .badge-rescue    { background-color: #1565c0; }
+        .badge-hazmat    { background-color: #558b2f; }
+        .badge-vehicle   { background-color: #6a1b9a; }
+        .badge-other     { background-color: #607d8b; }
 
         .distance-badge {
             display: inline-block;
-            padding: 4px 8px;
-            background: #4CAF50;
+            padding: 3px 8px;
+            background: #38a169;
             color: white;
             border-radius: 4px;
             font-size: 11px;
-            font-weight: bold;
-            margin-top: 5px;
+            font-weight: 600;
+            margin-top: 4px;
         }
 
+        .popup-weather {
+            margin-top: 10px;
+            padding: 8px 10px;
+            background: #ebf8ff;
+            border-radius: 6px;
+        }
+
+        .popup-weather h4 {
+            font-size: 11px;
+            margin-bottom: 6px;
+            color: #2b6cb0;
+            font-weight: 700;
+        }
+
+        .popup-weather .weather-item {
+            margin: 3px 0;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: #2d3748;
+        }
+
+        .wind-arrow {
+            display: inline-block;
+            font-size: 14px;
+        }
+
+        /* Map overlays that remain over map */
         .distance-label {
             position: absolute;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0,0,0,0.8);
             color: white;
-            padding: 4px 8px;
+            padding: 3px 7px;
             border-radius: 4px;
             font-size: 12px;
             font-weight: bold;
@@ -322,9 +471,9 @@
 
         .wind-label {
             position: absolute;
-            background: rgba(33, 150, 243, 0.9);
+            background: rgba(33,150,243,0.9);
             color: white;
-            padding: 4px 8px;
+            padding: 3px 7px;
             border-radius: 4px;
             font-size: 11px;
             font-weight: bold;
@@ -333,175 +482,32 @@
             transform: translate(-50%, -50%);
         }
 
-        .popup-weather {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #e0e0e0;
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 6px;
-        }
-
-        .popup-weather h4 {
-            font-size: 12px;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 600;
-        }
-
-        .popup-weather .weather-item {
-            margin: 4px 0;
-            font-size: 11px;
-            display: flex;
-            align-items: center;
-        }
-
-        .popup-weather .wind-arrow {
-            font-size: 14px;
-        }
-
-        .warning-panel {
-            position: absolute;
-            bottom: 20px;
-            right: 10px;
-            background: white;
-            padding: 12px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 1000;
-            max-width: 350px;
-            display: none;
-        }
-
-        .warning-panel.show {
-            display: block;
-        }
-
-        .warning-item {
-            padding: 8px 12px;
-            margin: 6px 0;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .warning-fire {
-            background: #d32f2f;
-            color: white;
-        }
-
-        .warning-ember {
-            background: #f57c00;
-            color: white;
-        }
-
-        .watchtower-list {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #e0e0e0;
-            font-size: 12px;
-            max-height: 150px;
-            overflow-y: auto;
-        }
-
-        .watchtower-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 4px 0;
-            border-bottom: 1px solid #f0f0f0;
-            gap: 8px;
-        }
-
-        .watchtower-name-input {
-            flex: 1;
-            padding: 4px 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 12px;
-            font-family: inherit;
-        }
-
-        .watchtower-name-input:focus {
-            outline: none;
-            border-color: #2196F3;
-        }
-
-        .watchtower-remove {
-            background: #f44336;
-            color: white;
-            border: none;
-            padding: 2px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 10px;
-        }
-
-        .watchtower-remove:hover {
-            background: #d32f2f;
-        }
-
-        .nav-btn {
-            margin-top: 12px;
-            padding: 8px 12px;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 600;
-            text-decoration: none;
-            display: block;
-            text-align: center;
-            transition: all 0.2s;
-        }
-
-        .nav-btn:hover {
-            background: #45a049;
-        }
-
-        .nav-btn:active {
-            transform: scale(0.95);
-        }
-
+        /* ── Modal ───────────────────────────────────────────────── */
         .custom-modal {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.5);
+            inset: 0;
+            background: rgba(0,0,0,0.5);
             display: none;
             justify-content: center;
             align-items: center;
             z-index: 3000;
         }
 
-        .custom-modal.show {
-            display: flex;
-        }
+        .custom-modal.show { display: flex; }
 
         .modal-content {
             background: white;
             padding: 24px;
             border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            max-width: 400px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+            max-width: 380px;
             text-align: center;
         }
 
-        .modal-content p {
-            margin: 0 0 20px 0;
-            font-size: 15px;
-            color: #333;
-        }
+        .modal-content p { margin: 0 0 18px; font-size: 14px; color: #2d3748; }
 
         .modal-content button {
-            background: #2196F3;
+            background: #3182ce;
             color: white;
             border: none;
             padding: 10px 24px;
@@ -511,107 +517,65 @@
             font-weight: 600;
         }
 
-        .modal-content button:hover {
-            background: #1976D2;
+        .modal-content button:hover { background: #2b6cb0; }
+
+        /* ── Mobile ──────────────────────────────────────────────── */
+        @media (max-width: 767px) {
+            body { display: block; }
+
+            #map { width: 100vw; height: 100vh; }
+
+            .sidebar-toggle {
+                display: flex;
+            }
+
+            .sidebar {
+                position: fixed;
+                top: 0;
+                right: -300px;
+                width: 280px;
+                height: 100vh;
+                transition: right 0.3s ease;
+                z-index: 1100;
+            }
+
+            .sidebar.open {
+                right: 0;
+            }
+
+            /* Dim overlay when sidebar open */
+            .sidebar-backdrop {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.4);
+                z-index: 1099;
+            }
+
+            .sidebar-backdrop.show { display: block; }
+
+            /* Smaller popup on mobile */
+            .ol-popup {
+                min-width: 260px;
+                max-width: calc(100vw - 32px);
+            }
         }
     </style>
 </head>
 <body>
+
+    <!-- Map fills left/all space -->
     <div id="map"></div>
-    
+
+    <!-- Floating map overlays -->
     <div id="popup" class="ol-popup">
         <a href="#" id="popup-closer" class="ol-popup-closer"></a>
         <div id="popup-content" class="popup-content"></div>
     </div>
-    
-    <div class="info-panel">
-        <h2>🚨 QLD Incident Monitor</h2>
-        <div class="stats">
-            <div class="stat-item">
-                <span class="stat-label">Active Incidents:</span>
-                <span id="incident-count">Loading...</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">Last Updated:</span>
-                <div id="last-update">-</div>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">Watchtowers:</span>
-                <span id="watchtower-count">0</span>
-            </div>
-        </div>
-        <div class="watchtower-list" id="watchtower-list"></div>
-        <a href="https://aaronunify2.github.io/UnifyVersion1/Maps/Bushfire/GPS.html" class="nav-btn">
-            📍 Switch to GPS View
-        </a>
-    </div>
-
-    <div class="control-panel">
-        <button class="control-btn" id="btn-refresh" title="Refresh fire data">
-            🔄 Refresh
-        </button>
-        <button class="control-btn" id="btn-watchtower" title="Click map to add watchtower">
-            🗼 Add Watchtower
-        </button>
-        <button class="control-btn" id="btn-measure" title="Show distances to fires within 100km from all watchtowers">
-            📏 Measure
-        </button>
-        <button class="control-btn" id="btn-wind" title="Show wind direction at each watchtower">
-            💨 Wind
-        </button>
-        <button class="control-btn" id="btn-satellite" title="Toggle satellite view">
-            🗺️ Satellite
-        </button>
-        <button class="control-btn" id="btn-firms" title="Toggle NASA satellite fire hotspots">
-            🛰️ Sat. Fires
-        </button>
-    </div>
-
-    <div class="legend">
-        <h3>Incident Types</h3>
-        <div class="legend-item">
-            <div class="legend-color incident-bushfire"></div>
-            <span>🔥 Bush Fire</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color incident-structure"></div>
-            <span>🏠 Structure Fire</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color incident-rescue"></div>
-            <span>🚨 Rescue</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color incident-hazmat"></div>
-            <span>☢️ Hazmat</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color incident-vehicle"></div>
-            <span>🚗 Vehicle</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color incident-other"></div>
-            <span>⭕ Other</span>
-        </div>
-        <div class="legend-divider"></div>
-        <div class="legend-subtitle">NASA Satellite Hotspots</div>
-        <div class="legend-item">
-            <div class="legend-color firms-high"></div>
-            <span>High confidence</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color firms-nominal"></div>
-            <span>Nominal confidence</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color firms-low"></div>
-            <span>Low confidence</span>
-        </div>
-    </div>
 
     <div id="warning-panel" class="warning-panel"></div>
 
-    <div id="loading" class="loading">Loading bushfire data...</div>
+    <div id="loading" class="loading">Loading incident data...</div>
 
     <div id="custom-modal" class="custom-modal">
         <div class="modal-content">
@@ -619,6 +583,87 @@
             <button onclick="closeModal()">OK</button>
         </div>
     </div>
+
+    <!-- Mobile: dim backdrop + toggle button -->
+    <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="closeSidebar()"></div>
+    <button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()" title="Open menu">☰</button>
+
+    <!-- Right sidebar -->
+    <div class="sidebar" id="sidebar">
+
+        <div class="sidebar-header">
+            <h2>🚨 QLD Incident Monitor</h2>
+            <div class="subtitle">Watchtower Edition</div>
+        </div>
+
+        <div class="sidebar-scroll">
+
+            <!-- Stats -->
+            <div class="sidebar-section">
+                <div class="section-title">📊 Status</div>
+                <div class="section-body">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="incident-count">—</div>
+                            <div class="stat-label">Incidents</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="watchtower-count">0</div>
+                            <div class="stat-label">Watchtowers</div>
+                        </div>
+                    </div>
+                    <div class="last-update">Updated: <span id="last-update">—</span></div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="sidebar-section">
+                <div class="section-title">🎛️ Controls</div>
+                <div class="section-body">
+                    <button class="control-btn" id="btn-refresh">🔄 Refresh Data</button>
+                    <button class="control-btn" id="btn-watchtower">🗼 Add Watchtower</button>
+                    <button class="control-btn" id="btn-measure">📏 Measure Distances</button>
+                    <button class="control-btn" id="btn-wind">💨 Wind Arrows</button>
+                    <button class="control-btn" id="btn-satellite">🗺️ Satellite View</button>
+                    <button class="control-btn" id="btn-firms">🛰️ Sat. Fires</button>
+                </div>
+            </div>
+
+            <!-- Watchtowers -->
+            <div class="sidebar-section">
+                <div class="section-title">🗼 Watchtowers</div>
+                <div class="section-body">
+                    <div class="watchtower-list" id="watchtower-list">
+                        <div class="watchtower-empty">No watchtowers added yet</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="sidebar-section">
+                <div class="section-title">🗺️ Legend</div>
+                <div class="section-body">
+                    <div class="legend-item"><div class="legend-color incident-bushfire"></div>🔥 Bush Fire</div>
+                    <div class="legend-item"><div class="legend-color incident-structure"></div>🏠 Structure Fire</div>
+                    <div class="legend-item"><div class="legend-color incident-rescue"></div>🚨 Rescue</div>
+                    <div class="legend-item"><div class="legend-color incident-hazmat"></div>☢️ Hazmat</div>
+                    <div class="legend-item"><div class="legend-color incident-vehicle"></div>🚗 Vehicle</div>
+                    <div class="legend-item"><div class="legend-color incident-other"></div>⭕ Other</div>
+                    <div class="legend-divider"></div>
+                    <div class="legend-subtitle">NASA Satellite Hotspots</div>
+                    <div class="legend-item"><div class="legend-color firms-high"></div>High confidence</div>
+                    <div class="legend-item"><div class="legend-color firms-nominal"></div>Nominal confidence</div>
+                    <div class="legend-item"><div class="legend-color firms-low"></div>Low confidence</div>
+                </div>
+            </div>
+
+            <!-- Nav -->
+            <a href="https://aaronunify2.github.io/UnifyVersion1/Maps/Bushfire/GPS.html" class="nav-btn">
+                📍 Switch to GPS View
+            </a>
+
+        </div><!-- /.sidebar-scroll -->
+    </div><!-- /.sidebar -->
 
     <!-- OpenLayers JS -->
     <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
@@ -1816,6 +1861,28 @@
 
             loading.style.display = 'none';
         }
+        function toggleSidebar() {
+            var sidebar = document.getElementById('sidebar');
+            var backdrop = document.getElementById('sidebar-backdrop');
+            var btn = document.getElementById('sidebar-toggle');
+            var isOpen = sidebar.classList.contains('open');
+            if (isOpen) {
+                sidebar.classList.remove('open');
+                backdrop.classList.remove('show');
+                btn.textContent = '☰';
+            } else {
+                sidebar.classList.add('open');
+                backdrop.classList.add('show');
+                btn.textContent = '✕';
+            }
+        }
+
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('sidebar-backdrop').classList.remove('show');
+            document.getElementById('sidebar-toggle').textContent = '☰';
+        }
+
     </script>
 </body>
 </html>
