@@ -45,6 +45,7 @@
         .sidebar-scroll {
             flex: 1;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             min-height: 0;
             padding: 10px;
             display: flex;
@@ -57,7 +58,7 @@
             background: white;
             border: 1px solid #e2e8f0;
             border-radius: 8px;
-            overflow: hidden;
+            flex-shrink: 0; /* never compress — scroll instead */
         }
 
         .section-title {
@@ -69,6 +70,7 @@
             padding: 8px 12px;
             background: #f0f4f8;
             border-bottom: 1px solid #e2e8f0;
+            border-radius: 8px 8px 0 0;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -84,8 +86,9 @@
 
         .sidebar-section.collapsed .section-body { display: none; }
         .sidebar-section.collapsed .chevron { transform: rotate(-90deg); }
+        .sidebar-section.collapsed .section-title { border-radius: 8px; border-bottom: none; }
 
-        .section-body { padding: 10px 12px; }
+        .section-body { padding: 10px 12px; border-radius: 0 0 8px 8px; }
 
         /* ── Stats ───────────────────────────────────────────────── */
         .stats-grid {
@@ -547,7 +550,7 @@
         </div>
     </div>
 
-    <div id="placement-hint" class="placement-hint">🗼 Tap the map to place your watchtower</div>
+    <div id="placement-hint" class="placement-hint">🗼 Double-tap the map to place your watchtower</div>
 
     <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="closeSidebar()"></div>
     <button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()" title="Open menu">☰</button>
@@ -582,6 +585,9 @@
                     <button class="control-btn" id="btn-refresh" onclick="loadBushfireData()" style="margin-top:8px;">
                         🔄 Refresh Data
                     </button>
+                    <a href="https://aaronunify2.github.io/UnifyVersion1/Maps/Bushfire/GPS.html" class="nav-btn" style="margin-top:6px;">
+                        📍 Switch to GPS View
+                    </a>
                 </div>
             </div>
 
@@ -594,7 +600,7 @@
 
                     <div class="control-section-label">QFS Incidents</div>
                     <button class="control-btn active" id="btn-qfsfire" onclick="cycleQFSFire()">
-                        🔴 QFS Fires <span class="mode-pill" id="qfsfire-mode-pill"></span>
+                        🔴 QFS Fires <span class="mode-pill" id="qfsfire-mode-pill">Responding</span>
                     </button>
                     <button class="control-btn" id="btn-watchtower" onclick="toggleAddWatchtower()">
                         🗼 Add Watchtower
@@ -681,11 +687,6 @@
 
                 </div>
             </div>
-
-            <!-- Nav -->
-            <a href="https://aaronunify2.github.io/UnifyVersion1/Maps/Bushfire/GPS.html" class="nav-btn">
-                📍 Switch to GPS View
-            </a>
 
         </div>
     </div>
@@ -808,7 +809,7 @@
             if (qfsFireMode === 0) {
                 btn.className  = 'control-btn active';
                 btn.childNodes[0].nodeValue = '🔴 QFS Fires ';
-                pill.textContent = '';
+                pill.textContent = 'Responding';
                 vectorLayer.setVisible(true);
                 applyQFSFireMode();
             } else if (qfsFireMode === 1) {
@@ -1211,67 +1212,86 @@
             loading.textContent = 'Loading NASA satellite hotspots...';
 
             var bbox = '138,-29,154,-10';
-            var url  = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/' +
-                       FIRMS_KEY + '/VIIRS_SNPP_NRT/' + bbox + '/1';
 
-            fetch(url)
-                .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-                .then(function(csvText) {
-                    var lines   = csvText.trim().split('\n');
-                    if (lines.length < 2) {
-                        loading.textContent = 'No satellite hotspots found for today.';
-                        setTimeout(function() { loading.style.display = 'none'; }, 3000);
-                        return;
-                    }
-                    var headers = lines[0].split(',');
-                    var getCol  = function(row, name) {
-                        var i = headers.indexOf(name);
-                        return i >= 0 ? row[i] : '';
-                    };
-                    firmsSource.clear();
-                    var count = 0;
-                    for (var i = 1; i < lines.length; i++) {
-                        var row  = lines[i].split(',');
-                        var lat  = parseFloat(getCol(row, 'latitude'));
-                        var lon  = parseFloat(getCol(row, 'longitude'));
-                        if (isNaN(lat) || isNaN(lon)) continue;
-
-                        var conf  = (getCol(row, 'confidence') || 'n').toLowerCase().charAt(0);
-                        var color = conf === 'h' ? [255, 23, 68, 0.85] : conf === 'l' ? [255, 214, 0, 0.85] : [255, 109, 0, 0.85];
-
-                        var feature = new ol.Feature({
-                            geometry: new ol.geom.Point(ol.proj.fromLonLat([lon, lat])),
-                            firmsProps: {
-                                confidence: conf,
-                                frp:        getCol(row, 'frp'),
-                                acq_date:   getCol(row, 'acq_date'),
-                                acq_time:   getCol(row, 'acq_time'),
-                                satellite:  getCol(row, 'satellite'),
-                                instrument: getCol(row, 'instrument'),
-                                daynight:   getCol(row, 'daynight')
+            // Try VIIRS Suomi-NPP first with 2-day window (handles processing delays),
+            // then fall back to MODIS_NRT if it returns empty
+            function trySource(source, dayRange, onEmpty) {
+                var url = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/' +
+                          FIRMS_KEY + '/' + source + '/' + bbox + '/' + dayRange;
+                fetch(url)
+                    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+                    .then(function(csvText) {
+                        var lines = csvText.trim().split('\n');
+                        if (lines.length < 2) {
+                            // No data from this source — try fallback if provided
+                            if (onEmpty) { onEmpty(); } else {
+                                loading.textContent = 'No satellite hotspots found in the last 2 days.';
+                                setTimeout(function() { loading.style.display = 'none'; }, 3000);
                             }
-                        });
-                        feature.setStyle(new ol.style.Style({
-                            image: new ol.style.Circle({
-                                radius: 10,
-                                fill:   new ol.style.Fill({ color: color }),
-                                stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 })
-                            })
-                        }));
-                        firmsSource.addFeature(feature);
-                        count++;
+                            return;
+                        }
+                        parseFIRMSCSV(csvText, source);
+                    })
+                    .catch(function(err) {
+                        loading.classList.add('error');
+                        loading.textContent = 'Error loading satellite data. Check MAP_KEY.';
+                        setTimeout(function() { loading.style.display = 'none'; }, 5000);
+                    });
+            }
+
+            // Try VIIRS first; if empty try MODIS as fallback
+            trySource('VIIRS_SNPP_NRT', 2, function() {
+                loading.textContent = 'Trying MODIS source...';
+                trySource('MODIS_NRT', 2, null);
+            });
+        }
+
+        function parseFIRMSCSV(csvText, sourceName) {
+            var loading = document.getElementById('loading');
+            var lines   = csvText.trim().split('\n');
+            var headers = lines[0].split(',');
+            var getCol  = function(row, name) {
+                var i = headers.indexOf(name);
+                return i >= 0 ? row[i] : '';
+            };
+            firmsSource.clear();
+            var count = 0;
+            for (var i = 1; i < lines.length; i++) {
+                var row  = lines[i].split(',');
+                var lat  = parseFloat(getCol(row, 'latitude'));
+                var lon  = parseFloat(getCol(row, 'longitude'));
+                if (isNaN(lat) || isNaN(lon)) continue;
+
+                var conf  = (getCol(row, 'confidence') || 'n').toLowerCase().charAt(0);
+                var color = conf === 'h' ? [255, 23, 68, 0.85] : conf === 'l' ? [255, 214, 0, 0.85] : [255, 109, 0, 0.85];
+
+                var feature = new ol.Feature({
+                    geometry: new ol.geom.Point(ol.proj.fromLonLat([lon, lat])),
+                    firmsProps: {
+                        confidence: conf,
+                        frp:        getCol(row, 'frp'),
+                        acq_date:   getCol(row, 'acq_date'),
+                        acq_time:   getCol(row, 'acq_time'),
+                        satellite:  getCol(row, 'satellite') || sourceName,
+                        instrument: getCol(row, 'instrument'),
+                        daynight:   getCol(row, 'daynight')
                     }
-                    loading.textContent = 'Loaded ' + count + ' satellite hotspots.';
-                    setTimeout(function() { loading.style.display = 'none'; }, 2000);
-                    // Re-draw NASA distance lines if active
-                    if (nasaDistMode > 0) drawNASADistanceLines();
-                    if (nasaWindEnabled) fetchWindDataForFIRMS();
-                })
-                .catch(function(err) {
-                    loading.classList.add('error');
-                    loading.textContent = 'Error loading satellite data. Check MAP_KEY.';
-                    setTimeout(function() { loading.style.display = 'none'; }, 5000);
                 });
+                feature.setStyle(new ol.style.Style({
+                    image: new ol.style.Circle({
+                        radius: 10,
+                        fill:   new ol.style.Fill({ color: color }),
+                        stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 })
+                    })
+                }));
+                firmsSource.addFeature(feature);
+                count++;
+            }
+            loading.textContent = 'Loaded ' + count + ' satellite hotspots.';
+            setTimeout(function() { loading.style.display = 'none'; }, 2000);
+            // Re-draw NASA overlays if active
+            if (nasaDistMode > 0) drawNASADistanceLines();
+            if (nasaWindEnabled) fetchWindDataForFIRMS();
         }
 
         // ── Watchtower management ─────────────────────────────────
