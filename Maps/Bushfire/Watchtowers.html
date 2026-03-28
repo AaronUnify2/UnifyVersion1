@@ -1476,12 +1476,26 @@
                     }
 
                     if (windEnabled && fireWindData[fireIdx]) {
-                        var d = fireWindData[fireIdx];
+                        var d   = fireWindData[fireIdx];
                         var rad = (90 - d.windDirection) * Math.PI / 180;
                         var len = d.windSpeed * 1000;
                         var ep  = [fc[0] + len * Math.cos(rad), fc[1] + len * Math.sin(rad)];
-                        if (ol.sphere.getLength(new ol.geom.LineString([ep, wt.coordinate])) <= 1000) {
-                            warnings.push({ type: 'ember', message: '⚠️ EMBER ZONE: ' + Math.round(d.windSpeed) + ' km/h wind toward ' + wt.name });
+
+                        // Find the closest point on the arrow SHAFT (not just the tip)
+                        // to the watchtower, using point-to-segment projection.
+                        var ax = ep[0] - fc[0], ay = ep[1] - fc[1];      // shaft vector
+                        var bx = wt.coordinate[0] - fc[0];               // fire→watchtower
+                        var by = wt.coordinate[1] - fc[1];
+                        var segLenSq = ax * ax + ay * ay;
+                        var t = segLenSq > 0 ? Math.max(0, Math.min(1, (bx * ax + by * ay) / segLenSq)) : 0;
+                        var closestX = fc[0] + t * ax;
+                        var closestY = fc[1] + t * ay;
+                        var distToShaft = ol.sphere.getLength(
+                            new ol.geom.LineString([[closestX, closestY], wt.coordinate])
+                        );
+
+                        if (distToShaft <= 3000) {
+                            warnings.push({ type: 'ember', message: '⚠️ EMBER ZONE: ' + Math.round(d.windSpeed) + ' km/h wind path passes within ' + formatDistance(distToShaft) + ' of ' + wt.name });
                         }
                     }
                 });
