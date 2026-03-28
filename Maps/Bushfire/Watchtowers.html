@@ -815,7 +815,7 @@
             } else if (qfsFireMode === 1) {
                 btn.className  = 'control-btn mode-typed';
                 btn.childNodes[0].nodeValue = '🎨 QFS Fires ';
-                pill.textContent = 'Typed';
+                pill.textContent = 'Incident Type';
                 vectorLayer.setVisible(true);
                 applyQFSFireMode();
             } else {
@@ -1077,19 +1077,45 @@
         function fetchWindDataForFIRMS() {
             if (!firmsEnabled) return;
             var features = firmsSource.getFeatures();
-            var promises = [];
+            if (features.length === 0) return;
+
+            // Cluster hotspots into ~0.5° grid cells (~50km) so we only
+            // fetch one wind reading per cell rather than one per hotspot.
+            var cells = {};
             features.forEach(function(feature, idx) {
                 var coords = feature.getGeometry().getCoordinates();
-                var ll = ol.proj.toLonLat(coords);
-                promises.push(
-                    fetch('https://api.open-meteo.com/v1/forecast?latitude=' + ll[1] + '&longitude=' + ll[0] + '&current=wind_speed_10m,wind_direction_10m')
-                        .then(function(r) { return r.json(); })
-                        .then(function(d) {
-                            nasaWindData[idx] = { coords: coords, windSpeed: d.current.wind_speed_10m, windDirection: d.current.wind_direction_10m };
-                        })
-                        .catch(function() {})
-                );
+                var ll     = ol.proj.toLonLat(coords);
+                var cellKey = Math.round(ll[1] / 0.5) + ',' + Math.round(ll[0] / 0.5);
+                if (!cells[cellKey]) {
+                    cells[cellKey] = { ll: ll, featureIndices: [], coords: coords };
+                }
+                cells[cellKey].featureIndices.push(idx);
+                // Store coords for each feature index so we can draw arrows
+                if (!cells[cellKey].allCoords) cells[cellKey].allCoords = {};
+                cells[cellKey].allCoords[idx] = coords;
             });
+
+            var cellKeys = Object.keys(cells);
+            var promises = cellKeys.map(function(key) {
+                var cell = cells[key];
+                var ll   = cell.ll;
+                return fetch('https://api.open-meteo.com/v1/forecast?latitude=' + ll[1] + '&longitude=' + ll[0] + '&current=wind_speed_10m,wind_direction_10m')
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        var windSpeed = d.current.wind_speed_10m;
+                        var windDir   = d.current.wind_direction_10m;
+                        // Apply this reading to every hotspot in the cell
+                        cell.featureIndices.forEach(function(idx) {
+                            nasaWindData[idx] = {
+                                coords:        cell.allCoords[idx],
+                                windSpeed:     windSpeed,
+                                windDirection: windDir
+                            };
+                        });
+                    })
+                    .catch(function() {});
+            });
+
             Promise.all(promises).then(function() { drawNASAWindOverlay(); });
         }
 
@@ -1474,33 +1500,92 @@
             var groupedType = props.GroupedType || props.groupedType || 'Unknown';
             var badgeClass  = getIncidentBadgeClass(groupedType);
             var emoji       = qfsFireMode === 0 ? '🔴' : getIncidentEmoji(groupedType);
-            var location    = props.LocalityName || props.Suburb || props.Location || props.areaDesc || '';
-            var status      = props.StatusText || props.Status || '';
-            var description = props.description || props.Description || '';
 
-            var html = '<h3>' + emoji + ' ' + groupedType;
-            html += '<span class="alert-badge ' + badgeClass + '">' + (status || groupedType) + '</span></h3>';
-            if (location) html += '<div class="detail"><strong>Location:</strong> ' + location + '</div>';
+            // Human-readable incident type label
+            var typeLabel = groupedType
+                .replace(/_/g, ' ')
+                .replace(/\bFire\b/i, 'Fire')
+                .toLowerCase()
+                .replace(/\b\w/g, function(c) { return c.toUpperCase(); });
 
-            var lonLat = ol.proj.toLonLat(coordinate);
-            watchtowers.forEach(function(wt) {
-                html += '<div class="distance-badge">📍 ' + calculateDistance(wt.lonLat[0], wt.lonLat[1], lonLat[0], lonLat[1]) + ' from ' + wt.name + '</div>';
-            });
+            // Key fields — prioritise locality over street address
+            var locality = props.LocalityName || props.Locality || '';
+            var street   = props.Location || props.Suburb || '';
+            var location = locality
+                ? (street ? street + ', ' + locality : locality)
+                : street;
 
-            if (description) {
-                html += '<div class="detail" style="margin:10px 0;padding:8px;background:#f5f5f5;border-radius:4px;font-size:11px;">' +
-                        description.substring(0, 200) + (description.length > 200 ? '...' : '') + '</div>';
+            // Status — strip internal codes, make readable
+            var rawStatus = props.CurrentStatus || props.StatusText || props.Status || '';
+            var statusMap = {
+                'Patrolled': 'Being monitored 👀',
+                'Controlled': 'Under control ✅',
+                'Contained': 'Contained ✅',
+                'Being Controlled': 'Crews working to control 🚒',
+                'Out of Control': 'Out of control ⚠️',
+                'Going': 'Active 🔥',
+                'Responded': 'Crews responded 🚒',
+                'Completed': 'Resolved ✅'
+            };
+            var statusDisplay = statusMap[rawStatus] || rawStatus || '—';
+
+            // First reported and last updated
+            var responseTs  = props.Response_Date  || props.ResponseDate  || null;
+            var lastUpdate  = props.LastUpdate      || props.Last_Update   || null;
+
+            function formatTS(val) {
+                if (!val) return null;
+                var d = (typeof val === 'number') ? new Date(val) : new Date(val);
+                return isNaN(d) ? val : d.toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });
             }
 
-            var skip = { GroupedType:1,groupedType:1,LocalityName:1,Suburb:1,Location:1,StatusText:1,Status:1,description:1,Description:1,OBJECTID:1 };
-            Object.keys(props).forEach(function(key) {
-                if (!skip[key] && props[key] !== null && props[key] !== '' && props[key] !== undefined) {
-                    var val = props[key];
-                    if (typeof val === 'number' && val > 1000000000000) val = new Date(val).toLocaleString();
-                    html += '<div class="detail"><strong>' + key + ':</strong> ' + val + '</div>';
-                }
+            // Vehicles
+            var vAssigned = parseInt(props.VehiclesAssigned || 0, 10);
+            var vRoute    = parseInt(props.VehiclesOnRoute  || 0, 10);
+            var vScene    = parseInt(props.VehiclesOnScene  || 0, 10);
+            var vTotal    = vAssigned + vRoute + vScene;
+
+            // Incident reference (shortened)
+            var incidentRef = props.Master_Incident_Number || props.IncidentNumber || '';
+
+            // ── Build HTML ──────────────────────────────────────────
+            var html = '<h3>' + emoji + ' ' + typeLabel;
+            html += '<span class="alert-badge ' + badgeClass + '">' + statusDisplay + '</span></h3>';
+
+            if (location) {
+                html += '<div class="detail"><strong>📍 Location:</strong> ' + location + '</div>';
+            }
+
+            // Distance badges
+            var lonLat = ol.proj.toLonLat(coordinate);
+            watchtowers.forEach(function(wt) {
+                html += '<div class="distance-badge">🗼 ' + calculateDistance(wt.lonLat[0], wt.lonLat[1], lonLat[0], lonLat[1]) + ' from ' + wt.name + '</div>';
             });
 
+            // Vehicles — only show if any assigned
+            if (vTotal > 0 || vScene > 0 || vRoute > 0) {
+                html += '<div class="detail" style="margin-top:8px;">';
+                html += '<strong>🚒 Vehicles:</strong> ';
+                var parts = [];
+                if (vScene > 0)  parts.push(vScene  + ' on scene');
+                if (vRoute > 0)  parts.push(vRoute  + ' en route');
+                if (vAssigned > 0 && vScene === 0 && vRoute === 0) parts.push(vAssigned + ' assigned');
+                html += (parts.length > 0 ? parts.join(', ') : 'Assigned') + '</div>';
+            } else {
+                html += '<div class="detail" style="margin-top:8px;"><strong>🚒 Vehicles:</strong> None currently assigned</div>';
+            }
+
+            if (formatTS(lastUpdate)) {
+                html += '<div class="detail"><strong>🕐 Last updated:</strong> ' + formatTS(lastUpdate) + ' (QLD time)</div>';
+            }
+            if (formatTS(responseTs)) {
+                html += '<div class="detail"><strong>📅 First reported:</strong> ' + formatTS(responseTs) + ' (QLD time)</div>';
+            }
+            if (incidentRef) {
+                html += '<div class="detail" style="color:#a0aec0;font-size:11px;margin-top:4px;">Ref: ' + incidentRef + '</div>';
+            }
+
+            // Weather
             if (weatherData) {
                 html += '<div class="popup-weather"><h4>🌤️ Current Conditions</h4>';
                 html += '<div class="weather-item"><span>💨 Wind: ' + weatherData.windSpeed + ' km/h</span>';
@@ -1674,14 +1759,18 @@
                         var satNames   = { 'N': 'Suomi-NPP', '1': 'NOAA-20', '2': 'NOAA-21' };
                         var satName    = satNames[fp.satellite] || fp.satellite || fp.instrument || '—';
                         var rawTime    = fp.acq_time || '';
-                        var fTime      = rawTime.length >= 3 ? rawTime.slice(0,-2).padStart(2,'0') + ':' + rawTime.slice(-2) : rawTime;
+                        var utcHH      = parseInt(rawTime.slice(0, -2).padStart(2, '0'), 10);
+                        var utcMM      = rawTime.slice(-2);
+                        var aestHH     = (utcHH + 10) % 24;
+                        var dayOffset  = (utcHH + 10) >= 24 ? ' (+1 day)' : '';
+                        var fTime      = aestHH.toString().padStart(2, '0') + ':' + utcMM + ' AEST' + dayOffset;
                         var frpVal     = parseFloat(fp.frp);
                         var frpLabel   = isNaN(frpVal) ? '—' : frpVal < 10 ? 'Low (' + frpVal + ' MW)' : frpVal < 50 ? 'Moderate (' + frpVal + ' MW)' : frpVal < 200 ? 'High (' + frpVal + ' MW)' : 'Extreme (' + frpVal + ' MW)';
 
                         var html = '<h3 style="display:flex;align-items:center;gap:8px;">🛰️ NASA Satellite Hotspot';
                         html += '<span class="alert-badge" style="background:' + confColor + '">' + confLabel + ' confidence</span></h3>';
                         html += '<div class="detail"><strong>FRP:</strong> ' + frpLabel + '</div>';
-                        html += '<div class="detail"><strong>Detected:</strong> ' + fp.acq_date + ' at ' + fTime + ' UTC</div>';
+                        html += '<div class="detail"><strong>Detected:</strong> ' + fp.acq_date + ' at ' + fTime + '</div>';
                         html += '<div class="detail"><strong>Satellite:</strong> ' + satName + ' (VIIRS)</div>';
                         html += '<div class="detail"><strong>Pass:</strong> ' + (fp.daynight === 'D' ? '☀️ Daytime' : '🌙 Nighttime') + '</div>';
                         html += '<div class="detail" style="margin-top:8px;padding:6px 8px;background:#fff8e1;border-radius:4px;font-size:11px;color:#795548;">⚠️ Thermal hotspot from satellite imagery — not a confirmed fire report.</div>';
