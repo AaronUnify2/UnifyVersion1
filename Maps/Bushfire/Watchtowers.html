@@ -30,6 +30,23 @@
             overflow: hidden;
             z-index: 1000;
             box-shadow: -2px 0 12px rgba(0,0,0,0.1);
+            transition: width 0.3s ease, border-width 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        /* Desktop collapsed — sidebar shrinks to zero, map fills the gap */
+        .sidebar.closed {
+            width: 0;
+            border-left-width: 0;
+            box-shadow: none;
+        }
+
+        .sidebar-header,
+        .sidebar-scroll { transition: opacity 0.15s ease; }
+
+        .sidebar.closed .sidebar-header,
+        .sidebar.closed .sidebar-scroll {
+            opacity: 0;
+            pointer-events: none;
         }
 
         .sidebar-header {
@@ -280,10 +297,10 @@
 
         /* ── Mobile toggle ───────────────────────────────────────── */
         .sidebar-toggle {
-            display: none;
+            display: flex;
             position: fixed;
             top: 12px;
-            right: 12px;
+            right: 292px; /* sits just left of the sidebar edge when open */
             z-index: 1200;
             background: #1a365d;
             color: white;
@@ -296,7 +313,11 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.25);
             align-items: center;
             justify-content: center;
+            transition: right 0.3s ease;
         }
+
+        /* When sidebar is closed on desktop, button floats to the right edge */
+        .sidebar-toggle.sidebar-closed { right: 12px; }
 
         /* ── Floating map overlays ───────────────────────────────── */
         .loading {
@@ -558,7 +579,9 @@
         @media (max-width: 767px) {
             body { display: block; }
             #map { width: 100vw; height: 100vh; }
-            .sidebar-toggle { display: flex; }
+
+            /* On mobile toggle is always at right edge */
+            .sidebar-toggle { right: 12px !important; }
 
             .sidebar {
                 position: fixed;
@@ -568,9 +591,21 @@
                 height: 100vh;
                 transition: right 0.3s ease;
                 z-index: 1100;
+                /* Override desktop closed state */
+                border-left-width: 1px !important;
+                box-shadow: -2px 0 12px rgba(0,0,0,0.1) !important;
             }
 
-            .sidebar.open { right: 0; }
+            .sidebar.open {
+                right: 0;
+                width: 280px !important;
+            }
+
+            /* Desktop closed class has no meaning on mobile */
+            .sidebar.closed {
+                width: 280px;
+                right: -300px;
+            }
 
             .sidebar-backdrop {
                 display: none;
@@ -859,20 +894,41 @@
         }
 
         // ── Sidebar mobile ────────────────────────────────────────
+        function isMobile() {
+            return window.innerWidth <= 767;
+        }
+
         function toggleSidebar() {
             var sidebar  = document.getElementById('sidebar');
             var backdrop = document.getElementById('sidebar-backdrop');
             var btn      = document.getElementById('sidebar-toggle');
-            var open     = sidebar.classList.contains('open');
-            sidebar.classList.toggle('open', !open);
-            backdrop.classList.toggle('show', !open);
-            btn.textContent = open ? '☰' : '✕';
+
+            if (isMobile()) {
+                // Mobile: slide-over behaviour
+                var open = sidebar.classList.contains('open');
+                sidebar.classList.toggle('open', !open);
+                backdrop.classList.toggle('show', !open);
+                btn.textContent = open ? '☰' : '✕';
+            } else {
+                // Desktop: collapse sidebar into flex layout
+                var closed = sidebar.classList.contains('closed');
+                sidebar.classList.toggle('closed', !closed);
+                btn.classList.toggle('sidebar-closed', !closed);
+                btn.textContent = closed ? '☰' : '✕';
+            }
         }
 
         function closeSidebar() {
-            document.getElementById('sidebar').classList.remove('open');
-            document.getElementById('sidebar-backdrop').classList.remove('show');
-            document.getElementById('sidebar-toggle').textContent = '☰';
+            var sidebar  = document.getElementById('sidebar');
+            var backdrop = document.getElementById('sidebar-backdrop');
+            var btn      = document.getElementById('sidebar-toggle');
+            // Mobile close
+            sidebar.classList.remove('open');
+            backdrop.classList.remove('show');
+            // Desktop close
+            sidebar.classList.add('closed');
+            btn.classList.add('sidebar-closed');
+            btn.textContent = '☰';
         }
 
         // ── Legend visibility ─────────────────────────────────────
