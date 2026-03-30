@@ -679,9 +679,9 @@
                     <button class="control-btn" id="btn-refresh" onclick="loadBushfireData()" style="margin-top:8px;">
                         🔄 Refresh Data
                     </button>
-                    <a href="https://aaronunify2.github.io/UnifyVersion1/Maps/Bushfire/GPS.html" class="nav-btn" style="margin-top:6px;">
-                        📍 Switch to GPS View
-                    </a>
+                    <button class="control-btn" id="btn-gps" onclick="placeWatchtowerAtGPS()" style="margin-top:6px;">
+                        📍 Place Watchtower at My Location
+                    </button>
                 </div>
             </div>
 
@@ -931,7 +931,42 @@
             btn.textContent = '☰';
         }
 
-        // ── Legend visibility ─────────────────────────────────────
+        function placeWatchtowerAtGPS() {
+            if (!navigator.geolocation) {
+                showModal('Your device or browser does not support GPS location.');
+                return;
+            }
+
+            var btn = document.getElementById('btn-gps');
+            btn.classList.add('active');
+            btn.textContent = '📍 Finding your location...';
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    btn.classList.remove('active');
+                    btn.innerHTML = '📍 Place Watchtower at My Location';
+
+                    var lon = position.coords.longitude;
+                    var lat = position.coords.latitude;
+                    var coordinate = ol.proj.fromLonLat([lon, lat]);
+
+                    // Place a watchtower and pan the map to it
+                    addWatchtowerAtLocation(coordinate);
+                    map.getView().animate({ center: coordinate, zoom: Math.max(map.getView().getZoom(), 10), duration: 800 });
+                },
+                function(err) {
+                    btn.classList.remove('active');
+                    btn.innerHTML = '📍 Place Watchtower at My Location';
+
+                    var msg = 'Unable to get your location.';
+                    if (err.code === 1) msg = 'Location access was denied. Please allow location access in your browser settings and try again.';
+                    if (err.code === 2) msg = 'Your location could not be determined. Try again in a moment.';
+                    if (err.code === 3) msg = 'Location request timed out. Please try again.';
+                    showModal(msg);
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
         function updateLegend() {
             document.getElementById('legend-qfs-types').style.display =
                 qfsFireMode === 1 ? '' : 'none';
