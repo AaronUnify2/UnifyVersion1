@@ -931,6 +931,20 @@
             btn.textContent = '☰';
         }
 
+        function resetGPSButton() {
+            var btn = document.getElementById('btn-gps');
+            btn.classList.remove('active');
+            btn.textContent = '📍 Place Watchtower at My Location';
+            btn.disabled = false;
+            // Also make sure watchtower-adding mode is cleared
+            if (addingWatchtower) {
+                addingWatchtower = false;
+                document.getElementById('btn-watchtower').classList.remove('active');
+                document.getElementById('placement-hint').classList.remove('show');
+                map.getTargetElement().style.cursor = '';
+            }
+        }
+
         function placeWatchtowerAtGPS() {
             if (!navigator.geolocation) {
                 showModal('Your device or browser does not support GPS location.');
@@ -940,27 +954,20 @@
             var btn = document.getElementById('btn-gps');
             btn.classList.add('active');
             btn.textContent = '📍 Finding your location...';
+            btn.disabled = true;
 
             navigator.geolocation.getCurrentPosition(
                 function(position) {
-                    btn.classList.remove('active');
-                    btn.innerHTML = '📍 Place Watchtower at My Location';
-
-                    var lon = position.coords.longitude;
-                    var lat = position.coords.latitude;
-                    var coordinate = ol.proj.fromLonLat([lon, lat]);
-
-                    // Place a watchtower and pan the map to it
+                    resetGPSButton();
+                    var coordinate = ol.proj.fromLonLat([position.coords.longitude, position.coords.latitude]);
                     addWatchtowerAtLocation(coordinate);
                     map.getView().animate({ center: coordinate, zoom: Math.max(map.getView().getZoom(), 10), duration: 800 });
                 },
                 function(err) {
-                    btn.classList.remove('active');
-                    btn.innerHTML = '📍 Place Watchtower at My Location';
-
-                    var msg = 'Unable to get your location.';
+                    resetGPSButton();
+                    var msg = 'Unable to get your location — please try again.';
                     if (err.code === 1) msg = 'Location access was denied. Please allow location access in your browser settings and try again.';
-                    if (err.code === 2) msg = 'Your location could not be determined. Try again in a moment.';
+                    if (err.code === 2) msg = 'Your location could not be determined. Please try again in a moment.';
                     if (err.code === 3) msg = 'Location request timed out. Please try again.';
                     showModal(msg);
                 },
