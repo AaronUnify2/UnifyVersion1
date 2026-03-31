@@ -964,7 +964,7 @@
                     resetGPSButton();
                     var msg = 'Unable to get your location — please try again.';
                     if (err.code === 1) msg = 'Location access was denied. Please allow location access in your browser settings and try again.';
-                    if (err.code === 2) msg = 'Your location could not be determined. GPS may be blocked on your network. Contact Network Administrator.';
+                    if (err.code === 2) msg = 'Your location could not be determined. Please try again in a moment.';
                     if (err.code === 3) msg = 'Location request timed out. Please try again.';
                     showModal(msg);
                 },
@@ -1305,6 +1305,7 @@
                 var d = nasaWindData[k];
                 drawArrow(d.coords, d.windDirection, d.windSpeed, '#e65100', nasaWindOverlays, 'nasaWindArrow');
             });
+            updateWarnings();
         }
 
         function clearNASAWindOverlay() {
@@ -1641,8 +1642,9 @@
                 return;
             }
             var warnings = [];
-            var fires = vectorSource.getFeatures();
 
+            // ── QFS fire proximity + QFS wind ember checks ────────
+            var fires = vectorSource.getFeatures();
             watchtowers.forEach(function(wt) {
                 fires.forEach(function(fire, fireIdx) {
                     var geom = fire.getGeometry();
@@ -1661,25 +1663,47 @@
                         var len = d.windSpeed * 1000;
                         var ep  = [fc[0] + len * Math.cos(rad), fc[1] + len * Math.sin(rad)];
 
-                        // Find the closest point on the arrow SHAFT (not just the tip)
-                        // to the watchtower, using point-to-segment projection.
-                        var ax = ep[0] - fc[0], ay = ep[1] - fc[1];      // shaft vector
-                        var bx = wt.coordinate[0] - fc[0];               // fire→watchtower
+                        var ax = ep[0] - fc[0], ay = ep[1] - fc[1];
+                        var bx = wt.coordinate[0] - fc[0];
                         var by = wt.coordinate[1] - fc[1];
                         var segLenSq = ax * ax + ay * ay;
                         var t = segLenSq > 0 ? Math.max(0, Math.min(1, (bx * ax + by * ay) / segLenSq)) : 0;
                         var closestX = fc[0] + t * ax;
                         var closestY = fc[1] + t * ay;
-                        var distToShaft = ol.sphere.getLength(
-                            new ol.geom.LineString([[closestX, closestY], wt.coordinate])
-                        );
+                        var distToShaft = ol.sphere.getLength(new ol.geom.LineString([[closestX, closestY], wt.coordinate]));
 
                         if (distToShaft <= 3000) {
-                            warnings.push({ type: 'ember', message: '⚠️ EMBER ZONE: ' + Math.round(d.windSpeed) + ' km/h wind path passes within ' + formatDistance(distToShaft) + ' of ' + wt.name });
+                            warnings.push({ type: 'ember', message: '⚠️ EMBER ZONE: ' + Math.round(d.windSpeed) + ' km/h QFS wind path passes within ' + formatDistance(distToShaft) + ' of ' + wt.name });
                         }
                     }
                 });
             });
+
+            // ── NASA satellite wind ember checks ──────────────────
+            if (nasaWindEnabled && Object.keys(nasaWindData).length > 0) {
+                watchtowers.forEach(function(wt) {
+                    Object.keys(nasaWindData).forEach(function(k) {
+                        var d   = nasaWindData[k];
+                        var fc  = d.coords;
+                        var rad = (90 - d.windDirection) * Math.PI / 180;
+                        var len = d.windSpeed * 1000;
+                        var ep  = [fc[0] + len * Math.cos(rad), fc[1] + len * Math.sin(rad)];
+
+                        var ax = ep[0] - fc[0], ay = ep[1] - fc[1];
+                        var bx = wt.coordinate[0] - fc[0];
+                        var by = wt.coordinate[1] - fc[1];
+                        var segLenSq = ax * ax + ay * ay;
+                        var t = segLenSq > 0 ? Math.max(0, Math.min(1, (bx * ax + by * ay) / segLenSq)) : 0;
+                        var closestX = fc[0] + t * ax;
+                        var closestY = fc[1] + t * ay;
+                        var distToShaft = ol.sphere.getLength(new ol.geom.LineString([[closestX, closestY], wt.coordinate]));
+
+                        if (distToShaft <= 3000) {
+                            warnings.push({ type: 'ember', message: '⚠️ SATELLITE EMBER ZONE: ' + Math.round(d.windSpeed) + ' km/h NASA wind path passes within ' + formatDistance(distToShaft) + ' of ' + wt.name });
+                        }
+                    });
+                });
+            }
 
             var panel = document.getElementById('warning-panel');
             if (warnings.length === 0) { panel.classList.remove('show'); return; }
