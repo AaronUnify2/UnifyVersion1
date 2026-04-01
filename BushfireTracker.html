@@ -269,6 +269,26 @@
 
         .watchtower-remove:hover { background: #fc8181; color: white; }
 
+        .watchtower-notes {
+            width: 100%;
+            min-height: 72px;
+            padding: 7px 9px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: inherit;
+            color: #2d3748;
+            resize: vertical;
+            background: #f8fafc;
+            margin-top: 4px;
+        }
+
+        .watchtower-notes:focus {
+            outline: none;
+            border-color: #3182ce;
+            background: white;
+        }
+
         .watchtower-empty {
             font-size: 12px;
             color: #a0aec0;
@@ -1506,13 +1526,13 @@
         function saveWatchtowersToStorage() {
             localStorage.setItem('bushfire_watchtowers', JSON.stringify(
                 watchtowers.map(function(wt) {
-                    return { id: wt.id, name: wt.name, lonLat: wt.lonLat, index: wt.index, color: wt.color };
+                    return { id: wt.id, name: wt.name, lonLat: wt.lonLat, index: wt.index, color: wt.color, notes: wt.notes || '' };
                 })
             ));
             localStorage.setItem('bushfire_watchtower_counter', watchtowerIdCounter.toString());
         }
 
-        function makeWatchtowerStyle(color) {
+        function makeWatchtowerStyle(color, name) {
             var r = parseInt(color.slice(1,3), 16);
             var g = parseInt(color.slice(3,5), 16);
             var b = parseInt(color.slice(5,7), 16);
@@ -1522,7 +1542,16 @@
                     fill:   new ol.style.Fill({ color: [r, g, b, 1] }),
                     stroke: new ol.style.Stroke({ color: 'white', width: 3 })
                 }),
-                text: new ol.style.Text({ text: '🗼', font: '16px sans-serif', offsetY: 0 })
+                text: new ol.style.Text({
+                    text:            '🗼' + (name ? '\n' + name : ''),
+                    font:            '12px sans-serif',
+                    offsetY:         20,
+                    textAlign:       'center',
+                    fill:            new ol.style.Fill({ color: '#1a365d' }),
+                    stroke:          new ol.style.Stroke({ color: 'white', width: 3 }),
+                    backgroundFill:  new ol.style.Fill({ color: 'rgba(255,255,255,0.85)' }),
+                    padding:         [2, 4, 2, 4]
+                })
             });
         }
 
@@ -1546,9 +1575,9 @@
             var idx     = watchtowers.length;
             var color   = getWatchtowerColor(idx);
 
-            var wt = { id: id, name: 'Watchtower ' + (idx + 1), index: idx, coordinate: coordinate, lonLat: lonLat, color: color, feature: null };
+            var wt = { id: id, name: 'Watchtower ' + (idx + 1), index: idx, coordinate: coordinate, lonLat: lonLat, color: color, notes: '', feature: null };
             var wtFeature = new ol.Feature({ geometry: new ol.geom.Point(coordinate), type: 'watchtower', watchtowerId: id });
-            wtFeature.setStyle(makeWatchtowerStyle(color));
+            wtFeature.setStyle(makeWatchtowerStyle(color, 'Watchtower ' + (idx + 1)));
             wt.feature = wtFeature;
 
             measureSource.addFeature(wtFeature);
@@ -1577,7 +1606,7 @@
             watchtowers.forEach(function(wt, i) {
                 wt.index = i;
                 wt.color = getWatchtowerColor(i);
-                wt.feature.setStyle(makeWatchtowerStyle(wt.color));
+                wt.feature.setStyle(makeWatchtowerStyle(wt.color, wt.name));
             });
 
             saveWatchtowersToStorage();
@@ -1590,7 +1619,19 @@
 
         function renameWatchtower(watchtowerId, newName) {
             var wt = watchtowers.find(function(w) { return w.id === watchtowerId; });
-            if (wt) { wt.name = newName || ('Watchtower ' + (wt.index + 1)); saveWatchtowersToStorage(); }
+            if (wt) {
+                wt.name = newName || ('Watchtower ' + (wt.index + 1));
+                wt.feature.setStyle(makeWatchtowerStyle(wt.color, wt.name));
+                saveWatchtowersToStorage();
+            }
+        }
+
+        function saveWatchtowerNotes(watchtowerId, notes) {
+            var wt = watchtowers.find(function(w) { return w.id === watchtowerId; });
+            if (wt) {
+                wt.notes = notes;
+                saveWatchtowersToStorage();
+            }
         }
 
         function updateWatchtowerList() {
@@ -1620,9 +1661,9 @@
 
                 JSON.parse(stored).forEach(function(wtData) {
                     var coordinate = ol.proj.fromLonLat(wtData.lonLat);
-                    var wt = { id: wtData.id, name: wtData.name, index: wtData.index, coordinate: coordinate, lonLat: wtData.lonLat, color: wtData.color, feature: null };
+                    var wt = { id: wtData.id, name: wtData.name, index: wtData.index, coordinate: coordinate, lonLat: wtData.lonLat, color: wtData.color, notes: wtData.notes || '', feature: null };
                     var wtFeature = new ol.Feature({ geometry: new ol.geom.Point(coordinate), type: 'watchtower', watchtowerId: wtData.id });
-                    wtFeature.setStyle(makeWatchtowerStyle(wtData.color));
+                    wtFeature.setStyle(makeWatchtowerStyle(wtData.color, wtData.name));
                     wt.feature = wtFeature;
                     measureSource.addFeature(wtFeature);
                     watchtowers.push(wt);
@@ -1711,6 +1752,45 @@
                 return '<div class="warning-item ' + (w.type === 'fire' ? 'warning-fire' : 'warning-ember') + '">' + w.message + '</div>';
             }).join('');
             panel.classList.add('show');
+        }
+
+        function createWatchtowerPopupContent(wt) {
+            var nearestFires = [];
+            vectorSource.getFeatures().forEach(function(fire) {
+                var geom = fire.getGeometry();
+                if (!geom) return;
+                var fc   = geom.getCoordinates();
+                var dist = ol.sphere.getLength(new ol.geom.LineString([wt.coordinate, fc]));
+                nearestFires.push({ dist: dist, props: fire.get('properties') });
+            });
+            nearestFires.sort(function(a, b) { return a.dist - b.dist; });
+            var top3 = nearestFires.slice(0, 3);
+
+            var html = '<h3>🗼 ' + wt.name + '</h3>';
+
+            // Coords
+            html += '<div class="detail" style="color:#a0aec0;font-size:11px;margin-bottom:8px;">';
+            html += wt.lonLat[1].toFixed(5) + ', ' + wt.lonLat[0].toFixed(5) + '</div>';
+
+            // Nearest fires
+            if (top3.length > 0) {
+                html += '<div class="detail" style="font-weight:600;margin-bottom:4px;">Nearest active incidents:</div>';
+                top3.forEach(function(f) {
+                    var type = f.props.GroupedType || f.props.groupedType || 'Incident';
+                    var loc  = f.props.LocalityName || f.props.Location || '';
+                    html += '<div class="detail">🔴 ' + formatDistance(f.dist) + ' — ' + type + (loc ? ' · ' + loc : '') + '</div>';
+                });
+            } else {
+                html += '<div class="detail" style="color:#38a169;">✅ No active incidents nearby</div>';
+            }
+
+            // Notes
+            html += '<div class="detail" style="font-weight:600;margin-top:10px;margin-bottom:2px;">📝 Notes</div>';
+            html += '<textarea class="watchtower-notes" id="notes-' + wt.id + '" ';
+            html += 'placeholder="Add notes about this location — access routes, hazards, contacts..." ';
+            html += 'onchange="saveWatchtowerNotes(' + wt.id + ', this.value)">' + (wt.notes || '') + '</textarea>';
+
+            return html;
         }
 
         // ── Popup content ─────────────────────────────────────────
@@ -1936,6 +2016,22 @@
 
                 map.on('click', function(evt) {
                     if (addingWatchtower) { addWatchtowerAtLocation(evt.coordinate); return; }
+
+                    // Check watchtower features first (they sit on measureLayer)
+                    var wtFeature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; }, {
+                        hitTolerance: 14,
+                        layerFilter: function(layer) { return layer === measureLayer; }
+                    });
+
+                    if (wtFeature && wtFeature.get('type') === 'watchtower') {
+                        var wtId = wtFeature.get('watchtowerId');
+                        var wt   = watchtowers.find(function(w) { return w.id === wtId; });
+                        if (wt) {
+                            content.innerHTML = createWatchtowerPopupContent(wt);
+                            popupOverlay.setPosition(wtFeature.getGeometry().getCoordinates());
+                        }
+                        return;
+                    }
 
                     var feature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; }, {
                         hitTolerance: 10,
