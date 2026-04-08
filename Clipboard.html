@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clipboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0e0e0e;
+      --surface: #161616;
+      --border: #2a2a2a;
+      --border-focus: #4a4a4a;
+      --text: #d4d4d4;
+      --text-dim: #5a5a5a;
+      --accent: #c8f53c;
+      --accent-dim: #8aac1e;
+      --copy-flash: #1e2e00;
+      --row-hover: #1c1c1c;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      min-height: 100vh;
+      padding: 24px 20px;
+    }
+
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .row {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: border-color 0.15s;
+    }
+
+    .row:focus-within {
+      border-color: var(--border-focus);
+    }
+
+    .row:hover {
+      background: var(--row-hover);
+    }
+
+    .index {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      min-width: 34px;
+      color: var(--text-dim);
+      font-size: 11px;
+      border-right: 1px solid var(--border);
+      user-select: none;
+      flex-shrink: 0;
+    }
+
+    textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 9px 12px;
+      resize: none;
+      overflow: hidden;
+      min-height: 38px;
+      height: 38px;
+    }
+
+    textarea::placeholder {
+      color: var(--text-dim);
+    }
+
+    .copy-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      min-width: 44px;
+      background: transparent;
+      border: none;
+      border-left: 1px solid var(--border);
+      color: var(--text-dim);
+      cursor: pointer;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      transition: color 0.1s, background 0.1s;
+      flex-shrink: 0;
+    }
+
+    .copy-btn:hover {
+      color: var(--accent);
+      background: rgba(200, 245, 60, 0.05);
+    }
+
+    .copy-btn.copied {
+      color: var(--accent);
+      background: var(--copy-flash);
+    }
+
+    .copy-btn svg {
+      width: 14px;
+      height: 14px;
+      pointer-events: none;
+    }
+
+    .copy-btn.copied svg {
+      display: none;
+    }
+
+    .copy-btn .check {
+      display: none;
+      font-size: 13px;
+    }
+
+    .copy-btn.copied .check {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<div class="list" id="list"></div>
+
+<script>
+  const STORAGE_KEY = 'clipboard-data';
+  const COUNT = 20;
+
+  function load() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function save(index, value) {
+    const data = load();
+    data[index] = value;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+
+  function autoResize(textarea) {
+    textarea.style.height = '38px';
+    textarea.style.height = Math.max(38, textarea.scrollHeight) + 'px';
+  }
+
+  function buildRow(index, savedValue) {
+    const row = document.createElement('div');
+    row.className = 'row';
+
+    const idx = document.createElement('div');
+    idx.className = 'index';
+    idx.textContent = String(index + 1).padStart(2, '0');
+
+    const textarea = document.createElement('textarea');
+    textarea.placeholder = 'paste something…';
+    textarea.value = savedValue || '';
+    textarea.spellcheck = false;
+
+    textarea.addEventListener('input', () => {
+      autoResize(textarea);
+      save(index, textarea.value);
+    });
+
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const next = document.querySelectorAll('textarea')[index + 1];
+        if (next) next.focus();
+      }
+    });
+
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.title = 'Copy';
+    btn.innerHTML = `
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="5" y="5" width="9" height="9" rx="1"/>
+        <path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"/>
+      </svg>
+      <span class="check">✓</span>
+    `;
+
+    btn.addEventListener('click', () => {
+      const text = textarea.value;
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.classList.add('copied');
+        setTimeout(() => btn.classList.remove('copied'), 1200);
+      });
+    });
+
+    row.appendChild(idx);
+    row.appendChild(textarea);
+    row.appendChild(btn);
+    return { row, textarea };
+  }
+
+  function init() {
+    const saved = load();
+    const list = document.getElementById('list');
+
+    for (let i = 0; i < COUNT; i++) {
+      const { row, textarea } = buildRow(i, saved[i]);
+      list.appendChild(row);
+      if (saved[i]) {
+        requestAnimationFrame(() => autoResize(textarea));
+      }
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>
