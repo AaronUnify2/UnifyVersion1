@@ -360,6 +360,33 @@
 
         .error { background: #fff5f5; color: #c53030; }
 
+        /* Persistent transport status panel — doesn't block UI like .loading does */
+        .transport-status {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            background: rgba(26, 54, 93, 0.92);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1100;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1.45;
+            max-width: 300px;
+            display: none;
+        }
+        .transport-status.show { display: block; }
+        .transport-status.warn  { background: rgba(214, 158, 46, 0.95); }
+        .transport-status.error { background: rgba(197, 48, 48, 0.95); }
+        .transport-status .ts-line { display: block; }
+        .transport-status .ts-dim  { opacity: 0.75; font-size: 11px; }
+
+        @media (max-width: 767px) {
+            .transport-status { top: 64px; max-width: calc(100vw - 80px); }
+        }
+
         .warning-panel {
             position: fixed;
             bottom: 16px;
@@ -655,6 +682,7 @@
 
     <div id="warning-panel" class="warning-panel"></div>
     <div id="loading" class="loading">Loading incident data...</div>
+    <div id="transport-status" class="transport-status"></div>
 
     <div id="custom-modal" class="custom-modal">
         <div class="modal-content">
@@ -890,6 +918,22 @@
         var planesEnabled = false;
         var planesPollTimer = null;
         var PLANES_POLL_MS = 30 * 1000;
+
+        // Diagnostic counters for on-screen debug panel
+        var shipStats = {
+            socketOpenedAt: 0,
+            firstMessageAt: 0,
+            lastMessageAt: 0,
+            totalMessages: 0,
+            positionReports: 0,
+            staticData: 0,
+            otherTypes: 0,
+            errors: 0,
+            parseErrors: 0,
+            messageTypesSeen: {},
+            firstMessages: []   // capture raw text of first 3 messages so we can see what arrives
+        };
+        var shipStatusTimer = null;
 
         var DIST_THRESHOLDS = [0, 10000, 30000, 50000]; // metres
         var DIST_LABELS     = ['Off', '10 km', '30 km', '50 km'];
@@ -2040,54 +2084,134 @@
             shipsLayer.setVisible(shipsEnabled);
 
             if (shipsEnabled) {
+                resetShipStats();
                 connectShipsSocket();
+                startShipStatusUpdates();
             } else {
                 disconnectShipsSocket();
+                stopShipStatusUpdates();
+                hideTransportStatus();
             }
             updateLegend();
+        }
+
+        function resetShipStats() {
+            shipStats.socketOpenedAt = 0;
+            shipStats.firstMessageAt = 0;
+            shipStats.lastMessageAt = 0;
+            shipStats.totalMessages = 0;
+            shipStats.positionReports = 0;
+            shipStats.staticData = 0;
+            shipStats.otherTypes = 0;
+            shipStats.errors = 0;
+            shipStats.parseErrors = 0;
+            shipStats.messageTypesSeen = {};
+            shipStats.firstMessages = [];
         }
 
         function connectShipsSocket() {
             if (shipsSocket && (shipsSocket.readyState === WebSocket.OPEN || shipsSocket.readyState === WebSocket.CONNECTING)) return;
 
             console.log('[Ships] Opening WebSocket to aisstream.io...');
-            showShipStatus('🚢 Connecting to AIS stream...', false);
+            showTransportStatus('🚢 Connecting to AIS stream…', 'info');
 
             try {
                 shipsSocket = new WebSocket('wss://stream.aisstream.io/v0/stream');
+                // CRITICAL: AISStream sends binary WebSocket frames. Default in browsers is Blob,
+                // which causes JSON.parse to silently fail on every message. Setting ArrayBuffer
+                // lets us TextDecoder it synchronously.
+                shipsSocket.binaryType = 'arraybuffer';
             } catch (e) {
                 console.error('[Ships] Socket construction failed:', e);
-                showShipStatus('🚢 Failed to open WebSocket: ' + e.message, true);
+                showTransportStatus('🚢 Failed to open WebSocket: ' + e.message, 'error');
                 return;
             }
 
             shipsSocket.onopen = function() {
                 console.log('[Ships] Socket open, sending subscription...');
+                shipStats.socketOpenedAt = Date.now();
+                // Note: APIKey field name (NOT Apikey — JS docs are wrong; Python/Go/Rust all use APIKey).
+                // Also: NOT filtering message types — accept all and filter client-side, since
+                // FilterMessageTypes appeared to be silently rejecting our subscription.
                 var sub = {
-                    APIKey: AIS_API_KEY,    // NOTE: must be 'APIKey' (not 'Apikey'); JS docs show wrong casing
-                    BoundingBoxes: [[[QLD_BBOX_SOUTH, QLD_BBOX_WEST], [QLD_BBOX_NORTH, QLD_BBOX_EAST]]],
-                    FilterMessageTypes: ['PositionReport', 'ShipStaticData']
+                    APIKey: AIS_API_KEY,
+                    BoundingBoxes: [[[QLD_BBOX_SOUTH, QLD_BBOX_WEST], [QLD_BBOX_NORTH, QLD_BBOX_EAST]]]
                 };
                 console.log('[Ships] Subscription:', JSON.stringify(sub).replace(AIS_API_KEY, '<KEY>'));
                 shipsSocket.send(JSON.stringify(sub));
-                showShipStatus('🚢 AIS connected — waiting for ships in QLD waters...', false);
             };
 
             shipsSocket.onmessage = function(evt) {
-                try {
-                    var msg = JSON.parse(evt.data);
-                    // Surface server-side errors (e.g. bad subscription, invalid key)
-                    if (msg && (msg.error || msg.Error)) {
-                        console.error('[Ships] Server error:', msg);
-                        showShipStatus('🚢 AIS error: ' + (msg.error || msg.Error), true);
+                shipStats.totalMessages++;
+                shipStats.lastMessageAt = Date.now();
+                if (!shipStats.firstMessageAt) shipStats.firstMessageAt = shipStats.lastMessageAt;
+
+                // Decode payload to text — handles both string and binary (ArrayBuffer/Blob) frames
+                var rawText = null;
+                if (typeof evt.data === 'string') {
+                    rawText = evt.data;
+                } else if (evt.data instanceof ArrayBuffer) {
+                    try {
+                        rawText = new TextDecoder('utf-8').decode(evt.data);
+                    } catch (e) {
+                        shipStats.parseErrors++;
+                        console.warn('[Ships] TextDecoder failed:', e);
                         return;
                     }
-                    handleAISMessage(msg);
-                    updateShipCountStatus();
-                } catch (e) {
-                    console.warn('[Ships] Bad message:', e, evt.data);
+                } else if (typeof Blob !== 'undefined' && evt.data instanceof Blob) {
+                    // Async fallback — shouldn't happen since we set binaryType='arraybuffer'
+                    evt.data.text().then(function(t) { processShipMessageText(t); });
+                    return;
+                } else {
+                    shipStats.parseErrors++;
+                    console.warn('[Ships] Unknown frame type:', typeof evt.data);
+                    return;
                 }
+                processShipMessageText(rawText);
             };
+
+            function processShipMessageText(rawText) {
+                // Capture first 3 raw messages so we can SEE what's actually arriving
+                if (shipStats.firstMessages.length < 3) {
+                    var s = String(rawText || '');
+                    shipStats.firstMessages.push(s.length > 220 ? s.slice(0, 220) + '…' : s);
+                }
+
+                var msg;
+                try {
+                    msg = JSON.parse(rawText);
+                } catch (e) {
+                    shipStats.parseErrors++;
+                    console.warn('[Ships] JSON parse failed:', e, rawText && rawText.slice(0, 200));
+                    return;
+                }
+
+                // Broaden server-error detection
+                var errText = null;
+                if (msg) {
+                    if (msg.error)        errText = msg.error;
+                    else if (msg.Error)   errText = msg.Error;
+                    else if (msg.message && typeof msg.message === 'string' && !msg.MessageType) errText = msg.message;
+                }
+                if (errText) {
+                    shipStats.errors++;
+                    console.error('[Ships] Server error:', errText);
+                    return;
+                }
+
+                var mt = (msg && msg.MessageType) || 'unknown';
+                shipStats.messageTypesSeen[mt] = (shipStats.messageTypesSeen[mt] || 0) + 1;
+
+                if (mt === 'PositionReport') {
+                    shipStats.positionReports++;
+                    handleAISMessage(msg);
+                } else if (mt === 'ShipStaticData') {
+                    shipStats.staticData++;
+                    handleAISMessage(msg);
+                } else {
+                    shipStats.otherTypes++;
+                }
+            }
 
             shipsSocket.onerror = function(e) {
                 console.warn('[Ships] Socket error', e);
@@ -2096,40 +2220,101 @@
             shipsSocket.onclose = function(evt) {
                 console.warn('[Ships] Socket closed code=' + evt.code + ' reason="' + evt.reason + '" wasClean=' + evt.wasClean);
                 if (shipsEnabled) {
-                    showShipStatus('🚢 AIS disconnected (code ' + evt.code + '), reconnecting in 5s...', evt.code !== 1000);
+                    showTransportStatus('🚢 AIS disconnected (code ' + evt.code + '). Reconnecting in 5s…', 'warn');
                     if (shipReconnectTimer) clearTimeout(shipReconnectTimer);
                     shipReconnectTimer = setTimeout(connectShipsSocket, 5000);
                 }
             };
         }
 
-        function showShipStatus(msg, isError) {
-            var loading = document.getElementById('loading');
-            loading.style.display = 'block';
-            loading.classList.toggle('error', !!isError);
-            loading.textContent = msg;
-            // Auto-hide non-error info messages after a moment
-            if (!isError) {
-                clearTimeout(showShipStatus._t);
-                showShipStatus._t = setTimeout(function() { loading.style.display = 'none'; }, 3500);
-            } else {
-                clearTimeout(showShipStatus._t);
-                showShipStatus._t = setTimeout(function() {
-                    loading.style.display = 'none';
-                    loading.classList.remove('error');
-                }, 6000);
-            }
+        function startShipStatusUpdates() {
+            if (shipStatusTimer) clearInterval(shipStatusTimer);
+            shipStatusTimer = setInterval(updateShipStatusPanel, 1000);
+            updateShipStatusPanel();
         }
 
-        function updateShipCountStatus() {
-            // Throttle so we don't spam the loading element with every AIS packet
-            if (updateShipCountStatus._t) return;
-            updateShipCountStatus._t = setTimeout(function() {
-                updateShipCountStatus._t = null;
-                if (!shipsEnabled) return;
-                var n = shipsSource.getFeatures().length;
-                if (n > 0) showShipStatus('🚢 ' + n + ' ships visible', false);
-            }, 1500);
+        function stopShipStatusUpdates() {
+            if (shipStatusTimer) { clearInterval(shipStatusTimer); shipStatusTimer = null; }
+        }
+
+        function updateShipStatusPanel() {
+            if (!shipsEnabled) return;
+            var now = Date.now();
+            var nShips = shipsSource.getFeatures().length;
+            var ageSec = shipStats.lastMessageAt ? Math.round((now - shipStats.lastMessageAt) / 1000) : null;
+            var sinceOpen = shipStats.socketOpenedAt ? Math.round((now - shipStats.socketOpenedAt) / 1000) : 0;
+
+            // Many parse errors with no good data → frame format issue
+            if (shipStats.parseErrors >= 5 && shipStats.positionReports === 0 && shipStats.staticData === 0) {
+                showTransportStatusHTML(
+                    '🚢 ' + shipStats.parseErrors + ' frames couldn\'t be parsed<br>' +
+                    '<span class="ts-dim">Frame format issue. See browser console for raw samples.</span>',
+                    'error'
+                );
+                return;
+            }
+
+            // Edge case: messages arriving but no ships ever added — parser bug
+            if (shipStats.positionReports >= 5 && nShips === 0) {
+                showTransportStatusHTML(
+                    '🚢 ' + shipStats.positionReports + ' position reports received<br>' +
+                    '<span class="ts-dim">but 0 ships added to map — parser issue</span>',
+                    'warn'
+                );
+                return;
+            }
+
+            // No data at all after 30s
+            if (shipStats.totalMessages === 0 && sinceOpen >= 30) {
+                showTransportStatusHTML(
+                    '🚢 No ship data after ' + sinceOpen + 's<br>' +
+                    '<span class="ts-dim">Subscription likely rejected. The AIS API key may have been rotated — try generating a new one at aisstream.io.</span>',
+                    'error'
+                );
+                return;
+            }
+
+            // Normal status
+            var lines = [];
+            lines.push('🚢 ' + nShips + ' ship' + (nShips === 1 ? '' : 's') + ' on map');
+
+            if (shipStats.totalMessages === 0) {
+                lines.push('<span class="ts-dim">Waiting for AIS data… (' + sinceOpen + 's)</span>');
+            } else {
+                var detail = shipStats.totalMessages + ' msg • ' +
+                             shipStats.positionReports + ' pos • ' +
+                             shipStats.staticData + ' static';
+                if (shipStats.otherTypes)  detail += ' • ' + shipStats.otherTypes + ' other';
+                if (shipStats.parseErrors) detail += ' • ' + shipStats.parseErrors + ' bad';
+                if (shipStats.errors)      detail += ' • ' + shipStats.errors + ' err';
+                lines.push('<span class="ts-dim">' + detail + '</span>');
+
+                if (ageSec !== null) {
+                    lines.push('<span class="ts-dim">' +
+                        (ageSec < 5 ? 'Live ✓' : 'Last msg ' + ageSec + 's ago') +
+                        '</span>');
+                }
+            }
+
+            showTransportStatusHTML(lines.join('<br>'), nShips > 0 ? 'info' : 'warn');
+        }
+
+        function showTransportStatus(text, kind) {
+            showTransportStatusHTML(text, kind);
+        }
+
+        function showTransportStatusHTML(html, kind) {
+            var el = document.getElementById('transport-status');
+            el.innerHTML = html;
+            el.classList.remove('warn', 'error');
+            if (kind === 'warn')  el.classList.add('warn');
+            if (kind === 'error') el.classList.add('error');
+            el.classList.add('show');
+        }
+
+        function hideTransportStatus() {
+            var el = document.getElementById('transport-status');
+            el.classList.remove('show');
         }
 
         function disconnectShipsSocket() {
@@ -2143,13 +2328,21 @@
         function handleAISMessage(msg) {
             var type = msg.MessageType;
             var meta = msg.MetaData || {};
+            // Try MetaData.MMSI first, fall back to inner UserID if missing
             var mmsi = meta.MMSI;
-            if (!mmsi) return;
+            if (!mmsi && msg.Message) {
+                var inner = msg.Message[type];
+                if (inner && inner.UserID) mmsi = inner.UserID;
+            }
+            if (!mmsi) {
+                console.warn('[Ships] No MMSI in message:', type, msg);
+                return;
+            }
 
             if (type === 'ShipStaticData') {
                 var s = (msg.Message && msg.Message.ShipStaticData) || {};
                 shipStaticData[mmsi] = {
-                    name:        (s.Name || '').trim() || shipStaticData[mmsi] && shipStaticData[mmsi].name,
+                    name:        (s.Name || '').trim() || (shipStaticData[mmsi] && shipStaticData[mmsi].name),
                     callsign:    (s.CallSign || '').trim(),
                     type:        s.Type,
                     destination: (s.Destination || '').trim()
@@ -2167,10 +2360,20 @@
             if (type !== 'PositionReport') return;
 
             var pr = msg.Message && msg.Message.PositionReport;
-            if (!pr) return;
+            if (!pr) {
+                console.warn('[Ships] PositionReport message missing inner data:', msg);
+                return;
+            }
 
             var lat = pr.Latitude, lon = pr.Longitude;
-            if (typeof lat !== 'number' || typeof lon !== 'number') return;
+            // Try MetaData.latitude/longitude as fallback (lowercase keys)
+            if (typeof lat !== 'number') lat = meta.latitude;
+            if (typeof lon !== 'number') lon = meta.longitude;
+
+            if (typeof lat !== 'number' || typeof lon !== 'number') {
+                console.warn('[Ships] No coords in PositionReport:', msg);
+                return;
+            }
             // AIS sometimes broadcasts 91/181 to mean "no fix"
             if (lat > 90 || lat < -90 || lon > 180 || lon < -180) return;
 
