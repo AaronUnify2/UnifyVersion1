@@ -1,0 +1,2509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QLD Fire Incident Monitor</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* ── Layout ──────────────────────────────────────────────── */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #map { flex: 1; height: 100vh; min-width: 0; }
+
+        /* ── Sidebar shell ───────────────────────────────────────── */
+        .sidebar {
+            width: 280px;
+            flex-shrink: 0;
+            height: 100vh;
+            background: #f8fafc;
+            border-left: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 1000;
+            box-shadow: -2px 0 12px rgba(0,0,0,0.1);
+            transition: width 0.3s ease, border-width 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        /* Desktop collapsed — sidebar shrinks to zero, map fills the gap */
+        .sidebar.closed {
+            width: 0;
+            border-left-width: 0;
+            box-shadow: none;
+        }
+
+        .sidebar-header,
+        .sidebar-scroll { transition: opacity 0.15s ease; }
+
+        .sidebar.closed .sidebar-header,
+        .sidebar.closed .sidebar-scroll {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .sidebar-header {
+            background: #1a365d;
+            color: white;
+            padding: 14px 16px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header h2 { font-size: 15px; font-weight: 700; }
+        .sidebar-header .subtitle { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+
+        .sidebar-scroll {
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            min-height: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* ── Sidebar sections ────────────────────────────────────── */
+        .sidebar-section {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            flex-shrink: 0; /* never compress — scroll instead */
+        }
+
+        .section-title {
+            font-size: 10px;
+            font-weight: 700;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 8px 12px;
+            background: #f0f4f8;
+            border-bottom: 1px solid #e2e8f0;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .section-title .chevron {
+            font-size: 11px;
+            transition: transform 0.2s;
+            opacity: 0.6;
+        }
+
+        .sidebar-section.collapsed .section-body { display: none; }
+        .sidebar-section.collapsed .chevron { transform: rotate(-90deg); }
+        .sidebar-section.collapsed .section-title { border-radius: 8px; border-bottom: none; }
+
+        .section-body { padding: 10px 12px; border-radius: 0 0 8px 8px; }
+
+        /* ── Stats ───────────────────────────────────────────────── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+
+        .stat-card {
+            background: #f0f4f8;
+            border-radius: 6px;
+            padding: 8px;
+            text-align: center;
+        }
+
+        .stat-card .stat-value { font-size: 20px; font-weight: 700; color: #1a365d; line-height: 1; }
+        .stat-card .stat-label { font-size: 10px; color: #718096; margin-top: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+        .last-update { font-size: 11px; color: #a0aec0; text-align: center; }
+
+        /* ── Control buttons ─────────────────────────────────────── */
+        .control-btn {
+            width: 100%;
+            background: white;
+            border: 1.5px solid #e2e8f0;
+            padding: 9px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #2d3748;
+            margin-bottom: 5px;
+            text-align: left;
+        }
+
+        .control-btn:last-child { margin-bottom: 0; }
+        .control-btn:hover { background: #ebf8ff; border-color: #3182ce; color: #2b6cb0; }
+        .control-btn.active { background: #2196F3; color: white; border-color: #2196F3; }
+        .control-btn.active:hover { background: #1976D2; }
+        .control-btn:active { transform: scale(0.97); }
+
+        /* Triple-toggle buttons have a mode pill */
+        .mode-pill {
+            margin-left: auto;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.08);
+            color: inherit;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .control-btn.active .mode-pill { background: rgba(255,255,255,0.25); }
+        .control-btn.mode-typed  { background: #f0fff4; border-color: #38a169; color: #276749; }
+        .control-btn.mode-typed:hover  { background: #c6f6d5; }
+        .control-btn.mode-hidden { background: #fff5f5; border-color: #fc8181; color: #c53030; }
+        .control-btn.mode-hidden:hover { background: #fed7d7; }
+
+        .control-section-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: #a0aec0;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            margin: 8px 0 4px;
+        }
+
+        .control-section-label:first-child { margin-top: 0; }
+
+        /* ── Legend ──────────────────────────────────────────────── */
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            font-size: 12px;
+            color: #2d3748;
+            gap: 8px;
+        }
+
+        .legend-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            border: 1.5px solid rgba(0,0,0,0.18);
+        }
+
+        .legend-divider { border-top: 1px solid #e2e8f0; margin: 7px 0 5px; }
+
+        .legend-subtitle {
+            font-size: 10px;
+            font-weight: 700;
+            color: #a0aec0;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            margin-bottom: 4px;
+        }
+
+        /* Incident colours */
+        .c-bushfire  { background-color: #d32f2f; }
+        .c-structure { background-color: #e64a19; }
+        .c-rescue    { background-color: #1565c0; }
+        .c-hazmat    { background-color: #558b2f; }
+        .c-vehicle   { background-color: #6a1b9a; }
+        .c-other     { background-color: #607d8b; }
+        .c-qfs-red   { background-color: #d32f2f; }
+        .c-watchtower{ background-color: #4CAF50; }
+        .firms-high  { background-color: #ff1744; }
+        .firms-nom   { background-color: #ff6d00; }
+        .firms-low   { background-color: #ffd600; }
+        .c-ship      { background-color: #1976d2; }
+        .c-plane     { background-color: #6d4c41; }
+
+        /* Also keep old class names for badge CSS still in use */
+        .incident-bushfire  { background-color: #d32f2f; }
+        .incident-structure { background-color: #e64a19; }
+        .incident-rescue    { background-color: #1565c0; }
+        .incident-hazmat    { background-color: #558b2f; }
+        .incident-vehicle   { background-color: #6a1b9a; }
+        .incident-other     { background-color: #607d8b; }
+
+        /* ── Watchtower list ─────────────────────────────────────── */
+        .watchtower-list { max-height: 150px; overflow-y: auto; }
+
+        .watchtower-item {
+            display: flex;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px solid #f0f4f8;
+            gap: 6px;
+        }
+
+        .watchtower-item:last-child { border-bottom: none; }
+
+        .watchtower-name-input {
+            flex: 1;
+            padding: 4px 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: inherit;
+            background: #f8fafc;
+        }
+
+        .watchtower-name-input:focus { outline: none; border-color: #3182ce; background: white; }
+
+        .watchtower-remove {
+            background: #fed7d7;
+            color: #c53030;
+            border: none;
+            padding: 3px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .watchtower-remove:hover { background: #fc8181; color: white; }
+
+        .watchtower-notes {
+            width: 100%;
+            min-height: 72px;
+            padding: 7px 9px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: inherit;
+            color: #2d3748;
+            resize: vertical;
+            background: #f8fafc;
+            margin-top: 4px;
+        }
+
+        .watchtower-notes:focus {
+            outline: none;
+            border-color: #3182ce;
+            background: white;
+        }
+
+        .watchtower-empty {
+            font-size: 12px;
+            color: #a0aec0;
+            text-align: center;
+            padding: 6px 0;
+            font-style: italic;
+        }
+
+        /* ── Nav button ──────────────────────────────────────────── */
+        .nav-btn {
+            display: block;
+            padding: 10px 12px;
+            background: #276749;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            text-align: center;
+            transition: background 0.15s;
+        }
+
+        .nav-btn:hover { background: #22543d; }
+
+        /* ── Mobile toggle ───────────────────────────────────────── */
+        .sidebar-toggle {
+            display: flex;
+            position: fixed;
+            top: 12px;
+            right: 292px; /* sits just left of the sidebar edge when open */
+            z-index: 1200;
+            background: #1a365d;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            width: 42px;
+            height: 42px;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+            align-items: center;
+            justify-content: center;
+            transition: right 0.3s ease;
+        }
+
+        /* When sidebar is closed on desktop, button floats to the right edge */
+        .sidebar-toggle.sidebar-closed { right: 12px; }
+
+        /* ── Floating map overlays ───────────────────────────────── */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            z-index: 2000;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+            max-width: 360px;
+        }
+
+        .error { background: #fff5f5; color: #c53030; }
+
+        .warning-panel {
+            position: fixed;
+            bottom: 16px;
+            left: 16px;
+            background: white;
+            padding: 10px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1100;
+            max-width: 320px;
+            display: none;
+        }
+
+        .warning-panel.show { display: block; }
+
+        .warning-item {
+            padding: 7px 10px;
+            margin: 4px 0;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .warning-fire  { background: #d32f2f; color: white; }
+        .warning-ember { background: #f57c00; color: white; }
+
+        /* ── Popup ───────────────────────────────────────────────── */
+        .ol-popup {
+            position: absolute;
+            background-color: white;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+            padding: 14px;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            bottom: 12px;
+            left: -50px;
+            min-width: 300px;
+            max-width: 380px;
+        }
+
+        .ol-popup:after, .ol-popup:before {
+            top: 100%;
+            border: solid transparent;
+            content: " ";
+            height: 0; width: 0;
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .ol-popup:after  { border-top-color: white;   border-width: 10px; left: 48px; margin-left: -10px; }
+        .ol-popup:before { border-top-color: #e2e8f0; border-width: 11px; left: 48px; margin-left: -11px; }
+
+        .ol-popup-closer {
+            text-decoration: none;
+            position: absolute;
+            top: 2px; right: 8px;
+            font-size: 20px;
+            color: #a0aec0;
+        }
+
+        .ol-popup-closer:after { content: "✖"; }
+
+        .popup-content h3 { margin-bottom: 8px; color: #1a365d; font-size: 14px; padding-right: 20px; }
+        .popup-content .detail { margin: 4px 0; font-size: 12px; color: #2d3748; }
+        .popup-content .detail strong { display: inline-block; min-width: 70px; color: #4a5568; }
+
+        .popup-content .alert-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            color: white;
+            margin-left: 6px;
+        }
+
+        .badge-bushfire  { background-color: #d32f2f; }
+        .badge-structure { background-color: #e64a19; }
+        .badge-rescue    { background-color: #1565c0; }
+        .badge-hazmat    { background-color: #558b2f; }
+        .badge-vehicle   { background-color: #6a1b9a; }
+        .badge-other     { background-color: #607d8b; }
+
+        .distance-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            background: #38a169;
+            color: white;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        .popup-weather {
+            margin-top: 10px;
+            padding: 8px 10px;
+            background: #ebf8ff;
+            border-radius: 6px;
+        }
+
+        .popup-weather h4 { font-size: 11px; margin-bottom: 6px; color: #2b6cb0; font-weight: 700; }
+        .popup-weather .weather-item { margin: 3px 0; font-size: 11px; display: flex; align-items: center; gap: 4px; color: #2d3748; }
+        .wind-arrow { display: inline-block; font-size: 14px; }
+
+        .distance-label {
+            position: absolute;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 3px 7px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            pointer-events: none;
+            white-space: nowrap;
+            transform: translate(-50%, -50%);
+        }
+
+        .wind-label {
+            position: absolute;
+            background: rgba(33,150,243,0.9);
+            color: white;
+            padding: 3px 7px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            pointer-events: none;
+            white-space: nowrap;
+            transform: translate(-50%, -50%);
+        }
+
+        /* ── Modal ───────────────────────────────────────────────── */
+        .custom-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 3000;
+            padding: 16px;
+        }
+
+        .custom-modal.show { display: flex; }
+
+        .modal-content {
+            background: white;
+            padding: 22px 24px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+            max-width: 360px;
+            width: 100%;
+            text-align: left;
+        }
+
+        .modal-content .modal-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1a365d;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .modal-content p {
+            margin: 0 0 14px;
+            font-size: 13px;
+            color: #2d3748;
+            line-height: 1.55;
+        }
+
+        .modal-content p:last-of-type { margin-bottom: 18px; }
+
+        .modal-content .modal-footer {
+            text-align: center;
+        }
+
+        .modal-content button {
+            background: #3182ce;
+            color: white;
+            border: none;
+            padding: 10px 28px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .modal-content button:hover { background: #2b6cb0; }
+
+        /* ── Help (?) button ──────────────────────────────────────── */
+        .help-btn {
+            margin-left: auto;
+            background: rgba(49,130,206,0.12);
+            color: #3182ce;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            flex-shrink: 0;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+
+        .help-btn:hover { background: rgba(49,130,206,0.25); }
+
+        /* ── Watchtower placement hint ───────────────────────────── */
+        .placement-hint {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1a365d;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            z-index: 1500;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .placement-hint.show { display: block; }
+
+        /* ── Mobile ──────────────────────────────────────────────── */
+        @media (max-width: 767px) {
+            body { display: block; }
+            #map { width: 100vw; height: 100vh; }
+
+            /* On mobile toggle is always at right edge */
+            .sidebar-toggle { right: 12px !important; }
+
+            .sidebar {
+                position: fixed;
+                top: 0;
+                right: -300px;
+                width: 280px;
+                height: 100vh;
+                transition: right 0.3s ease;
+                z-index: 1100;
+                /* Override desktop closed state */
+                border-left-width: 1px !important;
+                box-shadow: -2px 0 12px rgba(0,0,0,0.1) !important;
+            }
+
+            .sidebar.open {
+                right: 0;
+                width: 280px !important;
+            }
+
+            /* Desktop closed class has no meaning on mobile */
+            .sidebar.closed {
+                width: 280px;
+                right: -300px;
+            }
+
+            .sidebar-backdrop {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.4);
+                z-index: 1099;
+            }
+
+            .sidebar-backdrop.show { display: block; }
+
+            .ol-popup { min-width: 260px; max-width: calc(100vw - 32px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <!-- Floating overlays -->
+    <div id="popup" class="ol-popup">
+        <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+        <div id="popup-content" class="popup-content"></div>
+    </div>
+
+    <div id="warning-panel" class="warning-panel"></div>
+    <div id="loading" class="loading">Loading incident data...</div>
+
+    <div id="custom-modal" class="custom-modal">
+        <div class="modal-content">
+            <div class="modal-title" id="modal-title"></div>
+            <div id="modal-body"></div>
+            <div class="modal-footer">
+                <button onclick="closeModal()">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="placement-hint" class="placement-hint">🗼 Double-tap the map to place your watchtower</div>
+
+    <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="closeSidebar()"></div>
+    <button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()" title="Open menu">☰</button>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+
+        <div class="sidebar-header">
+            <h2>🔥 QLD Fire Incident Monitor</h2>
+            <div class="subtitle">Queensland Fire Department · ESCAD Live Data</div>
+        </div>
+
+        <div class="sidebar-scroll">
+
+            <!-- Stats -->
+            <div class="sidebar-section">
+                <div class="section-title" onclick="toggleSection(this)">
+                    📊 Status <span class="chevron">▼</span>
+                </div>
+                <div class="section-body">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="incident-count">—</div>
+                            <div class="stat-label">Incidents</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="watchtower-count">0</div>
+                            <div class="stat-label">Watchtowers</div>
+                        </div>
+                    </div>
+                    <div class="last-update">Updated: <span id="last-update">—</span></div>
+                    <button class="control-btn" id="btn-refresh" onclick="loadBushfireData()" style="margin-top:8px;">
+                        🔄 Refresh Data
+                    </button>
+                    <button class="control-btn" id="btn-gps" onclick="placeWatchtowerAtGPS()" style="margin-top:6px;">
+                        📍 Place Watchtower at My Location
+                    </button>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="sidebar-section">
+                <div class="section-title" onclick="toggleSection(this)">
+                    🎛️ Controls <span class="chevron">▼</span>
+                </div>
+                <div class="section-body">
+
+                    <div class="control-section-label">QFS Incidents</div>
+                    <button class="control-btn active" id="btn-qfsfire" onclick="cycleQFSFire()">
+                        🔴 QFS Fires <span class="mode-pill" id="qfsfire-mode-pill">Responding</span>
+                    </button>
+                    <button class="control-btn" id="btn-watchtower" onclick="toggleAddWatchtower()">
+                        🗼 Add Watchtower
+                        <span class="help-btn" onclick="event.stopPropagation();showHelp('watchtower')" title="What is a watchtower?">?</span>
+                    </button>
+                    <button class="control-btn" id="btn-measure" onclick="cycleMeasure()">
+                        📏 QFS Distance <span class="mode-pill" id="measure-mode-pill">Off</span>
+                    </button>
+                    <button class="control-btn" id="btn-wind" onclick="toggleWind()">
+                        💨 QFS Wind
+                        <span class="help-btn" onclick="event.stopPropagation();showHelp('wind')" title="How does wind help?">?</span>
+                    </button>
+
+                    <div class="control-section-label" style="margin-top:10px;">Map View</div>
+                    <button class="control-btn" id="btn-satellite" onclick="toggleSatellite()">
+                        🗺️ Satellite View
+                        <span class="help-btn" onclick="event.stopPropagation();showHelp('satellite')" title="Why use satellite view?">?</span>
+                    </button>
+
+                    <div class="control-section-label" style="margin-top:10px;">NASA Satellite Data</div>
+                    <button class="control-btn" id="btn-firms" onclick="toggleFIRMS()">
+                        🛰️ NASA Satellite Fires
+                    </button>
+                    <button class="control-btn" id="btn-nasawind" onclick="toggleNASAWind()">
+                        💨 NASA Wind
+                    </button>
+                    <button class="control-btn" id="btn-nasadist" onclick="cycleNASADist()">
+                        📏 NASA Distance <span class="mode-pill" id="nasadist-mode-pill">Off</span>
+                    </button>
+
+                    <div class="control-section-label" style="margin-top:10px;">Live Transport</div>
+                    <button class="control-btn" id="btn-ships" onclick="toggleShips()">
+                        🚢 Live Ships
+                        <span class="help-btn" onclick="event.stopPropagation();showHelp('ships')" title="About ship data">?</span>
+                    </button>
+                    <button class="control-btn" id="btn-planes" onclick="togglePlanes()">
+                        ✈️ Live Planes
+                        <span class="help-btn" onclick="event.stopPropagation();showHelp('planes')" title="About plane data">?</span>
+                    </button>
+
+                </div>
+            </div>
+
+            <!-- Watchtowers — hidden until first tower placed -->
+            <div class="sidebar-section" id="watchtower-section" style="display:none;">
+                <div class="section-title" onclick="toggleSection(this)">
+                    🗼 Watchtowers <span class="chevron">▼</span>
+                </div>
+                <div class="section-body">
+                    <div class="watchtower-list" id="watchtower-list">
+                        <div class="watchtower-empty">No watchtowers added yet</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="sidebar-section">
+                <div class="section-title" onclick="toggleSection(this)">
+                    🗺️ Legend <span class="chevron">▼</span>
+                </div>
+                <div class="section-body">
+
+                    <!-- Always shown: QFS basic -->
+                    <div class="legend-subtitle">QFS Active Response</div>
+                    <div class="legend-item"><div class="legend-color c-qfs-red"></div>🔴 QFS Fire</div>
+
+                    <!-- Shown when qfsFireMode = 1 (typed) -->
+                    <div id="legend-qfs-types" style="display:none;">
+                        <div class="legend-divider"></div>
+                        <div class="legend-subtitle">QFS Incident Types</div>
+                        <div class="legend-item"><div class="legend-color c-bushfire"></div>🔥 Bush Fire</div>
+                        <div class="legend-item"><div class="legend-color c-structure"></div>🏠 Structure Fire</div>
+                        <div class="legend-item"><div class="legend-color c-rescue"></div>🚨 Rescue</div>
+                        <div class="legend-item"><div class="legend-color c-hazmat"></div>☢️ Hazmat</div>
+                        <div class="legend-item"><div class="legend-color c-vehicle"></div>🚗 Vehicle</div>
+                        <div class="legend-item"><div class="legend-color c-other"></div>⭕ Other</div>
+                    </div>
+
+                    <!-- Shown when a watchtower is placed -->
+                    <div id="legend-watchtower" style="display:none;">
+                        <div class="legend-divider"></div>
+                        <div class="legend-subtitle">Watchtowers</div>
+                        <div class="legend-item"><div class="legend-color c-watchtower"></div>🗼 Watchtower</div>
+                    </div>
+
+                    <!-- Shown when FIRMS is enabled -->
+                    <div id="legend-nasa" style="display:none;">
+                        <div class="legend-divider"></div>
+                        <div class="legend-subtitle">NASA Satellite Hotspots</div>
+                        <div class="legend-item" style="font-size:11px;color:#718096;margin-bottom:5px;line-height:1.4;">
+                            Thermal signatures detected from orbit. Not confirmed fire reports — higher chance of false positives, but potentially earlier detection.
+                        </div>
+                        <div class="legend-item"><div class="legend-color firms-high"></div>High confidence</div>
+                        <div class="legend-item"><div class="legend-color firms-nom"></div>Nominal confidence</div>
+                        <div class="legend-item"><div class="legend-color firms-low"></div>Low confidence</div>
+                    </div>
+
+                    <!-- Shown when ships layer is enabled -->
+                    <div id="legend-ships" style="display:none;">
+                        <div class="legend-divider"></div>
+                        <div class="legend-subtitle">Live Ships (AIS)</div>
+                        <div class="legend-item" style="font-size:11px;color:#718096;margin-bottom:5px;line-height:1.4;">
+                            Real-time vessel positions broadcast over AIS. Pointed end shows the direction the ship is travelling.
+                        </div>
+                        <div class="legend-item"><div class="legend-color c-ship"></div>🚢 Ship</div>
+                    </div>
+
+                    <!-- Shown when planes layer is enabled -->
+                    <div id="legend-planes" style="display:none;">
+                        <div class="legend-divider"></div>
+                        <div class="legend-subtitle">Live Planes (ADS-B)</div>
+                        <div class="legend-item" style="font-size:11px;color:#718096;margin-bottom:5px;line-height:1.4;">
+                            Aircraft positions reported via ADS-B. Nose of the plane points in the direction of travel. Updates every 30 seconds.
+                        </div>
+                        <div class="legend-item"><div class="legend-color c-plane"></div>✈️ Plane</div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
+    <script>
+
+        // ── State ─────────────────────────────────────────────────
+        var map, vectorSource, vectorLayer, measureSource, measureLayer;
+        var osmLayer, satelliteLayer, firmsSource, firmsLayer;
+        var popupOverlay;
+
+        var watchtowers = [];
+        var watchtowerIdCounter = 0;
+        var addingWatchtower = false;
+
+        // 0 = red undiff, 1 = typed/coloured, 2 = hidden
+        var qfsFireMode = 0;
+
+        // 0 = off, 1 = 10km, 2 = 30km, 3 = 50km
+        var measureMode   = 0;
+        var nasaDistMode  = 0;
+
+        var isSatelliteView = false;
+        var windEnabled     = false;
+        var nasaWindEnabled = false;
+        var firmsEnabled    = false;
+
+        var windOverlays     = [];
+        var nasaWindOverlays = [];
+        var distanceOverlays    = [];
+        var nasaDistOverlays    = [];
+        var fireWindData    = {};
+        var watchtowerWindData = {};
+        var nasaWindData    = {};
+
+        var FIRMS_KEY = '577b0590cbd4f45bb0cfdbfbca871a11';
+
+        // ── Ships & Planes state ──────────────────────────────────
+        var AIS_API_KEY = 'c809ec1c8eefd41ba9b6f91eedf092caef2f4973';
+        var QLD_BBOX_SOUTH = -29, QLD_BBOX_NORTH = -10, QLD_BBOX_WEST = 138, QLD_BBOX_EAST = 154;
+
+        var shipsLayer, shipsSource;
+        var shipsEnabled = false;
+        var shipsSocket  = null;
+        var shipFeatures = {};      // MMSI -> ol.Feature
+        var shipStaticData = {};    // MMSI -> {name, type, callsign, destination}
+        var shipReconnectTimer = null;
+        var SHIP_STALE_MS = 30 * 60 * 1000; // drop ships not seen for 30 min
+
+        var planesLayer, planesSource;
+        var planesEnabled = false;
+        var planesPollTimer = null;
+        var PLANES_POLL_MS = 30 * 1000;
+
+        var DIST_THRESHOLDS = [0, 10000, 30000, 50000]; // metres
+        var DIST_LABELS     = ['Off', '10 km', '30 km', '50 km'];
+
+        // Plain red style for qfsFireMode=0
+        var QFS_RED_STYLE = null; // set after ol loads
+
+        var watchtowerColors = [
+            '#4CAF50','#66BB6A','#81C784','#2E7D32',
+            '#43A047','#558B2F','#689F38','#7CB342',
+            '#8BC34A','#9CCC65'
+        ];
+
+        // ── Utility ───────────────────────────────────────────────
+        function showModal(msg) {
+            document.getElementById('modal-title').textContent = '';
+            document.getElementById('modal-body').innerHTML = '<p>' + msg + '</p>';
+            document.getElementById('custom-modal').classList.add('show');
+        }
+
+        function showHelp(topic) {
+            var title, body;
+            if (topic === 'watchtower') {
+                title = '🗼 What is a Watchtower?';
+                body  = '<p>A watchtower marks a location that matters to you — your home, a family member\'s property, a workplace, or anywhere you want to keep an eye on.</p>' +
+                        '<p>Once placed, the map can show you the distance from each watchtower to nearby fires.</p>';
+            } else if (topic === 'wind') {
+                title = '💨 Understanding Wind Arrows';
+                body  = '<p>Wind direction and strength can tell you a lot about where a fire is likely to travel.</p>' +
+                        '<p>If a wind arrow\'s path passes close to one of your watchtowers, you\'ll see an <strong>Ember Zone warning</strong> — meaning there\'s a risk of embers being carried toward that location.</p>' +
+                        '<p>If you\'re concerned, this is a good time to arrange for someone to be present at the watchtower site, or to begin preparing the property.</p>';
+            } else if (topic === 'satellite') {
+                title = '🗺️ Satellite View';
+                body  = '<p>Satellite view can help you quickly assess what a fire may be moving through — dry grassland, dense bush, farmland, or more developed areas.</p>' +
+                        '<p>Use it alongside the wind arrows to get a clearer picture of the path a fire might take.</p>' +
+                        '<p style="color:#718096;font-size:12px;">Note: in rural areas satellite photos can be dated and may be out of season. The terrain may be dryer than the photo indicates.</p>';
+            } else if (topic === 'ships') {
+                title = '🚢 Live Ships';
+                body  = '<p>Shows real-time positions of ships broadcasting AIS (Automatic Identification System) signals around the Queensland coast.</p>' +
+                        '<p>Most cargo ships, tankers, ferries and many fishing boats and yachts are visible. The icon points in the direction the ship is travelling.</p>' +
+                        '<p>Tap a ship to see its name, speed, and destination if available.</p>' +
+                        '<p style="color:#718096;font-size:12px;">Data from aisstream.io. Updates stream in live as ships transmit.</p>';
+            } else if (topic === 'planes') {
+                title = '✈️ Live Planes';
+                body  = '<p>Shows aircraft currently flying over Queensland, using ADS-B signals broadcast from the planes themselves.</p>' +
+                        '<p>The plane icon rotates to show the direction of travel. Tap any plane for callsign, altitude, and speed.</p>' +
+                        '<p style="color:#718096;font-size:12px;">Data from the OpenSky Network. Refreshes every 30 seconds.</p>';
+            }
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-body').innerHTML    = body;
+            document.getElementById('custom-modal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('custom-modal').classList.remove('show');
+        }
+
+        function getWatchtowerColor(idx) {
+            return watchtowerColors[idx % watchtowerColors.length];
+        }
+
+        function formatDistance(meters) {
+            return meters > 1000
+                ? (Math.round(meters / 100) / 10) + ' km'
+                : Math.round(meters) + ' m';
+        }
+
+        function getCompassDirection(degrees) {
+            var dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+            return dirs[Math.round(degrees / 22.5) % 16];
+        }
+
+        function calculateDistance(lon1, lat1, lon2, lat2) {
+            var p1 = ol.proj.fromLonLat([lon1, lat1]);
+            var p2 = ol.proj.fromLonLat([lon2, lat2]);
+            return formatDistance(ol.sphere.getLength(new ol.geom.LineString([p1, p2])));
+        }
+
+        // ── Collapsible sections ──────────────────────────────────
+        function toggleSection(titleEl) {
+            titleEl.parentElement.classList.toggle('collapsed');
+        }
+
+        // ── Sidebar mobile ────────────────────────────────────────
+        function isMobile() {
+            return window.innerWidth <= 767;
+        }
+
+        function toggleSidebar() {
+            var sidebar  = document.getElementById('sidebar');
+            var backdrop = document.getElementById('sidebar-backdrop');
+            var btn      = document.getElementById('sidebar-toggle');
+
+            if (isMobile()) {
+                // Mobile: slide-over behaviour
+                var open = sidebar.classList.contains('open');
+                sidebar.classList.toggle('open', !open);
+                backdrop.classList.toggle('show', !open);
+                btn.textContent = open ? '☰' : '✕';
+            } else {
+                // Desktop: collapse sidebar into flex layout
+                var closed = sidebar.classList.contains('closed');
+                sidebar.classList.toggle('closed', !closed);
+                btn.classList.toggle('sidebar-closed', !closed);
+                btn.textContent = closed ? '☰' : '✕';
+            }
+        }
+
+        function closeSidebar() {
+            // Only closes the mobile slide-over overlay.
+            // Desktop collapse/expand is handled exclusively by toggleSidebar.
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('sidebar-backdrop').classList.remove('show');
+            if (isMobile()) {
+                document.getElementById('sidebar-toggle').textContent = '☰';
+            }
+        }
+
+        function resetGPSButton() {
+            var btn = document.getElementById('btn-gps');
+            btn.classList.remove('active');
+            btn.textContent = '📍 Place Watchtower at My Location';
+            btn.disabled = false;
+            // Also make sure watchtower-adding mode is cleared
+            if (addingWatchtower) {
+                addingWatchtower = false;
+                document.getElementById('btn-watchtower').classList.remove('active');
+                document.getElementById('placement-hint').classList.remove('show');
+                map.getTargetElement().style.cursor = '';
+            }
+        }
+
+        function placeWatchtowerAtGPS() {
+            if (!navigator.geolocation) {
+                showModal('Your device or browser does not support GPS location.');
+                return;
+            }
+
+            var btn = document.getElementById('btn-gps');
+            btn.classList.add('active');
+            btn.textContent = '📍 Finding your location...';
+            btn.disabled = true;
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    resetGPSButton();
+                    var coordinate = ol.proj.fromLonLat([position.coords.longitude, position.coords.latitude]);
+                    addWatchtowerAtLocation(coordinate);
+                    map.getView().animate({ center: coordinate, zoom: Math.max(map.getView().getZoom(), 10), duration: 800 });
+                },
+                function(err) {
+                    resetGPSButton();
+                    var msg = 'Unable to get your location — please try again.';
+                    if (err.code === 1) msg = 'Location access was denied. Please allow location access in your browser settings and try again.';
+                    if (err.code === 2) msg = 'Your location could not be determined. Please try again in a moment.';
+                    if (err.code === 3) msg = 'Location request timed out. Please try again.';
+                    showModal(msg);
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+        function updateLegend() {
+            document.getElementById('legend-qfs-types').style.display =
+                qfsFireMode === 1 ? '' : 'none';
+            document.getElementById('legend-watchtower').style.display =
+                watchtowers.length > 0 ? '' : 'none';
+            document.getElementById('legend-nasa').style.display =
+                firmsEnabled ? '' : 'none';
+            document.getElementById('legend-ships').style.display =
+                shipsEnabled ? '' : 'none';
+            document.getElementById('legend-planes').style.display =
+                planesEnabled ? '' : 'none';
+        }
+
+        // ── QFS fire mode (triple toggle) ─────────────────────────
+        function cycleQFSFire() {
+            qfsFireMode = (qfsFireMode + 1) % 3;
+            var btn  = document.getElementById('btn-qfsfire');
+            var pill = document.getElementById('qfsfire-mode-pill');
+
+            if (qfsFireMode === 0) {
+                btn.className  = 'control-btn active';
+                btn.childNodes[0].nodeValue = '🔴 QFS Fires ';
+                pill.textContent = 'Responding';
+                vectorLayer.setVisible(true);
+                applyQFSFireMode();
+            } else if (qfsFireMode === 1) {
+                btn.className  = 'control-btn mode-typed';
+                btn.childNodes[0].nodeValue = '🎨 QFS Fires ';
+                pill.textContent = 'Incident Type';
+                vectorLayer.setVisible(true);
+                applyQFSFireMode();
+            } else {
+                btn.className  = 'control-btn mode-hidden';
+                btn.childNodes[0].nodeValue = '🙈 QFS Fires ';
+                pill.textContent = 'Hidden';
+                vectorLayer.setVisible(false);
+                // Clear dependent overlays
+                if (measureMode > 0) { clearDistanceLines(); }
+                if (windEnabled) { clearWindOverlay(); }
+            }
+
+            updateLegend();
+        }
+
+        function applyQFSFireMode() {
+            vectorSource.getFeatures().forEach(function(feature) {
+                feature.setStyle(makeQFSStyle(feature.get('properties')));
+            });
+        }
+
+        function makeQFSStyle(props) {
+            if (qfsFireMode === 0) {
+                // Mode 0: plain red circle, no emoji
+                return QFS_RED_STYLE;
+            }
+            // Mode 1: typed colours + emoji
+            var groupedType = (props && (props.GroupedType || props.groupedType)) || '';
+            var color = getIncidentColor(groupedType);
+            var emoji = getIncidentEmoji(groupedType);
+            return new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 12,
+                    fill:   new ol.style.Fill({ color: color }),
+                    stroke: new ol.style.Stroke({ color: [color[0], color[1], color[2], 1], width: 2 })
+                }),
+                text: new ol.style.Text({
+                    text: emoji,
+                    font: '13px sans-serif',
+                    offsetY: 0,
+                    textAlign: 'center'
+                })
+            });
+        }
+
+        function getIncidentColor(groupedType) {
+            var t = (groupedType || '').toLowerCase();
+            if (t.indexOf('bush') !== -1 || t.indexOf('grass') !== -1 || t.indexOf('vegetation') !== -1) return [211, 47, 47, 0.75];
+            if (t.indexOf('structure') !== -1 || t.indexOf('building') !== -1) return [230, 74, 25, 0.75];
+            if (t.indexOf('rescue') !== -1) return [21, 101, 192, 0.75];
+            if (t.indexOf('hazmat') !== -1 || t.indexOf('chemical') !== -1) return [85, 139, 47, 0.75];
+            if (t.indexOf('vehicle') !== -1 || t.indexOf('motor') !== -1 || t.indexOf('crash') !== -1 || t.indexOf('accident') !== -1) return [106, 27, 154, 0.75];
+            return [96, 125, 139, 0.75];
+        }
+
+        function getIncidentEmoji(groupedType) {
+            var t = (groupedType || '').toLowerCase();
+            if (t.indexOf('bush') !== -1 || t.indexOf('grass') !== -1 || t.indexOf('vegetation') !== -1) return '🔥';
+            if (t.indexOf('structure') !== -1 || t.indexOf('building') !== -1) return '🏠';
+            if (t.indexOf('rescue') !== -1) return '🚨';
+            if (t.indexOf('hazmat') !== -1 || t.indexOf('chemical') !== -1) return '☢️';
+            if (t.indexOf('vehicle') !== -1 || t.indexOf('motor') !== -1 || t.indexOf('crash') !== -1) return '🚗';
+            return '⭕';
+        }
+
+        function getIncidentBadgeClass(groupedType) {
+            var t = (groupedType || '').toLowerCase();
+            if (t.indexOf('bush') !== -1 || t.indexOf('grass') !== -1 || t.indexOf('vegetation') !== -1) return 'badge-bushfire';
+            if (t.indexOf('structure') !== -1 || t.indexOf('building') !== -1) return 'badge-structure';
+            if (t.indexOf('rescue') !== -1) return 'badge-rescue';
+            if (t.indexOf('hazmat') !== -1 || t.indexOf('chemical') !== -1) return 'badge-hazmat';
+            if (t.indexOf('vehicle') !== -1 || t.indexOf('motor') !== -1 || t.indexOf('crash') !== -1) return 'badge-vehicle';
+            return 'badge-other';
+        }
+
+        // ── QFS distance (triple toggle) ──────────────────────────
+        function cycleMeasure() {
+            if (watchtowers.length === 0) {
+                showModal('Add at least one watchtower first — click "Add Watchtower" then click anywhere on the map.');
+                return;
+            }
+            measureMode = (measureMode + 1) % 4;
+            var btn  = document.getElementById('btn-measure');
+            var pill = document.getElementById('measure-mode-pill');
+            pill.textContent = DIST_LABELS[measureMode];
+
+            if (measureMode === 0) {
+                btn.classList.remove('active');
+                clearDistanceLines();
+            } else {
+                btn.classList.add('active');
+                drawDistanceLines();
+            }
+            updateWarnings();
+        }
+
+        function drawDistanceLines() {
+            clearDistanceLines();
+            if (measureMode === 0 || qfsFireMode === 2) return;
+            var threshold = DIST_THRESHOLDS[measureMode];
+            var fires = vectorSource.getFeatures();
+
+            watchtowers.forEach(function(wt) {
+                fires.forEach(function(fire) {
+                    var geom = fire.getGeometry();
+                    if (!geom) return;
+                    var fc = geom.getType() === 'Point'
+                        ? geom.getCoordinates()
+                        : geom.getInteriorPoint().getCoordinates();
+
+                    var line   = new ol.geom.LineString([wt.coordinate, fc]);
+                    var length = ol.sphere.getLength(line);
+                    if (length > threshold) return;
+
+                    var lineFeature = new ol.Feature({ geometry: line, type: 'distanceLine' });
+                    lineFeature.setStyle(new ol.style.Style({
+                        stroke: new ol.style.Stroke({ color: wt.color, width: 2, lineDash: [5, 5] })
+                    }));
+                    measureSource.addFeature(lineFeature);
+
+                    var mid = [(wt.coordinate[0] + fc[0]) / 2, (wt.coordinate[1] + fc[1]) / 2];
+                    var labelDiv = document.createElement('div');
+                    labelDiv.className = 'distance-label';
+                    labelDiv.style.background = wt.color;
+                    labelDiv.textContent = formatDistance(length);
+                    var labelOverlay = new ol.Overlay({ element: labelDiv, position: mid, positioning: 'center-center' });
+                    map.addOverlay(labelOverlay);
+                    distanceOverlays.push(labelOverlay);
+                });
+            });
+        }
+
+        function clearDistanceLines() {
+            measureSource.getFeatures().slice().forEach(function(f) {
+                if (f.get('type') === 'distanceLine') measureSource.removeFeature(f);
+            });
+            distanceOverlays.forEach(function(o) { map.removeOverlay(o); });
+            distanceOverlays = [];
+        }
+
+        // ── QFS Wind ──────────────────────────────────────────────
+        function toggleWind() {
+            windEnabled = !windEnabled;
+            var btn = document.getElementById('btn-wind');
+            btn.classList.toggle('active', windEnabled);
+            if (windEnabled) {
+                fetchWindDataForFires();
+            } else {
+                clearWindOverlay();
+            }
+            updateWarnings();
+        }
+
+        function isWindRelevant(props) {
+            var t = ((props && (props.GroupedType || props.groupedType)) || '').toLowerCase();
+            return t.indexOf('bush') !== -1 || t.indexOf('grass') !== -1 ||
+                   t.indexOf('vegetation') !== -1 || t.indexOf('structure') !== -1 ||
+                   t.indexOf('building') !== -1;
+        }
+
+        function fetchWindDataForFires() {
+            if (qfsFireMode === 2) return;
+            var fires = vectorSource.getFeatures();
+            var promises = [];
+            fires.forEach(function(fire, idx) {
+                if (!isWindRelevant(fire.get('properties'))) return;
+                var geom = fire.getGeometry();
+                var fc = geom.getType() === 'Point' ? geom.getCoordinates() : geom.getInteriorPoint().getCoordinates();
+                var ll = ol.proj.toLonLat(fc);
+                promises.push(
+                    fetch('https://api.open-meteo.com/v1/forecast?latitude=' + ll[1] + '&longitude=' + ll[0] + '&current=wind_speed_10m,wind_direction_10m')
+                        .then(function(r) { return r.json(); })
+                        .then(function(d) {
+                            fireWindData[idx] = { coords: fc, windSpeed: d.current.wind_speed_10m, windDirection: d.current.wind_direction_10m };
+                        })
+                        .catch(function() {})
+                );
+            });
+            Promise.all(promises).then(function() { drawWindOverlayForFires(); });
+        }
+
+        function fetchWindDataForWatchtowers() {
+            var promises = [];
+            watchtowers.forEach(function(wt) {
+                promises.push(
+                    fetch('https://api.open-meteo.com/v1/forecast?latitude=' + wt.lonLat[1] + '&longitude=' + wt.lonLat[0] + '&current=wind_speed_10m,wind_direction_10m')
+                        .then(function(r) { return r.json(); })
+                        .then(function(d) {
+                            watchtowerWindData[wt.id] = { coords: wt.coordinate, windSpeed: d.current.wind_speed_10m, windDirection: d.current.wind_direction_10m };
+                        })
+                        .catch(function() {})
+                );
+            });
+            Promise.all(promises).then(function() { drawWindOverlayForWatchtowers(); });
+        }
+
+        function drawArrow(coords, windDir, windSpeed, color, overlayArray, arrowType) {
+            var featureType = arrowType || 'windArrow';
+            var len = windSpeed * 1000;
+            var rad = (90 - windDir) * Math.PI / 180;
+            var ex = coords[0] + len * Math.cos(rad);
+            var ey = coords[1] + len * Math.sin(rad);
+
+            var wf = new ol.Feature({ geometry: new ol.geom.LineString([coords, [ex, ey]]), type: featureType });
+            wf.setStyle(new ol.style.Style({ stroke: new ol.style.Stroke({ color: color, width: 4 }) }));
+            measureSource.addFeature(wf);
+
+            var arrowDiv = document.createElement('div');
+            arrowDiv.style.cssText = 'font-size:24px;transform:rotate(' + (windDir - 90) + 'deg);color:' + (Array.isArray(color) ? 'rgba(' + color.join(',') + ')' : color);
+            arrowDiv.textContent = '➤';
+            var arrowOv = new ol.Overlay({ element: arrowDiv, position: [ex, ey], positioning: 'center-center' });
+            map.addOverlay(arrowOv);
+            overlayArray.push(arrowOv);
+
+            var labelDiv = document.createElement('div');
+            labelDiv.className = 'wind-label';
+            if (!Array.isArray(color)) labelDiv.style.background = color;
+            labelDiv.textContent = Math.round(windSpeed) + ' km/h';
+            var labelOv = new ol.Overlay({ element: labelDiv, position: coords, positioning: 'bottom-center', offset: [0, -20] });
+            map.addOverlay(labelOv);
+            overlayArray.push(labelOv);
+        }
+
+        function drawWindOverlayForFires() {
+            Object.keys(fireWindData).forEach(function(k) {
+                var d = fireWindData[k];
+                drawArrow(d.coords, d.windDirection, d.windSpeed, 'rgba(33,150,243,0.9)', windOverlays);
+            });
+        }
+
+        function drawWindOverlayForWatchtowers() {
+            watchtowers.forEach(function(wt) {
+                if (!watchtowerWindData[wt.id]) return;
+                var d = watchtowerWindData[wt.id];
+                drawArrow(d.coords, d.windDirection, d.windSpeed, wt.color, windOverlays);
+            });
+        }
+
+        function clearWindOverlay() {
+            measureSource.getFeatures().slice().forEach(function(f) {
+                if (f.get('type') === 'windArrow') measureSource.removeFeature(f);
+            });
+            windOverlays.forEach(function(o) { map.removeOverlay(o); });
+            windOverlays = [];
+        }
+
+        // ── NASA Wind ─────────────────────────────────────────────
+        function toggleNASAWind() {
+            nasaWindEnabled = !nasaWindEnabled;
+            document.getElementById('btn-nasawind').classList.toggle('active', nasaWindEnabled);
+            if (nasaWindEnabled) {
+                fetchWindDataForFIRMS();
+            } else {
+                clearNASAWindOverlay();
+                nasaWindData = {};
+            }
+        }
+
+        function fetchWindDataForFIRMS() {
+            if (!firmsEnabled) return;
+            var features = firmsSource.getFeatures();
+            if (features.length === 0) return;
+
+            // Cluster hotspots into ~0.5° grid cells (~50km) so we only
+            // fetch one wind reading per cell rather than one per hotspot.
+            var cells = {};
+            features.forEach(function(feature, idx) {
+                var coords = feature.getGeometry().getCoordinates();
+                var ll     = ol.proj.toLonLat(coords);
+                var cellKey = Math.round(ll[1] / 0.5) + ',' + Math.round(ll[0] / 0.5);
+                if (!cells[cellKey]) {
+                    cells[cellKey] = { ll: ll, featureIndices: [], coords: coords };
+                }
+                cells[cellKey].featureIndices.push(idx);
+                // Store coords for each feature index so we can draw arrows
+                if (!cells[cellKey].allCoords) cells[cellKey].allCoords = {};
+                cells[cellKey].allCoords[idx] = coords;
+            });
+
+            var cellKeys = Object.keys(cells);
+            var promises = cellKeys.map(function(key) {
+                var cell = cells[key];
+                var ll   = cell.ll;
+                return fetch('https://api.open-meteo.com/v1/forecast?latitude=' + ll[1] + '&longitude=' + ll[0] + '&current=wind_speed_10m,wind_direction_10m')
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        var windSpeed = d.current.wind_speed_10m;
+                        var windDir   = d.current.wind_direction_10m;
+                        // Apply this reading to every hotspot in the cell
+                        cell.featureIndices.forEach(function(idx) {
+                            nasaWindData[idx] = {
+                                coords:        cell.allCoords[idx],
+                                windSpeed:     windSpeed,
+                                windDirection: windDir
+                            };
+                        });
+                    })
+                    .catch(function() {});
+            });
+
+            Promise.all(promises).then(function() { drawNASAWindOverlay(); });
+        }
+
+        function drawNASAWindOverlay() {
+            clearNASAWindOverlay();
+            Object.keys(nasaWindData).forEach(function(k) {
+                var d = nasaWindData[k];
+                drawArrow(d.coords, d.windDirection, d.windSpeed, '#e65100', nasaWindOverlays, 'nasaWindArrow');
+            });
+            updateWarnings();
+        }
+
+        function clearNASAWindOverlay() {
+            measureSource.getFeatures().slice().forEach(function(f) {
+                if (f.get('type') === 'nasaWindArrow') measureSource.removeFeature(f);
+            });
+            nasaWindOverlays.forEach(function(o) { map.removeOverlay(o); });
+            nasaWindOverlays = [];
+            // Note: nasaWindData is NOT cleared here — only cleared when user disables NASA Wind
+        }
+
+        // ── NASA Distance (triple toggle) ─────────────────────────
+        function cycleNASADist() {
+            if (watchtowers.length === 0) {
+                showModal('Add at least one watchtower first.');
+                return;
+            }
+            if (!firmsEnabled) {
+                showModal('Enable NASA Satellite Fires first.');
+                return;
+            }
+            nasaDistMode = (nasaDistMode + 1) % 4;
+            var btn  = document.getElementById('btn-nasadist');
+            var pill = document.getElementById('nasadist-mode-pill');
+            pill.textContent = DIST_LABELS[nasaDistMode];
+
+            if (nasaDistMode === 0) {
+                btn.classList.remove('active');
+                clearNASADistanceLines();
+            } else {
+                btn.classList.add('active');
+                drawNASADistanceLines();
+            }
+        }
+
+        function drawNASADistanceLines() {
+            clearNASADistanceLines();
+            if (nasaDistMode === 0 || !firmsEnabled) return;
+            var threshold = DIST_THRESHOLDS[nasaDistMode];
+
+            watchtowers.forEach(function(wt) {
+                firmsSource.getFeatures().forEach(function(feature) {
+                    var fc = feature.getGeometry().getCoordinates();
+                    var line   = new ol.geom.LineString([wt.coordinate, fc]);
+                    var length = ol.sphere.getLength(line);
+                    if (length > threshold) return;
+
+                    var lineFeature = new ol.Feature({ geometry: line, type: 'nasaDistLine' });
+                    lineFeature.setStyle(new ol.style.Style({
+                        stroke: new ol.style.Stroke({ color: '#e65100', width: 2, lineDash: [4, 6] })
+                    }));
+                    measureSource.addFeature(lineFeature);
+
+                    var mid = [(wt.coordinate[0] + fc[0]) / 2, (wt.coordinate[1] + fc[1]) / 2];
+                    var labelDiv = document.createElement('div');
+                    labelDiv.className = 'distance-label';
+                    labelDiv.style.background = '#e65100';
+                    labelDiv.textContent = formatDistance(length);
+                    var labelOv = new ol.Overlay({ element: labelDiv, position: mid, positioning: 'center-center' });
+                    map.addOverlay(labelOv);
+                    nasaDistOverlays.push(labelOv);
+                });
+            });
+        }
+
+        function clearNASADistanceLines() {
+            measureSource.getFeatures().slice().forEach(function(f) {
+                if (f.get('type') === 'nasaDistLine') measureSource.removeFeature(f);
+            });
+            nasaDistOverlays.forEach(function(o) { map.removeOverlay(o); });
+            nasaDistOverlays = [];
+        }
+
+        // ── Satellite view ────────────────────────────────────────
+        function toggleSatellite() {
+            isSatelliteView = !isSatelliteView;
+            osmLayer.setVisible(!isSatelliteView);
+            satelliteLayer.setVisible(isSatelliteView);
+            document.getElementById('btn-satellite').classList.toggle('active', isSatelliteView);
+        }
+
+        // ── FIRMS / NASA fires ────────────────────────────────────
+        function toggleFIRMS() {
+            firmsEnabled = !firmsEnabled;
+            var btn = document.getElementById('btn-firms');
+            btn.classList.toggle('active', firmsEnabled);
+            firmsLayer.setVisible(firmsEnabled);
+            if (firmsEnabled && firmsSource.getFeatures().length === 0) {
+                loadFIRMSData();
+            }
+            if (!firmsEnabled) {
+                // Clear dependent NASA overlays
+                if (nasaDistMode > 0) {
+                    nasaDistMode = 0;
+                    document.getElementById('btn-nasadist').classList.remove('active');
+                    document.getElementById('nasadist-mode-pill').textContent = 'Off';
+                    clearNASADistanceLines();
+                }
+                if (nasaWindEnabled) {
+                    nasaWindEnabled = false;
+                    document.getElementById('btn-nasawind').classList.remove('active');
+                    clearNASAWindOverlay();
+                }
+            }
+            updateLegend();
+        }
+
+        function loadFIRMSData() {
+            var loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            loading.classList.remove('error');
+            loading.textContent = 'Loading NASA satellite hotspots...';
+
+            var bbox = '138,-29,154,-10';
+
+            // Try VIIRS Suomi-NPP first with 2-day window (handles processing delays),
+            // then fall back to MODIS_NRT if it returns empty
+            function trySource(source, dayRange, onEmpty) {
+                var url = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv/' +
+                          FIRMS_KEY + '/' + source + '/' + bbox + '/' + dayRange;
+                fetch(url)
+                    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+                    .then(function(csvText) {
+                        var lines = csvText.trim().split('\n');
+                        if (lines.length < 2) {
+                            // No data from this source — try fallback if provided
+                            if (onEmpty) { onEmpty(); } else {
+                                loading.textContent = 'No satellite hotspots found in the last 2 days.';
+                                setTimeout(function() { loading.style.display = 'none'; }, 3000);
+                            }
+                            return;
+                        }
+                        parseFIRMSCSV(csvText, source);
+                    })
+                    .catch(function(err) {
+                        loading.classList.add('error');
+                        loading.textContent = 'Error loading satellite data. Check MAP_KEY.';
+                        setTimeout(function() { loading.style.display = 'none'; }, 5000);
+                    });
+            }
+
+            // Try VIIRS first; if empty try MODIS as fallback
+            trySource('VIIRS_SNPP_NRT', 2, function() {
+                loading.textContent = 'Trying MODIS source...';
+                trySource('MODIS_NRT', 2, null);
+            });
+        }
+
+        function parseFIRMSCSV(csvText, sourceName) {
+            var loading = document.getElementById('loading');
+            var lines   = csvText.trim().split('\n');
+            var headers = lines[0].split(',');
+            var getCol  = function(row, name) {
+                var i = headers.indexOf(name);
+                return i >= 0 ? row[i] : '';
+            };
+            firmsSource.clear();
+            var count = 0;
+            for (var i = 1; i < lines.length; i++) {
+                var row  = lines[i].split(',');
+                var lat  = parseFloat(getCol(row, 'latitude'));
+                var lon  = parseFloat(getCol(row, 'longitude'));
+                if (isNaN(lat) || isNaN(lon)) continue;
+
+                var conf  = (getCol(row, 'confidence') || 'n').toLowerCase().charAt(0);
+                var color = conf === 'h' ? [255, 23, 68, 0.85] : conf === 'l' ? [255, 214, 0, 0.85] : [255, 109, 0, 0.85];
+
+                var feature = new ol.Feature({
+                    geometry: new ol.geom.Point(ol.proj.fromLonLat([lon, lat])),
+                    firmsProps: {
+                        confidence: conf,
+                        frp:        getCol(row, 'frp'),
+                        acq_date:   getCol(row, 'acq_date'),
+                        acq_time:   getCol(row, 'acq_time'),
+                        satellite:  getCol(row, 'satellite') || sourceName,
+                        instrument: getCol(row, 'instrument'),
+                        daynight:   getCol(row, 'daynight')
+                    }
+                });
+                feature.setStyle(new ol.style.Style({
+                    image: new ol.style.Circle({
+                        radius: 10,
+                        fill:   new ol.style.Fill({ color: color }),
+                        stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 })
+                    })
+                }));
+                firmsSource.addFeature(feature);
+                count++;
+            }
+            loading.textContent = 'Loaded ' + count + ' satellite hotspots.';
+            setTimeout(function() { loading.style.display = 'none'; }, 2000);
+            // Re-draw NASA overlays if active
+            if (nasaDistMode > 0) drawNASADistanceLines();
+            if (nasaWindEnabled) fetchWindDataForFIRMS();
+        }
+
+        // ── Watchtower management ─────────────────────────────────
+        function saveWatchtowersToStorage() {
+            localStorage.setItem('bushfire_watchtowers', JSON.stringify(
+                watchtowers.map(function(wt) {
+                    return { id: wt.id, name: wt.name, lonLat: wt.lonLat, index: wt.index, color: wt.color, notes: wt.notes || '' };
+                })
+            ));
+            localStorage.setItem('bushfire_watchtower_counter', watchtowerIdCounter.toString());
+        }
+
+        function makeWatchtowerStyle(color, name) {
+            var r = parseInt(color.slice(1,3), 16);
+            var g = parseInt(color.slice(3,5), 16);
+            var b = parseInt(color.slice(5,7), 16);
+            return new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 12,
+                    fill:   new ol.style.Fill({ color: [r, g, b, 1] }),
+                    stroke: new ol.style.Stroke({ color: 'white', width: 3 })
+                }),
+                text: new ol.style.Text({ text: '🗼', font: '16px sans-serif', offsetY: 0 })
+            });
+        }
+
+        function revealWatchtowerUI() {
+            document.getElementById('watchtower-section').style.display = '';
+            updateLegend();
+        }
+
+        function toggleAddWatchtower() {
+            addingWatchtower = !addingWatchtower;
+            var btn  = document.getElementById('btn-watchtower');
+            var hint = document.getElementById('placement-hint');
+            btn.classList.toggle('active', addingWatchtower);
+            hint.classList.toggle('show', addingWatchtower);
+            map.getTargetElement().style.cursor = addingWatchtower ? 'crosshair' : '';
+        }
+
+        function addWatchtowerAtLocation(coordinate) {
+            var lonLat  = ol.proj.toLonLat(coordinate);
+            var id      = watchtowerIdCounter++;
+            var idx     = watchtowers.length;
+            var color   = getWatchtowerColor(idx);
+
+            var wt = { id: id, name: 'Watchtower ' + (idx + 1), index: idx, coordinate: coordinate, lonLat: lonLat, color: color, notes: '', feature: null };
+            var wtFeature = new ol.Feature({ geometry: new ol.geom.Point(coordinate), type: 'watchtower', watchtowerId: id });
+            wtFeature.setStyle(makeWatchtowerStyle(color, 'Watchtower ' + (idx + 1)));
+            wt.feature = wtFeature;
+
+            measureSource.addFeature(wtFeature);
+            watchtowers.push(wt);
+            saveWatchtowersToStorage();
+            updateWatchtowerList();
+            revealWatchtowerUI();
+
+            if (measureMode > 0) drawDistanceLines();
+            if (nasaDistMode > 0) drawNASADistanceLines();
+
+            addingWatchtower = false;
+            document.getElementById('btn-watchtower').classList.remove('active');
+            document.getElementById('placement-hint').classList.remove('show');
+            map.getTargetElement().style.cursor = '';
+            updateWarnings();
+        }
+
+        function removeWatchtower(watchtowerId) {
+            var idx = watchtowers.findIndex(function(w) { return w.id === watchtowerId; });
+            if (idx === -1) return;
+            measureSource.removeFeature(watchtowers[idx].feature);
+            delete watchtowerWindData[watchtowerId];
+            watchtowers.splice(idx, 1);
+
+            watchtowers.forEach(function(wt, i) {
+                wt.index = i;
+                wt.color = getWatchtowerColor(i);
+                wt.feature.setStyle(makeWatchtowerStyle(wt.color, wt.name));
+            });
+
+            saveWatchtowersToStorage();
+            updateWatchtowerList();
+            if (measureMode > 0) drawDistanceLines();
+            if (nasaDistMode > 0) drawNASADistanceLines();
+            updateWarnings();
+            updateLegend();
+        }
+
+        function renameWatchtower(watchtowerId, newName) {
+            var wt = watchtowers.find(function(w) { return w.id === watchtowerId; });
+            if (wt) {
+                wt.name = newName || ('Watchtower ' + (wt.index + 1));
+                wt.feature.setStyle(makeWatchtowerStyle(wt.color, wt.name));
+                saveWatchtowersToStorage();
+            }
+        }
+
+        function saveWatchtowerNotes(watchtowerId, notes) {
+            var wt = watchtowers.find(function(w) { return w.id === watchtowerId; });
+            if (wt) {
+                wt.notes = notes;
+                saveWatchtowersToStorage();
+            }
+        }
+
+        function updateWatchtowerList() {
+            document.getElementById('watchtower-count').textContent = watchtowers.length;
+            var listDiv = document.getElementById('watchtower-list');
+            if (watchtowers.length === 0) {
+                listDiv.innerHTML = '<div class="watchtower-empty">No watchtowers added yet</div>';
+                return;
+            }
+            var html = '';
+            watchtowers.forEach(function(wt) {
+                html += '<div class="watchtower-item">';
+                html += '<input type="text" class="watchtower-name-input" value="' + wt.name + '" ';
+                html += 'onchange="renameWatchtower(' + wt.id + ', this.value)" onclick="event.stopPropagation()"/>';
+                html += '<button class="watchtower-remove" onclick="removeWatchtower(' + wt.id + ')">Remove</button>';
+                html += '</div>';
+            });
+            listDiv.innerHTML = html;
+        }
+
+        function loadWatchtowersFromStorage() {
+            try {
+                var counter = localStorage.getItem('bushfire_watchtower_counter');
+                var stored  = localStorage.getItem('bushfire_watchtowers');
+                if (counter) watchtowerIdCounter = parseInt(counter, 10);
+                if (!stored) return;
+
+                JSON.parse(stored).forEach(function(wtData) {
+                    var coordinate = ol.proj.fromLonLat(wtData.lonLat);
+                    var wt = { id: wtData.id, name: wtData.name, index: wtData.index, coordinate: coordinate, lonLat: wtData.lonLat, color: wtData.color, notes: wtData.notes || '', feature: null };
+                    var wtFeature = new ol.Feature({ geometry: new ol.geom.Point(coordinate), type: 'watchtower', watchtowerId: wtData.id });
+                    wtFeature.setStyle(makeWatchtowerStyle(wtData.color, wtData.name));
+                    wt.feature = wtFeature;
+                    measureSource.addFeature(wtFeature);
+                    watchtowers.push(wt);
+                });
+
+                updateWatchtowerList();
+                if (watchtowers.length > 0) revealWatchtowerUI();
+            } catch (e) {
+                console.error('Error loading watchtowers:', e);
+            }
+        }
+
+        // ── Warnings ──────────────────────────────────────────────
+        function updateWarnings() {
+            if (qfsFireMode === 2) {
+                document.getElementById('warning-panel').classList.remove('show');
+                return;
+            }
+            var warnings = [];
+
+            // ── QFS fire proximity + QFS wind ember checks ────────
+            var fires = vectorSource.getFeatures();
+            watchtowers.forEach(function(wt) {
+                fires.forEach(function(fire, fireIdx) {
+                    var geom = fire.getGeometry();
+                    if (!geom) return;
+                    var fc = geom.getType() === 'Point' ? geom.getCoordinates() : geom.getInteriorPoint().getCoordinates();
+
+                    var dist = ol.sphere.getLength(new ol.geom.LineString([wt.coordinate, fc]));
+                    if (dist <= 10000) {
+                        var props = fire.get('properties');
+                        warnings.push({ type: 'fire', message: '🔥 FIRE ALERT: ' + formatDistance(dist) + ' from ' + wt.name + ' — ' + (props.headline || 'Incident') });
+                    }
+
+                    if (windEnabled && fireWindData[fireIdx]) {
+                        var d   = fireWindData[fireIdx];
+                        var rad = (90 - d.windDirection) * Math.PI / 180;
+                        var len = d.windSpeed * 1000;
+                        var ep  = [fc[0] + len * Math.cos(rad), fc[1] + len * Math.sin(rad)];
+
+                        var ax = ep[0] - fc[0], ay = ep[1] - fc[1];
+                        var bx = wt.coordinate[0] - fc[0];
+                        var by = wt.coordinate[1] - fc[1];
+                        var segLenSq = ax * ax + ay * ay;
+                        var t = segLenSq > 0 ? Math.max(0, Math.min(1, (bx * ax + by * ay) / segLenSq)) : 0;
+                        var closestX = fc[0] + t * ax;
+                        var closestY = fc[1] + t * ay;
+                        var distToShaft = ol.sphere.getLength(new ol.geom.LineString([[closestX, closestY], wt.coordinate]));
+
+                        if (distToShaft <= 3000) {
+                            warnings.push({ type: 'ember', message: '⚠️ EMBER ZONE: ' + Math.round(d.windSpeed) + ' km/h QFS wind path passes within ' + formatDistance(distToShaft) + ' of ' + wt.name });
+                        }
+                    }
+                });
+            });
+
+            // ── NASA satellite wind ember checks ──────────────────
+            if (nasaWindEnabled && Object.keys(nasaWindData).length > 0) {
+                watchtowers.forEach(function(wt) {
+                    Object.keys(nasaWindData).forEach(function(k) {
+                        var d   = nasaWindData[k];
+                        var fc  = d.coords;
+                        var rad = (90 - d.windDirection) * Math.PI / 180;
+                        var len = d.windSpeed * 1000;
+                        var ep  = [fc[0] + len * Math.cos(rad), fc[1] + len * Math.sin(rad)];
+
+                        var ax = ep[0] - fc[0], ay = ep[1] - fc[1];
+                        var bx = wt.coordinate[0] - fc[0];
+                        var by = wt.coordinate[1] - fc[1];
+                        var segLenSq = ax * ax + ay * ay;
+                        var t = segLenSq > 0 ? Math.max(0, Math.min(1, (bx * ax + by * ay) / segLenSq)) : 0;
+                        var closestX = fc[0] + t * ax;
+                        var closestY = fc[1] + t * ay;
+                        var distToShaft = ol.sphere.getLength(new ol.geom.LineString([[closestX, closestY], wt.coordinate]));
+
+                        if (distToShaft <= 3000) {
+                            warnings.push({ type: 'ember', message: '⚠️ SATELLITE EMBER ZONE: ' + Math.round(d.windSpeed) + ' km/h NASA wind path passes within ' + formatDistance(distToShaft) + ' of ' + wt.name });
+                        }
+                    });
+                });
+            }
+
+            var panel = document.getElementById('warning-panel');
+            if (warnings.length === 0) { panel.classList.remove('show'); return; }
+            panel.innerHTML = warnings.map(function(w) {
+                return '<div class="warning-item ' + (w.type === 'fire' ? 'warning-fire' : 'warning-ember') + '">' + w.message + '</div>';
+            }).join('');
+            panel.classList.add('show');
+        }
+
+        function createWatchtowerPopupContent(wt) {
+            var nearestFires = [];
+            vectorSource.getFeatures().forEach(function(fire) {
+                var geom = fire.getGeometry();
+                if (!geom) return;
+                var fc   = geom.getCoordinates();
+                var dist = ol.sphere.getLength(new ol.geom.LineString([wt.coordinate, fc]));
+                nearestFires.push({ dist: dist, props: fire.get('properties') });
+            });
+            nearestFires.sort(function(a, b) { return a.dist - b.dist; });
+            var top3 = nearestFires.slice(0, 3);
+
+            var html = '<h3>🗼 ' + wt.name + '</h3>';
+
+            // Coords
+            html += '<div class="detail" style="color:#a0aec0;font-size:11px;margin-bottom:8px;">';
+            html += wt.lonLat[1].toFixed(5) + ', ' + wt.lonLat[0].toFixed(5) + '</div>';
+
+            // Nearest fires
+            if (top3.length > 0) {
+                html += '<div class="detail" style="font-weight:600;margin-bottom:4px;">Nearest active incidents:</div>';
+                top3.forEach(function(f) {
+                    var type = f.props.GroupedType || f.props.groupedType || 'Incident';
+                    var loc  = f.props.LocalityName || f.props.Location || '';
+                    html += '<div class="detail">🔴 ' + formatDistance(f.dist) + ' — ' + type + (loc ? ' · ' + loc : '') + '</div>';
+                });
+            } else {
+                html += '<div class="detail" style="color:#38a169;">✅ No active incidents nearby</div>';
+            }
+
+            // Notes
+            html += '<div class="detail" style="font-weight:600;margin-top:10px;margin-bottom:2px;">📝 Notes</div>';
+            html += '<textarea class="watchtower-notes" id="notes-' + wt.id + '" ';
+            html += 'placeholder="Add notes about this location — access routes, hazards, contacts..." ';
+            html += 'onchange="saveWatchtowerNotes(' + wt.id + ', this.value)">' + (wt.notes || '') + '</textarea>';
+
+            return html;
+        }
+
+        // ── Popup content ─────────────────────────────────────────
+        function createPopupContent(props, coordinate, weatherData) {
+            var groupedType = props.GroupedType || props.groupedType || 'Unknown';
+            var badgeClass  = getIncidentBadgeClass(groupedType);
+            var emoji       = qfsFireMode === 0 ? '🔴' : getIncidentEmoji(groupedType);
+
+            // Human-readable incident type label
+            var typeLabel = groupedType
+                .replace(/_/g, ' ')
+                .replace(/\bFire\b/i, 'Fire')
+                .toLowerCase()
+                .replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+
+            // Key fields — prioritise locality over street address
+            var locality = props.LocalityName || props.Locality || '';
+            var street   = props.Location || props.Suburb || '';
+            var location = locality
+                ? (street ? street + ', ' + locality : locality)
+                : street;
+
+            // Status — strip internal codes, make readable
+            var rawStatus = props.CurrentStatus || props.StatusText || props.Status || '';
+            var statusMap = {
+                'Patrolled': 'Being monitored 👀',
+                'Controlled': 'Under control ✅',
+                'Contained': 'Contained ✅',
+                'Being Controlled': 'Crews working to control 🚒',
+                'Out of Control': 'Out of control ⚠️',
+                'Going': 'Active 🔥',
+                'Responded': 'Crews responded 🚒',
+                'Completed': 'Resolved ✅'
+            };
+            var statusDisplay = statusMap[rawStatus] || rawStatus || '—';
+
+            // First reported and last updated
+            var responseTs  = props.Response_Date  || props.ResponseDate  || null;
+            var lastUpdate  = props.LastUpdate      || props.Last_Update   || null;
+
+            function formatTS(val) {
+                if (!val) return null;
+                var d = (typeof val === 'number') ? new Date(val) : new Date(val);
+                return isNaN(d) ? val : d.toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' });
+            }
+
+            // Vehicles
+            var vAssigned = parseInt(props.VehiclesAssigned || 0, 10);
+            var vRoute    = parseInt(props.VehiclesOnRoute  || 0, 10);
+            var vScene    = parseInt(props.VehiclesOnScene  || 0, 10);
+            var vTotal    = vAssigned + vRoute + vScene;
+
+            // Incident reference (shortened)
+            var incidentRef = props.Master_Incident_Number || props.IncidentNumber || '';
+
+            // ── Build HTML ──────────────────────────────────────────
+            var html = '<h3>' + emoji + ' ' + typeLabel;
+            html += '<span class="alert-badge ' + badgeClass + '">' + statusDisplay + '</span></h3>';
+
+            if (location) {
+                html += '<div class="detail"><strong>📍 Location:</strong> ' + location + '</div>';
+            }
+
+            // Distance badges
+            var lonLat = ol.proj.toLonLat(coordinate);
+            watchtowers.forEach(function(wt) {
+                html += '<div class="distance-badge">🗼 ' + calculateDistance(wt.lonLat[0], wt.lonLat[1], lonLat[0], lonLat[1]) + ' from ' + wt.name + '</div>';
+            });
+
+            // Vehicles — only show if any assigned
+            if (vTotal > 0 || vScene > 0 || vRoute > 0) {
+                html += '<div class="detail" style="margin-top:8px;">';
+                html += '<strong>🚒 Vehicles:</strong> ';
+                var parts = [];
+                if (vScene > 0)  parts.push(vScene  + ' on scene');
+                if (vRoute > 0)  parts.push(vRoute  + ' en route');
+                if (vAssigned > 0 && vScene === 0 && vRoute === 0) parts.push(vAssigned + ' assigned');
+                html += (parts.length > 0 ? parts.join(', ') : 'Assigned') + '</div>';
+            } else {
+                html += '<div class="detail" style="margin-top:8px;"><strong>🚒 Vehicles:</strong> None currently assigned</div>';
+            }
+
+            if (formatTS(lastUpdate)) {
+                html += '<div class="detail"><strong>🕐 Last updated:</strong> ' + formatTS(lastUpdate) + ' (QLD time)</div>';
+            }
+            if (formatTS(responseTs)) {
+                html += '<div class="detail"><strong>📅 First reported:</strong> ' + formatTS(responseTs) + ' (QLD time)</div>';
+            }
+            if (incidentRef) {
+                html += '<div class="detail" style="color:#a0aec0;font-size:11px;margin-top:4px;">Ref: ' + incidentRef + '</div>';
+            }
+
+            // Weather
+            if (weatherData) {
+                html += '<div class="popup-weather"><h4>🌤️ Current Conditions</h4>';
+                html += '<div class="weather-item"><span>💨 Wind: ' + weatherData.windSpeed + ' km/h</span>';
+                html += '<span class="wind-arrow" style="transform:rotate(' + weatherData.windDirection + 'deg);">↑</span>';
+                html += '<span style="margin-left:8px;">(' + weatherData.windDirectionText + ')</span></div>';
+                html += '<div class="weather-item"><span>🌡️ Temperature: ' + weatherData.temp + '°C</span></div>';
+                html += '<div class="weather-item"><span>💧 Humidity: ' + weatherData.humidity + '%</span></div>';
+                html += '</div>';
+            } else {
+                html += '<div class="popup-weather"><h4>🌤️ Loading weather data...</h4></div>';
+            }
+            return html;
+        }
+
+        // ── ESCAD data ────────────────────────────────────────────
+        function addFireToMap(feature) {
+            var props  = feature.properties;
+            var geom   = feature.geometry;
+            if (!geom) return;
+
+            var circleFeature = new ol.Feature({
+                geometry:   new ol.geom.Point(ol.proj.fromLonLat(geom.coordinates)),
+                properties: props
+            });
+            circleFeature.setStyle(makeQFSStyle(props));
+            vectorSource.addFeature(circleFeature);
+        }
+
+        function loadBushfireData() {
+            var loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            loading.classList.remove('error');
+            loading.textContent = 'Loading QLD incidents from ESCAD...';
+            if (vectorSource) vectorSource.clear();
+
+            var escadUrl = 'https://services1.arcgis.com/vkTwD8kHw2woKBqV/arcgis/rest/services/' +
+                           'ESCAD_Current_Incidents_Public/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson';
+            var controller = new AbortController();
+            var timer = setTimeout(function() { controller.abort(); }, 15000);
+
+            fetch(escadUrl, { signal: controller.signal })
+                .then(function(r) { clearTimeout(timer); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+                .then(function(data) { processData(data); })
+                .catch(function(err) {
+                    clearTimeout(timer);
+                    loading.classList.add('error');
+                    loading.textContent = 'Error loading ESCAD data. Please refresh.';
+                    setTimeout(function() { loading.style.display = 'none'; }, 5000);
+                });
+        }
+
+        function processData(data) {
+            var loading  = document.getElementById('loading');
+            var features = data.features || [];
+            features.forEach(function(f) { addFireToMap(f); });
+
+            document.getElementById('incident-count').textContent = features.length;
+            document.getElementById('last-update').textContent    = new Date().toLocaleTimeString();
+
+            // Respect current layer visibility
+            vectorLayer.setVisible(qfsFireMode !== 2);
+
+            if (measureMode > 0) drawDistanceLines();
+            if (windEnabled) fetchWindDataForFires();
+
+            var extent = vectorSource.getExtent();
+            if (extent[0] !== Infinity && watchtowers.length === 0) {
+                map.getView().fit(extent, { padding: [50, 50, 50, 300], maxZoom: 12 });
+            }
+
+            updateWarnings();
+            loading.style.display = 'none';
+        }
+
+        // ── Ships (AISStream WebSocket) ───────────────────────────
+        // SVG icon: simple top-down boat shape, bow at the top so 0° = North
+        var SHIP_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="22" height="28">' +
+            '<path d="M12 1 L20 12 L20 27 Q20 30 17 30 L7 30 Q4 30 4 27 L4 12 Z" ' +
+            'fill="#1976d2" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>' +
+            '<circle cx="12" cy="18" r="2.5" fill="white" opacity="0.85"/>' +
+            '</svg>';
+
+        function makeShipStyle(courseDeg) {
+            var rot = (typeof courseDeg === 'number' && !isNaN(courseDeg)) ? courseDeg * Math.PI / 180 : 0;
+            return new ol.style.Style({
+                image: new ol.style.Icon({
+                    src: 'data:image/svg+xml;utf8,' + encodeURIComponent(SHIP_SVG),
+                    rotation: rot,
+                    rotateWithView: false,
+                    anchor: [0.5, 0.5]
+                })
+            });
+        }
+
+        function toggleShips() {
+            shipsEnabled = !shipsEnabled;
+            var btn = document.getElementById('btn-ships');
+            btn.classList.toggle('active', shipsEnabled);
+            shipsLayer.setVisible(shipsEnabled);
+
+            if (shipsEnabled) {
+                connectShipsSocket();
+            } else {
+                disconnectShipsSocket();
+            }
+            updateLegend();
+        }
+
+        function connectShipsSocket() {
+            if (shipsSocket && (shipsSocket.readyState === WebSocket.OPEN || shipsSocket.readyState === WebSocket.CONNECTING)) return;
+
+            try {
+                shipsSocket = new WebSocket('wss://stream.aisstream.io/v0/stream');
+            } catch (e) {
+                console.error('AIS socket failed:', e);
+                return;
+            }
+
+            shipsSocket.onopen = function() {
+                var sub = {
+                    Apikey: AIS_API_KEY,
+                    BoundingBoxes: [[[QLD_BBOX_SOUTH, QLD_BBOX_WEST], [QLD_BBOX_NORTH, QLD_BBOX_EAST]]],
+                    FilterMessageTypes: ['PositionReport', 'ShipStaticData']
+                };
+                shipsSocket.send(JSON.stringify(sub));
+            };
+
+            shipsSocket.onmessage = function(evt) {
+                try {
+                    var msg = JSON.parse(evt.data);
+                    handleAISMessage(msg);
+                } catch (e) { /* ignore malformed */ }
+            };
+
+            shipsSocket.onerror = function(e) {
+                console.warn('AIS socket error', e);
+            };
+
+            shipsSocket.onclose = function() {
+                // Auto-reconnect if user still wants ships on
+                if (shipsEnabled) {
+                    if (shipReconnectTimer) clearTimeout(shipReconnectTimer);
+                    shipReconnectTimer = setTimeout(connectShipsSocket, 5000);
+                }
+            };
+        }
+
+        function disconnectShipsSocket() {
+            if (shipReconnectTimer) { clearTimeout(shipReconnectTimer); shipReconnectTimer = null; }
+            if (shipsSocket) {
+                try { shipsSocket.close(); } catch(e) {}
+                shipsSocket = null;
+            }
+        }
+
+        function handleAISMessage(msg) {
+            var type = msg.MessageType;
+            var meta = msg.MetaData || {};
+            var mmsi = meta.MMSI;
+            if (!mmsi) return;
+
+            if (type === 'ShipStaticData') {
+                var s = (msg.Message && msg.Message.ShipStaticData) || {};
+                shipStaticData[mmsi] = {
+                    name:        (s.Name || '').trim() || shipStaticData[mmsi] && shipStaticData[mmsi].name,
+                    callsign:    (s.CallSign || '').trim(),
+                    type:        s.Type,
+                    destination: (s.Destination || '').trim()
+                };
+                // If we already have a feature for this ship, refresh its props
+                var f = shipFeatures[mmsi];
+                if (f) {
+                    var p = f.get('shipProps') || {};
+                    p.staticData = shipStaticData[mmsi];
+                    f.set('shipProps', p);
+                }
+                return;
+            }
+
+            if (type !== 'PositionReport') return;
+
+            var pr = msg.Message && msg.Message.PositionReport;
+            if (!pr) return;
+
+            var lat = pr.Latitude, lon = pr.Longitude;
+            if (typeof lat !== 'number' || typeof lon !== 'number') return;
+            // AIS sometimes broadcasts 91/181 to mean "no fix"
+            if (lat > 90 || lat < -90 || lon > 180 || lon < -180) return;
+
+            // Course over ground; fall back to true heading if missing
+            var course = pr.Cog;
+            if (course === undefined || course === null || course >= 360) course = pr.TrueHeading;
+            if (course === undefined || course === null || course >= 360) course = 0;
+
+            var coord = ol.proj.fromLonLat([lon, lat]);
+            var feat = shipFeatures[mmsi];
+            var props = {
+                mmsi:       mmsi,
+                shipName:   meta.ShipName || (shipStaticData[mmsi] && shipStaticData[mmsi].name) || '',
+                lat:        lat,
+                lon:        lon,
+                sog:        pr.Sog,             // speed over ground (knots)
+                cog:        pr.Cog,             // course over ground (deg)
+                heading:    pr.TrueHeading,
+                navStatus:  pr.NavigationalStatus,
+                lastSeen:   Date.now(),
+                staticData: shipStaticData[mmsi] || null
+            };
+
+            if (feat) {
+                feat.getGeometry().setCoordinates(coord);
+                feat.set('shipProps', props);
+                feat.setStyle(makeShipStyle(course));
+            } else {
+                feat = new ol.Feature({ geometry: new ol.geom.Point(coord) });
+                feat.set('shipProps', props);
+                feat.setStyle(makeShipStyle(course));
+                shipsSource.addFeature(feat);
+                shipFeatures[mmsi] = feat;
+            }
+        }
+
+        // Drop ships we haven't heard from in a while
+        function pruneStaleShips() {
+            var now = Date.now();
+            Object.keys(shipFeatures).forEach(function(mmsi) {
+                var f = shipFeatures[mmsi];
+                var p = f.get('shipProps') || {};
+                if (now - (p.lastSeen || 0) > SHIP_STALE_MS) {
+                    shipsSource.removeFeature(f);
+                    delete shipFeatures[mmsi];
+                }
+            });
+        }
+        setInterval(pruneStaleShips, 5 * 60 * 1000);
+
+        // AIS ship-type code → human label (abridged from ITU spec)
+        function aisShipTypeLabel(code) {
+            if (!code) return '';
+            if (code >= 20 && code <= 29) return 'Wing-in-ground craft';
+            if (code === 30) return 'Fishing';
+            if (code === 31 || code === 32) return 'Tug';
+            if (code === 33) return 'Dredger';
+            if (code === 34) return 'Dive vessel';
+            if (code === 35) return 'Military';
+            if (code === 36) return 'Sailing';
+            if (code === 37) return 'Pleasure craft';
+            if (code >= 40 && code <= 49) return 'High-speed craft';
+            if (code === 50) return 'Pilot';
+            if (code === 51) return 'Search & rescue';
+            if (code === 52) return 'Tug';
+            if (code === 53) return 'Port tender';
+            if (code === 55) return 'Law enforcement';
+            if (code >= 60 && code <= 69) return 'Passenger';
+            if (code >= 70 && code <= 79) return 'Cargo';
+            if (code >= 80 && code <= 89) return 'Tanker';
+            if (code >= 90 && code <= 99) return 'Other';
+            return '';
+        }
+
+        function createShipPopup(props) {
+            var name = props.shipName || (props.staticData && props.staticData.name) || ('MMSI ' + props.mmsi);
+            var sd   = props.staticData || {};
+            var typeLabel = aisShipTypeLabel(sd.type);
+            var sogText   = (typeof props.sog === 'number') ? props.sog.toFixed(1) + ' kn' : '—';
+            var cogText   = (typeof props.cog === 'number' && props.cog < 360)
+                          ? Math.round(props.cog) + '° (' + getCompassDirection(props.cog) + ')' : '—';
+
+            var html = '<h3>🚢 ' + name + '</h3>';
+            if (typeLabel) html += '<div class="detail"><strong>Type:</strong> ' + typeLabel + '</div>';
+            html += '<div class="detail"><strong>MMSI:</strong> ' + props.mmsi + '</div>';
+            if (sd.callsign)    html += '<div class="detail"><strong>Callsign:</strong> ' + sd.callsign + '</div>';
+            html += '<div class="detail"><strong>Speed:</strong> ' + sogText + '</div>';
+            html += '<div class="detail"><strong>Course:</strong> ' + cogText + '</div>';
+            if (sd.destination) html += '<div class="detail"><strong>Destination:</strong> ' + sd.destination + '</div>';
+            html += '<div class="detail" style="color:#718096;font-size:11px;margin-top:6px;">Position: ' +
+                    props.lat.toFixed(4) + '°, ' + props.lon.toFixed(4) + '°</div>';
+            return html;
+        }
+
+        // ── Planes (OpenSky Network) ──────────────────────────────
+        // SVG icon: simple top-down plane silhouette, nose up so 0° = North
+        var PLANE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28">' +
+            '<path d="M16 2 L18 14 L30 19 L30 22 L18 19.5 L18 26 L22 28 L22 30 L16 28.5 L10 30 L10 28 L14 26 L14 19.5 L2 22 L2 19 L14 14 Z" ' +
+            'fill="#6d4c41" stroke="white" stroke-width="1.2" stroke-linejoin="round"/>' +
+            '</svg>';
+
+        function makePlaneStyle(headingDeg) {
+            var rot = (typeof headingDeg === 'number' && !isNaN(headingDeg)) ? headingDeg * Math.PI / 180 : 0;
+            return new ol.style.Style({
+                image: new ol.style.Icon({
+                    src: 'data:image/svg+xml;utf8,' + encodeURIComponent(PLANE_SVG),
+                    rotation: rot,
+                    rotateWithView: false,
+                    anchor: [0.5, 0.5]
+                })
+            });
+        }
+
+        function togglePlanes() {
+            planesEnabled = !planesEnabled;
+            var btn = document.getElementById('btn-planes');
+            btn.classList.toggle('active', planesEnabled);
+            planesLayer.setVisible(planesEnabled);
+
+            if (planesEnabled) {
+                loadPlanesData();
+                if (planesPollTimer) clearInterval(planesPollTimer);
+                planesPollTimer = setInterval(loadPlanesData, PLANES_POLL_MS);
+            } else {
+                if (planesPollTimer) { clearInterval(planesPollTimer); planesPollTimer = null; }
+            }
+            updateLegend();
+        }
+
+        function loadPlanesData() {
+            var url = 'https://opensky-network.org/api/states/all?lamin=' + QLD_BBOX_SOUTH +
+                      '&lomin=' + QLD_BBOX_WEST +
+                      '&lamax=' + QLD_BBOX_NORTH +
+                      '&lomax=' + QLD_BBOX_EAST;
+
+            fetch(url)
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(data) {
+                    planesSource.clear();
+                    var states = (data && data.states) || [];
+                    states.forEach(function(s) {
+                        // OpenSky state vector: see https://openskynetwork.github.io/opensky-api/rest.html
+                        // [icao24, callsign, origin_country, time_position, last_contact,
+                        //  longitude, latitude, baro_altitude, on_ground, velocity,
+                        //  true_track, vertical_rate, sensors, geo_altitude, squawk, spi, position_source]
+                        var lon = s[5], lat = s[6];
+                        if (lon === null || lat === null) return;
+                        var heading = (s[10] === null) ? 0 : s[10];
+
+                        var feat = new ol.Feature({ geometry: new ol.geom.Point(ol.proj.fromLonLat([lon, lat])) });
+                        feat.set('planeProps', {
+                            icao24:        s[0],
+                            callsign:      (s[1] || '').trim(),
+                            originCountry: s[2],
+                            lon:           lon,
+                            lat:           lat,
+                            altMeters:     s[7],
+                            onGround:      s[8],
+                            velocity:      s[9],
+                            heading:       heading,
+                            verticalRate:  s[11],
+                            geoAltMeters:  s[13]
+                        });
+                        feat.setStyle(makePlaneStyle(heading));
+                        planesSource.addFeature(feat);
+                    });
+                })
+                .catch(function(err) {
+                    console.warn('OpenSky fetch failed:', err);
+                    // OpenSky rate-limits anonymous calls; surface gently if user just turned it on
+                    if (planesEnabled && planesSource.getFeatures().length === 0) {
+                        var loading = document.getElementById('loading');
+                        loading.style.display = 'block';
+                        loading.classList.add('error');
+                        loading.textContent = 'OpenSky aircraft data unavailable (rate-limited or offline). Will retry.';
+                        setTimeout(function() { loading.style.display = 'none'; loading.classList.remove('error'); }, 4000);
+                    }
+                });
+        }
+
+        function createPlanePopup(props) {
+            var name = props.callsign || ('ICAO ' + (props.icao24 || '').toUpperCase());
+            var altFt = (typeof props.altMeters === 'number') ? Math.round(props.altMeters * 3.28084).toLocaleString() + ' ft' : '—';
+            var spdKts = (typeof props.velocity === 'number') ? Math.round(props.velocity * 1.94384) + ' kn' : '—';
+            var hdg    = (typeof props.heading === 'number') ? Math.round(props.heading) + '° (' + getCompassDirection(props.heading) + ')' : '—';
+            var vRate  = (typeof props.verticalRate === 'number')
+                       ? (props.verticalRate > 0.5 ? '↗ Climbing' : props.verticalRate < -0.5 ? '↘ Descending' : '→ Level')
+                       : '—';
+
+            var html = '<h3>✈️ ' + name + '</h3>';
+            if (props.originCountry) html += '<div class="detail"><strong>Country:</strong> ' + props.originCountry + '</div>';
+            html += '<div class="detail"><strong>Altitude:</strong> ' + altFt + '</div>';
+            html += '<div class="detail"><strong>Speed:</strong> ' + spdKts + '</div>';
+            html += '<div class="detail"><strong>Heading:</strong> ' + hdg + '</div>';
+            html += '<div class="detail"><strong>Status:</strong> ' + (props.onGround ? '🛬 On ground' : vRate) + '</div>';
+            html += '<div class="detail" style="color:#718096;font-size:11px;margin-top:6px;">Position: ' +
+                    props.lat.toFixed(4) + '°, ' + props.lon.toFixed(4) + '°</div>';
+            return html;
+        }
+
+        // ── Map initialisation ────────────────────────────────────
+        window.addEventListener('load', function() {
+            try {
+                if (typeof ol === 'undefined') {
+                    document.getElementById('loading').textContent = 'Error: Map library failed to load.';
+                    document.getElementById('loading').classList.add('error');
+                    return;
+                }
+
+                // Build the plain red style now ol is available
+                QFS_RED_STYLE = new ol.style.Style({
+                    image: new ol.style.Circle({
+                        radius: 12,
+                        fill:   new ol.style.Fill({ color: [211, 47, 47, 0.75] }),
+                        stroke: new ol.style.Stroke({ color: [211, 47, 47, 1], width: 2 })
+                    })
+                });
+
+                vectorSource = new ol.source.Vector();
+                vectorLayer  = new ol.layer.Vector({ source: vectorSource });
+
+                osmLayer = new ol.layer.Tile({ source: new ol.source.OSM() });
+
+                satelliteLayer = new ol.layer.Tile({
+                    source: new ol.source.XYZ({
+                        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                        attributions: 'Tiles © Esri'
+                    }),
+                    visible: false
+                });
+
+                measureSource = new ol.source.Vector();
+                measureLayer  = new ol.layer.Vector({
+                    source: measureSource,
+                    style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#FF5722', width: 3 }) })
+                });
+
+                firmsSource = new ol.source.Vector();
+                firmsLayer  = new ol.layer.Vector({ source: firmsSource, visible: false });
+
+                shipsSource = new ol.source.Vector();
+                shipsLayer  = new ol.layer.Vector({ source: shipsSource, visible: false });
+
+                planesSource = new ol.source.Vector();
+                planesLayer  = new ol.layer.Vector({ source: planesSource, visible: false });
+
+                map = new ol.Map({
+                    target: 'map',
+                    layers: [osmLayer, satelliteLayer, firmsLayer, vectorLayer, measureLayer, shipsLayer, planesLayer],
+                    view: new ol.View({ center: ol.proj.fromLonLat([144.5, -22.5]), zoom: 5 })
+                });
+
+                // Popup
+                var container = document.getElementById('popup');
+                var content   = document.getElementById('popup-content');
+                var closer    = document.getElementById('popup-closer');
+
+                popupOverlay = new ol.Overlay({ element: container, autoPan: true, autoPanAnimation: { duration: 250 } });
+                map.addOverlay(popupOverlay);
+
+                closer.onclick = function() { popupOverlay.setPosition(undefined); closer.blur(); return false; };
+
+                map.on('click', function(evt) {
+                    if (addingWatchtower) { addWatchtowerAtLocation(evt.coordinate); return; }
+
+                    // Check watchtower features first (they sit on measureLayer)
+                    var wtFeature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; }, {
+                        hitTolerance: 14,
+                        layerFilter: function(layer) { return layer === measureLayer; }
+                    });
+
+                    if (wtFeature && wtFeature.get('type') === 'watchtower') {
+                        var wtId = wtFeature.get('watchtowerId');
+                        var wt   = watchtowers.find(function(w) { return w.id === wtId; });
+                        if (wt) {
+                            content.innerHTML = createWatchtowerPopupContent(wt);
+                            popupOverlay.setPosition(wtFeature.getGeometry().getCoordinates());
+                        }
+                        return;
+                    }
+
+                    var feature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; }, {
+                        hitTolerance: 10,
+                        layerFilter: function(layer) { return layer === vectorLayer; }
+                    });
+
+                    if (feature) {
+                        var props      = feature.get('properties');
+                        var coordinate = evt.coordinate;
+                        var lonLat     = ol.proj.toLonLat(coordinate);
+                        content.innerHTML = createPopupContent(props, coordinate, null);
+                        popupOverlay.setPosition(coordinate);
+
+                        fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lonLat[1] + '&longitude=' + lonLat[0] + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m')
+                            .then(function(r) { return r.json(); })
+                            .then(function(d) {
+                                content.innerHTML = createPopupContent(props, coordinate, {
+                                    temp: Math.round(d.current.temperature_2m),
+                                    humidity: Math.round(d.current.relative_humidity_2m),
+                                    windSpeed: Math.round(d.current.wind_speed_10m),
+                                    windDirection: d.current.wind_direction_10m,
+                                    windDirectionText: getCompassDirection(d.current.wind_direction_10m)
+                                });
+                            })
+                            .catch(function() {});
+                        return;
+                    }
+
+                    // Check ships (transport icons take precedence over FIRMS hotspots)
+                    var shipFeature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; }, {
+                        hitTolerance: 10,
+                        layerFilter: function(layer) { return layer === shipsLayer; }
+                    });
+                    if (shipFeature) {
+                        content.innerHTML = createShipPopup(shipFeature.get('shipProps'));
+                        popupOverlay.setPosition(shipFeature.getGeometry().getCoordinates());
+                        return;
+                    }
+
+                    // Check planes
+                    var planeFeature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; }, {
+                        hitTolerance: 10,
+                        layerFilter: function(layer) { return layer === planesLayer; }
+                    });
+                    if (planeFeature) {
+                        content.innerHTML = createPlanePopup(planeFeature.get('planeProps'));
+                        popupOverlay.setPosition(planeFeature.getGeometry().getCoordinates());
+                        return;
+                    }
+
+                    // Check FIRMS
+                    var firmsFeature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; }, {
+                        hitTolerance: 8,
+                        layerFilter: function(layer) { return layer === firmsLayer; }
+                    });
+
+                    if (firmsFeature) {
+                        var fp         = firmsFeature.get('firmsProps');
+                        var confLabel  = fp.confidence === 'h' ? 'High' : fp.confidence === 'l' ? 'Low' : 'Nominal';
+                        var confColor  = fp.confidence === 'h' ? '#ff1744' : fp.confidence === 'l' ? '#f9a825' : '#ff6d00';
+                        var satNames   = { 'N': 'Suomi-NPP', '1': 'NOAA-20', '2': 'NOAA-21' };
+                        var satName    = satNames[fp.satellite] || fp.satellite || fp.instrument || '—';
+                        var rawTime    = fp.acq_time || '';
+                        var utcHH      = parseInt(rawTime.slice(0, -2).padStart(2, '0'), 10);
+                        var utcMM      = rawTime.slice(-2);
+                        var aestHH     = (utcHH + 10) % 24;
+                        var dayOffset  = (utcHH + 10) >= 24 ? ' (+1 day)' : '';
+                        var fTime      = aestHH.toString().padStart(2, '0') + ':' + utcMM + ' AEST' + dayOffset;
+                        var frpVal     = parseFloat(fp.frp);
+                        var frpLabel   = isNaN(frpVal) ? '—' : frpVal < 10 ? 'Low (' + frpVal + ' MW)' : frpVal < 50 ? 'Moderate (' + frpVal + ' MW)' : frpVal < 200 ? 'High (' + frpVal + ' MW)' : 'Extreme (' + frpVal + ' MW)';
+
+                        var html = '<h3 style="display:flex;align-items:center;gap:8px;">🛰️ NASA Satellite Hotspot';
+                        html += '<span class="alert-badge" style="background:' + confColor + '">' + confLabel + ' confidence</span></h3>';
+                        html += '<div class="detail"><strong>FRP:</strong> ' + frpLabel + '</div>';
+                        html += '<div class="detail"><strong>Detected:</strong> ' + fp.acq_date + ' at ' + fTime + '</div>';
+                        html += '<div class="detail"><strong>Satellite:</strong> ' + satName + ' (VIIRS)</div>';
+                        html += '<div class="detail"><strong>Pass:</strong> ' + (fp.daynight === 'D' ? '☀️ Daytime' : '🌙 Nighttime') + '</div>';
+                        html += '<div class="detail" style="margin-top:8px;padding:6px 8px;background:#fff8e1;border-radius:4px;font-size:11px;color:#795548;">⚠️ Thermal hotspot from satellite imagery — not a confirmed fire report.</div>';
+                        content.innerHTML = html;
+                        popupOverlay.setPosition(evt.coordinate);
+                    } else {
+                        popupOverlay.setPosition(undefined);
+                    }
+                });
+
+                loadWatchtowersFromStorage();
+                loadBushfireData();
+                setInterval(loadBushfireData, 5 * 60 * 1000);
+
+            } catch (e) {
+                console.error('Init error:', e);
+                document.getElementById('loading').textContent = 'Error: ' + e.message;
+                document.getElementById('loading').classList.add('error');
+            }
+        });
+
+    </script>
+</body>
+</html>
