@@ -2050,40 +2050,86 @@
         function connectShipsSocket() {
             if (shipsSocket && (shipsSocket.readyState === WebSocket.OPEN || shipsSocket.readyState === WebSocket.CONNECTING)) return;
 
+            console.log('[Ships] Opening WebSocket to aisstream.io...');
+            showShipStatus('🚢 Connecting to AIS stream...', false);
+
             try {
                 shipsSocket = new WebSocket('wss://stream.aisstream.io/v0/stream');
             } catch (e) {
-                console.error('AIS socket failed:', e);
+                console.error('[Ships] Socket construction failed:', e);
+                showShipStatus('🚢 Failed to open WebSocket: ' + e.message, true);
                 return;
             }
 
             shipsSocket.onopen = function() {
+                console.log('[Ships] Socket open, sending subscription...');
                 var sub = {
-                    Apikey: AIS_API_KEY,
+                    APIKey: AIS_API_KEY,    // NOTE: must be 'APIKey' (not 'Apikey'); JS docs show wrong casing
                     BoundingBoxes: [[[QLD_BBOX_SOUTH, QLD_BBOX_WEST], [QLD_BBOX_NORTH, QLD_BBOX_EAST]]],
                     FilterMessageTypes: ['PositionReport', 'ShipStaticData']
                 };
+                console.log('[Ships] Subscription:', JSON.stringify(sub).replace(AIS_API_KEY, '<KEY>'));
                 shipsSocket.send(JSON.stringify(sub));
+                showShipStatus('🚢 AIS connected — waiting for ships in QLD waters...', false);
             };
 
             shipsSocket.onmessage = function(evt) {
                 try {
                     var msg = JSON.parse(evt.data);
+                    // Surface server-side errors (e.g. bad subscription, invalid key)
+                    if (msg && (msg.error || msg.Error)) {
+                        console.error('[Ships] Server error:', msg);
+                        showShipStatus('🚢 AIS error: ' + (msg.error || msg.Error), true);
+                        return;
+                    }
                     handleAISMessage(msg);
-                } catch (e) { /* ignore malformed */ }
+                    updateShipCountStatus();
+                } catch (e) {
+                    console.warn('[Ships] Bad message:', e, evt.data);
+                }
             };
 
             shipsSocket.onerror = function(e) {
-                console.warn('AIS socket error', e);
+                console.warn('[Ships] Socket error', e);
             };
 
-            shipsSocket.onclose = function() {
-                // Auto-reconnect if user still wants ships on
+            shipsSocket.onclose = function(evt) {
+                console.warn('[Ships] Socket closed code=' + evt.code + ' reason="' + evt.reason + '" wasClean=' + evt.wasClean);
                 if (shipsEnabled) {
+                    showShipStatus('🚢 AIS disconnected (code ' + evt.code + '), reconnecting in 5s...', evt.code !== 1000);
                     if (shipReconnectTimer) clearTimeout(shipReconnectTimer);
                     shipReconnectTimer = setTimeout(connectShipsSocket, 5000);
                 }
             };
+        }
+
+        function showShipStatus(msg, isError) {
+            var loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            loading.classList.toggle('error', !!isError);
+            loading.textContent = msg;
+            // Auto-hide non-error info messages after a moment
+            if (!isError) {
+                clearTimeout(showShipStatus._t);
+                showShipStatus._t = setTimeout(function() { loading.style.display = 'none'; }, 3500);
+            } else {
+                clearTimeout(showShipStatus._t);
+                showShipStatus._t = setTimeout(function() {
+                    loading.style.display = 'none';
+                    loading.classList.remove('error');
+                }, 6000);
+            }
+        }
+
+        function updateShipCountStatus() {
+            // Throttle so we don't spam the loading element with every AIS packet
+            if (updateShipCountStatus._t) return;
+            updateShipCountStatus._t = setTimeout(function() {
+                updateShipCountStatus._t = null;
+                if (!shipsEnabled) return;
+                var n = shipsSource.getFeatures().length;
+                if (n > 0) showShipStatus('🚢 ' + n + ' ships visible', false);
+            }, 1500);
         }
 
         function disconnectShipsSocket() {
@@ -2260,19 +2306,19 @@
                       '&lamax=' + QLD_BBOX_NORTH +
                       '&lomax=' + QLD_BBOX_EAST;
 
+            console.log('[Planes] Fetching', url);
+
             fetch(url)
                 .then(function(r) {
-                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    console.log('[Planes] HTTP', r.status, r.statusText);
+                    if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + r.statusText);
                     return r.json();
                 })
                 .then(function(data) {
                     planesSource.clear();
                     var states = (data && data.states) || [];
+                    console.log('[Planes] Got', states.length, 'aircraft');
                     states.forEach(function(s) {
-                        // OpenSky state vector: see https://openskynetwork.github.io/opensky-api/rest.html
-                        // [icao24, callsign, origin_country, time_position, last_contact,
-                        //  longitude, latitude, baro_altitude, on_ground, velocity,
-                        //  true_track, vertical_rate, sensors, geo_altitude, squawk, spi, position_source]
                         var lon = s[5], lat = s[6];
                         if (lon === null || lat === null) return;
                         var heading = (s[10] === null) ? 0 : s[10];
@@ -2294,16 +2340,29 @@
                         feat.setStyle(makePlaneStyle(heading));
                         planesSource.addFeature(feat);
                     });
+
+                    if (planesEnabled && planesSource.getFeatures().length > 0) {
+                        var loading = document.getElementById('loading');
+                        loading.style.display = 'block';
+                        loading.classList.remove('error');
+                        loading.textContent = '✈️ ' + planesSource.getFeatures().length + ' aircraft visible';
+                        setTimeout(function() { loading.style.display = 'none'; }, 2500);
+                    }
                 })
                 .catch(function(err) {
-                    console.warn('OpenSky fetch failed:', err);
-                    // OpenSky rate-limits anonymous calls; surface gently if user just turned it on
-                    if (planesEnabled && planesSource.getFeatures().length === 0) {
+                    console.error('[Planes] Fetch failed:', err);
+                    if (planesEnabled) {
                         var loading = document.getElementById('loading');
                         loading.style.display = 'block';
                         loading.classList.add('error');
-                        loading.textContent = 'OpenSky aircraft data unavailable (rate-limited or offline). Will retry.';
-                        setTimeout(function() { loading.style.display = 'none'; loading.classList.remove('error'); }, 4000);
+                        // TypeError in browsers = CORS / network / DNS failure
+                        var msg = err && err.message ? err.message : 'unknown';
+                        if (msg.indexOf('Failed to fetch') !== -1 || err.name === 'TypeError') {
+                            loading.textContent = '✈️ Plane data blocked by browser (CORS) — see chat for fix';
+                        } else {
+                            loading.textContent = '✈️ Plane data error: ' + msg;
+                        }
+                        setTimeout(function() { loading.style.display = 'none'; loading.classList.remove('error'); }, 6000);
                     }
                 });
         }
