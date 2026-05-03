@@ -222,8 +222,6 @@
         .firms-high  { background-color: #ff1744; }
         .firms-nom   { background-color: #ff6d00; }
         .firms-low   { background-color: #ffd600; }
-        .c-ship      { background-color: #1976d2; }
-        .c-plane     { background-color: #6d4c41; }
 
         /* Also keep old class names for badge CSS still in use */
         .incident-bushfire  { background-color: #d32f2f; }
@@ -359,33 +357,6 @@
         }
 
         .error { background: #fff5f5; color: #c53030; }
-
-        /* Persistent transport status panel — doesn't block UI like .loading does */
-        .transport-status {
-            position: fixed;
-            top: 12px;
-            left: 12px;
-            background: rgba(26, 54, 93, 0.92);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 1100;
-            font-size: 12px;
-            font-weight: 500;
-            line-height: 1.45;
-            max-width: 300px;
-            display: none;
-        }
-        .transport-status.show { display: block; }
-        .transport-status.warn  { background: rgba(214, 158, 46, 0.95); }
-        .transport-status.error { background: rgba(197, 48, 48, 0.95); }
-        .transport-status .ts-line { display: block; }
-        .transport-status .ts-dim  { opacity: 0.75; font-size: 11px; }
-
-        @media (max-width: 767px) {
-            .transport-status { top: 64px; max-width: calc(100vw - 80px); }
-        }
 
         .warning-panel {
             position: fixed;
@@ -682,7 +653,6 @@
 
     <div id="warning-panel" class="warning-panel"></div>
     <div id="loading" class="loading">Loading incident data...</div>
-    <div id="transport-status" class="transport-status"></div>
 
     <div id="custom-modal" class="custom-modal">
         <div class="modal-content">
@@ -775,16 +745,6 @@
                         📏 NASA Distance <span class="mode-pill" id="nasadist-mode-pill">Off</span>
                     </button>
 
-                    <div class="control-section-label" style="margin-top:10px;">Live Transport</div>
-                    <button class="control-btn" id="btn-ships" onclick="toggleShips()">
-                        🚢 Live Ships
-                        <span class="help-btn" onclick="event.stopPropagation();showHelp('ships')" title="About ship data">?</span>
-                    </button>
-                    <button class="control-btn" id="btn-planes" onclick="togglePlanes()">
-                        ✈️ Live Planes
-                        <span class="help-btn" onclick="event.stopPropagation();showHelp('planes')" title="About plane data">?</span>
-                    </button>
-
                 </div>
             </div>
 
@@ -842,26 +802,6 @@
                         <div class="legend-item"><div class="legend-color firms-low"></div>Low confidence</div>
                     </div>
 
-                    <!-- Shown when ships layer is enabled -->
-                    <div id="legend-ships" style="display:none;">
-                        <div class="legend-divider"></div>
-                        <div class="legend-subtitle">Live Ships (AIS)</div>
-                        <div class="legend-item" style="font-size:11px;color:#718096;margin-bottom:5px;line-height:1.4;">
-                            Real-time vessel positions broadcast over AIS. Pointed end shows the direction the ship is travelling.
-                        </div>
-                        <div class="legend-item"><div class="legend-color c-ship"></div>🚢 Ship</div>
-                    </div>
-
-                    <!-- Shown when planes layer is enabled -->
-                    <div id="legend-planes" style="display:none;">
-                        <div class="legend-divider"></div>
-                        <div class="legend-subtitle">Live Planes (ADS-B)</div>
-                        <div class="legend-item" style="font-size:11px;color:#718096;margin-bottom:5px;line-height:1.4;">
-                            Aircraft positions reported via ADS-B. Nose of the plane points in the direction of travel. Updates every 30 seconds.
-                        </div>
-                        <div class="legend-item"><div class="legend-color c-plane"></div>✈️ Plane</div>
-                    </div>
-
                 </div>
             </div>
 
@@ -902,37 +842,6 @@
 
         var FIRMS_KEY = '577b0590cbd4f45bb0cfdbfbca871a11';
 
-        // ── Ships & Planes state ──────────────────────────────────
-        var AIS_API_KEY = 'c809ec1c8eefd41ba9b6f91eedf092caef2f4973';
-        var QLD_BBOX_SOUTH = -29, QLD_BBOX_NORTH = -10, QLD_BBOX_WEST = 138, QLD_BBOX_EAST = 154;
-
-        var shipsLayer, shipsSource;
-        var shipsEnabled = false;
-        var shipsSocket  = null;
-        var shipFeatures = {};      // MMSI -> ol.Feature
-        var shipStaticData = {};    // MMSI -> {name, type, callsign, destination}
-        var shipReconnectTimer = null;
-        var SHIP_STALE_MS = 30 * 60 * 1000; // drop ships not seen for 30 min
-
-        var planesLayer, planesSource;
-        var planesEnabled = false;
-        var planesPollTimer = null;
-        var PLANES_POLL_MS = 30 * 1000;
-
-        // Diagnostic counters for on-screen debug panel
-        var shipStats = {
-            socketOpenedAt: 0,
-            firstMessageAt: 0,
-            lastMessageAt: 0,
-            totalMessages: 0,
-            positionReports: 0,
-            staticData: 0,
-            otherTypes: 0,
-            errors: 0,
-            messageTypesSeen: {}
-        };
-        var shipStatusTimer = null;
-
         var DIST_THRESHOLDS = [0, 10000, 30000, 50000]; // metres
         var DIST_LABELS     = ['Off', '10 km', '30 km', '50 km'];
 
@@ -968,17 +877,6 @@
                 body  = '<p>Satellite view can help you quickly assess what a fire may be moving through — dry grassland, dense bush, farmland, or more developed areas.</p>' +
                         '<p>Use it alongside the wind arrows to get a clearer picture of the path a fire might take.</p>' +
                         '<p style="color:#718096;font-size:12px;">Note: in rural areas satellite photos can be dated and may be out of season. The terrain may be dryer than the photo indicates.</p>';
-            } else if (topic === 'ships') {
-                title = '🚢 Live Ships';
-                body  = '<p>Shows real-time positions of ships broadcasting AIS (Automatic Identification System) signals around the Queensland coast.</p>' +
-                        '<p>Most cargo ships, tankers, ferries and many fishing boats and yachts are visible. The icon points in the direction the ship is travelling.</p>' +
-                        '<p>Tap a ship to see its name, speed, and destination if available.</p>' +
-                        '<p style="color:#718096;font-size:12px;">Data from aisstream.io. Updates stream in live as ships transmit.</p>';
-            } else if (topic === 'planes') {
-                title = '✈️ Live Planes';
-                body  = '<p>Shows aircraft currently flying over Queensland, using ADS-B signals broadcast from the planes themselves.</p>' +
-                        '<p>The plane icon rotates to show the direction of travel. Tap any plane for callsign, altitude, and speed.</p>' +
-                        '<p style="color:#718096;font-size:12px;">Data from the OpenSky Network. Refreshes every 30 seconds.</p>';
             }
             document.getElementById('modal-title').textContent = title;
             document.getElementById('modal-body').innerHTML    = body;
@@ -1100,10 +998,6 @@
                 watchtowers.length > 0 ? '' : 'none';
             document.getElementById('legend-nasa').style.display =
                 firmsEnabled ? '' : 'none';
-            document.getElementById('legend-ships').style.display =
-                shipsEnabled ? '' : 'none';
-            document.getElementById('legend-planes').style.display =
-                planesEnabled ? '' : 'none';
         }
 
         // ── QFS fire mode (triple toggle) ─────────────────────────
@@ -2055,485 +1949,6 @@
             loading.style.display = 'none';
         }
 
-        // ── Ships (AISStream WebSocket) ───────────────────────────
-        // SVG icon: simple top-down boat shape, bow at the top so 0° = North
-        var SHIP_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="22" height="28">' +
-            '<path d="M12 1 L20 12 L20 27 Q20 30 17 30 L7 30 Q4 30 4 27 L4 12 Z" ' +
-            'fill="#1976d2" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>' +
-            '<circle cx="12" cy="18" r="2.5" fill="white" opacity="0.85"/>' +
-            '</svg>';
-
-        function makeShipStyle(courseDeg) {
-            var rot = (typeof courseDeg === 'number' && !isNaN(courseDeg)) ? courseDeg * Math.PI / 180 : 0;
-            return new ol.style.Style({
-                image: new ol.style.Icon({
-                    src: 'data:image/svg+xml;utf8,' + encodeURIComponent(SHIP_SVG),
-                    rotation: rot,
-                    rotateWithView: false,
-                    anchor: [0.5, 0.5]
-                })
-            });
-        }
-
-        function toggleShips() {
-            shipsEnabled = !shipsEnabled;
-            var btn = document.getElementById('btn-ships');
-            btn.classList.toggle('active', shipsEnabled);
-            shipsLayer.setVisible(shipsEnabled);
-
-            if (shipsEnabled) {
-                resetShipStats();
-                connectShipsSocket();
-                startShipStatusUpdates();
-            } else {
-                disconnectShipsSocket();
-                stopShipStatusUpdates();
-                hideTransportStatus();
-            }
-            updateLegend();
-        }
-
-        function resetShipStats() {
-            shipStats.socketOpenedAt = 0;
-            shipStats.firstMessageAt = 0;
-            shipStats.lastMessageAt = 0;
-            shipStats.totalMessages = 0;
-            shipStats.positionReports = 0;
-            shipStats.staticData = 0;
-            shipStats.otherTypes = 0;
-            shipStats.errors = 0;
-            shipStats.messageTypesSeen = {};
-        }
-
-        function connectShipsSocket() {
-            if (shipsSocket && (shipsSocket.readyState === WebSocket.OPEN || shipsSocket.readyState === WebSocket.CONNECTING)) return;
-
-            console.log('[Ships] Opening WebSocket to aisstream.io...');
-            showTransportStatus('🚢 Connecting to AIS stream…', 'info');
-
-            try {
-                shipsSocket = new WebSocket('wss://stream.aisstream.io/v0/stream');
-            } catch (e) {
-                console.error('[Ships] Socket construction failed:', e);
-                showTransportStatus('🚢 Failed to open WebSocket: ' + e.message, 'error');
-                return;
-            }
-
-            shipsSocket.onopen = function() {
-                console.log('[Ships] Socket open, sending subscription...');
-                shipStats.socketOpenedAt = Date.now();
-                // Note: APIKey field name (NOT Apikey — JS docs are wrong; Python/Go/Rust all use APIKey).
-                // Also: NOT filtering message types — accept all and filter client-side, since
-                // FilterMessageTypes appeared to be silently rejecting our subscription.
-                var sub = {
-                    APIKey: AIS_API_KEY,
-                    BoundingBoxes: [[[QLD_BBOX_SOUTH, QLD_BBOX_WEST], [QLD_BBOX_NORTH, QLD_BBOX_EAST]]]
-                };
-                console.log('[Ships] Subscription:', JSON.stringify(sub).replace(AIS_API_KEY, '<KEY>'));
-                shipsSocket.send(JSON.stringify(sub));
-            };
-
-            shipsSocket.onmessage = function(evt) {
-                shipStats.totalMessages++;
-                shipStats.lastMessageAt = Date.now();
-                if (!shipStats.firstMessageAt) shipStats.firstMessageAt = shipStats.lastMessageAt;
-
-                try {
-                    var msg = JSON.parse(evt.data);
-
-                    // Server-side error (bad subscription, bad key, etc.)
-                    if (msg && (msg.error || msg.Error)) {
-                        shipStats.errors++;
-                        var errText = msg.error || msg.Error;
-                        console.error('[Ships] Server error:', errText);
-                        showTransportStatus('🚢 AIS error: ' + errText, 'error');
-                        return;
-                    }
-
-                    var mt = msg.MessageType || 'unknown';
-                    shipStats.messageTypesSeen[mt] = (shipStats.messageTypesSeen[mt] || 0) + 1;
-
-                    if (mt === 'PositionReport') {
-                        shipStats.positionReports++;
-                        handleAISMessage(msg);
-                    } else if (mt === 'ShipStaticData') {
-                        shipStats.staticData++;
-                        handleAISMessage(msg);
-                    } else {
-                        shipStats.otherTypes++;
-                        // Other AIS message types (binary broadcasts, safety, etc.) are ignored
-                    }
-                } catch (e) {
-                    console.warn('[Ships] Bad message:', e, evt.data);
-                }
-            };
-
-            shipsSocket.onerror = function(e) {
-                console.warn('[Ships] Socket error', e);
-            };
-
-            shipsSocket.onclose = function(evt) {
-                console.warn('[Ships] Socket closed code=' + evt.code + ' reason="' + evt.reason + '" wasClean=' + evt.wasClean);
-                if (shipsEnabled) {
-                    showTransportStatus('🚢 AIS disconnected (code ' + evt.code + '). Reconnecting in 5s…', 'warn');
-                    if (shipReconnectTimer) clearTimeout(shipReconnectTimer);
-                    shipReconnectTimer = setTimeout(connectShipsSocket, 5000);
-                }
-            };
-        }
-
-        function startShipStatusUpdates() {
-            if (shipStatusTimer) clearInterval(shipStatusTimer);
-            shipStatusTimer = setInterval(updateShipStatusPanel, 1000);
-            updateShipStatusPanel();
-        }
-
-        function stopShipStatusUpdates() {
-            if (shipStatusTimer) { clearInterval(shipStatusTimer); shipStatusTimer = null; }
-        }
-
-        function updateShipStatusPanel() {
-            if (!shipsEnabled) return;
-            var now = Date.now();
-            var nShips = shipsSource.getFeatures().length;
-            var ageSec = shipStats.lastMessageAt ? Math.round((now - shipStats.lastMessageAt) / 1000) : null;
-            var sinceOpen = shipStats.socketOpenedAt ? Math.round((now - shipStats.socketOpenedAt) / 1000) : 0;
-
-            // Edge case: messages arriving but no ships ever added — parser bug
-            if (shipStats.positionReports >= 5 && nShips === 0) {
-                showTransportStatusHTML(
-                    '🚢 ' + shipStats.positionReports + ' position reports received<br>' +
-                    '<span class="ts-dim">but 0 ships added to map — parser issue</span>',
-                    'warn'
-                );
-                return;
-            }
-
-            // Edge case: no data at all after 30s
-            if (shipStats.totalMessages === 0 && sinceOpen >= 30) {
-                showTransportStatusHTML(
-                    '🚢 No ship data after ' + sinceOpen + 's<br>' +
-                    '<span class="ts-dim">Subscription likely rejected. The AIS API key may have been rotated — try generating a new one at aisstream.io.</span>',
-                    'error'
-                );
-                return;
-            }
-
-            // Normal status
-            var lines = [];
-            lines.push('🚢 ' + nShips + ' ship' + (nShips === 1 ? '' : 's') + ' on map');
-
-            if (shipStats.totalMessages === 0) {
-                lines.push('<span class="ts-dim">Waiting for AIS data… (' + sinceOpen + 's)</span>');
-            } else {
-                lines.push('<span class="ts-dim">' +
-                    shipStats.totalMessages + ' msg • ' +
-                    shipStats.positionReports + ' pos • ' +
-                    shipStats.staticData + ' static' +
-                    (shipStats.otherTypes ? ' • ' + shipStats.otherTypes + ' other' : '') +
-                    '</span>');
-
-                if (ageSec !== null) {
-                    lines.push('<span class="ts-dim">' +
-                        (ageSec < 5 ? 'Live ✓' : 'Last msg ' + ageSec + 's ago') +
-                        '</span>');
-                }
-            }
-
-            showTransportStatusHTML(lines.join('<br>'), nShips > 0 ? 'info' : 'warn');
-        }
-
-        function showTransportStatus(text, kind) {
-            showTransportStatusHTML(text, kind);
-        }
-
-        function showTransportStatusHTML(html, kind) {
-            var el = document.getElementById('transport-status');
-            el.innerHTML = html;
-            el.classList.remove('warn', 'error');
-            if (kind === 'warn')  el.classList.add('warn');
-            if (kind === 'error') el.classList.add('error');
-            el.classList.add('show');
-        }
-
-        function hideTransportStatus() {
-            var el = document.getElementById('transport-status');
-            el.classList.remove('show');
-        }
-
-        function disconnectShipsSocket() {
-            if (shipReconnectTimer) { clearTimeout(shipReconnectTimer); shipReconnectTimer = null; }
-            if (shipsSocket) {
-                try { shipsSocket.close(); } catch(e) {}
-                shipsSocket = null;
-            }
-        }
-
-        function handleAISMessage(msg) {
-            var type = msg.MessageType;
-            var meta = msg.MetaData || {};
-            // Try MetaData.MMSI first, fall back to inner UserID if missing
-            var mmsi = meta.MMSI;
-            if (!mmsi && msg.Message) {
-                var inner = msg.Message[type];
-                if (inner && inner.UserID) mmsi = inner.UserID;
-            }
-            if (!mmsi) {
-                console.warn('[Ships] No MMSI in message:', type, msg);
-                return;
-            }
-
-            if (type === 'ShipStaticData') {
-                var s = (msg.Message && msg.Message.ShipStaticData) || {};
-                shipStaticData[mmsi] = {
-                    name:        (s.Name || '').trim() || (shipStaticData[mmsi] && shipStaticData[mmsi].name),
-                    callsign:    (s.CallSign || '').trim(),
-                    type:        s.Type,
-                    destination: (s.Destination || '').trim()
-                };
-                // If we already have a feature for this ship, refresh its props
-                var f = shipFeatures[mmsi];
-                if (f) {
-                    var p = f.get('shipProps') || {};
-                    p.staticData = shipStaticData[mmsi];
-                    f.set('shipProps', p);
-                }
-                return;
-            }
-
-            if (type !== 'PositionReport') return;
-
-            var pr = msg.Message && msg.Message.PositionReport;
-            if (!pr) {
-                console.warn('[Ships] PositionReport message missing inner data:', msg);
-                return;
-            }
-
-            var lat = pr.Latitude, lon = pr.Longitude;
-            // Try MetaData.latitude/longitude as fallback (lowercase keys)
-            if (typeof lat !== 'number') lat = meta.latitude;
-            if (typeof lon !== 'number') lon = meta.longitude;
-
-            if (typeof lat !== 'number' || typeof lon !== 'number') {
-                console.warn('[Ships] No coords in PositionReport:', msg);
-                return;
-            }
-            // AIS sometimes broadcasts 91/181 to mean "no fix"
-            if (lat > 90 || lat < -90 || lon > 180 || lon < -180) return;
-
-            // Course over ground; fall back to true heading if missing
-            var course = pr.Cog;
-            if (course === undefined || course === null || course >= 360) course = pr.TrueHeading;
-            if (course === undefined || course === null || course >= 360) course = 0;
-
-            var coord = ol.proj.fromLonLat([lon, lat]);
-            var feat = shipFeatures[mmsi];
-            var props = {
-                mmsi:       mmsi,
-                shipName:   meta.ShipName || (shipStaticData[mmsi] && shipStaticData[mmsi].name) || '',
-                lat:        lat,
-                lon:        lon,
-                sog:        pr.Sog,             // speed over ground (knots)
-                cog:        pr.Cog,             // course over ground (deg)
-                heading:    pr.TrueHeading,
-                navStatus:  pr.NavigationalStatus,
-                lastSeen:   Date.now(),
-                staticData: shipStaticData[mmsi] || null
-            };
-
-            if (feat) {
-                feat.getGeometry().setCoordinates(coord);
-                feat.set('shipProps', props);
-                feat.setStyle(makeShipStyle(course));
-            } else {
-                feat = new ol.Feature({ geometry: new ol.geom.Point(coord) });
-                feat.set('shipProps', props);
-                feat.setStyle(makeShipStyle(course));
-                shipsSource.addFeature(feat);
-                shipFeatures[mmsi] = feat;
-            }
-        }
-
-        // Drop ships we haven't heard from in a while
-        function pruneStaleShips() {
-            var now = Date.now();
-            Object.keys(shipFeatures).forEach(function(mmsi) {
-                var f = shipFeatures[mmsi];
-                var p = f.get('shipProps') || {};
-                if (now - (p.lastSeen || 0) > SHIP_STALE_MS) {
-                    shipsSource.removeFeature(f);
-                    delete shipFeatures[mmsi];
-                }
-            });
-        }
-        setInterval(pruneStaleShips, 5 * 60 * 1000);
-
-        // AIS ship-type code → human label (abridged from ITU spec)
-        function aisShipTypeLabel(code) {
-            if (!code) return '';
-            if (code >= 20 && code <= 29) return 'Wing-in-ground craft';
-            if (code === 30) return 'Fishing';
-            if (code === 31 || code === 32) return 'Tug';
-            if (code === 33) return 'Dredger';
-            if (code === 34) return 'Dive vessel';
-            if (code === 35) return 'Military';
-            if (code === 36) return 'Sailing';
-            if (code === 37) return 'Pleasure craft';
-            if (code >= 40 && code <= 49) return 'High-speed craft';
-            if (code === 50) return 'Pilot';
-            if (code === 51) return 'Search & rescue';
-            if (code === 52) return 'Tug';
-            if (code === 53) return 'Port tender';
-            if (code === 55) return 'Law enforcement';
-            if (code >= 60 && code <= 69) return 'Passenger';
-            if (code >= 70 && code <= 79) return 'Cargo';
-            if (code >= 80 && code <= 89) return 'Tanker';
-            if (code >= 90 && code <= 99) return 'Other';
-            return '';
-        }
-
-        function createShipPopup(props) {
-            var name = props.shipName || (props.staticData && props.staticData.name) || ('MMSI ' + props.mmsi);
-            var sd   = props.staticData || {};
-            var typeLabel = aisShipTypeLabel(sd.type);
-            var sogText   = (typeof props.sog === 'number') ? props.sog.toFixed(1) + ' kn' : '—';
-            var cogText   = (typeof props.cog === 'number' && props.cog < 360)
-                          ? Math.round(props.cog) + '° (' + getCompassDirection(props.cog) + ')' : '—';
-
-            var html = '<h3>🚢 ' + name + '</h3>';
-            if (typeLabel) html += '<div class="detail"><strong>Type:</strong> ' + typeLabel + '</div>';
-            html += '<div class="detail"><strong>MMSI:</strong> ' + props.mmsi + '</div>';
-            if (sd.callsign)    html += '<div class="detail"><strong>Callsign:</strong> ' + sd.callsign + '</div>';
-            html += '<div class="detail"><strong>Speed:</strong> ' + sogText + '</div>';
-            html += '<div class="detail"><strong>Course:</strong> ' + cogText + '</div>';
-            if (sd.destination) html += '<div class="detail"><strong>Destination:</strong> ' + sd.destination + '</div>';
-            html += '<div class="detail" style="color:#718096;font-size:11px;margin-top:6px;">Position: ' +
-                    props.lat.toFixed(4) + '°, ' + props.lon.toFixed(4) + '°</div>';
-            return html;
-        }
-
-        // ── Planes (OpenSky Network) ──────────────────────────────
-        // SVG icon: simple top-down plane silhouette, nose up so 0° = North
-        var PLANE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28">' +
-            '<path d="M16 2 L18 14 L30 19 L30 22 L18 19.5 L18 26 L22 28 L22 30 L16 28.5 L10 30 L10 28 L14 26 L14 19.5 L2 22 L2 19 L14 14 Z" ' +
-            'fill="#6d4c41" stroke="white" stroke-width="1.2" stroke-linejoin="round"/>' +
-            '</svg>';
-
-        function makePlaneStyle(headingDeg) {
-            var rot = (typeof headingDeg === 'number' && !isNaN(headingDeg)) ? headingDeg * Math.PI / 180 : 0;
-            return new ol.style.Style({
-                image: new ol.style.Icon({
-                    src: 'data:image/svg+xml;utf8,' + encodeURIComponent(PLANE_SVG),
-                    rotation: rot,
-                    rotateWithView: false,
-                    anchor: [0.5, 0.5]
-                })
-            });
-        }
-
-        function togglePlanes() {
-            planesEnabled = !planesEnabled;
-            var btn = document.getElementById('btn-planes');
-            btn.classList.toggle('active', planesEnabled);
-            planesLayer.setVisible(planesEnabled);
-
-            if (planesEnabled) {
-                loadPlanesData();
-                if (planesPollTimer) clearInterval(planesPollTimer);
-                planesPollTimer = setInterval(loadPlanesData, PLANES_POLL_MS);
-            } else {
-                if (planesPollTimer) { clearInterval(planesPollTimer); planesPollTimer = null; }
-            }
-            updateLegend();
-        }
-
-        function loadPlanesData() {
-            var url = 'https://opensky-network.org/api/states/all?lamin=' + QLD_BBOX_SOUTH +
-                      '&lomin=' + QLD_BBOX_WEST +
-                      '&lamax=' + QLD_BBOX_NORTH +
-                      '&lomax=' + QLD_BBOX_EAST;
-
-            console.log('[Planes] Fetching', url);
-
-            fetch(url)
-                .then(function(r) {
-                    console.log('[Planes] HTTP', r.status, r.statusText);
-                    if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + r.statusText);
-                    return r.json();
-                })
-                .then(function(data) {
-                    planesSource.clear();
-                    var states = (data && data.states) || [];
-                    console.log('[Planes] Got', states.length, 'aircraft');
-                    states.forEach(function(s) {
-                        var lon = s[5], lat = s[6];
-                        if (lon === null || lat === null) return;
-                        var heading = (s[10] === null) ? 0 : s[10];
-
-                        var feat = new ol.Feature({ geometry: new ol.geom.Point(ol.proj.fromLonLat([lon, lat])) });
-                        feat.set('planeProps', {
-                            icao24:        s[0],
-                            callsign:      (s[1] || '').trim(),
-                            originCountry: s[2],
-                            lon:           lon,
-                            lat:           lat,
-                            altMeters:     s[7],
-                            onGround:      s[8],
-                            velocity:      s[9],
-                            heading:       heading,
-                            verticalRate:  s[11],
-                            geoAltMeters:  s[13]
-                        });
-                        feat.setStyle(makePlaneStyle(heading));
-                        planesSource.addFeature(feat);
-                    });
-
-                    if (planesEnabled && planesSource.getFeatures().length > 0) {
-                        var loading = document.getElementById('loading');
-                        loading.style.display = 'block';
-                        loading.classList.remove('error');
-                        loading.textContent = '✈️ ' + planesSource.getFeatures().length + ' aircraft visible';
-                        setTimeout(function() { loading.style.display = 'none'; }, 2500);
-                    }
-                })
-                .catch(function(err) {
-                    console.error('[Planes] Fetch failed:', err);
-                    if (planesEnabled) {
-                        var loading = document.getElementById('loading');
-                        loading.style.display = 'block';
-                        loading.classList.add('error');
-                        // TypeError in browsers = CORS / network / DNS failure
-                        var msg = err && err.message ? err.message : 'unknown';
-                        if (msg.indexOf('Failed to fetch') !== -1 || err.name === 'TypeError') {
-                            loading.textContent = '✈️ Plane data blocked by browser (CORS) — see chat for fix';
-                        } else {
-                            loading.textContent = '✈️ Plane data error: ' + msg;
-                        }
-                        setTimeout(function() { loading.style.display = 'none'; loading.classList.remove('error'); }, 6000);
-                    }
-                });
-        }
-
-        function createPlanePopup(props) {
-            var name = props.callsign || ('ICAO ' + (props.icao24 || '').toUpperCase());
-            var altFt = (typeof props.altMeters === 'number') ? Math.round(props.altMeters * 3.28084).toLocaleString() + ' ft' : '—';
-            var spdKts = (typeof props.velocity === 'number') ? Math.round(props.velocity * 1.94384) + ' kn' : '—';
-            var hdg    = (typeof props.heading === 'number') ? Math.round(props.heading) + '° (' + getCompassDirection(props.heading) + ')' : '—';
-            var vRate  = (typeof props.verticalRate === 'number')
-                       ? (props.verticalRate > 0.5 ? '↗ Climbing' : props.verticalRate < -0.5 ? '↘ Descending' : '→ Level')
-                       : '—';
-
-            var html = '<h3>✈️ ' + name + '</h3>';
-            if (props.originCountry) html += '<div class="detail"><strong>Country:</strong> ' + props.originCountry + '</div>';
-            html += '<div class="detail"><strong>Altitude:</strong> ' + altFt + '</div>';
-            html += '<div class="detail"><strong>Speed:</strong> ' + spdKts + '</div>';
-            html += '<div class="detail"><strong>Heading:</strong> ' + hdg + '</div>';
-            html += '<div class="detail"><strong>Status:</strong> ' + (props.onGround ? '🛬 On ground' : vRate) + '</div>';
-            html += '<div class="detail" style="color:#718096;font-size:11px;margin-top:6px;">Position: ' +
-                    props.lat.toFixed(4) + '°, ' + props.lon.toFixed(4) + '°</div>';
-            return html;
-        }
-
         // ── Map initialisation ────────────────────────────────────
         window.addEventListener('load', function() {
             try {
@@ -2574,15 +1989,9 @@
                 firmsSource = new ol.source.Vector();
                 firmsLayer  = new ol.layer.Vector({ source: firmsSource, visible: false });
 
-                shipsSource = new ol.source.Vector();
-                shipsLayer  = new ol.layer.Vector({ source: shipsSource, visible: false });
-
-                planesSource = new ol.source.Vector();
-                planesLayer  = new ol.layer.Vector({ source: planesSource, visible: false });
-
                 map = new ol.Map({
                     target: 'map',
-                    layers: [osmLayer, satelliteLayer, firmsLayer, vectorLayer, measureLayer, shipsLayer, planesLayer],
+                    layers: [osmLayer, satelliteLayer, firmsLayer, vectorLayer, measureLayer],
                     view: new ol.View({ center: ol.proj.fromLonLat([144.5, -22.5]), zoom: 5 })
                 });
 
@@ -2639,28 +2048,6 @@
                                 });
                             })
                             .catch(function() {});
-                        return;
-                    }
-
-                    // Check ships (transport icons take precedence over FIRMS hotspots)
-                    var shipFeature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; }, {
-                        hitTolerance: 10,
-                        layerFilter: function(layer) { return layer === shipsLayer; }
-                    });
-                    if (shipFeature) {
-                        content.innerHTML = createShipPopup(shipFeature.get('shipProps'));
-                        popupOverlay.setPosition(shipFeature.getGeometry().getCoordinates());
-                        return;
-                    }
-
-                    // Check planes
-                    var planeFeature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; }, {
-                        hitTolerance: 10,
-                        layerFilter: function(layer) { return layer === planesLayer; }
-                    });
-                    if (planeFeature) {
-                        content.innerHTML = createPlanePopup(planeFeature.get('planeProps'));
-                        popupOverlay.setPosition(planeFeature.getGeometry().getCoordinates());
                         return;
                     }
 
