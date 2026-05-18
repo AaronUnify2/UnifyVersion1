@@ -1,0 +1,4269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factory Mapper — Manufacturing Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --color-bg: #F5F7FA;
+            --color-surface: #FFFFFF;
+            --color-canvas: #FAFBFC;
+            --color-text: #1D1D1F;
+            --color-text-soft: #6E6E73;
+            --color-border: rgba(0, 0, 0, 0.08);
+            --color-border-strong: rgba(0, 0, 0, 0.15);
+            --color-accent: #0A66C2;
+            --color-accent-hover: #084A8E;
+            --color-danger: #DC2626;
+            --color-danger-bg: #FEE2E2;
+
+            /* Wall styling */
+            --color-wall: #2C2C2E;
+            --color-wall-preview: #0A66C2;
+            --color-wall-selected: #0A66C2;
+
+            /* Grid styling */
+            --color-grid-minor: rgba(0, 0, 0, 0.04);
+            --color-grid-major: rgba(0, 0, 0, 0.10);
+            --color-grid-label: #8E8E93;
+
+            /* Station type colors */
+            --station-input: #2E9F5C;
+            --station-process: #0A66C2;
+            --station-inspection: #D97706;
+            --station-buffer: #6B7280;
+            --station-output: #7C3AED;
+
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+            --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.08);
+            --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.12);
+
+            --sidebar-width: 280px;
+            --ruler-size: 24px;
+        }
+
+        html, body { height: 100%; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ---------- Factory header ---------- */
+        .factory-header {
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
+            padding: 0.9rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1.5rem;
+            z-index: 900;
+            flex-shrink: 0;
+        }
+
+        .factory-info {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .factory-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: var(--color-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .factory-title.unset {
+            color: var(--color-text-soft);
+            font-weight: 500;
+            font-style: italic;
+        }
+
+        .factory-meta {
+            display: flex;
+            gap: 1.25rem;
+            margin-top: 0.25rem;
+            font-size: 0.8rem;
+            color: var(--color-text-soft);
+            flex-wrap: wrap;
+        }
+
+        body.no-active-factory .factory-meta { display: none; }
+
+        .factory-meta span { white-space: nowrap; }
+
+        .factory-meta strong {
+            color: var(--color-text);
+            font-weight: 600;
+        }
+
+        .factory-header-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .header-btn {
+            background: transparent;
+            border: 1px solid var(--color-border);
+            padding: 0.5rem 0.9rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--color-text);
+            transition: all 0.15s ease;
+        }
+
+        .header-btn:hover {
+            background: var(--color-bg);
+            border-color: var(--color-border-strong);
+        }
+
+        .header-btn.primary {
+            background: var(--color-accent);
+            border-color: var(--color-accent);
+            color: white;
+        }
+
+        .header-btn.primary:hover {
+            background: var(--color-accent-hover);
+            border-color: var(--color-accent-hover);
+        }
+
+        body.no-active-factory .header-btn:not(.show-no-factory) { display: none; }
+
+        /* ---------- Body layout ---------- */
+        .body-container {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        /* ---------- Sidebar ---------- */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--color-surface);
+            border-right: 1px solid var(--color-border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            overflow: hidden;
+            transition: width 0.18s ease;
+        }
+
+        .sidebar.collapsed {
+            width: 44px;
+        }
+
+        .sidebar.collapsed .sidebar-title,
+        .sidebar.collapsed .sidebar-action-btn,
+        .sidebar.collapsed .sidebar-body,
+        .sidebar.collapsed .sidebar-footer {
+            display: none;
+        }
+
+        .sidebar.collapsed .sidebar-header {
+            padding: 0.6rem 0.25rem;
+            border-bottom: none;
+            align-items: center;
+        }
+
+        .sidebar-header {
+            padding: 0.85rem 0.85rem 0.65rem;
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+        }
+
+        .sidebar-header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+        }
+
+        .sidebar-collapse-btn {
+            background: transparent;
+            border: 1px solid var(--color-border);
+            width: 28px;
+            height: 28px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--color-text-soft);
+            transition: all 0.15s ease;
+            padding: 0;
+            flex-shrink: 0;
+        }
+
+        .sidebar-collapse-btn:hover {
+            background: var(--color-bg);
+            color: var(--color-text);
+            border-color: var(--color-border-strong);
+        }
+
+        .sidebar-collapse-btn svg {
+            transition: transform 0.18s ease;
+        }
+
+        .sidebar.collapsed .sidebar-collapse-btn svg {
+            transform: rotate(180deg);
+        }
+
+        .sidebar-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--color-text-soft);
+        }
+
+        .sidebar-action-btn {
+            background: transparent;
+            border: 1px solid var(--color-border);
+            padding: 0.4rem 0.75rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--color-text);
+            transition: all 0.15s ease;
+            width: 100%;
+            text-align: left;
+        }
+
+        .sidebar-action-btn:hover {
+            background: var(--color-bg);
+            border-color: var(--color-border-strong);
+        }
+
+        .sidebar-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem 0.5rem 1rem;
+        }
+
+        .category-block {
+            margin-bottom: 0.5rem;
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.4rem 0.5rem;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--color-text-soft);
+            user-select: none;
+        }
+
+        .category-header:hover { background: var(--color-bg); }
+
+        .category-chevron {
+            width: 10px;
+            height: 10px;
+            transition: transform 0.15s ease;
+            flex-shrink: 0;
+        }
+
+        .category-block.collapsed .category-chevron {
+            transform: rotate(-90deg);
+        }
+
+        .category-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .category-actions {
+            display: flex;
+            gap: 0.15rem;
+        }
+
+        .icon-btn {
+            background: transparent;
+            border: none;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 4px;
+            color: var(--color-text-soft);
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+        }
+
+        .icon-btn:hover {
+            background: rgba(0, 0, 0, 0.06);
+            color: var(--color-text);
+        }
+
+        .icon-btn.danger:hover {
+            background: var(--color-danger-bg);
+            color: var(--color-danger);
+        }
+
+        .sidebar-footer {
+            padding: 0.65rem 0.75rem;
+            border-top: 1px solid var(--color-border);
+            background: var(--color-bg);
+            display: flex;
+            gap: 0.4rem;
+            flex-shrink: 0;
+        }
+
+        .sidebar-footer .sidebar-action-btn {
+            flex: 1;
+            text-align: center;
+            background: var(--color-surface);
+        }
+
+        .category-items {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+            padding-left: 0.4rem;
+        }
+
+        .category-block.collapsed .category-items { display: none; }
+
+        .factory-item {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.45rem 0.6rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: var(--color-text);
+            transition: background 0.15s ease;
+            position: relative;
+        }
+
+        .factory-item:hover { background: var(--color-bg); }
+
+        .factory-item.active {
+            background: rgba(10, 102, 194, 0.10);
+            color: var(--color-accent);
+            font-weight: 600;
+        }
+
+        .factory-item-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .factory-item-actions {
+            display: flex;
+            gap: 0.1rem;
+        }
+
+        .factory-item-dim {
+            font-size: 0.7rem;
+            color: var(--color-text-soft);
+            font-weight: 500;
+        }
+
+        .factory-item.active .factory-item-dim { color: var(--color-accent); }
+
+        /* Desktop with hover: reveal on hover only to keep the list clean */
+        @media (hover: hover) {
+            .factory-item-actions { display: none; }
+            .factory-item:hover .factory-item-actions { display: flex; }
+            .category-actions { display: none; }
+            .category-header:hover .category-actions { display: flex; }
+        }
+
+        /* ---------- Canvas container ---------- */
+        .canvas-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            position: relative;
+            background: var(--color-canvas);
+        }
+
+        .canvas-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem;
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .tool-group {
+            display: flex;
+            gap: 0.25rem;
+            padding: 0.15rem;
+            background: var(--color-bg);
+            border-radius: 7px;
+            border: 1px solid var(--color-border);
+        }
+
+        .tool-btn {
+            background: transparent;
+            border: none;
+            padding: 0.35rem 0.7rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--color-text-soft);
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .tool-btn:hover {
+            color: var(--color-text);
+            background: rgba(0, 0, 0, 0.04);
+        }
+
+        .tool-btn.active {
+            background: var(--color-surface);
+            color: var(--color-accent);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+        }
+
+        .toolbar-spacer { flex: 1; }
+
+        .toolbar-info {
+            font-size: 0.75rem;
+            color: var(--color-text-soft);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        .toolbar-info strong {
+            color: var(--color-text);
+            font-weight: 600;
+        }
+
+        .zoom-display {
+            min-width: 52px;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+
+        body.no-active-factory .canvas-toolbar { display: none; }
+
+        /* ---------- Canvas viewport ---------- */
+        .canvas-viewport {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: var(--color-canvas);
+            cursor: default;
+        }
+
+        .canvas-viewport.mode-pan { cursor: grab; }
+        .canvas-viewport.mode-pan.panning { cursor: grabbing; }
+        .canvas-viewport.mode-wall { cursor: crosshair; }
+        .canvas-viewport.mode-select { cursor: default; }
+
+        .canvas-world {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: 0 0;
+            will-change: transform;
+        }
+
+        .canvas-world svg {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            overflow: visible;
+        }
+
+        /* Factory land — the plot/property rectangle. Users draw building walls inside. */
+        .factory-floor {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: #FBFAF6;          /* very subtle warm tint, suggests outdoor ground */
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+            border: 1.5px dashed rgba(34, 139, 64, 0.45); /* sage green = property line */
+        }
+
+        /* Walls */
+        .wall {
+            stroke: var(--color-wall);
+            stroke-linecap: square;
+            cursor: pointer;
+        }
+
+        .wall.selected {
+            stroke: var(--color-wall-selected);
+        }
+
+        .wall-hit {
+            stroke: transparent;
+            stroke-width: 14;
+            cursor: pointer;
+            fill: none;
+        }
+
+        .canvas-viewport.mode-wall .wall-hit { cursor: crosshair; }
+
+        .wall-preview {
+            stroke: var(--color-wall-preview);
+            stroke-dasharray: 6 4;
+            pointer-events: none;
+            opacity: 0.85;
+        }
+
+        .wall-endpoint {
+            fill: var(--color-wall-preview);
+            pointer-events: none;
+        }
+
+        .wall-handle {
+            fill: white;
+            stroke: var(--color-wall-selected);
+            stroke-width: 2;
+            cursor: pointer;
+        }
+
+        .snap-indicator {
+            fill: none;
+            stroke: var(--color-accent);
+            stroke-width: 1.5;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+
+        /* ---------- Stations ---------- */
+        .station-card {
+            position: absolute;
+            border-radius: 4px;
+            background: var(--st-bg, rgba(10, 102, 194, 0.10));
+            border: 2px solid var(--st-color, #0A66C2);
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+            cursor: move;
+            user-select: none;
+            transition: box-shadow 0.15s ease;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            color: var(--color-text);
+            font-size: 11px;
+            line-height: 1.25;
+        }
+
+        .station-card:hover {
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.14);
+        }
+
+        .station-card.selected {
+            outline: 2px solid var(--color-accent);
+            outline-offset: 2px;
+        }
+
+        .station-card.dragging,
+        .station-card.resizing {
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+            opacity: 0.92;
+        }
+
+        .station-header {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 5px;
+            background: var(--st-color, #0A66C2);
+            color: white;
+            font-weight: 700;
+            font-size: 10px;
+            letter-spacing: 0.02em;
+            flex-shrink: 0;
+            min-height: 18px;
+        }
+
+        .station-number {
+            background: rgba(255, 255, 255, 0.22);
+            border-radius: 2px;
+            padding: 0 4px;
+            font-size: 9px;
+            font-weight: 700;
+        }
+
+        .station-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 11px;
+        }
+
+        .station-body {
+            flex: 1;
+            padding: 4px 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            overflow: hidden;
+        }
+
+        .station-stat {
+            font-size: 10px;
+            color: var(--color-text-soft);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .station-stat strong {
+            color: var(--color-text);
+            font-weight: 700;
+        }
+
+        .station-footprint {
+            font-size: 9px;
+            color: var(--color-text-soft);
+            margin-top: auto;
+            opacity: 0.7;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* When the station is small on screen, hide most internal text */
+        .station-card.compact .station-body { display: none; }
+        .station-card.compact .station-title { display: none; }
+        .station-card.compact .station-header { justify-content: center; padding: 2px; min-height: 0; }
+        .station-card.compact .station-number { padding: 0 3px; }
+
+        .station-card.tiny .station-header { display: none; }
+        .station-card.tiny .station-body { display: none; }
+
+        /* Resize handles */
+        .resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: white;
+            border: 2px solid var(--color-accent);
+            border-radius: 2px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+            z-index: 5;
+        }
+        .resize-handle.nw { top: -6px; left: -6px; cursor: nwse-resize; }
+        .resize-handle.n  { top: -6px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+        .resize-handle.ne { top: -6px; right: -6px; cursor: nesw-resize; }
+        .resize-handle.e  { top: 50%; right: -6px; transform: translateY(-50%); cursor: ew-resize; }
+        .resize-handle.se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+        .resize-handle.s  { bottom: -6px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+        .resize-handle.sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+        .resize-handle.w  { top: 50%; left: -6px; transform: translateY(-50%); cursor: ew-resize; }
+
+        /* Placement ghost preview (follows cursor when placing a new station) */
+        .station-ghost {
+            position: absolute;
+            border: 2px dashed var(--st-color, #0A66C2);
+            background: var(--st-bg, rgba(10, 102, 194, 0.10));
+            border-radius: 4px;
+            pointer-events: none;
+            opacity: 0.85;
+            z-index: 100;
+        }
+
+        /* Palette buttons in toolbar */
+        .station-palette { display: flex; gap: 0.2rem; }
+
+        .palette-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            padding: 0.3rem 0.55rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--color-text);
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .palette-btn:hover {
+            background: rgba(0, 0, 0, 0.04);
+        }
+
+        .palette-btn .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--dot, #999);
+            flex-shrink: 0;
+        }
+
+        .palette-btn.active {
+            background: var(--color-surface);
+            border-color: var(--dot, var(--color-accent));
+            color: var(--dot, var(--color-accent));
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+        }
+
+        .canvas-viewport.mode-place { cursor: crosshair; }
+
+        /* ---------- Connections (arrows between stations) ---------- */
+        .connection-line {
+            stroke: #5B6470;
+            stroke-width: 2;
+            fill: none;
+            transition: stroke 0.15s ease;
+        }
+
+        .connection-line.selected {
+            stroke: var(--color-accent);
+            stroke-width: 3;
+        }
+
+        .connection-hit {
+            stroke: transparent;
+            stroke-width: 16;
+            fill: none;
+            cursor: pointer;
+        }
+
+        .canvas-viewport.mode-connect .connection-hit { cursor: not-allowed; }
+
+        .connection-preview {
+            stroke: var(--color-accent);
+            stroke-width: 2;
+            stroke-dasharray: 6 4;
+            fill: none;
+            pointer-events: none;
+            opacity: 0.85;
+        }
+
+        .connection-label {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 10px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            fill: white;
+        }
+
+        .connection-label-bg {
+            fill: #5B6470;
+            stroke: none;
+        }
+
+        .connection-label-bg.selected { fill: var(--color-accent); }
+
+        /* Connect mode: target station highlight on hover */
+        .canvas-viewport.mode-connect {
+            cursor: crosshair;
+        }
+        .canvas-viewport.mode-connect .station-card {
+            cursor: pointer;
+        }
+        .canvas-viewport.mode-connect .station-card:hover:not(.connect-source) {
+            outline: 2px solid var(--color-accent);
+            outline-offset: 2px;
+            box-shadow: 0 4px 14px rgba(10, 102, 194, 0.25);
+        }
+        .canvas-viewport.mode-connect .station-card.connect-source {
+            outline: 2px solid var(--color-accent);
+            outline-offset: 2px;
+            opacity: 0.7;
+        }
+        /* Hide resize handles while in connect mode */
+        .canvas-viewport.mode-connect .resize-handle { display: none; }
+
+        /* ---------- Simulation ---------- */
+        .sim-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.45rem 0.85rem;
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
+            flex-shrink: 0;
+            z-index: 9;
+            font-size: 0.78rem;
+            flex-wrap: wrap;
+        }
+        body.no-active-factory .sim-bar { display: none; }
+
+        .sim-play-btn {
+            background: var(--color-accent);
+            color: white;
+            border: 1px solid var(--color-accent);
+            padding: 0.4rem 0.85rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-weight: 600;
+            font-family: inherit;
+            transition: background 0.15s ease;
+            min-width: 86px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+        }
+        .sim-play-btn:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+        .sim-play-btn.running { background: #DC2626; border-color: #DC2626; }
+        .sim-play-btn.running:hover { background: #B91C1C; border-color: #B91C1C; }
+
+        .sim-reset-btn {
+            background: transparent;
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+            padding: 0.4rem 0.7rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 600;
+            font-family: inherit;
+            transition: all 0.15s ease;
+        }
+        .sim-reset-btn:hover { background: var(--color-bg); border-color: var(--color-border-strong); }
+
+        .sim-speed-group {
+            display: flex;
+            gap: 0.15rem;
+            padding: 0.12rem;
+            background: var(--color-bg);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+        }
+        .sim-speed-btn {
+            background: transparent;
+            border: none;
+            padding: 0.25rem 0.55rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.76rem;
+            font-weight: 600;
+            color: var(--color-text-soft);
+            font-family: inherit;
+            font-variant-numeric: tabular-nums;
+        }
+        .sim-speed-btn:hover { color: var(--color-text); background: rgba(0,0,0,0.04); }
+        .sim-speed-btn.active {
+            background: var(--color-surface);
+            color: var(--color-accent);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+        }
+
+        .sim-readout {
+            display: flex;
+            gap: 1rem;
+            font-variant-numeric: tabular-nums;
+            color: var(--color-text-soft);
+            margin-left: auto;
+            flex-wrap: wrap;
+        }
+        .sim-readout strong {
+            color: var(--color-text);
+            font-weight: 700;
+        }
+        .sim-readout .readout-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-right: 0.35rem;
+        }
+
+        /* Pulses (animated dots representing units flowing through the system) */
+        .pulses-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 4;
+        }
+
+        .pulse {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            margin-left: -6px;
+            margin-top: -6px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #FCD34D 0%, #F59E0B 55%, rgba(245, 158, 11, 0) 100%);
+            box-shadow: 0 0 6px rgba(245, 158, 11, 0.7), 0 0 14px rgba(245, 158, 11, 0.35);
+            pointer-events: none;
+            will-change: transform;
+            transition: none;
+        }
+
+        .pulse.in-service {
+            background: radial-gradient(circle, #FFFFFF 0%, #FCD34D 35%, rgba(245, 158, 11, 0) 100%);
+            box-shadow: 0 0 8px rgba(252, 211, 77, 0.9), 0 0 18px rgba(245, 158, 11, 0.5);
+        }
+
+        /* WIP badge — red counter that appears on stations with a queue */
+        .station-wip-badge {
+            position: absolute;
+            top: -9px;
+            right: -9px;
+            background: #DC2626;
+            color: white;
+            border-radius: 12px;
+            min-width: 22px;
+            height: 22px;
+            padding: 0 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            box-shadow: 0 2px 5px rgba(220, 38, 38, 0.35);
+            z-index: 6;
+            font-variant-numeric: tabular-nums;
+            pointer-events: none;
+            animation: wipPulse 1.2s ease-in-out infinite;
+        }
+
+        @keyframes wipPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        /* Station processing indicator — subtle pulsing on the header */
+        .station-card.in-service .station-header {
+            animation: stationServing 1.4s ease-in-out infinite;
+        }
+
+        @keyframes stationServing {
+            0%, 100% { filter: brightness(1); }
+            50%      { filter: brightness(1.25); }
+        }
+
+        /* Source/sink badges, shown when sim is running */
+        .station-role-badge {
+            position: absolute;
+            top: -8px;
+            left: -8px;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 1px 5px;
+            border-radius: 8px;
+            background: var(--color-surface);
+            border: 1.5px solid var(--st-color, #6B7280);
+            color: var(--st-color, #6B7280);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            z-index: 5;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 720px) {
+            .sim-bar { gap: 0.4rem; padding: 0.4rem 0.55rem; }
+            .sim-readout { gap: 0.55rem; font-size: 0.72rem; }
+            .sim-readout .readout-label { display: none; }
+        }
+
+        /* Rulers */
+        .ruler {
+            position: absolute;
+            background: var(--color-surface);
+            border-color: var(--color-border);
+            z-index: 5;
+            overflow: hidden;
+            font-size: 10px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-variant-numeric: tabular-nums;
+            color: var(--color-grid-label);
+            user-select: none;
+            pointer-events: none;
+        }
+
+        .ruler-top {
+            top: 0;
+            left: var(--ruler-size);
+            right: 0;
+            height: var(--ruler-size);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .ruler-left {
+            top: var(--ruler-size);
+            left: 0;
+            bottom: 0;
+            width: var(--ruler-size);
+            border-right: 1px solid var(--color-border);
+        }
+
+        .ruler-corner {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: var(--ruler-size);
+            height: var(--ruler-size);
+            background: var(--color-surface);
+            border-right: 1px solid var(--color-border);
+            border-bottom: 1px solid var(--color-border);
+            z-index: 6;
+        }
+
+        .ruler-label {
+            position: absolute;
+            color: var(--color-grid-label);
+        }
+
+        .ruler-top .ruler-label {
+            bottom: 2px;
+            transform: translateX(-50%);
+        }
+
+        .ruler-left .ruler-label {
+            right: 2px;
+            transform: translateY(-50%);
+            text-align: right;
+        }
+
+        .ruler-tick {
+            position: absolute;
+            background: var(--color-grid-major);
+        }
+
+        .ruler-top .ruler-tick {
+            bottom: 0;
+            width: 1px;
+            height: 6px;
+        }
+
+        .ruler-left .ruler-tick {
+            right: 0;
+            width: 6px;
+            height: 1px;
+        }
+
+        /* Empty / hint states */
+        .empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--color-text-soft);
+            max-width: 420px;
+            padding: 2rem;
+            pointer-events: none;
+        }
+
+        .empty-state h2 {
+            color: var(--color-text);
+            font-size: 1.35rem;
+            font-weight: 700;
+            margin-bottom: 0.65rem;
+            letter-spacing: -0.01em;
+        }
+
+        .empty-state p {
+            font-size: 0.92rem;
+            line-height: 1.55;
+        }
+
+        .empty-state strong { color: var(--color-text); font-weight: 600; }
+
+        /* Contextual action bar — shows tappable buttons depending on mode/selection.
+           Replaces the static mode-banner with touch-friendly controls. */
+        .action-bar {
+            position: absolute;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--color-text);
+            color: white;
+            padding: 0.35rem 0.4rem 0.35rem 0.85rem;
+            border-radius: 8px;
+            box-shadow: var(--shadow-md);
+            z-index: 20;
+            display: none;
+            align-items: center;
+            gap: 0.7rem;
+            max-width: calc(100% - 24px);
+            font-size: 0.82rem;
+        }
+
+        .action-bar.visible { display: flex; }
+
+        .action-hint {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 50vw;
+        }
+
+        .action-hint .hint-tip {
+            opacity: 0.7;
+            font-size: 0.74rem;
+            margin-left: 0.4rem;
+            font-weight: 400;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 0.25rem;
+            flex-shrink: 0;
+        }
+
+        .action-btn {
+            background: rgba(255, 255, 255, 0.14);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: white;
+            padding: 0.4rem 0.75rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 600;
+            font-family: inherit;
+            transition: all 0.15s ease;
+            min-height: 32px;
+            white-space: nowrap;
+        }
+
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.24);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .action-btn:active {
+            transform: translateY(1px);
+        }
+
+        .action-btn.primary {
+            background: var(--color-accent);
+            border-color: var(--color-accent);
+        }
+        .action-btn.primary:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+
+        .action-btn.danger {
+            background: var(--color-danger);
+            border-color: var(--color-danger);
+        }
+        .action-btn.danger:hover { background: #B91C1C; border-color: #B91C1C; }
+
+        /* Hide the hint text on narrow screens so the buttons still fit */
+        @media (max-width: 560px) {
+            .action-hint { display: none; }
+            .action-bar { padding-left: 0.4rem; }
+        }
+
+        /* On very narrow screens, keep button labels readable */
+        @media (max-width: 380px) {
+            .action-btn { padding: 0.4rem 0.55rem; font-size: 0.74rem; }
+        }
+
+        /* ---------- Modals ---------- */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            backdrop-filter: blur(6px);
+        }
+
+        .modal.visible { display: flex; }
+
+        .modal-content {
+            background: var(--color-surface);
+            padding: 2rem;
+            border-radius: 12px;
+            width: 540px;
+            max-width: 92%;
+            max-height: 92vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+        }
+
+        .modal-content h3 {
+            color: var(--color-text);
+            margin-bottom: 0.35rem;
+            font-size: 1.3rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        .modal-subtitle {
+            color: var(--color-text-soft);
+            font-size: 0.85rem;
+            margin-bottom: 1.5rem;
+            line-height: 1.45;
+        }
+
+        .form-group { margin-bottom: 1.1rem; }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.35rem;
+            font-weight: 600;
+            color: var(--color-text);
+            font-size: 0.82rem;
+            letter-spacing: -0.005em;
+        }
+
+        .form-group .hint {
+            display: block;
+            font-size: 0.72rem;
+            color: var(--color-text-soft);
+            margin-top: -0.2rem;
+            margin-bottom: 0.4rem;
+            font-weight: 400;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 0.6rem 0.75rem;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-family: inherit;
+            background: var(--color-surface);
+            color: var(--color-text);
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            border-color: var(--color-accent);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(10, 102, 194, 0.12);
+        }
+
+        .form-group textarea {
+            min-height: 75px;
+            resize: vertical;
+            line-height: 1.45;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .form-row.three {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .input-suffix {
+            position: relative;
+        }
+
+        .input-suffix input {
+            padding-right: 2.2rem;
+        }
+
+        .input-suffix .suffix {
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--color-text-soft);
+            font-size: 0.85rem;
+            font-weight: 500;
+            pointer-events: none;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            margin-top: 1.5rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--color-border);
+            flex-wrap: wrap;
+        }
+
+        .button-group button {
+            background: var(--color-accent);
+            color: white;
+            border: none;
+            padding: 0.65rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: background 0.15s ease;
+        }
+
+        .button-group button:hover { background: var(--color-accent-hover); }
+
+        .button-group button.secondary {
+            background: var(--color-bg);
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+        }
+
+        .button-group button.secondary:hover { background: #ECEFF3; }
+
+        .button-group button.delete-action {
+            background: var(--color-bg);
+            color: var(--color-danger);
+            border: 1px solid var(--color-border);
+            margin-right: auto;
+        }
+
+        .button-group button.delete-action:hover {
+            background: var(--color-danger-bg);
+            border-color: var(--color-danger);
+        }
+
+        .file-input { display: none; }
+
+        /* ---------- Responsive ---------- */
+        @media (max-width: 720px) {
+            :root { --sidebar-width: 220px; }
+            .factory-header { padding: 0.75rem 1rem; }
+            .factory-title { font-size: 1rem; }
+            .canvas-toolbar { padding: 0.5rem 0.6rem; flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body class="no-active-factory">
+    <header class="factory-header">
+        <div class="factory-info">
+            <div class="factory-title unset" id="factoryTitle">No factory selected</div>
+            <div class="factory-meta" id="factoryMeta"></div>
+        </div>
+        <div class="factory-header-actions">
+            <button class="header-btn" onclick="openFactorySettings()">Settings</button>
+            <button class="header-btn" onclick="saveAsImage()">Save image</button>
+        </div>
+    </header>
+
+    <div class="body-container">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-header-top">
+                    <div class="sidebar-title">Factories</div>
+                    <button class="sidebar-collapse-btn" onclick="toggleSidebar()" title="Hide sidebar" id="sidebarCollapseBtn" aria-label="Toggle sidebar">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3L5 7l4 4"/></svg>
+                    </button>
+                </div>
+                <button class="sidebar-action-btn" onclick="createFactory()">+ New factory</button>
+                <button class="sidebar-action-btn" onclick="createCategory()">+ New category</button>
+            </div>
+            <div class="sidebar-body" id="sidebarBody"></div>
+            <div class="sidebar-footer">
+                <button class="sidebar-action-btn" onclick="exportAll()" title="Export everything as a JSON file">Export</button>
+                <button class="sidebar-action-btn" onclick="document.getElementById('importFile').click()" title="Import a JSON file">Import</button>
+                <input type="file" id="importFile" class="file-input" accept=".json" onchange="importFile(event)">
+            </div>
+        </aside>
+
+        <div class="canvas-container">
+            <div class="canvas-toolbar">
+                <div class="tool-group" role="group" aria-label="Tools">
+                    <button class="tool-btn active" id="toolSelect" onclick="setTool('select')" title="Select / pan (V)">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2l8 5-3.5 1L6 12 3 2z"/></svg>
+                        Select
+                    </button>
+                    <button class="tool-btn" id="toolWall" onclick="setTool('wall')" title="Draw walls (W)">
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 7h12M1 4h12M1 10h12"/></svg>
+                        Walls
+                    </button>
+                </div>
+                <div class="tool-group station-palette" role="group" aria-label="Add station">
+                    <button class="palette-btn" id="paletteInput"      style="--dot: #2E9F5C"  onclick="setTool('place:input')"      title="Place an Input station (1)"><span class="dot"></span>Input</button>
+                    <button class="palette-btn" id="paletteProcess"    style="--dot: #0A66C2"  onclick="setTool('place:process')"    title="Place a Process station (2)"><span class="dot"></span>Process</button>
+                    <button class="palette-btn" id="paletteInspection" style="--dot: #D97706"  onclick="setTool('place:inspection')" title="Place an Inspection station (3)"><span class="dot"></span>Inspection</button>
+                    <button class="palette-btn" id="paletteBuffer"     style="--dot: #6B7280"  onclick="setTool('place:buffer')"     title="Place a Buffer (4)"><span class="dot"></span>Buffer</button>
+                    <button class="palette-btn" id="paletteOutput"     style="--dot: #7C3AED"  onclick="setTool('place:output')"     title="Place an Output station (5)"><span class="dot"></span>Output</button>
+                </div>
+                <div class="tool-group">
+                    <button class="tool-btn" onclick="zoomOut()" title="Zoom out (−)">−</button>
+                    <button class="tool-btn zoom-display" onclick="zoomReset()" title="Reset zoom (0)" id="zoomDisplay">100%</button>
+                    <button class="tool-btn" onclick="zoomIn()" title="Zoom in (+)">+</button>
+                    <button class="tool-btn" onclick="zoomFit()" title="Fit to screen (F)">Fit</button>
+                </div>
+                <div class="toolbar-spacer"></div>
+                <div class="toolbar-info" id="cursorInfo">—</div>
+            </div>
+            <div class="sim-bar" id="simBar">
+                <button class="sim-play-btn" id="simPlayBtn" onclick="toggleSim()" title="Run / pause the simulation">
+                    <span id="simPlayIcon">▶</span>
+                    <span id="simPlayLabel">Run</span>
+                </button>
+                <button class="sim-reset-btn" onclick="resetSim()" title="Reset all pulses and clock">⟲ Reset</button>
+                <div class="sim-speed-group" role="group" aria-label="Simulation speed">
+                    <button class="sim-speed-btn" data-speed="1"  onclick="setSimSpeed(1)">1×</button>
+                    <button class="sim-speed-btn" data-speed="5"  onclick="setSimSpeed(5)">5×</button>
+                    <button class="sim-speed-btn active" data-speed="10" onclick="setSimSpeed(10)">10×</button>
+                    <button class="sim-speed-btn" data-speed="30" onclick="setSimSpeed(30)">30×</button>
+                    <button class="sim-speed-btn" data-speed="60" onclick="setSimSpeed(60)">60×</button>
+                </div>
+                <div class="sim-readout">
+                    <span><span class="readout-label">Clock</span><strong id="simClock">0:00</strong></span>
+                    <span><span class="readout-label">Throughput</span><strong id="simThroughput">— u/h</strong></span>
+                    <span><span class="readout-label">Produced</span><strong id="simProduced">0</strong></span>
+                </div>
+            </div>
+            <div class="canvas-viewport mode-select" id="viewport">
+                <div class="ruler-corner"></div>
+                <div class="ruler ruler-top" id="rulerTop"></div>
+                <div class="ruler ruler-left" id="rulerLeft"></div>
+                <div class="canvas-world" id="world"></div>
+                <div class="action-bar" id="actionBar">
+                    <div class="action-hint" id="actionHint"></div>
+                    <div class="action-buttons" id="actionButtons"></div>
+                </div>
+                <div class="empty-state" id="emptyState">
+                    <h2>Start mapping a factory</h2>
+                    <p>Open the sidebar and tap <strong>+ New factory</strong> to begin. You'll set the size of the plot of land, draw the building walls inside it, then place production stations on top.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Factory settings modal -->
+    <div class="modal" id="factoryModal">
+        <div class="modal-content">
+            <h3>Factory settings</h3>
+            <p class="modal-subtitle">Set the size of the plot of land in metres. You'll draw the building walls inside it. Everything you place is measured against this scale.</p>
+            <div class="form-group">
+                <label>Factory name</label>
+                <input type="text" id="factoryNameInput" placeholder="e.g. Widget A assembly hall">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Land width</label>
+                    <span class="hint">Full plot width — includes outdoor areas</span>
+                    <div class="input-suffix">
+                        <input type="number" id="factoryWidthInput" min="1" max="500" step="0.5" placeholder="30">
+                        <span class="suffix">m</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Land depth</label>
+                    <span class="hint">Full plot depth — includes outdoor areas</span>
+                    <div class="input-suffix">
+                        <input type="number" id="factoryDepthInput" min="1" max="500" step="0.5" placeholder="20">
+                        <span class="suffix">m</span>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <span class="hint">Group factories by product line, site, or business unit</span>
+                <select id="factoryCategoryInput"></select>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="factoryDescriptionInput" placeholder="Optional notes about this factory or production line"></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Owner</label>
+                    <span class="hint">Person accountable for this layout</span>
+                    <input type="text" id="factoryOwnerInput" placeholder="e.g. Production Manager">
+                </div>
+                <div class="form-group">
+                    <label>Last reviewed</label>
+                    <input type="date" id="factoryReviewedInput">
+                </div>
+            </div>
+            <div class="button-group">
+                <button class="delete-action" id="factoryDeleteBtn" onclick="deleteActiveFactory()">Delete factory</button>
+                <button class="secondary" onclick="closeFactorySettings()">Cancel</button>
+                <button onclick="saveFactorySettings()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Station edit modal -->
+    <div class="modal" id="stationModal">
+        <div class="modal-content">
+            <h3 id="stationModalTitle">Station details</h3>
+            <p class="modal-subtitle">A self-contained station with its own cycle time, throughput, equipment, and method. The cycle time drives the simulation pulse later on.</p>
+
+            <div class="form-group">
+                <label>Station type</label>
+                <span class="hint">Input = receives material · Process = does work · Inspection = QC · Buffer = WIP storage · Output = ships out</span>
+                <div class="tool-group station-palette" style="display: inline-flex;" id="stationTypeSelector">
+                    <button class="palette-btn" type="button" data-type="input"      style="--dot: #2E9F5C"><span class="dot"></span>Input</button>
+                    <button class="palette-btn" type="button" data-type="process"    style="--dot: #0A66C2"><span class="dot"></span>Process</button>
+                    <button class="palette-btn" type="button" data-type="inspection" style="--dot: #D97706"><span class="dot"></span>Inspection</button>
+                    <button class="palette-btn" type="button" data-type="buffer"     style="--dot: #6B7280"><span class="dot"></span>Buffer</button>
+                    <button class="palette-btn" type="button" data-type="output"     style="--dot: #7C3AED"><span class="dot"></span>Output</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Station name</label>
+                <input type="text" id="stTitle" placeholder="e.g. Assembly 1 / Final QC / Raw material bay">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Operator(s)</label>
+                    <span class="hint">Role, not name</span>
+                    <input type="text" id="stOperator" placeholder="e.g. Assembly operator">
+                </div>
+                <div class="form-group">
+                    <label>Operator count</label>
+                    <input type="number" id="stOperatorCount" min="0" step="1" value="1">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Cycle time (minutes)</label>
+                    <span class="hint">Time to process one unit</span>
+                    <div class="input-suffix">
+                        <input type="number" id="stCycleMin" min="0" step="0.1" placeholder="5">
+                        <span class="suffix">min</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Throughput</label>
+                    <span class="hint">Units per hour at this station</span>
+                    <div class="input-suffix">
+                        <input type="number" id="stThroughput" min="0" step="0.1" placeholder="12">
+                        <span class="suffix">u/h</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Width</label>
+                    <div class="input-suffix">
+                        <input type="number" id="stWidth" min="0.5" step="0.1" placeholder="2">
+                        <span class="suffix">m</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Depth</label>
+                    <div class="input-suffix">
+                        <input type="number" id="stDepth" min="0.5" step="0.1" placeholder="2">
+                        <span class="suffix">m</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Equipment / machinery</label>
+                <textarea id="stEquipment" placeholder="CNC mill, conveyor, jig…"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Work method</label>
+                <textarea id="stMethod" placeholder="How the operation is performed"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Quality / completion criteria</label>
+                <textarea id="stQuality" placeholder="How to verify the step is complete and acceptable"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Safety zone</label>
+                <select id="stSafetyZone">
+                    <option value="none">None</option>
+                    <option value="hazmat">Hazmat</option>
+                    <option value="high-voltage">High voltage</option>
+                    <option value="confined-space">Confined space</option>
+                    <option value="dust">Dust control</option>
+                    <option value="noise">Noise zone</option>
+                    <option value="chemical">Chemical area</option>
+                    <option value="hot-surface">Hot surface</option>
+                </select>
+            </div>
+
+            <div class="button-group">
+                <button class="delete-action" onclick="deleteStationFromModal()">Delete station</button>
+                <button class="secondary" onclick="duplicateStationFromModal()">Duplicate</button>
+                <button class="secondary" onclick="closeStationModal()">Cancel</button>
+                <button onclick="saveStationModal()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection edit modal -->
+    <div class="modal" id="connectionModal">
+        <div class="modal-content">
+            <h3 id="connectionModalTitle">Connection</h3>
+            <p class="modal-subtitle">How material moves from one station to the next. Transfer time feeds the simulation pulse later on.</p>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>From</label>
+                    <input type="text" id="connFrom" readonly style="background: var(--color-bg);">
+                </div>
+                <div class="form-group">
+                    <label>To</label>
+                    <input type="text" id="connTo" readonly style="background: var(--color-bg);">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Transport method</label>
+                <select id="connTransport">
+                    <option value="manual">Manual handoff</option>
+                    <option value="conveyor">Conveyor</option>
+                    <option value="agv">AGV (autonomous)</option>
+                    <option value="forklift">Forklift</option>
+                    <option value="pallet-jack">Pallet jack</option>
+                    <option value="overhead-crane">Overhead crane</option>
+                    <option value="gravity">Gravity feed / chute</option>
+                    <option value="roller-table">Roller table</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Transfer time</label>
+                    <span class="hint">Time to move one batch from A to B</span>
+                    <div class="input-suffix">
+                        <input type="number" id="connTransferMin" min="0" step="0.1" placeholder="0.5">
+                        <span class="suffix">min</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Batch size</label>
+                    <span class="hint">Units moved per transfer</span>
+                    <div class="input-suffix">
+                        <input type="number" id="connBatch" min="1" step="1" placeholder="1">
+                        <span class="suffix">units</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea id="connNotes" placeholder="Optional notes about this material flow"></textarea>
+            </div>
+
+            <div class="button-group">
+                <button class="delete-action" onclick="deleteConnectionFromModal()">Delete connection</button>
+                <button class="secondary" onclick="closeConnectionModal()">Cancel</button>
+                <button onclick="saveConnectionModal()">Save</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    /* ==========================================================
+       Factory Mapper — Layer 1: Scale + Walls
+       Coordinates are stored in METRES. Pixels are computed at
+       render time as: pixels = metres * BASE_PX_PER_M * zoom.
+       Layers 2–6 (stations, connections, simulation, bottleneck
+       colouring, line view) will read from this same data model.
+       ========================================================== */
+
+    const STORAGE_KEY = 'factoryMapperV1';
+    const BASE_PX_PER_M = 20;           // 1 metre = 20 px at zoom 1.0
+    const SNAP_M = 0.5;                 // default position snap (metres)
+    const FINE_SNAP_M = 0.1;            // Alt-held fine snap (metres)
+    const WALL_STROKE_PX = 5;           // wall render thickness (pixels at zoom 1)
+    const RULER_SIZE = 24;              // matches CSS --ruler-size
+    const MIN_ZOOM = 0.1;
+    const MAX_ZOOM = 8;
+    const ZOOM_STEP = 1.25;
+
+    /* ---------------- State ---------------- */
+    let state = {
+        version: 1,
+        categories: [],
+        uncategorisedExpanded: true,
+        sidebarCollapsed: false,
+        factories: [],
+        activeFactoryId: null
+    };
+
+    /* Per-factory ephemeral view state (not persisted) */
+    const viewState = {
+        // map factoryId -> { pan: {x,y}, zoom }
+        cache: {},
+        get(id) {
+            if (!this.cache[id]) this.cache[id] = { pan: { x: 0, y: 0 }, zoom: 1 };
+            return this.cache[id];
+        }
+    };
+
+    /* Interaction state */
+    let tool = 'select';
+    let selection = null;           // { type: 'wall'|'station', id }
+    let wallDraw = null;            // { points: [{x,y}], cursorM: {x,y}, lastSnap: null }
+    let panDrag = null;             // { startX, startY, panStartX, panStartY, hasMoved }
+    let stationDrag = null;         // { stationId, mode: 'move'|'resize', handle?, origStation, startM }
+    let placeGhost = null;          // { type, mPos: {x,y} } when in a place:* tool
+    let cursorM = null;             // current cursor position in metres (for ruler readout)
+
+    /* Station type catalogue */
+    const STATION_TYPES = {
+        input:      { label: 'Input',      color: '#2E9F5C', bg: 'rgba(46, 159, 92, 0.10)',  defaultW: 2,   defaultD: 1.5 },
+        process:    { label: 'Process',    color: '#0A66C2', bg: 'rgba(10, 102, 194, 0.10)', defaultW: 2,   defaultD: 2 },
+        inspection: { label: 'Inspection', color: '#D97706', bg: 'rgba(217, 119, 6, 0.10)',  defaultW: 1.5, defaultD: 1.5 },
+        buffer:     { label: 'Buffer',     color: '#6B7280', bg: 'rgba(107, 114, 128, 0.10)', defaultW: 2.5, defaultD: 2 },
+        output:     { label: 'Output',     color: '#7C3AED', bg: 'rgba(124, 58, 237, 0.10)', defaultW: 2,   defaultD: 1.5 }
+    };
+    const STATION_MIN_M = 0.5;
+
+    /* ---------------- Persistence ---------------- */
+    function saveState() {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {
+            console.warn('Failed to save state', e);
+        }
+    }
+
+    function loadState() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                state = Object.assign(state, parsed);
+            }
+            // Backfill any missing fields on factories
+            state.factories.forEach(normaliseFactory);
+        } catch (e) {
+            console.warn('Failed to load state', e);
+        }
+    }
+
+    function normaliseFactory(f) {
+        if (!f.meta) f.meta = {};
+        if (typeof f.meta.widthM !== 'number') f.meta.widthM = 30;
+        if (typeof f.meta.heightM !== 'number') f.meta.heightM = 20;
+        if (typeof f.meta.name !== 'string') f.meta.name = 'Untitled factory';
+        if (typeof f.meta.description !== 'string') f.meta.description = '';
+        if (typeof f.meta.owner !== 'string') f.meta.owner = '';
+        if (typeof f.meta.lastReviewed !== 'string') f.meta.lastReviewed = '';
+        if (!Array.isArray(f.walls)) f.walls = [];
+        if (!Array.isArray(f.stations)) f.stations = [];        // for Layer 2
+        if (!Array.isArray(f.connections)) f.connections = []; // for Layer 3
+        if (typeof f.stationCounter !== 'number') f.stationCounter = 0;
+        if (typeof f.categoryId === 'undefined') f.categoryId = null;
+        return f;
+    }
+
+    /* ---------------- ID helpers ---------------- */
+    function genId(prefix) {
+        return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    }
+
+    /* ---------------- Accessors ---------------- */
+    function activeFactory() {
+        if (!state.activeFactoryId) return null;
+        return state.factories.find(f => f.id === state.activeFactoryId) || null;
+    }
+
+    function activeView() {
+        if (!state.activeFactoryId) return null;
+        return viewState.get(state.activeFactoryId);
+    }
+
+    function pxPerM() {
+        const view = activeView();
+        return BASE_PX_PER_M * (view ? view.zoom : 1);
+    }
+
+    /* ---------------- Coordinate conversion ---------------- */
+    function mToPx(m) {
+        return m * pxPerM();
+    }
+
+    /* Screen coords -> world (metre) coords */
+    function screenToM(clientX, clientY) {
+        const vp = document.getElementById('viewport');
+        const rect = vp.getBoundingClientRect();
+        const view = activeView();
+        if (!view) return null;
+        const localX = clientX - rect.left - RULER_SIZE - view.pan.x;
+        const localY = clientY - rect.top - RULER_SIZE - view.pan.y;
+        const p = pxPerM();
+        return { x: localX / p, y: localY / p };
+    }
+
+    /* Snap a metre coordinate to the grid (or fine grid with Alt) */
+    function snapM(m, fineSnap = false) {
+        const step = fineSnap ? FINE_SNAP_M : SNAP_M;
+        return Math.round(m / step) * step;
+    }
+
+    function snapPoint(p, fineSnap = false) {
+        return { x: snapM(p.x, fineSnap), y: snapM(p.y, fineSnap) };
+    }
+
+    /* When chaining walls, snap to 90° from previous point unless shift held */
+    function snapToAngle(prev, curr, freeAngle, fineSnap) {
+        if (freeAngle) return snapPoint(curr, fineSnap);
+        const dx = curr.x - prev.x;
+        const dy = curr.y - prev.y;
+        if (Math.abs(dx) > Math.abs(dy)) {
+            return { x: snapM(curr.x, fineSnap), y: prev.y };
+        } else {
+            return { x: prev.x, y: snapM(curr.y, fineSnap) };
+        }
+    }
+
+    /* ---------------- Sidebar rendering ---------------- */
+    const ICON_CHEVRON = `<svg class="category-chevron" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4l3 3 3-3"/></svg>`;
+    const ICON_EDIT = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5l1.5 1.5L5 10.5l-2 .5.5-2L10 2.5z"/></svg>`;
+    const ICON_DELETE = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h8M5.5 4V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1M4 4l.5 7a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1L10 4"/></svg>`;
+    const ICON_DUPLICATE = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="4.5" width="7.5" height="7.5" rx="1"/><path d="M2 9V3a1 1 0 0 1 1-1h6"/></svg>`;
+
+    function renderSidebar() {
+        const body = document.getElementById('sidebarBody');
+        body.innerHTML = '';
+
+        // Render each category
+        state.categories.forEach(cat => {
+            body.appendChild(renderCategoryBlock(cat));
+        });
+
+        // Render "Uncategorised" block at the end if any
+        const uncat = state.factories.filter(f => !f.categoryId);
+        if (uncat.length > 0 || state.categories.length === 0) {
+            body.appendChild(renderCategoryBlock({
+                id: '__uncat__',
+                name: state.categories.length === 0 ? 'Factories' : 'Uncategorised',
+                expanded: state.uncategorisedExpanded
+            }, true));
+        }
+    }
+
+    function renderCategoryBlock(cat, isUncat = false) {
+        const block = document.createElement('div');
+        block.className = 'category-block' + (cat.expanded ? '' : ' collapsed');
+
+        const header = document.createElement('div');
+        header.className = 'category-header';
+        header.onclick = () => toggleCategoryExpanded(cat.id);
+
+        const chevron = document.createElement('span');
+        chevron.innerHTML = ICON_CHEVRON;
+        header.appendChild(chevron.firstChild);
+
+        const name = document.createElement('span');
+        name.className = 'category-name';
+        name.textContent = cat.name;
+        header.appendChild(name);
+
+        if (!isUncat) {
+            const actions = document.createElement('span');
+            actions.className = 'category-actions';
+            actions.onclick = e => e.stopPropagation();
+
+            const renameBtn = document.createElement('button');
+            renameBtn.className = 'icon-btn';
+            renameBtn.title = 'Rename category';
+            renameBtn.innerHTML = ICON_EDIT;
+            renameBtn.onclick = () => renameCategory(cat.id);
+            actions.appendChild(renameBtn);
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'icon-btn danger';
+            delBtn.title = 'Delete category';
+            delBtn.innerHTML = ICON_DELETE;
+            delBtn.onclick = () => deleteCategory(cat.id);
+            actions.appendChild(delBtn);
+
+            header.appendChild(actions);
+        }
+
+        block.appendChild(header);
+
+        const items = document.createElement('div');
+        items.className = 'category-items';
+
+        const factories = isUncat
+            ? state.factories.filter(f => !f.categoryId)
+            : state.factories.filter(f => f.categoryId === cat.id);
+
+        if (factories.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'padding: 0.4rem 0.6rem; font-size: 0.78rem; color: var(--color-text-soft); font-style: italic;';
+            empty.textContent = 'No factories';
+            items.appendChild(empty);
+        } else {
+            factories.forEach(f => items.appendChild(renderFactoryItem(f)));
+        }
+
+        block.appendChild(items);
+        return block;
+    }
+
+    function renderFactoryItem(f) {
+        const item = document.createElement('div');
+        item.className = 'factory-item' + (f.id === state.activeFactoryId ? ' active' : '');
+        item.onclick = () => setActiveFactory(f.id);
+
+        const name = document.createElement('span');
+        name.className = 'factory-item-name';
+        name.textContent = f.meta.name || 'Untitled';
+        item.appendChild(name);
+
+        const dim = document.createElement('span');
+        dim.className = 'factory-item-dim';
+        dim.textContent = `${formatM(f.meta.widthM)}×${formatM(f.meta.heightM)}m`;
+        item.appendChild(dim);
+
+        const actions = document.createElement('span');
+        actions.className = 'factory-item-actions';
+        actions.onclick = e => e.stopPropagation();
+
+        const dupBtn = document.createElement('button');
+        dupBtn.className = 'icon-btn';
+        dupBtn.title = 'Duplicate';
+        dupBtn.innerHTML = ICON_DUPLICATE;
+        dupBtn.onclick = () => duplicateFactory(f.id);
+        actions.appendChild(dupBtn);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'icon-btn danger';
+        delBtn.title = 'Delete';
+        delBtn.innerHTML = ICON_DELETE;
+        delBtn.onclick = () => deleteFactory(f.id);
+        actions.appendChild(delBtn);
+
+        item.appendChild(actions);
+        return item;
+    }
+
+    function formatM(m) {
+        if (Number.isInteger(m)) return String(m);
+        return m.toFixed(1);
+    }
+
+    /* ---------------- Category CRUD ---------------- */
+    function createCategory() {
+        const name = prompt('Category name:');
+        if (name === null) return;
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        state.categories.push({ id: genId('cat'), name: trimmed, expanded: true });
+        saveState();
+        renderSidebar();
+    }
+
+    function renameCategory(id) {
+        const cat = state.categories.find(c => c.id === id);
+        if (!cat) return;
+        const newName = prompt('Rename category:', cat.name);
+        if (newName === null) return;
+        const trimmed = newName.trim();
+        if (trimmed) cat.name = trimmed;
+        saveState();
+        renderSidebar();
+    }
+
+    function deleteCategory(id) {
+        const cat = state.categories.find(c => c.id === id);
+        if (!cat) return;
+        const inCat = state.factories.filter(f => f.categoryId === id).length;
+        let msg = `Delete category "${cat.name}"?`;
+        if (inCat > 0) msg += `\n\n${inCat} factor${inCat === 1 ? 'y' : 'ies'} will be moved to Uncategorised.`;
+        if (!confirm(msg)) return;
+        state.factories.forEach(f => { if (f.categoryId === id) f.categoryId = null; });
+        state.categories = state.categories.filter(c => c.id !== id);
+        saveState();
+        renderSidebar();
+    }
+
+    function toggleCategoryExpanded(id) {
+        if (id === '__uncat__') {
+            state.uncategorisedExpanded = !state.uncategorisedExpanded;
+        } else {
+            const cat = state.categories.find(c => c.id === id);
+            if (cat) cat.expanded = !cat.expanded;
+        }
+        saveState();
+        renderSidebar();
+    }
+
+    /* ---------------- Factory CRUD ---------------- */
+    function createFactory() {
+        const name = prompt('Factory name:', 'New factory');
+        if (name === null) return;
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const f = normaliseFactory({
+            id: genId('fac'),
+            categoryId: null,
+            meta: {
+                name: trimmed,
+                widthM: 30,
+                heightM: 20,
+                description: '',
+                owner: '',
+                lastReviewed: ''
+            },
+            walls: [],
+            stations: [],
+            connections: [],
+            stationCounter: 0
+        });
+        state.factories.push(f);
+        state.activeFactoryId = f.id;
+        saveState();
+        renderSidebar();
+        renderAll();
+        // Open settings so user can adjust dimensions immediately
+        openFactorySettings();
+    }
+
+    function duplicateFactory(id) {
+        const original = state.factories.find(f => f.id === id);
+        if (!original) return;
+        const copy = JSON.parse(JSON.stringify(original));
+        copy.id = genId('fac');
+        copy.meta.name = (original.meta.name || 'Untitled') + ' (Copy)';
+        // Re-id walls so future references are clean
+        copy.walls.forEach(w => { w.id = genId('wall'); });
+        const idx = state.factories.findIndex(f => f.id === id);
+        state.factories.splice(idx + 1, 0, copy);
+        state.activeFactoryId = copy.id;
+        saveState();
+        renderSidebar();
+        renderAll();
+    }
+
+    function deleteFactory(id) {
+        const f = state.factories.find(f => f.id === id);
+        if (!f) return;
+        if (!confirm(`Delete factory "${f.meta.name || 'Untitled'}"?\n\nThis will remove all walls and (later) stations on it. This cannot be undone.`)) return;
+        state.factories = state.factories.filter(f => f.id !== id);
+        if (state.activeFactoryId === id) {
+            state.activeFactoryId = state.factories.length > 0 ? state.factories[0].id : null;
+        }
+        saveState();
+        renderSidebar();
+        renderAll();
+    }
+
+    function deleteActiveFactory() {
+        const f = activeFactory();
+        if (!f) return;
+        closeFactorySettings();
+        deleteFactory(f.id);
+    }
+
+    function setActiveFactory(id) {
+        if (state.activeFactoryId === id) {
+            // toggle off (deselect) when clicking the active one
+            state.activeFactoryId = null;
+        } else {
+            state.activeFactoryId = id;
+            // Center / fit the newly opened factory on first open
+            const view = viewState.get(id);
+            if (!view._initialised) {
+                view._initialised = true;
+                queueMicrotask(zoomFit);
+            }
+        }
+        cancelWallDraw();
+        selection = null;
+        resetSim();
+        saveState();
+        renderSidebar();
+        renderAll();
+    }
+
+    /* ---------------- Factory settings modal ---------------- */
+    function openFactorySettings() {
+        const f = activeFactory();
+        if (!f) return;
+        document.getElementById('factoryNameInput').value = f.meta.name || '';
+        document.getElementById('factoryWidthInput').value = f.meta.widthM;
+        document.getElementById('factoryDepthInput').value = f.meta.heightM;
+        document.getElementById('factoryDescriptionInput').value = f.meta.description || '';
+        document.getElementById('factoryOwnerInput').value = f.meta.owner || '';
+        document.getElementById('factoryReviewedInput').value = f.meta.lastReviewed || '';
+        // Populate categories
+        const sel = document.getElementById('factoryCategoryInput');
+        sel.innerHTML = '<option value="">Uncategorised</option>' +
+            state.categories.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+        sel.value = f.categoryId || '';
+        document.getElementById('factoryModal').classList.add('visible');
+    }
+
+    function closeFactorySettings() {
+        document.getElementById('factoryModal').classList.remove('visible');
+    }
+
+    function saveFactorySettings() {
+        const f = activeFactory();
+        if (!f) return;
+        const name = document.getElementById('factoryNameInput').value.trim();
+        const w = parseFloat(document.getElementById('factoryWidthInput').value);
+        const h = parseFloat(document.getElementById('factoryDepthInput').value);
+        if (!name) { alert('Factory name is required.'); return; }
+        if (!w || w <= 0) { alert('Width must be greater than 0.'); return; }
+        if (!h || h <= 0) { alert('Depth must be greater than 0.'); return; }
+        f.meta.name = name;
+        f.meta.widthM = w;
+        f.meta.heightM = h;
+        f.meta.description = document.getElementById('factoryDescriptionInput').value;
+        f.meta.owner = document.getElementById('factoryOwnerInput').value.trim();
+        f.meta.lastReviewed = document.getElementById('factoryReviewedInput').value;
+        f.categoryId = document.getElementById('factoryCategoryInput').value || null;
+        saveState();
+        closeFactorySettings();
+        renderSidebar();
+        renderAll();
+    }
+
+    /* ---------------- Header rendering ---------------- */
+    function renderHeader() {
+        const f = activeFactory();
+        const title = document.getElementById('factoryTitle');
+        const meta = document.getElementById('factoryMeta');
+        if (!f) {
+            document.body.classList.add('no-active-factory');
+            title.textContent = 'No factory selected';
+            title.classList.add('unset');
+            meta.innerHTML = '';
+            return;
+        }
+        document.body.classList.remove('no-active-factory');
+        title.textContent = f.meta.name || 'Untitled';
+        title.classList.remove('unset');
+        const bits = [];
+        bits.push(`<span><strong>${formatM(f.meta.widthM)}×${formatM(f.meta.heightM)} m</strong> land</span>`);
+        bits.push(`<span><strong>${f.walls.length}</strong> wall${f.walls.length === 1 ? '' : 's'}</span>`);
+        bits.push(`<span><strong>${f.stations.length}</strong> station${f.stations.length === 1 ? '' : 's'}</span>`);
+        bits.push(`<span><strong>${f.connections.length}</strong> connection${f.connections.length === 1 ? '' : 's'}</span>`);
+        const area = (f.meta.widthM * f.meta.heightM).toFixed(0);
+        bits.push(`<span><strong>${area}</strong> m² plot</span>`);
+        if (f.meta.owner) bits.push(`<span>Owner: <strong>${escapeHtml(f.meta.owner)}</strong></span>`);
+        meta.innerHTML = bits.join('');
+    }
+
+    /* ---------------- Canvas rendering ---------------- */
+    function renderAll() {
+        renderHeader();
+        renderCanvas();
+        renderEmptyState();
+    }
+
+    function renderEmptyState() {
+        document.getElementById('emptyState').style.display = activeFactory() ? 'none' : 'block';
+    }
+
+    function renderCanvas() {
+        const world = document.getElementById('world');
+        world.innerHTML = '';
+
+        const f = activeFactory();
+        if (!f) {
+            renderRulers();
+            return;
+        }
+
+        const view = activeView();
+        const pxm = pxPerM();
+        const wPx = f.meta.widthM * pxm;
+        const hPx = f.meta.heightM * pxm;
+
+        // Position the world container at pan offset (after ruler offset)
+        world.style.transform = `translate(${view.pan.x + RULER_SIZE}px, ${view.pan.y + RULER_SIZE}px)`;
+        world.style.width = wPx + 'px';
+        world.style.height = hPx + 'px';
+
+        // Factory floor rectangle (dashed border, white background)
+        const floor = document.createElement('div');
+        floor.className = 'factory-floor';
+        floor.style.width = wPx + 'px';
+        floor.style.height = hPx + 'px';
+        world.appendChild(floor);
+
+        // SVG layer for grid, walls, etc.
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', wPx + 200); // extra room for handles outside floor
+        svg.setAttribute('height', hPx + 200);
+        svg.style.left = '-100px';
+        svg.style.top = '-100px';
+
+        // Grid (within factory floor only)
+        const gridG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        gridG.setAttribute('transform', 'translate(100, 100)');
+        renderGrid(gridG, f.meta.widthM, f.meta.heightM, pxm);
+        svg.appendChild(gridG);
+
+        // Walls layer
+        const wallsG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        wallsG.setAttribute('transform', 'translate(100, 100)');
+        wallsG.classList.add('walls-layer');
+        renderWalls(wallsG, f, pxm);
+        svg.appendChild(wallsG);
+
+        // Connections layer (between walls and stations)
+        renderConnections(svg, f, pxm);
+
+        // Connect-mode preview (source → cursor)
+        if (tool.startsWith('connect:') && cursorM) {
+            renderConnectionPreview(svg, f, pxm, tool.split(':')[1], cursorM);
+        }
+
+        // Preview / draw layer
+        const drawG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        drawG.setAttribute('transform', 'translate(100, 100)');
+        drawG.classList.add('draw-layer');
+        renderDrawLayer(drawG, pxm);
+        svg.appendChild(drawG);
+
+        world.appendChild(svg);
+
+        // Stations as HTML divs layered above the SVG (positioned in metres relative to world)
+        renderStations(world, f, pxm);
+
+        renderRulers();
+        updateZoomDisplay();
+
+        // Sim-related overlays sit on top of stations and are recreated each render
+        renderPulses();
+        updateStationOverlays();
+    }
+
+    function renderGrid(g, widthM, heightM, pxm) {
+        const gridStepM = pxm < 8 ? 5 : 1;   // when zoomed way out, skip minor lines
+        const majorEveryM = 5;
+
+        // Minor + major vertical lines
+        for (let x = 0; x <= widthM + 0.0001; x += gridStepM) {
+            const isMajor = Math.abs(x % majorEveryM) < 0.0001;
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', x * pxm);
+            line.setAttribute('y1', 0);
+            line.setAttribute('x2', x * pxm);
+            line.setAttribute('y2', heightM * pxm);
+            line.setAttribute('stroke', isMajor ? 'rgba(0,0,0,0.10)' : 'rgba(0,0,0,0.04)');
+            line.setAttribute('stroke-width', '1');
+            g.appendChild(line);
+        }
+        // Horizontal lines
+        for (let y = 0; y <= heightM + 0.0001; y += gridStepM) {
+            const isMajor = Math.abs(y % majorEveryM) < 0.0001;
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', 0);
+            line.setAttribute('y1', y * pxm);
+            line.setAttribute('x2', widthM * pxm);
+            line.setAttribute('y2', y * pxm);
+            line.setAttribute('stroke', isMajor ? 'rgba(0,0,0,0.10)' : 'rgba(0,0,0,0.04)');
+            line.setAttribute('stroke-width', '1');
+            g.appendChild(line);
+        }
+    }
+
+    function renderWalls(g, f, pxm) {
+        f.walls.forEach(w => {
+            // Hit area (transparent, wide) for easy clicking
+            const hit = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            hit.setAttribute('x1', w.x1 * pxm);
+            hit.setAttribute('y1', w.y1 * pxm);
+            hit.setAttribute('x2', w.x2 * pxm);
+            hit.setAttribute('y2', w.y2 * pxm);
+            hit.classList.add('wall-hit');
+            hit.dataset.wallId = w.id;
+            hit.addEventListener('click', e => {
+                e.stopPropagation();
+                if (tool === 'wall' || tool.startsWith('place:')) return;
+                selection = { type: 'wall', id: w.id };
+                renderCanvas();
+                updateModeBanner();
+            });
+            g.appendChild(hit);
+
+            // Visible line
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', w.x1 * pxm);
+            line.setAttribute('y1', w.y1 * pxm);
+            line.setAttribute('x2', w.x2 * pxm);
+            line.setAttribute('y2', w.y2 * pxm);
+            line.classList.add('wall');
+            if (selection && selection.type === 'wall' && selection.id === w.id) line.classList.add('selected');
+            line.setAttribute('stroke-width', WALL_STROKE_PX);
+            line.dataset.wallId = w.id;
+            g.appendChild(line);
+
+            // Selected: endpoint handles
+            if (selection && selection.type === 'wall' && selection.id === w.id) {
+                [[w.x1, w.y1], [w.x2, w.y2]].forEach(([px, py]) => {
+                    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    c.setAttribute('cx', px * pxm);
+                    c.setAttribute('cy', py * pxm);
+                    c.setAttribute('r', 5);
+                    c.classList.add('wall-handle');
+                    g.appendChild(c);
+                });
+            }
+        });
+    }
+
+    function renderDrawLayer(g, pxm) {
+        if (tool !== 'wall' || !wallDraw) return;
+        const pts = wallDraw.points;
+        if (pts.length === 0) return;
+
+        // Existing committed segments in this drawing session
+        for (let i = 0; i < pts.length - 1; i++) {
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', pts[i].x * pxm);
+            line.setAttribute('y1', pts[i].y * pxm);
+            line.setAttribute('x2', pts[i + 1].x * pxm);
+            line.setAttribute('y2', pts[i + 1].y * pxm);
+            line.classList.add('wall');
+            line.setAttribute('stroke-width', WALL_STROKE_PX);
+            g.appendChild(line);
+        }
+
+        // Preview line from last point to cursor
+        const last = pts[pts.length - 1];
+        if (wallDraw.cursorM) {
+            const preview = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            preview.setAttribute('x1', last.x * pxm);
+            preview.setAttribute('y1', last.y * pxm);
+            preview.setAttribute('x2', wallDraw.cursorM.x * pxm);
+            preview.setAttribute('y2', wallDraw.cursorM.y * pxm);
+            preview.classList.add('wall-preview');
+            preview.setAttribute('stroke-width', WALL_STROKE_PX);
+            g.appendChild(preview);
+
+            // Endpoint dot at cursor
+            const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            dot.setAttribute('cx', wallDraw.cursorM.x * pxm);
+            dot.setAttribute('cy', wallDraw.cursorM.y * pxm);
+            dot.setAttribute('r', 4);
+            dot.classList.add('wall-endpoint');
+            g.appendChild(dot);
+
+            // Length label at midpoint
+            const midX = (last.x + wallDraw.cursorM.x) / 2;
+            const midY = (last.y + wallDraw.cursorM.y) / 2;
+            const dx = wallDraw.cursorM.x - last.x;
+            const dy = wallDraw.cursorM.y - last.y;
+            const len = Math.hypot(dx, dy);
+            if (len > 0.05) {
+                const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                const labelText = `${len.toFixed(2)} m`;
+                const textW = labelText.length * 6.5 + 10;
+                labelBg.setAttribute('x', midX * pxm - textW / 2);
+                labelBg.setAttribute('y', midY * pxm - 10);
+                labelBg.setAttribute('width', textW);
+                labelBg.setAttribute('height', 18);
+                labelBg.setAttribute('rx', 3);
+                labelBg.setAttribute('fill', '#0A66C2');
+                g.appendChild(labelBg);
+
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', midX * pxm);
+                text.setAttribute('y', midY * pxm + 3);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('fill', 'white');
+                text.setAttribute('font-size', '11');
+                text.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
+                text.setAttribute('font-weight', '600');
+                text.textContent = labelText;
+                g.appendChild(text);
+            }
+        }
+
+        // Start dot
+        const startDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        startDot.setAttribute('cx', pts[0].x * pxm);
+        startDot.setAttribute('cy', pts[0].y * pxm);
+        startDot.setAttribute('r', 4);
+        startDot.classList.add('wall-endpoint');
+        g.appendChild(startDot);
+    }
+
+    function renderRulers() {
+        const f = activeFactory();
+        const top = document.getElementById('rulerTop');
+        const left = document.getElementById('rulerLeft');
+        top.innerHTML = '';
+        left.innerHTML = '';
+        if (!f) return;
+
+        const view = activeView();
+        const pxm = pxPerM();
+
+        // Decide a tick interval based on zoom
+        let stepM;
+        if (pxm >= 40) stepM = 1;
+        else if (pxm >= 15) stepM = 2;
+        else if (pxm >= 6) stepM = 5;
+        else stepM = 10;
+
+        const vp = document.getElementById('viewport');
+        const vpRect = vp.getBoundingClientRect();
+        const usableW = vpRect.width - RULER_SIZE;
+        const usableH = vpRect.height - RULER_SIZE;
+
+        // Top ruler: ticks from 0 to widthM, positioned at (m*pxm + panX)
+        const startMx = Math.max(0, Math.floor((-view.pan.x) / (stepM * pxm)) * stepM);
+        const endMx = Math.min(f.meta.widthM, Math.ceil((usableW - view.pan.x) / pxm));
+        for (let m = startMx; m <= endMx + 0.0001; m += stepM) {
+            const x = m * pxm + view.pan.x;
+            if (x < 0 || x > usableW) continue;
+            const tick = document.createElement('div');
+            tick.className = 'ruler-tick';
+            tick.style.left = x + 'px';
+            top.appendChild(tick);
+
+            const label = document.createElement('div');
+            label.className = 'ruler-label';
+            label.style.left = x + 'px';
+            label.textContent = formatM(m);
+            top.appendChild(label);
+        }
+
+        // Left ruler
+        const startMy = Math.max(0, Math.floor((-view.pan.y) / (stepM * pxm)) * stepM);
+        const endMy = Math.min(f.meta.heightM, Math.ceil((usableH - view.pan.y) / pxm));
+        for (let m = startMy; m <= endMy + 0.0001; m += stepM) {
+            const y = m * pxm + view.pan.y;
+            if (y < 0 || y > usableH) continue;
+            const tick = document.createElement('div');
+            tick.className = 'ruler-tick';
+            tick.style.top = y + 'px';
+            left.appendChild(tick);
+
+            const label = document.createElement('div');
+            label.className = 'ruler-label';
+            label.style.top = y + 'px';
+            label.textContent = formatM(m);
+            left.appendChild(label);
+        }
+    }
+
+    function updateZoomDisplay() {
+        const view = activeView();
+        const disp = document.getElementById('zoomDisplay');
+        if (!view) { disp.textContent = '100%'; return; }
+        disp.textContent = Math.round(view.zoom * 100) + '%';
+    }
+
+    function updateCursorInfo() {
+        const info = document.getElementById('cursorInfo');
+        if (!cursorM || !activeFactory()) { info.textContent = '—'; return; }
+        info.innerHTML = `<strong>${cursorM.x.toFixed(2)}</strong>, <strong>${cursorM.y.toFixed(2)}</strong> m`;
+    }
+
+    /* ---------------- Tool switching ---------------- */
+    function setTool(t) {
+        if (t === tool) return;
+        tool = t;
+        cancelWallDraw();
+        // Preserve a connect-mode selection only if entering connect mode
+        if (!t.startsWith('connect:')) selection = null;
+        // Tool button states
+        document.getElementById('toolSelect').classList.toggle('active', tool === 'select');
+        document.getElementById('toolWall').classList.toggle('active', tool === 'wall');
+        // Palette button states
+        ['input', 'process', 'inspection', 'buffer', 'output'].forEach(t2 => {
+            const el = document.getElementById('palette' + t2.charAt(0).toUpperCase() + t2.slice(1));
+            if (el) el.classList.toggle('active', tool === 'place:' + t2);
+        });
+        const vp = document.getElementById('viewport');
+        vp.classList.remove('mode-select', 'mode-wall', 'mode-pan', 'mode-place', 'mode-connect');
+        if (tool === 'select') vp.classList.add('mode-select');
+        else if (tool === 'wall') vp.classList.add('mode-wall');
+        else if (tool.startsWith('place:')) vp.classList.add('mode-place');
+        else if (tool.startsWith('connect:')) vp.classList.add('mode-connect');
+        placeGhost = null;
+        renderActionBar();
+        renderCanvas();
+    }
+
+    /* Build the contextual action bar with tappable buttons. Keyboard shortcuts
+       continue to work — this just gives touch users the same powers. */
+    function renderActionBar() {
+        const bar = document.getElementById('actionBar');
+        const hint = document.getElementById('actionHint');
+        const btns = document.getElementById('actionButtons');
+        if (!bar) return;
+        btns.innerHTML = '';
+
+        let hintHtml = '';
+        const actions = [];   // { label, onclick, className }
+
+        if (tool === 'wall') {
+            if (wallDraw && wallDraw.points.length > 0) {
+                hintHtml = `Drawing wall <span class="hint-tip">Tap to add corner</span>`;
+                actions.push({ label: 'Cancel', onclick: () => { cancelWallDraw(); renderCanvas(); renderActionBar(); } });
+                actions.push({ label: 'Done', className: 'primary', onclick: () => { finishWallDraw(); renderActionBar(); } });
+            } else {
+                hintHtml = `Wall tool <span class="hint-tip">Tap the canvas to begin</span>`;
+                actions.push({ label: 'Exit', onclick: () => setTool('select') });
+            }
+        } else if (tool.startsWith('place:')) {
+            const t = tool.split(':')[1];
+            hintHtml = `Place <strong>${STATION_TYPES[t].label}</strong> <span class="hint-tip">Tap to drop</span>`;
+            actions.push({ label: 'Cancel', onclick: () => setTool('select') });
+        } else if (tool.startsWith('connect:')) {
+            hintHtml = `Connecting <span class="hint-tip">Tap the destination station</span>`;
+            actions.push({ label: 'Cancel', onclick: () => setTool('select') });
+        } else if (selection && selection.type === 'wall') {
+            hintHtml = `Wall selected`;
+            actions.push({ label: 'Delete', className: 'danger', onclick: deleteSelectedWall });
+            actions.push({ label: 'Done', onclick: () => { selection = null; renderCanvas(); renderActionBar(); } });
+        } else if (selection && selection.type === 'station') {
+            const f = activeFactory();
+            const s = f && f.stations.find(x => x.id === selection.id);
+            const label = s ? (STATION_TYPES[s.type] || STATION_TYPES.process).label : 'Station';
+            hintHtml = `${label} station selected`;
+            actions.push({ label: 'Edit', className: 'primary', onclick: () => openStationModal(selection.id) });
+            actions.push({ label: 'Connect', onclick: () => startConnectFrom(selection.id) });
+            actions.push({ label: 'Duplicate', onclick: () => duplicateStation(selection.id) });
+            actions.push({ label: 'Delete', className: 'danger', onclick: deleteSelectedStation });
+            actions.push({ label: 'Done', onclick: () => { selection = null; renderCanvas(); renderActionBar(); } });
+        } else if (selection && selection.type === 'connection') {
+            hintHtml = `Connection selected`;
+            actions.push({ label: 'Edit', className: 'primary', onclick: () => openConnectionModal(selection.id) });
+            actions.push({ label: 'Delete', className: 'danger', onclick: deleteSelectedConnection });
+            actions.push({ label: 'Done', onclick: () => { selection = null; renderCanvas(); renderActionBar(); } });
+        } else {
+            bar.classList.remove('visible');
+            return;
+        }
+
+        hint.innerHTML = hintHtml;
+        actions.forEach(a => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'action-btn' + (a.className ? ' ' + a.className : '');
+            b.textContent = a.label;
+            b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); a.onclick(); });
+            // Prevent the canvas from also receiving a mousedown for this tap
+            b.addEventListener('mousedown', e => e.stopPropagation());
+            b.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+            btns.appendChild(b);
+        });
+        bar.classList.add('visible');
+    }
+
+    /* Back-compat shim — older code paths still call updateModeBanner. */
+    function updateModeBanner() { renderActionBar(); }
+
+    /* ---------------- Sidebar collapse ---------------- */
+    function toggleSidebar() {
+        state.sidebarCollapsed = !state.sidebarCollapsed;
+        applySidebarState();
+        saveState();
+        // Canvas size has changed; re-render so rulers/walls stay aligned
+        if (activeFactory()) renderCanvas();
+    }
+
+    function applySidebarState() {
+        const sb = document.getElementById('sidebar');
+        const btn = document.getElementById('sidebarCollapseBtn');
+        if (!sb) return;
+        sb.classList.toggle('collapsed', !!state.sidebarCollapsed);
+        if (btn) btn.title = state.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar';
+    }
+
+    /* ---------------- Wall drawing ---------------- */
+    function cancelWallDraw() {
+        wallDraw = null;
+        updateModeBanner();
+    }
+
+    function finishWallDraw() {
+        // Commit pending segments (already done as we go, so this just clears the chain)
+        cancelWallDraw();
+        renderCanvas();
+    }
+
+    function addWallSegment(a, b) {
+        const f = activeFactory();
+        if (!f) return;
+        // Don't add zero-length segments
+        if (Math.hypot(b.x - a.x, b.y - a.y) < 0.05) return;
+        f.walls.push({
+            id: genId('wall'),
+            x1: a.x, y1: a.y,
+            x2: b.x, y2: b.y
+        });
+        saveState();
+        renderHeader();
+    }
+
+    function deleteSelectedWall() {
+        const f = activeFactory();
+        if (!f || !selection || selection.type !== 'wall') return;
+        f.walls = f.walls.filter(w => w.id !== selection.id);
+        selection = null;
+        saveState();
+        renderCanvas();
+        renderHeader();
+        updateModeBanner();
+    }
+
+    /* ---------------- Stations ---------------- */
+    function renderStations(world, f, pxm) {
+        // Render placement ghost (a follow-the-cursor preview) — handled separately
+        // because it lives outside per-render lifecycle when cursor moves.
+        f.stations.forEach(s => {
+            const el = document.createElement('div');
+            el.className = 'station-card';
+            el.dataset.stationId = s.id;
+            const t = STATION_TYPES[s.type] || STATION_TYPES.process;
+            el.style.setProperty('--st-color', t.color);
+            el.style.setProperty('--st-bg', t.bg);
+            const wPx = s.widthM * pxm;
+            const dPx = s.depthM * pxm;
+            el.style.left = (s.x * pxm) + 'px';
+            el.style.top = (s.y * pxm) + 'px';
+            el.style.width = wPx + 'px';
+            el.style.height = dPx + 'px';
+
+            // Compactness classes based on rendered pixel size
+            if (wPx < 56 || dPx < 36) el.classList.add('compact');
+            if (wPx < 28 || dPx < 22) el.classList.add('tiny');
+
+            if (selection && selection.type === 'station' && selection.id === s.id) {
+                el.classList.add('selected');
+            }
+
+            // While in connect mode, the source station gets a distinct style
+            if (tool === 'connect:' + s.id) {
+                el.classList.add('connect-source');
+            }
+
+            // Content
+            const stats = [];
+            if (s.meta.cycleTimeMin) stats.push(`<div class="station-stat">Cycle <strong>${formatStat(s.meta.cycleTimeMin)} min</strong></div>`);
+            if (s.meta.throughput) stats.push(`<div class="station-stat">Out <strong>${formatStat(s.meta.throughput)}/h</strong></div>`);
+            if (!s.meta.cycleTimeMin && !s.meta.throughput) stats.push(`<div class="station-stat" style="opacity:0.55">Tap to set times</div>`);
+
+            el.innerHTML = `
+                <div class="station-header">
+                    <span class="station-number">${s.number}</span>
+                    <span class="station-title">${escapeHtml(s.meta.title || t.label)}</span>
+                </div>
+                <div class="station-body">
+                    ${stats.join('')}
+                    <div class="station-footprint">${formatM(s.widthM)}×${formatM(s.depthM)} m</div>
+                </div>
+            `;
+
+            // Drag (move) on the body
+            el.addEventListener('mousedown', e => {
+                if (tool !== 'select') return;
+                if (e.button !== 0) return;
+                if (e.target.classList.contains('resize-handle')) return; // handled below
+                e.stopPropagation();
+                selection = { type: 'station', id: s.id };
+                renderCanvas();
+                updateModeBanner();
+                startStationDrag(s, 'move', null, screenToM(e.clientX, e.clientY));
+            });
+
+            el.addEventListener('dblclick', e => {
+                e.stopPropagation();
+                openStationModal(s.id);
+            });
+
+            // Resize handles (visible only when selected)
+            if (selection && selection.type === 'station' && selection.id === s.id) {
+                ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].forEach(dir => {
+                    const h = document.createElement('div');
+                    h.className = 'resize-handle ' + dir;
+                    h.addEventListener('mousedown', e => {
+                        if (tool !== 'select') return;
+                        if (e.button !== 0) return;
+                        e.stopPropagation();
+                        e.preventDefault();
+                        startStationDrag(s, 'resize', dir, screenToM(e.clientX, e.clientY));
+                    });
+                    el.appendChild(h);
+                });
+            }
+
+            world.appendChild(el);
+        });
+    }
+
+    function formatStat(n) {
+        const num = Number(n);
+        if (!isFinite(num)) return '—';
+        if (num >= 100) return num.toFixed(0);
+        if (num >= 10) return num.toFixed(1);
+        return num.toFixed(2).replace(/\.?0+$/, '');
+    }
+
+    /* Placement ghost preview (follows cursor) */
+    function renderPlaceGhost() {
+        const world = document.getElementById('world');
+        const existing = world.querySelector('.station-ghost');
+        if (existing) existing.remove();
+
+        if (!placeGhost || !activeFactory()) return;
+        const pxm = pxPerM();
+        const t = STATION_TYPES[placeGhost.type];
+        if (!t) return;
+
+        // Ghost is centred on the cursor (so clicking drops the centre at the cursor)
+        const wPx = t.defaultW * pxm;
+        const dPx = t.defaultD * pxm;
+        const cx = placeGhost.mPos.x * pxm;
+        const cy = placeGhost.mPos.y * pxm;
+
+        const ghost = document.createElement('div');
+        ghost.className = 'station-ghost';
+        ghost.style.setProperty('--st-color', t.color);
+        ghost.style.setProperty('--st-bg', t.bg);
+        ghost.style.left = (cx - wPx / 2) + 'px';
+        ghost.style.top = (cy - dPx / 2) + 'px';
+        ghost.style.width = wPx + 'px';
+        ghost.style.height = dPx + 'px';
+        world.appendChild(ghost);
+    }
+
+    function placeStationAt(type, mPos) {
+        const f = activeFactory();
+        if (!f || !STATION_TYPES[type]) return;
+        const t = STATION_TYPES[type];
+        // Snap centre to grid, then derive top-left
+        const snapped = snapPoint(mPos, false);
+        f.stationCounter = (f.stationCounter || 0) + 1;
+        const station = {
+            id: genId('station'),
+            type,
+            number: f.stationCounter,
+            x: snapped.x - t.defaultW / 2,
+            y: snapped.y - t.defaultD / 2,
+            widthM: t.defaultW,
+            depthM: t.defaultD,
+            rotation: 0,
+            meta: {
+                title: '',
+                operator: '',
+                operatorCount: 1,
+                cycleTimeMin: '',
+                throughput: '',
+                equipment: '',
+                method: '',
+                quality: '',
+                safetyZone: 'none'
+            }
+        };
+        f.stations.push(station);
+        selection = { type: 'station', id: station.id };
+        saveState();
+        // Return to select tool so user can immediately drag/edit
+        setTool('select');
+        selection = { type: 'station', id: station.id }; // setTool clears, restore
+        renderCanvas();
+        renderHeader();
+        updateModeBanner();
+    }
+
+    function startStationDrag(s, mode, handle, startM) {
+        if (!startM) return;
+        stationDrag = {
+            stationId: s.id,
+            mode,
+            handle,
+            startM,
+            orig: { x: s.x, y: s.y, widthM: s.widthM, depthM: s.depthM }
+        };
+        document.querySelectorAll('.station-card').forEach(el => {
+            if (el.dataset.stationId === s.id) el.classList.add(mode === 'move' ? 'dragging' : 'resizing');
+        });
+    }
+
+    function handleStationDragMove(mPos, e) {
+        if (!stationDrag) return;
+        const f = activeFactory();
+        if (!f) return;
+        const s = f.stations.find(st => st.id === stationDrag.stationId);
+        if (!s) return;
+        const orig = stationDrag.orig;
+        const start = stationDrag.startM;
+        const fine = e.altKey;
+
+        if (stationDrag.mode === 'move') {
+            const dx = mPos.x - start.x;
+            const dy = mPos.y - start.y;
+            s.x = snapM(orig.x + dx, fine);
+            s.y = snapM(orig.y + dy, fine);
+        } else {
+            // resize: handle which edges move based on direction
+            const dir = stationDrag.handle;
+            const right = orig.x + orig.widthM;
+            const bottom = orig.y + orig.depthM;
+            // What the cursor is now (snapped)
+            const cx = snapM(mPos.x, fine);
+            const cy = snapM(mPos.y, fine);
+            let nx = orig.x, ny = orig.y, nw = orig.widthM, nd = orig.depthM;
+            if (dir.includes('w')) {
+                nx = Math.min(cx, right - STATION_MIN_M);
+                nw = right - nx;
+            }
+            if (dir.includes('n')) {
+                ny = Math.min(cy, bottom - STATION_MIN_M);
+                nd = bottom - ny;
+            }
+            if (dir.includes('e')) {
+                nw = Math.max(STATION_MIN_M, cx - orig.x);
+            }
+            if (dir.includes('s')) {
+                nd = Math.max(STATION_MIN_M, cy - orig.y);
+            }
+            s.x = nx; s.y = ny; s.widthM = nw; s.depthM = nd;
+        }
+        renderCanvas();
+    }
+
+    function endStationDrag() {
+        if (!stationDrag) return;
+        stationDrag = null;
+        saveState();
+        renderCanvas();
+        renderHeader();
+    }
+
+    function deleteSelectedStation() {
+        const f = activeFactory();
+        if (!f || !selection || selection.type !== 'station') return;
+        const id = selection.id;
+        f.stations = f.stations.filter(s => s.id !== id);
+        purgeConnectionsForStation(id);
+        selection = null;
+        saveState();
+        renderCanvas();
+        renderHeader();
+        renderActionBar();
+    }
+
+    function duplicateStation(id) {
+        const f = activeFactory();
+        if (!f) return;
+        const s = f.stations.find(st => st.id === id);
+        if (!s) return;
+        const copy = JSON.parse(JSON.stringify(s));
+        copy.id = genId('station');
+        f.stationCounter = (f.stationCounter || f.stations.length) + 1;
+        copy.number = f.stationCounter;
+        copy.x = s.x + 0.5;
+        copy.y = s.y + 0.5;
+        f.stations.push(copy);
+        selection = { type: 'station', id: copy.id };
+        saveState();
+        renderCanvas();
+        renderHeader();
+        updateModeBanner();
+    }
+
+    /* ---------------- Station modal ---------------- */
+    let modalStationId = null;
+
+    function openStationModal(id) {
+        const f = activeFactory();
+        if (!f) return;
+        const s = f.stations.find(st => st.id === id);
+        if (!s) return;
+        modalStationId = id;
+        document.getElementById('stationModalTitle').textContent = `Station ${s.number}`;
+        document.getElementById('stTitle').value = s.meta.title || '';
+        document.getElementById('stOperator').value = s.meta.operator || '';
+        document.getElementById('stOperatorCount').value = s.meta.operatorCount ?? 1;
+        document.getElementById('stCycleMin').value = s.meta.cycleTimeMin || '';
+        document.getElementById('stThroughput').value = s.meta.throughput || '';
+        document.getElementById('stWidth').value = s.widthM;
+        document.getElementById('stDepth').value = s.depthM;
+        document.getElementById('stEquipment').value = s.meta.equipment || '';
+        document.getElementById('stMethod').value = s.meta.method || '';
+        document.getElementById('stQuality').value = s.meta.quality || '';
+        document.getElementById('stSafetyZone').value = s.meta.safetyZone || 'none';
+        // Highlight current type in selector
+        document.querySelectorAll('#stationTypeSelector .palette-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.type === s.type);
+        });
+        document.getElementById('stationModal').classList.add('visible');
+        setTimeout(() => document.getElementById('stTitle').focus(), 50);
+    }
+
+    function closeStationModal() {
+        document.getElementById('stationModal').classList.remove('visible');
+        modalStationId = null;
+    }
+
+    function saveStationModal() {
+        const f = activeFactory();
+        if (!f || !modalStationId) return;
+        const s = f.stations.find(st => st.id === modalStationId);
+        if (!s) return;
+
+        // Determine selected type from active button
+        const activeTypeBtn = document.querySelector('#stationTypeSelector .palette-btn.active');
+        if (activeTypeBtn) s.type = activeTypeBtn.dataset.type;
+
+        s.meta.title = document.getElementById('stTitle').value.trim();
+        s.meta.operator = document.getElementById('stOperator').value.trim();
+        s.meta.operatorCount = parseInt(document.getElementById('stOperatorCount').value, 10) || 0;
+        s.meta.cycleTimeMin = parseFloat(document.getElementById('stCycleMin').value) || 0;
+        s.meta.throughput = parseFloat(document.getElementById('stThroughput').value) || 0;
+        const newW = parseFloat(document.getElementById('stWidth').value);
+        const newD = parseFloat(document.getElementById('stDepth').value);
+        if (newW && newW >= STATION_MIN_M) s.widthM = newW;
+        if (newD && newD >= STATION_MIN_M) s.depthM = newD;
+        s.meta.equipment = document.getElementById('stEquipment').value;
+        s.meta.method = document.getElementById('stMethod').value;
+        s.meta.quality = document.getElementById('stQuality').value;
+        s.meta.safetyZone = document.getElementById('stSafetyZone').value;
+        saveState();
+        closeStationModal();
+        renderCanvas();
+        renderHeader();
+    }
+
+    function deleteStationFromModal() {
+        if (!modalStationId) return;
+        const f = activeFactory();
+        if (!f) return;
+        if (!confirm('Delete this station? This cannot be undone.')) return;
+        f.stations = f.stations.filter(s => s.id !== modalStationId);
+        purgeConnectionsForStation(modalStationId);
+        selection = null;
+        saveState();
+        closeStationModal();
+        renderCanvas();
+        renderHeader();
+        renderActionBar();
+    }
+
+    function duplicateStationFromModal() {
+        if (!modalStationId) return;
+        duplicateStation(modalStationId);
+        closeStationModal();
+        // Open the duplicate's modal
+        if (selection && selection.type === 'station') openStationModal(selection.id);
+    }
+
+    /* Wire up the type-selector buttons inside the modal */
+    function setupStationTypeSelector() {
+        document.querySelectorAll('#stationTypeSelector .palette-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#stationTypeSelector .palette-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+    }
+
+    /* ---------------- Connections (material flow between stations) ---------------- */
+    const TRANSPORT_LABELS = {
+        'manual': 'Manual',
+        'conveyor': 'Conveyor',
+        'agv': 'AGV',
+        'forklift': 'Forklift',
+        'pallet-jack': 'Pallet jack',
+        'overhead-crane': 'Overhead crane',
+        'gravity': 'Gravity',
+        'roller-table': 'Roller table',
+        'other': 'Other'
+    };
+
+    function stationCenter(s) {
+        return { x: s.x + s.widthM / 2, y: s.y + s.depthM / 2 };
+    }
+
+    /* Find where a ray from (cx, cy) heading in (dx, dy) exits an axis-aligned
+       rectangle centred at (cx, cy) with half-extents (halfW, halfH).
+       Used to make arrows stop at the edge of the destination station instead of
+       hiding behind it. */
+    function rayBoxExit(cx, cy, halfW, halfH, dx, dy) {
+        const eps = 1e-9;
+        const txp = dx > eps ? halfW / dx : (dx < -eps ? -halfW / dx : Infinity);
+        const typ = dy > eps ? halfH / dy : (dy < -eps ? -halfH / dy : Infinity);
+        const t = Math.min(Math.abs(txp), Math.abs(typ));
+        return { x: cx + dx * t, y: cy + dy * t };
+    }
+
+    /* Compute the visible endpoints of a connection — start at source edge, end
+       at destination edge (offset slightly to leave room for the arrowhead). */
+    function connectionEndpoints(from, to) {
+        const a = stationCenter(from);
+        const b = stationCenter(to);
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const len = Math.hypot(dx, dy);
+        if (len < 1e-6) return { a, b };
+        const ux = dx / len, uy = dy / len;
+        // Exit point from source toward destination
+        const start = rayBoxExit(a.x, a.y, from.widthM / 2, from.depthM / 2, ux, uy);
+        // Exit point from destination back toward source (then we use this as the end)
+        const end   = rayBoxExit(b.x, b.y, to.widthM / 2,   to.depthM / 2,  -ux, -uy);
+        return { a: start, b: end };
+    }
+
+    function renderConnections(svgRoot, f, pxm) {
+        // SVG group sits inside the existing world SVG between walls and the draw layer
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('transform', 'translate(100, 100)');
+        g.classList.add('connections-layer');
+
+        // <defs> for arrow markers (one default colour for now; bottleneck colours come in Layer 5)
+        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        defs.innerHTML = `
+            <marker id="arrow-default" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 L2,5 z" fill="#5B6470"/>
+            </marker>
+            <marker id="arrow-selected" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 L2,5 z" fill="#0A66C2"/>
+            </marker>
+        `;
+        g.appendChild(defs);
+
+        f.connections.forEach(c => {
+            const from = f.stations.find(s => s.id === c.fromId);
+            const to = f.stations.find(s => s.id === c.toId);
+            if (!from || !to) return; // dangling: skip (will be cleaned on next save)
+
+            const { a, b } = connectionEndpoints(from, to);
+            const isSelected = selection && selection.type === 'connection' && selection.id === c.id;
+
+            // Wide transparent hit area
+            const hit = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            hit.setAttribute('x1', a.x * pxm);
+            hit.setAttribute('y1', a.y * pxm);
+            hit.setAttribute('x2', b.x * pxm);
+            hit.setAttribute('y2', b.y * pxm);
+            hit.classList.add('connection-hit');
+            hit.dataset.connectionId = c.id;
+            hit.addEventListener('click', e => {
+                e.stopPropagation();
+                if (tool.startsWith('connect:') || tool.startsWith('place:') || tool === 'wall') return;
+                selection = { type: 'connection', id: c.id };
+                renderCanvas();
+                renderActionBar();
+            });
+            hit.addEventListener('dblclick', e => {
+                e.stopPropagation();
+                openConnectionModal(c.id);
+            });
+            g.appendChild(hit);
+
+            // Visible arrow line
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', a.x * pxm);
+            line.setAttribute('y1', a.y * pxm);
+            line.setAttribute('x2', b.x * pxm);
+            line.setAttribute('y2', b.y * pxm);
+            line.classList.add('connection-line');
+            if (isSelected) line.classList.add('selected');
+            line.setAttribute('marker-end', `url(#${isSelected ? 'arrow-selected' : 'arrow-default'})`);
+            g.appendChild(line);
+
+            // Mid-point label (transfer time + transport)
+            const midX = (a.x + b.x) / 2 * pxm;
+            const midY = (a.y + b.y) / 2 * pxm;
+            const labelParts = [];
+            if (c.meta.transferTimeMin) labelParts.push(`${formatStat(c.meta.transferTimeMin)} min`);
+            else if (c.meta.transport) labelParts.push(TRANSPORT_LABELS[c.meta.transport] || c.meta.transport);
+            else labelParts.push('•••');
+
+            const labelText = labelParts.join(' · ');
+            // Only show label if there's room (rough heuristic on pixel length)
+            const lineLen = Math.hypot((b.x - a.x) * pxm, (b.y - a.y) * pxm);
+            if (lineLen > 40) {
+                const textW = labelText.length * 6 + 12;
+                const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                labelBg.setAttribute('x', midX - textW / 2);
+                labelBg.setAttribute('y', midY - 9);
+                labelBg.setAttribute('width', textW);
+                labelBg.setAttribute('height', 16);
+                labelBg.setAttribute('rx', 3);
+                labelBg.classList.add('connection-label-bg');
+                if (isSelected) labelBg.classList.add('selected');
+                g.appendChild(labelBg);
+
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', midX);
+                text.setAttribute('y', midY + 3);
+                text.setAttribute('text-anchor', 'middle');
+                text.classList.add('connection-label');
+                text.textContent = labelText;
+                g.appendChild(text);
+            }
+        });
+
+        svgRoot.appendChild(g);
+    }
+
+    /* Preview arrow shown during connect mode (source → cursor) */
+    function renderConnectionPreview(svgRoot, f, pxm, fromId, cursorM) {
+        const from = f.stations.find(s => s.id === fromId);
+        if (!from || !cursorM) return;
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('transform', 'translate(100, 100)');
+        const a = stationCenter(from);
+        const dx = cursorM.x - a.x;
+        const dy = cursorM.y - a.y;
+        const len = Math.hypot(dx, dy);
+        if (len < 1e-6) return;
+        const ux = dx / len, uy = dy / len;
+        const start = rayBoxExit(a.x, a.y, from.widthM / 2, from.depthM / 2, ux, uy);
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', start.x * pxm);
+        line.setAttribute('y1', start.y * pxm);
+        line.setAttribute('x2', cursorM.x * pxm);
+        line.setAttribute('y2', cursorM.y * pxm);
+        line.classList.add('connection-preview');
+        line.setAttribute('marker-end', 'url(#arrow-selected)');
+        g.appendChild(line);
+        svgRoot.appendChild(g);
+    }
+
+    /* ---------------- Connection CRUD ---------------- */
+    function startConnectFrom(stationId) {
+        const f = activeFactory();
+        if (!f) return;
+        const s = f.stations.find(x => x.id === stationId);
+        if (!s) return;
+        tool = 'connect:' + stationId;
+        const vp = document.getElementById('viewport');
+        vp.classList.remove('mode-select', 'mode-wall', 'mode-place');
+        vp.classList.add('mode-connect');
+        // Update palette/select toggle styles
+        document.getElementById('toolSelect').classList.remove('active');
+        document.getElementById('toolWall').classList.remove('active');
+        ['input', 'process', 'inspection', 'buffer', 'output'].forEach(t => {
+            const el = document.getElementById('palette' + t.charAt(0).toUpperCase() + t.slice(1));
+            if (el) el.classList.remove('active');
+        });
+        // Keep the source station "selected" visually
+        selection = { type: 'station', id: stationId };
+        renderCanvas();
+        renderActionBar();
+    }
+
+    function createConnection(fromId, toId) {
+        const f = activeFactory();
+        if (!f) return;
+        if (fromId === toId) return;
+        const conn = {
+            id: genId('conn'),
+            fromId,
+            toId,
+            meta: {
+                transport: 'manual',
+                transferTimeMin: 0,
+                batchSize: 1,
+                notes: ''
+            }
+        };
+        f.connections.push(conn);
+        saveState();
+        // Return to select tool, select the new connection, open its modal
+        setTool('select');
+        selection = { type: 'connection', id: conn.id };
+        renderCanvas();
+        renderHeader();
+        openConnectionModal(conn.id);
+    }
+
+    function deleteSelectedConnection() {
+        const f = activeFactory();
+        if (!f || !selection || selection.type !== 'connection') return;
+        f.connections = f.connections.filter(c => c.id !== selection.id);
+        selection = null;
+        saveState();
+        renderCanvas();
+        renderHeader();
+        renderActionBar();
+    }
+
+    /* Remove any connections referencing a station id (called when station is deleted) */
+    function purgeConnectionsForStation(stationId) {
+        const f = activeFactory();
+        if (!f) return;
+        f.connections = f.connections.filter(c => c.fromId !== stationId && c.toId !== stationId);
+    }
+
+    /* ---------------- Connection modal ---------------- */
+    let modalConnectionId = null;
+
+    function openConnectionModal(id) {
+        const f = activeFactory();
+        if (!f) return;
+        const c = f.connections.find(x => x.id === id);
+        if (!c) return;
+        const from = f.stations.find(s => s.id === c.fromId);
+        const to = f.stations.find(s => s.id === c.toId);
+        modalConnectionId = id;
+        const fromLabel = from ? `#${from.number} ${from.meta.title || (STATION_TYPES[from.type] || {}).label || 'Station'}` : '—';
+        const toLabel   = to   ? `#${to.number} ${to.meta.title || (STATION_TYPES[to.type] || {}).label || 'Station'}` : '—';
+        document.getElementById('connectionModalTitle').textContent = `${fromLabel} → ${toLabel}`;
+        document.getElementById('connFrom').value = fromLabel;
+        document.getElementById('connTo').value = toLabel;
+        document.getElementById('connTransport').value = c.meta.transport || 'manual';
+        document.getElementById('connTransferMin').value = c.meta.transferTimeMin || '';
+        document.getElementById('connBatch').value = c.meta.batchSize || 1;
+        document.getElementById('connNotes').value = c.meta.notes || '';
+        document.getElementById('connectionModal').classList.add('visible');
+        setTimeout(() => document.getElementById('connTransferMin').focus(), 50);
+    }
+
+    function closeConnectionModal() {
+        document.getElementById('connectionModal').classList.remove('visible');
+        modalConnectionId = null;
+    }
+
+    function saveConnectionModal() {
+        const f = activeFactory();
+        if (!f || !modalConnectionId) return;
+        const c = f.connections.find(x => x.id === modalConnectionId);
+        if (!c) return;
+        c.meta.transport = document.getElementById('connTransport').value;
+        c.meta.transferTimeMin = parseFloat(document.getElementById('connTransferMin').value) || 0;
+        c.meta.batchSize = parseInt(document.getElementById('connBatch').value, 10) || 1;
+        c.meta.notes = document.getElementById('connNotes').value;
+        saveState();
+        closeConnectionModal();
+        renderCanvas();
+        renderHeader();
+        renderActionBar();
+    }
+
+    function deleteConnectionFromModal() {
+        if (!modalConnectionId) return;
+        const f = activeFactory();
+        if (!f) return;
+        if (!confirm('Delete this connection? This cannot be undone.')) return;
+        f.connections = f.connections.filter(c => c.id !== modalConnectionId);
+        selection = null;
+        saveState();
+        closeConnectionModal();
+        renderCanvas();
+        renderHeader();
+        renderActionBar();
+    }
+
+    /* ==========================================================
+       Layer 4: Simulation engine
+       Discrete time-step model. Each frame advances simulated
+       minutes proportional to wall-clock time × speedMul.
+       Sources spawn pulses; pulses traverse connections; stations
+       process them; sinks count and discard them.
+       ========================================================== */
+
+    const sim = {
+        running: false,
+        time: 0,                    // simulated time, minutes
+        speedMul: 10,               // simulated-minutes per real-second
+        pulseCounter: 0,
+        pulses: new Map(),          // pulseId -> {} (mostly for tracking; could hold product types later)
+        stationStates: {},          // stationId -> { queue: [pulseId], inService, serviceProgress, processed, outgoingIdx }
+        connectionStates: {},       // connId -> { pulses: [{ id, progress }] }
+        spawnAccumulators: {},      // stationId -> accumulated time toward next spawn
+        productionLog: [],          // [simTime] of recent productions for throughput
+        totalProduced: 0,
+        lastFrame: 0,
+        rafId: null
+    };
+
+    function isSource(s, f) {
+        if (s.type === 'input') return true;
+        return !f.connections.some(c => c.toId === s.id);
+    }
+    function isSink(s, f) {
+        if (s.type === 'output') return true;
+        return !f.connections.some(c => c.fromId === s.id);
+    }
+    function effectiveCycleMin(s) {
+        return (s.meta && s.meta.cycleTimeMin > 0) ? s.meta.cycleTimeMin : 1.0;
+    }
+    function effectiveTransferMin(c) {
+        return (c.meta && c.meta.transferTimeMin > 0) ? c.meta.transferTimeMin : 0.1;
+    }
+
+    function ensureSimStateExists() {
+        const f = activeFactory();
+        if (!f) return;
+        f.stations.forEach(s => {
+            if (!sim.stationStates[s.id]) {
+                sim.stationStates[s.id] = {
+                    queue: [],
+                    inService: null,
+                    serviceProgress: 0,
+                    processed: 0,
+                    outgoingIdx: 0
+                };
+            }
+            if (!(s.id in sim.spawnAccumulators) && isSource(s, f)) {
+                sim.spawnAccumulators[s.id] = effectiveCycleMin(s);  // ready to spawn immediately
+            }
+        });
+        f.connections.forEach(c => {
+            if (!sim.connectionStates[c.id]) {
+                sim.connectionStates[c.id] = { pulses: [] };
+            }
+        });
+        // Garbage-collect stale state
+        Object.keys(sim.stationStates).forEach(id => {
+            if (!f.stations.find(s => s.id === id)) {
+                const st = sim.stationStates[id];
+                if (st.inService) sim.pulses.delete(st.inService);
+                st.queue.forEach(pid => sim.pulses.delete(pid));
+                delete sim.stationStates[id];
+                delete sim.spawnAccumulators[id];
+            }
+        });
+        Object.keys(sim.connectionStates).forEach(id => {
+            if (!f.connections.find(c => c.id === id)) {
+                sim.connectionStates[id].pulses.forEach(p => sim.pulses.delete(p.id));
+                delete sim.connectionStates[id];
+            }
+        });
+    }
+
+    function resetSim() {
+        if (sim.rafId) cancelAnimationFrame(sim.rafId);
+        sim.rafId = null;
+        sim.running = false;
+        sim.time = 0;
+        sim.pulses.clear();
+        sim.stationStates = {};
+        sim.connectionStates = {};
+        sim.spawnAccumulators = {};
+        sim.productionLog = [];
+        sim.totalProduced = 0;
+        sim.pulseCounter = 0;
+        updateSimButton();
+        updateSimReadout();
+        clearPulseLayer();
+        clearStationOverlays();
+    }
+
+    function startSim() {
+        if (!activeFactory()) return;
+        if (sim.running) return;
+        ensureSimStateExists();
+        sim.running = true;
+        sim.lastFrame = performance.now();
+        updateSimButton();
+        sim.rafId = requestAnimationFrame(tick);
+    }
+
+    function pauseSim() {
+        sim.running = false;
+        if (sim.rafId) cancelAnimationFrame(sim.rafId);
+        sim.rafId = null;
+        updateSimButton();
+    }
+
+    function toggleSim() {
+        if (sim.running) pauseSim();
+        else startSim();
+    }
+
+    function setSimSpeed(mul) {
+        sim.speedMul = mul;
+        document.querySelectorAll('.sim-speed-btn').forEach(b => {
+            b.classList.toggle('active', parseInt(b.dataset.speed, 10) === mul);
+        });
+    }
+
+    function updateSimButton() {
+        const btn = document.getElementById('simPlayBtn');
+        const icon = document.getElementById('simPlayIcon');
+        const label = document.getElementById('simPlayLabel');
+        if (!btn) return;
+        if (sim.running) {
+            btn.classList.add('running');
+            icon.textContent = '❚❚';
+            label.textContent = 'Pause';
+        } else {
+            btn.classList.remove('running');
+            icon.textContent = '▶';
+            label.textContent = sim.time > 0 ? 'Resume' : 'Run';
+        }
+    }
+
+    function tick() {
+        if (!sim.running) return;
+        const now = performance.now();
+        let dtReal = (now - sim.lastFrame) / 1000;   // real seconds since last frame
+        sim.lastFrame = now;
+        // Cap dt to avoid huge jumps when tab regains focus
+        dtReal = Math.min(dtReal, 0.25);
+        const dtSim = dtReal * sim.speedMul;          // simulated minutes
+        if (dtSim > 0) advance(dtSim);
+        renderPulses();
+        updateStationOverlays();
+        updateSimReadout();
+        sim.rafId = requestAnimationFrame(tick);
+    }
+
+    function advance(dtMin) {
+        const f = activeFactory();
+        if (!f) return;
+        ensureSimStateExists();
+        // Advance the clock first so production timestamps are correct
+        sim.time += dtMin;
+
+        // (1) Spawn at sources
+        f.stations.forEach(s => {
+            if (!isSource(s, f)) return;
+            const interval = effectiveCycleMin(s);
+            sim.spawnAccumulators[s.id] = (sim.spawnAccumulators[s.id] || 0) + dtMin;
+            let guard = 0;
+            while (sim.spawnAccumulators[s.id] >= interval && guard++ < 50) {
+                sim.spawnAccumulators[s.id] -= interval;
+                spawnPulseAt(s.id);
+            }
+        });
+
+        // (2) Advance traveling pulses on connections
+        f.connections.forEach(c => {
+            const state = sim.connectionStates[c.id];
+            if (!state) return;
+            const transfer = effectiveTransferMin(c);
+            const arrived = [];
+            state.pulses.forEach(p => {
+                p.progress += dtMin / transfer;
+                if (p.progress >= 1) arrived.push(p);
+            });
+            if (arrived.length > 0) {
+                state.pulses = state.pulses.filter(p => !arrived.includes(p));
+                arrived.forEach(p => {
+                    const dest = sim.stationStates[c.toId];
+                    if (dest) dest.queue.push(p.id);
+                });
+            }
+        });
+
+        // (3) Advance in-service pulses; route on completion
+        f.stations.forEach(s => {
+            const state = sim.stationStates[s.id];
+            if (!state || !state.inService) return;
+            const cycle = effectiveCycleMin(s);
+            state.serviceProgress += dtMin / cycle;
+            if (state.serviceProgress >= 1) {
+                const pulseId = state.inService;
+                state.inService = null;
+                state.serviceProgress = 0;
+                state.processed++;
+
+                if (isSink(s, f)) {
+                    sim.totalProduced++;
+                    sim.productionLog.push(sim.time);
+                    sim.pulses.delete(pulseId);
+                } else {
+                    const outgoing = f.connections.filter(cc => cc.fromId === s.id);
+                    if (outgoing.length === 0) {
+                        sim.totalProduced++;
+                        sim.productionLog.push(sim.time);
+                        sim.pulses.delete(pulseId);
+                    } else {
+                        // Round-robin across outgoing connections
+                        const conn = outgoing[state.outgoingIdx % outgoing.length];
+                        state.outgoingIdx = (state.outgoingIdx + 1) % outgoing.length;
+                        sim.connectionStates[conn.id].pulses.push({ id: pulseId, progress: 0 });
+                    }
+                }
+            }
+        });
+
+        // (4) Pull from queue into service
+        f.stations.forEach(s => {
+            const state = sim.stationStates[s.id];
+            if (!state || state.inService) return;
+            if (state.queue.length > 0) {
+                state.inService = state.queue.shift();
+                state.serviceProgress = 0;
+            }
+        });
+
+        // (5) Prune the throughput log
+        const windowMin = 10;
+        sim.productionLog = sim.productionLog.filter(t => t > sim.time - windowMin);
+    }
+
+    function spawnPulseAt(stationId) {
+        const id = 'pulse_' + (++sim.pulseCounter);
+        sim.pulses.set(id, {});
+        const state = sim.stationStates[stationId];
+        if (state) state.queue.push(id);
+    }
+
+    /* ---------- Pulse rendering ---------- */
+    function clearPulseLayer() {
+        const world = document.getElementById('world');
+        if (!world) return;
+        const layer = world.querySelector('.pulses-layer');
+        if (layer) layer.innerHTML = '';
+    }
+
+    function clearStationOverlays() {
+        document.querySelectorAll('.station-wip-badge').forEach(el => el.remove());
+        document.querySelectorAll('.station-card.in-service').forEach(el => el.classList.remove('in-service'));
+    }
+
+    function ensurePulseLayer() {
+        const world = document.getElementById('world');
+        if (!world) return null;
+        let layer = world.querySelector('.pulses-layer');
+        if (!layer) {
+            layer = document.createElement('div');
+            layer.className = 'pulses-layer';
+            world.appendChild(layer);
+        }
+        return layer;
+    }
+
+    function renderPulses() {
+        const f = activeFactory();
+        if (!f) return;
+        const layer = ensurePulseLayer();
+        if (!layer) return;
+        const pxm = pxPerM();
+
+        const existing = new Map();
+        layer.querySelectorAll('.pulse').forEach(el => existing.set(el.dataset.pulseId, el));
+        const seen = new Set();
+
+        // Pulses traveling along connections
+        f.connections.forEach(c => {
+            const state = sim.connectionStates[c.id];
+            if (!state) return;
+            const from = f.stations.find(s => s.id === c.fromId);
+            const to = f.stations.find(s => s.id === c.toId);
+            if (!from || !to) return;
+            const { a, b } = connectionEndpoints(from, to);
+            state.pulses.forEach(p => {
+                const t = Math.max(0, Math.min(1, p.progress));
+                const x = (a.x + (b.x - a.x) * t) * pxm;
+                const y = (a.y + (b.y - a.y) * t) * pxm;
+                let el = existing.get(p.id);
+                if (!el) {
+                    el = document.createElement('div');
+                    el.className = 'pulse';
+                    el.dataset.pulseId = p.id;
+                    layer.appendChild(el);
+                }
+                el.style.transform = `translate(${x}px, ${y}px)`;
+                el.classList.remove('in-service');
+                seen.add(p.id);
+            });
+        });
+
+        // In-service pulse rendered at the station's center
+        f.stations.forEach(s => {
+            const state = sim.stationStates[s.id];
+            if (!state || !state.inService) return;
+            const c = stationCenter(s);
+            const x = c.x * pxm;
+            const y = c.y * pxm;
+            let el = existing.get(state.inService);
+            if (!el) {
+                el = document.createElement('div');
+                el.className = 'pulse';
+                el.dataset.pulseId = state.inService;
+                layer.appendChild(el);
+            }
+            el.style.transform = `translate(${x}px, ${y}px)`;
+            el.classList.add('in-service');
+            seen.add(state.inService);
+        });
+
+        // Remove stale pulse elements
+        existing.forEach((el, id) => { if (!seen.has(id)) el.remove(); });
+    }
+
+    /* ---------- Station overlays (WIP badge + in-service highlight) ---------- */
+    function updateStationOverlays() {
+        const f = activeFactory();
+        if (!f) return;
+        f.stations.forEach(s => {
+            const card = document.querySelector(`.station-card[data-station-id="${s.id}"]`);
+            if (!card) return;
+            const state = sim.stationStates[s.id];
+            const queueLen = state ? state.queue.length : 0;
+
+            // Update / remove WIP badge
+            let badge = card.querySelector('.station-wip-badge');
+            if (queueLen > 0) {
+                if (!badge) {
+                    badge = document.createElement('div');
+                    badge.className = 'station-wip-badge';
+                    card.appendChild(badge);
+                }
+                badge.textContent = queueLen;
+            } else if (badge) {
+                badge.remove();
+            }
+
+            // Highlight while processing
+            card.classList.toggle('in-service', !!(state && state.inService));
+        });
+    }
+
+    /* ---------- Sim readout ---------- */
+    function formatSimClock(min) {
+        if (min < 60) return Math.floor(min) + ':' + String(Math.floor((min % 1) * 60)).padStart(2, '0');
+        const hours = Math.floor(min / 60);
+        const m = Math.floor(min % 60);
+        if (hours < 24) return hours + 'h ' + String(m).padStart(2, '0') + 'm';
+        const days = Math.floor(hours / 24);
+        const h = hours % 24;
+        return days + 'd ' + h + 'h';
+    }
+
+    function updateSimReadout() {
+        const clockEl = document.getElementById('simClock');
+        const tpEl = document.getElementById('simThroughput');
+        const prodEl = document.getElementById('simProduced');
+        if (!clockEl) return;
+        clockEl.textContent = formatSimClock(sim.time);
+        prodEl.textContent = sim.totalProduced;
+        if (sim.time < 1) {
+            tpEl.textContent = '— u/h';
+        } else {
+            // Rolling 10-min throughput
+            const windowMin = Math.min(10, sim.time);
+            const recent = sim.productionLog.filter(t => t > sim.time - windowMin).length;
+            const perHour = recent * (60 / windowMin);
+            tpEl.textContent = (perHour < 10 ? perHour.toFixed(1) : Math.round(perHour)) + ' u/h';
+        }
+    }
+
+    /* ---------------- Mouse / keyboard handling ---------------- */
+    function setupCanvasInteraction() {
+        const vp = document.getElementById('viewport');
+
+        vp.addEventListener('mousedown', e => {
+            const f = activeFactory();
+            if (!f) return;
+            // Right or middle button: always pan
+            if (e.button === 1 || e.button === 2) {
+                e.preventDefault();
+                startPan(e);
+                return;
+            }
+            if (e.button !== 0) return;
+
+            const mPos = screenToM(e.clientX, e.clientY);
+            if (!mPos) return;
+
+            // Connect mode: tap on a station completes the connection
+            if (tool.startsWith('connect:')) {
+                const card = e.target.closest && e.target.closest('.station-card');
+                const fromId = tool.split(':')[1];
+                if (card) {
+                    e.stopPropagation();
+                    const toId = card.dataset.stationId;
+                    if (toId === fromId) {
+                        // Tapped the source again — cancel
+                        setTool('select');
+                    } else {
+                        createConnection(fromId, toId);
+                    }
+                } else {
+                    // Tap on empty space cancels connect mode
+                    setTool('select');
+                }
+                return;
+            }
+
+            // If user mousedowns on a station card or one of its children, the station's own
+            // listeners handle it. Skip viewport handling.
+            if (e.target.closest && e.target.closest('.station-card')) return;
+            if (e.target.closest && e.target.closest('.resize-handle')) return;
+
+            if (tool === 'wall') {
+                handleWallClick(mPos, e);
+            } else if (tool.startsWith('place:')) {
+                placeStationAt(tool.split(':')[1], mPos);
+            } else {
+                // Select tool: if click is on empty space (not a wall), start panning
+                const target = e.target;
+                const isWall = target.dataset && target.dataset.wallId;
+                const isConn = target.dataset && target.dataset.connectionId;
+                if (!isWall && !isConn) {
+                    if (selection) {
+                        selection = null;
+                        renderCanvas();
+                        renderActionBar();
+                    }
+                    startPan(e);
+                }
+            }
+        });
+
+        vp.addEventListener('mousemove', e => {
+            const mPos = screenToM(e.clientX, e.clientY);
+            if (mPos) {
+                cursorM = mPos;
+                updateCursorInfo();
+            }
+
+            if (panDrag) {
+                continuePan(e);
+                return;
+            }
+
+            if (stationDrag && mPos) {
+                handleStationDragMove(mPos, e);
+                return;
+            }
+
+            if (tool === 'wall' && wallDraw && wallDraw.points.length > 0 && mPos) {
+                const last = wallDraw.points[wallDraw.points.length - 1];
+                const snapped = snapToAngle(last, mPos, e.shiftKey, e.altKey);
+                wallDraw.cursorM = snapped;
+                renderCanvas();
+            }
+
+            if (tool.startsWith('connect:') && mPos) {
+                // Cheap: just re-render canvas so the preview line follows the cursor
+                renderCanvas();
+            }
+
+            if (tool.startsWith('place:') && mPos) {
+                const t = tool.split(':')[1];
+                placeGhost = { type: t, mPos: snapPoint(mPos, e.altKey) };
+                renderPlaceGhost();
+            }
+        });
+
+        window.addEventListener('mouseup', e => {
+            if (panDrag) endPan(e);
+            if (stationDrag) endStationDrag();
+        });
+
+        vp.addEventListener('mouseleave', () => {
+            cursorM = null;
+            updateCursorInfo();
+            if (wallDraw) {
+                wallDraw.cursorM = null;
+                renderCanvas();
+            }
+            if (placeGhost) {
+                placeGhost = null;
+                renderPlaceGhost();
+            }
+        });
+
+        vp.addEventListener('contextmenu', e => e.preventDefault());
+
+        vp.addEventListener('dblclick', e => {
+            if (tool === 'wall' && wallDraw) {
+                finishWallDraw();
+            }
+        });
+
+        // Wheel: zoom around cursor
+        vp.addEventListener('wheel', e => {
+            const f = activeFactory();
+            if (!f) return;
+            if (!e.ctrlKey && !e.metaKey && Math.abs(e.deltaY) < 50) {
+                // Plain scroll: pan vertically (and horizontally if shift)
+                e.preventDefault();
+                const view = activeView();
+                if (e.shiftKey) {
+                    view.pan.x -= e.deltaY;
+                } else {
+                    view.pan.x -= e.deltaX;
+                    view.pan.y -= e.deltaY;
+                }
+                renderCanvas();
+                return;
+            }
+            // Ctrl/Cmd+wheel: zoom around cursor
+            e.preventDefault();
+            const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+            zoomBy(factor, e.clientX, e.clientY);
+        }, { passive: false });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', e => {
+            // Ignore when typing in an input/textarea/select
+            const t = e.target;
+            if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+
+            if (e.key === 'Escape') {
+                if (wallDraw) { cancelWallDraw(); renderCanvas(); }
+                else if (tool.startsWith('place:')) { setTool('select'); }
+                else if (tool.startsWith('connect:')) { setTool('select'); }
+                else if (selection) { selection = null; renderCanvas(); renderActionBar(); }
+                else if (document.querySelector('.modal.visible')) {
+                    closeFactorySettings();
+                    closeStationModal();
+                    closeConnectionModal();
+                }
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (selection && selection.type === 'wall') { e.preventDefault(); deleteSelectedWall(); }
+                else if (selection && selection.type === 'station') { e.preventDefault(); deleteSelectedStation(); }
+                else if (selection && selection.type === 'connection') { e.preventDefault(); deleteSelectedConnection(); }
+            } else if (e.key === 'Enter') {
+                if (wallDraw) finishWallDraw();
+                else if (selection && selection.type === 'station') openStationModal(selection.id);
+                else if (selection && selection.type === 'connection') openConnectionModal(selection.id);
+            } else if (e.key === 'd' || e.key === 'D') {
+                if (selection && selection.type === 'station') duplicateStation(selection.id);
+            } else if (e.key === 'c' || e.key === 'C') {
+                if (selection && selection.type === 'station') startConnectFrom(selection.id);
+            } else if (e.key === 'v' || e.key === 'V') {
+                setTool('select');
+            } else if (e.key === 'w' || e.key === 'W') {
+                setTool('wall');
+            } else if (e.key === '1') { setTool('place:input'); }
+            else if (e.key === '2') { setTool('place:process'); }
+            else if (e.key === '3') { setTool('place:inspection'); }
+            else if (e.key === '4') { setTool('place:buffer'); }
+            else if (e.key === '5') { setTool('place:output'); }
+            else if (e.key === '+' || e.key === '=') {
+                zoomIn();
+            } else if (e.key === '-' || e.key === '_') {
+                zoomOut();
+            } else if (e.key === '0') {
+                zoomReset();
+            } else if (e.key === 'f' || e.key === 'F') {
+                zoomFit();
+            } else if (e.key === ' ') {
+                // Space toggles the simulation if a factory is loaded
+                if (activeFactory()) { e.preventDefault(); toggleSim(); }
+            }
+        });
+    }
+
+    function handleWallClick(mPos, e) {
+        if (!wallDraw) {
+            // Start a new chain at this point (snapped)
+            const start = snapPoint(mPos, e.altKey);
+            wallDraw = { points: [start], cursorM: start };
+        } else {
+            const last = wallDraw.points[wallDraw.points.length - 1];
+            const next = snapToAngle(last, mPos, e.shiftKey, e.altKey);
+            // Commit the segment
+            addWallSegment(last, next);
+            wallDraw.points.push(next);
+            wallDraw.cursorM = next;
+        }
+        renderCanvas();
+        updateModeBanner();
+    }
+
+    /* ---------------- Pan ---------------- */
+    function startPan(e) {
+        const view = activeView();
+        if (!view) return;
+        panDrag = {
+            startX: e.clientX,
+            startY: e.clientY,
+            panStartX: view.pan.x,
+            panStartY: view.pan.y,
+            hasMoved: false
+        };
+        document.getElementById('viewport').classList.add('panning');
+    }
+
+    function continuePan(e) {
+        if (!panDrag) return;
+        const dx = e.clientX - panDrag.startX;
+        const dy = e.clientY - panDrag.startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) panDrag.hasMoved = true;
+        const view = activeView();
+        view.pan.x = panDrag.panStartX + dx;
+        view.pan.y = panDrag.panStartY + dy;
+        renderCanvas();
+    }
+
+    function endPan(e) {
+        panDrag = null;
+        document.getElementById('viewport').classList.remove('panning');
+    }
+
+    /* ---------------- Zoom ---------------- */
+    function zoomIn() { zoomBy(ZOOM_STEP); }
+    function zoomOut() { zoomBy(1 / ZOOM_STEP); }
+    function zoomReset() {
+        const view = activeView();
+        if (!view) return;
+        view.zoom = 1;
+        view.pan.x = 0;
+        view.pan.y = 0;
+        renderCanvas();
+    }
+    function zoomFit() {
+        const f = activeFactory();
+        const view = activeView();
+        if (!f || !view) return;
+        const vp = document.getElementById('viewport').getBoundingClientRect();
+        const margin = 60;
+        const availW = vp.width - RULER_SIZE - margin;
+        const availH = vp.height - RULER_SIZE - margin;
+        const wPxAt1 = f.meta.widthM * BASE_PX_PER_M;
+        const hPxAt1 = f.meta.heightM * BASE_PX_PER_M;
+        const z = Math.min(availW / wPxAt1, availH / hPxAt1);
+        view.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
+        // Center
+        const wPx = f.meta.widthM * BASE_PX_PER_M * view.zoom;
+        const hPx = f.meta.heightM * BASE_PX_PER_M * view.zoom;
+        view.pan.x = (vp.width - RULER_SIZE - wPx) / 2;
+        view.pan.y = (vp.height - RULER_SIZE - hPx) / 2;
+        renderCanvas();
+    }
+    function zoomBy(factor, anchorClientX, anchorClientY) {
+        const view = activeView();
+        if (!view) return;
+        const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, view.zoom * factor));
+        if (newZoom === view.zoom) return;
+        // Keep anchor (or viewport center) at the same world point after zoom
+        const vp = document.getElementById('viewport').getBoundingClientRect();
+        const cx = (anchorClientX !== undefined ? anchorClientX : vp.left + vp.width / 2) - vp.left - RULER_SIZE;
+        const cy = (anchorClientY !== undefined ? anchorClientY : vp.top + vp.height / 2) - vp.top - RULER_SIZE;
+        const worldX = (cx - view.pan.x) / (BASE_PX_PER_M * view.zoom);
+        const worldY = (cy - view.pan.y) / (BASE_PX_PER_M * view.zoom);
+        view.zoom = newZoom;
+        view.pan.x = cx - worldX * BASE_PX_PER_M * view.zoom;
+        view.pan.y = cy - worldY * BASE_PX_PER_M * view.zoom;
+        renderCanvas();
+    }
+
+    /* ---------------- Import / export ---------------- */
+    function exportAll() {
+        const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `factory-mapper-export-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function importFile(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+            try {
+                const parsed = JSON.parse(ev.target.result);
+                if (!parsed || typeof parsed !== 'object') throw new Error('Invalid file');
+                // Full export?
+                if (Array.isArray(parsed.factories)) {
+                    if (!confirm('Replace current data with imported data?')) {
+                        e.target.value = '';
+                        return;
+                    }
+                    state = Object.assign({
+                        version: 1,
+                        categories: [],
+                        uncategorisedExpanded: true,
+                        factories: [],
+                        activeFactoryId: null
+                    }, parsed);
+                    state.factories.forEach(normaliseFactory);
+                    saveState();
+                    renderSidebar();
+                    renderAll();
+                } else {
+                    alert('This file doesn\'t look like a Factory Mapper export.');
+                }
+            } catch (err) {
+                alert('Failed to import: ' + err.message);
+            }
+            e.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    /* ---------------- Save as image ---------------- */
+    function saveAsImage() {
+        const f = activeFactory();
+        if (!f) { alert('Open a factory first.'); return; }
+
+        // Build a clean SVG (no rulers, no pan, no preview) at base zoom
+        const margin = 40;
+        const pxm = BASE_PX_PER_M; // export at 1× zoom
+        const wPx = f.meta.widthM * pxm + margin * 2;
+        const hPx = f.meta.heightM * pxm + margin * 2 + 40; // extra for title
+
+        const svgNS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNS, 'svg');
+        svg.setAttribute('xmlns', svgNS);
+        svg.setAttribute('width', wPx);
+        svg.setAttribute('height', hPx);
+        svg.setAttribute('viewBox', `0 0 ${wPx} ${hPx}`);
+
+        // Background
+        const bg = document.createElementNS(svgNS, 'rect');
+        bg.setAttribute('width', wPx);
+        bg.setAttribute('height', hPx);
+        bg.setAttribute('fill', '#FFFFFF');
+        svg.appendChild(bg);
+
+        // Title
+        const title = document.createElementNS(svgNS, 'text');
+        title.setAttribute('x', margin);
+        title.setAttribute('y', 26);
+        title.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
+        title.setAttribute('font-size', 16);
+        title.setAttribute('font-weight', 700);
+        title.setAttribute('fill', '#1D1D1F');
+        title.textContent = `${f.meta.name}  ·  ${formatM(f.meta.widthM)} × ${formatM(f.meta.heightM)} m`;
+        svg.appendChild(title);
+
+        const g = document.createElementNS(svgNS, 'g');
+        g.setAttribute('transform', `translate(${margin}, ${margin + 40})`);
+        svg.appendChild(g);
+
+        // Floor outline
+        // Land outline (property line)
+        const floor = document.createElementNS(svgNS, 'rect');
+        floor.setAttribute('width', f.meta.widthM * pxm);
+        floor.setAttribute('height', f.meta.heightM * pxm);
+        floor.setAttribute('fill', '#FBFAF6');
+        floor.setAttribute('stroke', 'rgba(34, 139, 64, 0.55)');
+        floor.setAttribute('stroke-dasharray', '5 4');
+        floor.setAttribute('stroke-width', 1.5);
+        g.appendChild(floor);
+
+        // Grid (major lines only for cleanliness)
+        for (let x = 0; x <= f.meta.widthM + 0.001; x += 5) {
+            const l = document.createElementNS(svgNS, 'line');
+            l.setAttribute('x1', x * pxm); l.setAttribute('y1', 0);
+            l.setAttribute('x2', x * pxm); l.setAttribute('y2', f.meta.heightM * pxm);
+            l.setAttribute('stroke', 'rgba(0,0,0,0.08)');
+            l.setAttribute('stroke-width', 1);
+            g.appendChild(l);
+        }
+        for (let y = 0; y <= f.meta.heightM + 0.001; y += 5) {
+            const l = document.createElementNS(svgNS, 'line');
+            l.setAttribute('x1', 0); l.setAttribute('y1', y * pxm);
+            l.setAttribute('x2', f.meta.widthM * pxm); l.setAttribute('y2', y * pxm);
+            l.setAttribute('stroke', 'rgba(0,0,0,0.08)');
+            l.setAttribute('stroke-width', 1);
+            g.appendChild(l);
+        }
+
+        // Walls
+        f.walls.forEach(w => {
+            const l = document.createElementNS(svgNS, 'line');
+            l.setAttribute('x1', w.x1 * pxm);
+            l.setAttribute('y1', w.y1 * pxm);
+            l.setAttribute('x2', w.x2 * pxm);
+            l.setAttribute('y2', w.y2 * pxm);
+            l.setAttribute('stroke', '#2C2C2E');
+            l.setAttribute('stroke-width', WALL_STROKE_PX);
+            l.setAttribute('stroke-linecap', 'square');
+            g.appendChild(l);
+        });
+
+        // Arrow marker def for export
+        const defs = document.createElementNS(svgNS, 'defs');
+        defs.innerHTML = `<marker id="exp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 L2,5 z" fill="#5B6470"/></marker>`;
+        svg.appendChild(defs);
+
+        // Connections
+        f.connections.forEach(c => {
+            const from = f.stations.find(s => s.id === c.fromId);
+            const to = f.stations.find(s => s.id === c.toId);
+            if (!from || !to) return;
+            const { a, b } = connectionEndpoints(from, to);
+            const line = document.createElementNS(svgNS, 'line');
+            line.setAttribute('x1', a.x * pxm);
+            line.setAttribute('y1', a.y * pxm);
+            line.setAttribute('x2', b.x * pxm);
+            line.setAttribute('y2', b.y * pxm);
+            line.setAttribute('stroke', '#5B6470');
+            line.setAttribute('stroke-width', 2);
+            line.setAttribute('fill', 'none');
+            line.setAttribute('marker-end', 'url(#exp-arrow)');
+            g.appendChild(line);
+
+            // Label
+            const midX = (a.x + b.x) / 2 * pxm;
+            const midY = (a.y + b.y) / 2 * pxm;
+            const txt = c.meta.transferTimeMin ? `${formatStat(c.meta.transferTimeMin)} min` : (TRANSPORT_LABELS[c.meta.transport] || '');
+            if (txt) {
+                const textW = txt.length * 6 + 12;
+                const rect = document.createElementNS(svgNS, 'rect');
+                rect.setAttribute('x', midX - textW / 2);
+                rect.setAttribute('y', midY - 9);
+                rect.setAttribute('width', textW);
+                rect.setAttribute('height', 16);
+                rect.setAttribute('rx', 3);
+                rect.setAttribute('fill', '#5B6470');
+                g.appendChild(rect);
+                const tx = document.createElementNS(svgNS, 'text');
+                tx.setAttribute('x', midX);
+                tx.setAttribute('y', midY + 3);
+                tx.setAttribute('text-anchor', 'middle');
+                tx.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
+                tx.setAttribute('font-size', 10);
+                tx.setAttribute('font-weight', 600);
+                tx.setAttribute('fill', 'white');
+                tx.textContent = txt;
+                g.appendChild(tx);
+            }
+        });
+
+        // Stations
+        f.stations.forEach(s => {
+            const t = STATION_TYPES[s.type] || STATION_TYPES.process;
+            const x = s.x * pxm, y = s.y * pxm;
+            const w = s.widthM * pxm, h = s.depthM * pxm;
+            const headerH = Math.min(18, h * 0.32);
+
+            // Body rect (tinted background)
+            const rect = document.createElementNS(svgNS, 'rect');
+            rect.setAttribute('x', x); rect.setAttribute('y', y);
+            rect.setAttribute('width', w); rect.setAttribute('height', h);
+            rect.setAttribute('rx', 4);
+            rect.setAttribute('fill', t.bg.replace('0.10', '0.18'));
+            rect.setAttribute('stroke', t.color);
+            rect.setAttribute('stroke-width', 1.5);
+            g.appendChild(rect);
+
+            // Header bar
+            const hbar = document.createElementNS(svgNS, 'rect');
+            hbar.setAttribute('x', x); hbar.setAttribute('y', y);
+            hbar.setAttribute('width', w); hbar.setAttribute('height', headerH);
+            hbar.setAttribute('fill', t.color);
+            g.appendChild(hbar);
+
+            // Title text
+            const title = document.createElementNS(svgNS, 'text');
+            title.setAttribute('x', x + 4);
+            title.setAttribute('y', y + headerH - 4);
+            title.setAttribute('fill', 'white');
+            title.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
+            title.setAttribute('font-size', Math.min(10, headerH - 3));
+            title.setAttribute('font-weight', '700');
+            title.textContent = `#${s.number} ${s.meta.title || t.label}`;
+            g.appendChild(title);
+
+            // Body text (cycle / throughput)
+            if (h - headerH > 14) {
+                const body = document.createElementNS(svgNS, 'text');
+                body.setAttribute('x', x + 4);
+                body.setAttribute('y', y + headerH + 12);
+                body.setAttribute('fill', '#1D1D1F');
+                body.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, sans-serif');
+                body.setAttribute('font-size', 9);
+                const parts = [];
+                if (s.meta.cycleTimeMin) parts.push(`${s.meta.cycleTimeMin} min`);
+                if (s.meta.throughput) parts.push(`${s.meta.throughput}/h`);
+                body.textContent = parts.join('  ·  ');
+                g.appendChild(body);
+            }
+        });
+
+        // Rasterise to PNG
+        const xml = new XMLSerializer().serializeToString(svg);
+        const svgBlob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        const img = new Image();
+        img.onload = () => {
+            const scale = 2; // retina-ish export
+            const canvas = document.createElement('canvas');
+            canvas.width = wPx * scale;
+            canvas.height = hPx * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(scale, scale);
+            ctx.drawImage(img, 0, 0);
+            canvas.toBlob(blob => {
+                const dlUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = dlUrl;
+                a.download = `${f.meta.name.replace(/[^a-z0-9-_]+/gi, '_')}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(dlUrl);
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            alert('Failed to render image.');
+        };
+        img.src = url;
+    }
+
+    /* ---------------- Utilities ---------------- */
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    /* ---------------- Init ---------------- */
+    function init() {
+        loadState();
+        setupCanvasInteraction();
+        setupStationTypeSelector();
+        applySidebarState();
+        window.addEventListener('resize', () => { if (activeFactory()) renderCanvas(); });
+        renderSidebar();
+        renderAll();
+        // Fit any active factory on first paint
+        if (activeFactory()) {
+            requestAnimationFrame(() => {
+                const view = activeView();
+                if (view) view._initialised = true;
+                zoomFit();
+            });
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
