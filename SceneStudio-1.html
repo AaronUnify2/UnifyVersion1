@@ -1,0 +1,4011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scene Studio — Novel Workspace</title>
+    <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --color-bg: #0c1021;
+            --color-surface: #161d2e;
+            --color-surface-2: #1c2538;
+            --color-text: #d4cfc4;
+            --color-text-soft: #7a7891;
+            --color-border: rgba(120, 119, 148, 0.22);
+            --color-accent: #cf9f4a;
+            --color-accent-hover: #e0b25e;
+
+            /* Beat types: Establish · Beat · Turn · Land */
+            --type-entry: #5a9a6a;
+            --type-action: #5b6fa3;
+            --type-decision: #d4783a;
+            --type-resolution: #7c6fae;
+
+            --color-hover: rgba(207, 163, 84, 0.10);
+            --border-accent: rgba(207, 163, 84, 0.4);
+
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+            --shadow-md: 0 6px 24px rgba(0, 0, 0, 0.45);
+            --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
+
+            --font-display: 'Special Elite', 'Courier New', monospace;
+            --font-serif: 'Libre Baskerville', Georgia, serif;
+            --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+
+            --sidebar-width: 280px;
+        }
+
+        html, body { height: 100%; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ---------- Process header ---------- */
+        .process-header {
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
+            padding: 0.9rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1.5rem;
+            z-index: 900;
+            flex-shrink: 0;
+        }
+
+        .process-info {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .process-title {
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            font-weight: 400;
+            letter-spacing: 0.01em;
+            color: var(--color-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .process-title.unset {
+            color: var(--color-text-soft);
+            font-weight: 500;
+            font-style: italic;
+        }
+
+        .process-meta {
+            display: flex;
+            gap: 1.25rem;
+            margin-top: 0.25rem;
+            font-size: 0.8rem;
+            color: var(--color-text-soft);
+            flex-wrap: wrap;
+        }
+
+        body.no-active-process .process-meta { display: none; }
+
+        .process-meta span { white-space: nowrap; }
+
+        .process-meta strong {
+            color: var(--color-text);
+            font-weight: 600;
+        }
+
+        .process-header-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .header-add-step-btn {
+            background: var(--color-accent);
+            color: white;
+            border: none;
+            padding: 0.5rem 0.9rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: background 0.15s ease;
+        }
+
+        .header-add-step-btn:hover { background: var(--color-accent-hover); }
+
+        body.no-active-process .header-add-step-btn { display: none; }
+        body.view-mode .header-add-step-btn { display: none; }
+
+        .process-settings-btn {
+            background: transparent;
+            border: 1px solid var(--color-border);
+            padding: 0.5rem 0.9rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--color-text);
+            transition: all 0.15s ease;
+        }
+
+        .process-settings-btn:hover {
+            background: var(--color-bg);
+            border-color: rgba(0, 0, 0, 0.15);
+        }
+
+        body.no-active-process .process-settings-btn { display: none; }
+        body.view-mode .process-settings-btn { display: none; }
+
+        /* Save image button: same look as process-settings-btn but stays visible in view mode */
+        .save-image-btn {
+            background: transparent;
+            border: 1px solid var(--color-border);
+            padding: 0.5rem 0.9rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--color-text);
+            transition: all 0.15s ease;
+        }
+
+        .save-image-btn:hover {
+            background: var(--color-bg);
+            border-color: rgba(0, 0, 0, 0.15);
+        }
+
+        body.no-active-process .save-image-btn { display: none; }
+
+        /* ---------- Toolbar ---------- */
+        .toolbar {
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
+            padding: 0.6rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            z-index: 800;
+            flex-shrink: 0;
+        }
+
+        .sidebar-toggle {
+            background: var(--color-bg);
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+            padding: 0.45rem 0.7rem;
+            font-size: 1rem;
+            line-height: 1;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .sidebar-toggle:hover { background: var(--color-hover); }
+
+        .view-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.75rem;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            font-size: 0.82rem;
+            color: var(--color-text-soft);
+            background: var(--color-bg);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .view-toggle input[type="checkbox"] { cursor: pointer; }
+
+        /* Card detail level: segmented control with three options */
+        .card-detail-toggle {
+            display: inline-flex;
+            background: var(--color-bg);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            padding: 2px;
+            gap: 1px;
+        }
+
+        .cdt-btn {
+            background: transparent;
+            border: none;
+            padding: 0.3rem 0.65rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--color-text-soft);
+            transition: all 0.15s ease;
+            line-height: 1.2;
+        }
+
+        .cdt-btn:hover { color: var(--color-text); }
+
+        .cdt-btn.active {
+            background: var(--color-surface);
+            color: var(--color-text);
+            font-weight: 600;
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* Simple mode shrinks cards since they have no summary boxes */
+        body.card-detail-simple .card { min-height: 0; }
+
+        .mode-indicator {
+            font-size: 0.85rem;
+            color: var(--color-accent);
+            font-weight: 600;
+            margin-left: 0.25rem;
+        }
+
+        /* ---------- Main area: sidebar + canvas ---------- */
+        .main-area {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        /* ---------- Sidebar ---------- */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--color-surface);
+            border-right: 1px solid var(--color-border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            transition: width 0.2s ease;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        body.sidebar-collapsed .sidebar {
+            width: 0;
+            border-right-width: 0;
+        }
+
+        /* ---------- Session switcher ---------- */
+        .session-switcher {
+            position: relative;
+            padding: 0.75rem 0.75rem 0.5rem;
+            border-bottom: 1px solid var(--color-border);
+            flex-shrink: 0;
+            background: var(--color-bg);
+        }
+        .session-pill {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.55rem 0.75rem;
+            background: white;
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            text-align: left;
+            transition: border-color 0.12s ease, box-shadow 0.12s ease;
+        }
+        .session-pill:hover {
+            border-color: var(--color-text-soft);
+        }
+        .session-pill-content {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.05rem;
+        }
+        .session-pill-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--color-text-soft);
+            font-weight: 600;
+        }
+        .session-pill-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--color-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .session-pill-arrow {
+            color: var(--color-text-soft);
+            font-size: 0.75rem;
+            flex-shrink: 0;
+        }
+        .session-menu {
+            position: absolute;
+            top: calc(100% - 0.25rem);
+            left: 0.75rem;
+            right: 0.75rem;
+            background: white;
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+            z-index: 100;
+            display: none;
+            padding: 0.3rem;
+        }
+        .session-menu.open {
+            display: block;
+        }
+        .session-menu-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.1rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .session-menu-item {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: none;
+            padding: 0.5rem 0.65rem;
+            font-family: inherit;
+            font-size: 0.88rem;
+            cursor: pointer;
+            border-radius: 4px;
+            color: var(--color-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .session-menu-item:hover {
+            background: var(--color-hover);
+        }
+        .session-menu-item.active {
+            background: var(--color-hover);
+            font-weight: 600;
+        }
+        .session-menu-item.danger {
+            color: #d98a8a;
+        }
+        .session-menu-item.danger:hover {
+            background: rgba(180, 74, 74, 0.18);
+        }
+        .session-menu-divider {
+            height: 1px;
+            background: var(--color-border);
+            margin: 0.3rem 0;
+        }
+
+        .sidebar-header {
+            padding: 0.75rem 1rem 0.6rem;
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .sidebar-title {
+            font-family: var(--font-display);
+            font-weight: 400;
+            font-size: 1rem;
+            letter-spacing: 0.02em;
+            color: var(--color-text);
+        }
+
+        .sidebar-process-count {
+            font-size: 0.72rem;
+            color: var(--color-text-soft);
+            font-weight: 500;
+        }
+
+        .sidebar-top-actions {
+            padding: 0.6rem 0.75rem;
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            flex-shrink: 0;
+            background: var(--color-bg);
+        }
+
+        .sidebar-body {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 0.4rem 0;
+        }
+
+        .sidebar-footer {
+            padding: 0.6rem 0.75rem;
+            border-top: 1px solid var(--color-border);
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            flex-shrink: 0;
+            background: var(--color-bg);
+        }
+
+        .sidebar-action-btn {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-align: left;
+            color: var(--color-text);
+            transition: all 0.15s ease;
+        }
+
+        .sidebar-action-btn:hover {
+            background: var(--color-hover);
+            border-color: rgba(0, 0, 0, 0.15);
+        }
+
+        .category-section { margin-bottom: 0.15rem; }
+
+        .category-header {
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.82rem;
+            color: var(--color-text);
+            user-select: none;
+            transition: background 0.1s ease;
+        }
+
+        .category-header:hover { background: var(--color-bg); }
+
+        .category-section.hover-expand-pending .category-header {
+            background: rgba(10, 102, 194, 0.08);
+        }
+
+        .category-chevron {
+            font-size: 0.6rem;
+            color: var(--color-text-soft);
+            transition: transform 0.15s ease;
+            width: 10px;
+            display: inline-block;
+            transform-origin: center;
+        }
+
+        .category-section.expanded .category-chevron {
+            transform: rotate(90deg);
+        }
+
+        .category-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .category-section.uncategorised .category-name {
+            color: var(--color-text-soft);
+            font-style: italic;
+            font-weight: 500;
+        }
+
+        .category-actions {
+            display: flex;
+            gap: 0.1rem;
+            opacity: 0.6;
+        }
+
+        .category-header:hover .category-actions { opacity: 1; }
+
+        .category-action {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: var(--color-text-soft);
+            padding: 0.15rem 0.35rem;
+            border-radius: 3px;
+            transition: all 0.1s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .category-action svg { display: block; }
+
+        .category-action:hover {
+            background: rgba(0, 0, 0, 0.06);
+            color: var(--color-text);
+        }
+
+        .category-action.delete:hover {
+            color: #DC2626;
+            background: rgba(220, 38, 38, 0.08);
+        }
+
+        .process-list {
+            display: none;
+            padding-bottom: 0.2rem;
+            min-height: 4px;
+        }
+
+        .category-section.expanded .process-list { display: block; }
+
+        .process-item {
+            padding: 0.45rem 0.5rem 0.45rem 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: var(--color-text);
+            transition: background 0.1s ease;
+            position: relative;
+        }
+
+        .process-item:hover { background: var(--color-bg); }
+
+        .process-item.active {
+            background: rgba(10, 102, 194, 0.08);
+            color: var(--color-accent);
+            font-weight: 600;
+        }
+
+        .process-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: var(--color-accent);
+        }
+
+        .process-item.drag-source {
+            opacity: 0.35;
+            pointer-events: none;
+        }
+
+        .drag-handle {
+            width: 18px;
+            height: 24px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            color: var(--color-text-soft);
+            opacity: 0.4;
+            touch-action: none;
+            user-select: none;
+            transition: opacity 0.15s ease;
+            border-radius: 4px;
+        }
+
+        .process-item:hover .drag-handle { opacity: 0.8; }
+        .drag-handle:hover { opacity: 1 !important; }
+        .drag-handle:active { cursor: grabbing; }
+
+        @media (hover: none) {
+            .drag-handle { opacity: 0.55; }
+        }
+
+        .drag-handle svg { display: block; }
+
+        .process-indicator {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 1.5px solid var(--color-text-soft);
+            flex-shrink: 0;
+            transition: all 0.15s ease;
+            background: var(--color-surface);
+        }
+
+        .process-item.active .process-indicator {
+            border-color: var(--color-accent);
+            background: var(--color-accent);
+            box-shadow: inset 0 0 0 3px white;
+        }
+
+        .process-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+
+        .process-actions {
+            display: flex;
+            gap: 1px;
+            opacity: 0.55;
+            transition: opacity 0.15s ease;
+            flex-shrink: 0;
+        }
+
+        .process-item:hover .process-actions { opacity: 1; }
+
+        .process-action {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 0.95rem;
+            color: var(--color-text-soft);
+            padding: 0.15rem 0.3rem;
+            border-radius: 3px;
+            transition: all 0.1s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .process-action svg { display: block; }
+
+        .process-action:hover {
+            background: rgba(0, 0, 0, 0.06);
+            color: var(--color-text);
+        }
+
+        .process-action.delete:hover {
+            color: #DC2626;
+            background: rgba(220, 38, 38, 0.08);
+        }
+
+        @media (hover: none) {
+            .process-actions { opacity: 0.7; }
+            .category-actions { opacity: 0.7; }
+        }
+
+        .empty-category {
+            padding: 0.4rem 1rem 0.5rem 2.4rem;
+            font-size: 0.76rem;
+            color: var(--color-text-soft);
+            font-style: italic;
+            min-height: 28px;
+        }
+
+        .drop-indicator {
+            height: 0;
+            border-top: 2px solid var(--color-accent);
+            margin: -1px 0;
+            pointer-events: none;
+            position: relative;
+        }
+
+        .drop-indicator::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: -4px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--color-accent);
+        }
+
+        .process-list.drop-into,
+        .empty-category.drop-into {
+            background: rgba(10, 102, 194, 0.1);
+            outline: 1px dashed var(--color-accent);
+            outline-offset: -2px;
+        }
+
+        body.dragging-process {
+            cursor: grabbing !important;
+            user-select: none;
+        }
+
+        body.dragging-process .drag-handle { cursor: grabbing; }
+
+        /* ---------- Canvas ---------- */
+        .canvas-container {
+            position: relative;
+            flex: 1;
+            overflow: auto;
+            background: var(--color-bg);
+            min-width: 0;
+        }
+
+        .canvas {
+            position: relative;
+            min-width: 2400px;
+            min-height: 2000px;
+            background-image: radial-gradient(circle, rgba(120, 119, 148, 0.16) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        /* ---------- Cards ---------- */
+        .card {
+            position: absolute;
+            width: 240px;
+            min-height: 110px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-left: 4px solid var(--type-action);
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            cursor: move;
+            box-shadow: var(--shadow-md);
+            transition: box-shadow 0.15s ease, transform 0.15s ease;
+            z-index: 100;
+        }
+
+        .card[data-type="entry"] { border-left-color: var(--type-entry); }
+        .card[data-type="action"] { border-left-color: var(--type-action); }
+        .card[data-type="decision"] { border-left-color: var(--type-decision); }
+        .card[data-type="resolution"] { border-left-color: var(--type-resolution); }
+
+        .card:hover { box-shadow: var(--shadow-lg); }
+
+        .card.dragging {
+            opacity: 0.97;
+            transform: rotate(0.5deg) scale(1.01);
+            z-index: 1000;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
+        }
+
+        .card.source-card {
+            outline: 2px solid var(--type-entry);
+            outline-offset: 2px;
+        }
+
+        .card.can-connect {
+            outline: 2px dashed var(--type-decision);
+            outline-offset: 2px;
+        }
+
+        /* During connect mode, target cards are tap targets; source card is not draggable */
+        body:not(.view-mode) .card.can-connect { cursor: pointer; }
+        body:not(.view-mode) .card.source-card { cursor: default; }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.5rem;
+            gap: 0.5rem;
+        }
+
+        .card-number {
+            background: var(--color-text);
+            color: white;
+            min-width: 26px;
+            height: 22px;
+            padding: 0 0.4rem;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            flex-shrink: 0;
+        }
+
+        .card[data-type="entry"] .card-number { background: var(--type-entry); }
+        .card[data-type="decision"] .card-number { background: var(--type-decision); }
+        .card[data-type="resolution"] .card-number { background: var(--type-resolution); }
+
+        .card-type-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--color-text-soft);
+            padding-top: 0.2rem;
+        }
+
+        .card-title {
+            font-family: var(--font-serif);
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--color-text);
+            margin-bottom: 0.35rem;
+            line-height: 1.3;
+            word-wrap: break-word;
+        }
+
+        .card-role {
+            font-size: 0.75rem;
+            color: var(--color-text-soft);
+            margin-bottom: 0.5rem;
+        }
+
+        .card-role strong {
+            color: var(--color-text);
+            font-weight: 600;
+        }
+
+        .card-summary {
+            font-size: 0.72rem;
+            color: var(--color-text-soft);
+            background: var(--color-bg);
+            border-radius: 4px;
+            padding: 0.35rem 0.5rem;
+            margin-top: 0.4rem;
+            line-height: 1.35;
+            border-left: 2px solid var(--type-action);
+            white-space: pre-wrap;
+        }
+
+        .card[data-type="entry"] .card-summary { border-left-color: var(--type-entry); }
+        .card[data-type="action"] .card-summary { border-left-color: var(--type-action); }
+        .card[data-type="decision"] .card-summary { border-left-color: var(--type-decision); }
+        .card[data-type="resolution"] .card-summary { border-left-color: var(--type-resolution); }
+
+        .card-summary-label {
+            font-weight: 700;
+            color: var(--color-text);
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: block;
+            margin-bottom: 0.15rem;
+        }
+
+        .card-controls {
+            position: absolute;
+            top: -13px;
+            right: 8px;
+            display: flex;
+            gap: 4px;
+        }
+
+        .card-btn {
+            width: 26px;
+            height: 26px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s ease, background 0.15s ease;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+            color: white;
+            font-weight: 700;
+        }
+
+        .card-btn:hover { transform: scale(1.12); }
+        .edit-btn { background: #6E6E73; }
+        .delete-btn { background: #DC2626; }
+        .connect-btn { background: var(--type-entry); }
+
+        /* Source card's connect button flips red to signal "tap again to cancel" */
+        .card.source-card .connect-btn { background: #DC2626; }
+
+        /* ---------- View mode ---------- */
+        body.view-mode .card { cursor: default; }
+        body.view-mode .card-controls { display: none; }
+
+        /* ---------- Arrows ----------
+           Inline stroke attrs are also set in drawConnections() so rendering doesn't
+           depend on CSS var() resolution inside SVG presentation attributes (which
+           is flaky on some mobile browsers). CSS here is a backup. */
+        .arrow-line {
+            stroke-width: 2.5;
+            fill: none;
+            stroke: #cf9f4a;
+            stroke-linecap: round;
+            stroke-dasharray: 2 4;
+            opacity: 0.75;
+        }
+
+        .arrow-condition {
+            position: absolute;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 14px;
+            padding: 0.25rem 0.7rem;
+            font-size: 0.72rem;
+            font-weight: 600;
+            cursor: pointer;
+            z-index: 200;
+            color: var(--color-text);
+            transition: all 0.15s ease;
+            box-shadow: var(--shadow-sm);
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .arrow-condition:hover {
+            border-color: var(--color-accent);
+            color: var(--color-accent);
+        }
+
+        .arrow-condition.empty {
+            font-style: italic;
+            color: var(--color-text-soft);
+            border-style: dashed;
+        }
+
+        /* View mode: filled conditions visible and non-interactive; empty placeholders hidden */
+        body.view-mode .arrow-condition {
+            cursor: default;
+            pointer-events: none;
+            border-color: var(--color-accent);
+            color: var(--color-text);
+        }
+        body.view-mode .arrow-condition.empty { display: none; }
+
+        /* ---------- Modals ---------- */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            backdrop-filter: blur(6px);
+        }
+
+        .modal-content {
+            background: var(--color-surface);
+            padding: 2rem;
+            border-radius: 12px;
+            width: 580px;
+            max-width: 92%;
+            max-height: 92vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+        }
+
+        .modal-content h3 {
+            font-family: var(--font-display);
+            color: var(--color-text);
+            margin-bottom: 0.35rem;
+            font-size: 1.3rem;
+            font-weight: 400;
+            letter-spacing: 0.01em;
+        }
+
+        .modal-subtitle {
+            color: var(--color-text-soft);
+            font-size: 0.85rem;
+            margin-bottom: 1.5rem;
+            line-height: 1.45;
+        }
+
+        .form-group { margin-bottom: 1.1rem; }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.35rem;
+            font-weight: 600;
+            color: var(--color-text);
+            font-size: 0.82rem;
+            letter-spacing: -0.005em;
+        }
+
+        .form-group .hint {
+            display: block;
+            font-size: 0.72rem;
+            color: var(--color-text-soft);
+            margin-top: -0.2rem;
+            margin-bottom: 0.4rem;
+            font-weight: 400;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 0.6rem 0.75rem;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-family: inherit;
+            background: var(--color-surface);
+            color: var(--color-text);
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            border-color: var(--color-accent);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(10, 102, 194, 0.12);
+        }
+
+        .form-group textarea {
+            min-height: 75px;
+            resize: vertical;
+            line-height: 1.45;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .type-selector {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+        }
+
+        .type-option {
+            border: 1.5px solid var(--color-border);
+            border-radius: 6px;
+            padding: 0.5rem;
+            text-align: center;
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 600;
+            transition: all 0.15s ease;
+            background: var(--color-surface);
+            color: var(--color-text-soft);
+            user-select: none;
+        }
+
+        .type-option:hover { border-color: rgba(0, 0, 0, 0.2); }
+
+        .type-option.selected[data-type="entry"] {
+            border-color: var(--type-entry);
+            background: rgba(46, 159, 92, 0.08);
+            color: var(--type-entry);
+        }
+        .type-option.selected[data-type="action"] {
+            border-color: var(--type-action);
+            background: rgba(10, 102, 194, 0.08);
+            color: var(--type-action);
+        }
+        .type-option.selected[data-type="decision"] {
+            border-color: var(--type-decision);
+            background: rgba(217, 119, 6, 0.08);
+            color: var(--type-decision);
+        }
+        .type-option.selected[data-type="resolution"] {
+            border-color: var(--type-resolution);
+            background: rgba(124, 58, 237, 0.08);
+            color: var(--type-resolution);
+        }
+
+        .duration-group { display: flex; gap: 0.5rem; }
+        .duration-group input { flex: 2; }
+        .duration-group select { flex: 1; }
+
+        .button-group {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            margin-top: 1.5rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--color-border);
+            flex-wrap: wrap;
+        }
+
+        .button-group button {
+            background: var(--color-accent);
+            color: white;
+            border: none;
+            padding: 0.65rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: background 0.15s ease;
+        }
+
+        .button-group button:hover { background: var(--color-accent-hover); }
+
+        .button-group button.secondary {
+            background: var(--color-bg);
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+        }
+
+        .button-group button.secondary:hover { background: var(--color-hover); }
+
+        .button-group button.delete-action {
+            background: var(--color-bg);
+            color: #DC2626;
+            border: 1px solid var(--color-border);
+            margin-right: auto;
+        }
+
+        .button-group button.delete-action:hover {
+            background: rgba(180, 74, 74, 0.18);
+            border-color: #DC2626;
+        }
+
+        .button-group button.export-action {
+            background: var(--color-bg);
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+            margin-right: auto;
+        }
+
+        .button-group button.export-action:hover {
+            background: var(--color-hover);
+        }
+
+        /* ---------- Field customization (step settings, custom fields) ---------- */
+        .form-field-footer {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 0.5rem;
+            padding-top: 0.75rem;
+            border-top: 1px dashed var(--color-border);
+        }
+        .field-footer-btn {
+            background: var(--color-bg);
+            color: var(--color-text-soft);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            padding: 0.5rem 0.85rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .field-footer-btn:hover {
+            background: var(--color-hover);
+            color: var(--color-text);
+        }
+        .custom-field-remove {
+            background: none;
+            border: none;
+            color: var(--color-text-soft);
+            font-size: 1.1rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0 0.35rem;
+            margin-left: 0.35rem;
+            border-radius: 4px;
+            vertical-align: middle;
+        }
+        .custom-field-remove:hover {
+            background: rgba(180, 74, 74, 0.18);
+            color: #d98a8a;
+        }
+        .field-toggle-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            margin-bottom: 1rem;
+        }
+        .field-toggle-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+            padding: 0.6rem 0.75rem;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            background: var(--color-bg);
+            cursor: pointer;
+        }
+        .field-toggle-row input[type="checkbox"] {
+            margin-top: 0.15rem;
+            flex-shrink: 0;
+        }
+        .field-toggle-label-wrap {
+            flex: 1;
+            min-width: 0;
+        }
+        .field-toggle-label {
+            display: block;
+            font-weight: 500;
+            font-size: 0.92rem;
+            color: var(--color-text);
+        }
+        .field-toggle-hint {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--color-text-soft);
+            margin-top: 0.15rem;
+            line-height: 1.4;
+        }
+        .field-toggle-list-empty {
+            font-size: 0.85rem;
+            color: var(--color-text-soft);
+            font-style: italic;
+            padding: 0.5rem 0;
+        }
+        .field-toggle-section-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--color-text-soft);
+            font-weight: 600;
+            margin: 0.5rem 0 0.3rem;
+        }
+
+        /* ---------- Empty state ---------- */
+        .empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--color-text-soft);
+            pointer-events: none;
+            padding: 1rem;
+            max-width: 90%;
+        }
+
+        .empty-state h2 {
+            font-family: var(--font-display);
+            font-size: 1.4rem;
+            font-weight: 400;
+            color: var(--color-text);
+            margin-bottom: 0.4rem;
+            letter-spacing: 0.02em;
+        }
+
+        .empty-state p {
+            font-size: 0.9rem;
+            max-width: 360px;
+            line-height: 1.5;
+            margin: 0 auto;
+        }
+
+        /* ---------- Responsive ---------- */
+        @media (max-width: 768px) {
+            .process-header {
+                padding: 0.75rem 1rem;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.6rem;
+            }
+            .process-header-actions {
+                justify-content: flex-end;
+                flex-wrap: wrap;
+            }
+            .toolbar { padding: 0.55rem 0.75rem; flex-wrap: wrap; gap: 0.4rem; }
+            .process-meta { gap: 0.75rem; font-size: 0.72rem; }
+            .form-row { grid-template-columns: 1fr; }
+            .type-selector { grid-template-columns: repeat(2, 1fr); }
+            .card { width: 220px; }
+            :root { --sidebar-width: 250px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="process-header">
+        <div class="process-info">
+            <div class="process-title unset" id="processTitle">No scene selected</div>
+            <div class="process-meta">
+                <span><strong>POV:</strong> <span id="metaEntry">—</span></span>
+                <span><strong>Setting:</strong> <span id="metaOwner">—</span></span>
+                <span><strong>Last revised:</strong> <span id="metaReviewed">—</span></span>
+            </div>
+        </div>
+        <div class="process-header-actions">
+            <button class="header-add-step-btn" id="addStepBtn" onclick="addCard()">+ Add beat</button>
+            <button class="save-image-btn" id="saveImageBtn" onclick="exportCanvasAsSvg()" title="Save scene map as an image">Save image</button>
+            <button class="process-settings-btn" onclick="openProcessModal()">Scene settings</button>
+        </div>
+    </header>
+
+    <div class="toolbar">
+        <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">☰</button>
+        <label class="view-toggle">
+            <input type="checkbox" id="viewModeToggle" onchange="toggleViewMode()">
+            View mode
+        </label>
+        <div class="card-detail-toggle" role="group" aria-label="Card detail level">
+            <button class="cdt-btn" data-detail="simple" onclick="setCardDetail('simple')" title="Title and POV only">Simple</button>
+            <button class="cdt-btn" data-detail="default" onclick="setCardDetail('default')" title="One craft note per beat">Default</button>
+            <button class="cdt-btn" data-detail="context" onclick="setCardDetail('context')" title="Two craft notes per beat">Context</button>
+        </div>
+        <span id="modeIndicator" class="mode-indicator"></span>
+        <input type="file" id="importFile" style="display:none" accept=".json" onchange="importProject(event)">
+    </div>
+
+    <div class="main-area">
+        <aside class="sidebar" id="sidebar">
+            <!-- Manuscript switcher: each manuscript is a self-contained workspace -->
+            <div class="session-switcher">
+                <button class="session-pill" onclick="toggleSessionMenu()" type="button">
+                    <span class="session-pill-content">
+                        <span class="session-pill-label">Manuscript</span>
+                        <span class="session-pill-name" id="sessionPillName">Untitled novel</span>
+                    </span>
+                    <span class="session-pill-arrow">▾</span>
+                </button>
+                <div class="session-menu" id="sessionMenu">
+                    <div class="session-menu-list" id="sessionMenuList"></div>
+                    <div class="session-menu-divider"></div>
+                    <button class="session-menu-item" onclick="loadJsonAsSession()" type="button">+ Open a saved manuscript (JSON)</button>
+                    <button class="session-menu-item" onclick="renameCurrentSession()" type="button">Rename this manuscript</button>
+                    <button class="session-menu-item danger" onclick="deleteCurrentSession()" type="button">Delete this manuscript</button>
+                </div>
+            </div>
+            <div class="sidebar-header">
+                <div>
+                    <div class="sidebar-title">Scenes</div>
+                    <div class="sidebar-process-count" id="sidebarCount">0 scenes</div>
+                </div>
+            </div>
+            <div class="sidebar-top-actions">
+                <button class="sidebar-action-btn" onclick="createProcess()">+ New scene</button>
+                <button class="sidebar-action-btn" onclick="createCategory()">+ New chapter</button>
+            </div>
+            <div class="sidebar-body" id="sidebarBody"></div>
+            <div class="sidebar-footer">
+                <button class="sidebar-action-btn" onclick="exportAll()" title="Export this whole manuscript">Export all</button>
+                <button class="sidebar-action-btn" onclick="document.getElementById('importFile').click()" title="Import into this manuscript (a scene, a chapter, or a full export)">Import</button>
+                <button class="sidebar-action-btn" onclick="downloadAiTemplate()" title="Download a template to turn a synopsis into scene beats with any AI">AI template</button>
+                <button class="sidebar-action-btn" onclick="restoreWelcomeDemo()" title="Re-add the example scene to this manuscript">Restore example</button>
+            </div>
+        </aside>
+
+        <input type="file" id="sessionImportFile" accept=".json" onchange="handleSessionImport(event)" style="display: none;">
+
+        <div class="canvas-container">
+            <div class="canvas" id="canvas">
+                <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible;">
+                    <defs>
+                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#cf9f4a" opacity="0.7"/>
+                        </marker>
+                    </defs>
+                </svg>
+                <div class="empty-state" id="emptyState">
+                    <h2 id="emptyStateTitle">A blank page</h2>
+                    <p id="emptyStateBody">Open the sidebar and click <strong>+ New scene</strong> to begin. Each scene is a canvas of beats you can write on and connect.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="cardModal">
+        <div class="modal-content">
+            <h3>Beat</h3>
+            <p class="modal-subtitle" id="cardModalSubtitle">A beat is one moment in the scene. Fill the prompts to find it, then draft the prose right here.</p>
+            <div class="form-group">
+                <label>Beat type</label>
+                <span class="hint">Establish = ground the scene · Beat = something happens · Turn = the pivot · Land = how it closes</span>
+                <div class="type-selector" id="typeSelector">
+                    <div class="type-option" data-type="entry" onclick="selectType('entry')">Establish</div>
+                    <div class="type-option" data-type="action" onclick="selectType('action')">Beat</div>
+                    <div class="type-option" data-type="decision" onclick="selectType('decision')">Turn</div>
+                    <div class="type-option" data-type="resolution" onclick="selectType('resolution')">Land</div>
+                </div>
+            </div>
+            <div id="dynamicFormFields"></div>
+            <div class="button-group">
+                <button class="delete-action" onclick="deleteCardFromModal()">Delete beat</button>
+                <button class="secondary" onclick="closeCardModal()">Cancel</button>
+                <button onclick="saveCard()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt customiser: toggle craft prompts on/off per beat type -->
+    <div class="modal" id="stepFieldsModal">
+        <div class="modal-content">
+            <h3>Customise <span id="sfStepTypeLabel">beat</span> prompts</h3>
+            <p class="modal-subtitle">Turn the craft prompts on or off for this beat type. Changes apply to every beat of this type, and travel with the scene when you export it.</p>
+            <div id="sfLegacyFieldList" class="field-toggle-list"></div>
+            <div id="sfCustomFieldList" class="field-toggle-list"></div>
+            <div class="button-group">
+                <button onclick="closeStepFieldsModal()">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add your own prompt -->
+    <div class="modal" id="addCustomFieldModal">
+        <div class="modal-content">
+            <h3>Add your own prompt</h3>
+            <p class="modal-subtitle">This prompt will appear on every <strong><span id="acfStepTypeLabel">beat</span></strong> beat. It travels with your scene exports.</p>
+            <div class="form-group">
+                <label>Prompt name</label>
+                <span class="hint">What this prompt is called (e.g. "Weather", "Theme echo", "Time skip")</span>
+                <input type="text" id="acfLabel" placeholder="e.g. Theme echo">
+            </div>
+            <div class="form-group">
+                <label>Field type</label>
+                <span class="hint">Single line for short notes; multiple lines for longer ones</span>
+                <select id="acfType">
+                    <option value="text">Single line</option>
+                    <option value="textarea">Multiple lines</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Hint (optional)</label>
+                <span class="hint">Helper text shown under the label</span>
+                <input type="text" id="acfHint" placeholder="e.g. How does this beat echo the book's theme?">
+            </div>
+            <div class="form-group">
+                <label>Placeholder (optional)</label>
+                <span class="hint">Example shown in the empty field</span>
+                <input type="text" id="acfPlaceholder" placeholder="e.g. Mirrors the opening image">
+            </div>
+            <div class="button-group">
+                <button class="secondary" onclick="closeAddCustomFieldModal()">Cancel</button>
+                <button onclick="addCustomField()">Add prompt</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="connectionModal">
+        <div class="modal-content">
+            <h3>How the beat flows</h3>
+            <p class="modal-subtitle">Arrows show cause and effect — what one beat sets up for the next. Add a condition only when the scene forks (e.g. she stays vs she leaves).</p>
+            <div class="form-group">
+                <label>Condition</label>
+                <span class="hint">If the scene branches here, what decides which way it goes?</span>
+                <input type="text" id="connCondition" placeholder="e.g. If she opens the letter   /   If he stays silent">
+            </div>
+            <div class="form-group">
+                <label>Notes</label>
+                <span class="hint">Any note about the link that doesn't belong on the beat itself</span>
+                <textarea id="connNotes" placeholder="Optional notes"></textarea>
+            </div>
+            <div class="button-group">
+                <button class="delete-action" onclick="deleteConnectionFromModal()">Remove link</button>
+                <button class="secondary" onclick="closeConnectionModal()">Cancel</button>
+                <button onclick="saveConnection()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="processModal">
+        <div class="modal-content">
+            <h3>Scene settings</h3>
+            <p class="modal-subtitle">The shape of the scene as a whole — whose eyes we're behind, where it happens, and what it has to do for the story.</p>
+            <div class="form-group">
+                <label>Scene title</label>
+                <input type="text" id="processNameInput" placeholder="e.g. The letter on the kitchen table">
+            </div>
+            <div class="form-group">
+                <label>Chapter</label>
+                <span class="hint">Which chapter this scene belongs to</span>
+                <select id="processCategoryInput"></select>
+            </div>
+            <div class="form-group">
+                <label>POV character</label>
+                <span class="hint">Whose eyes are we behind in this scene?</span>
+                <input type="text" id="processEntryInput" placeholder="e.g. Mara, close third person">
+            </div>
+            <div class="form-group">
+                <label>Purpose of the scene</label>
+                <textarea id="processDescriptionInput" placeholder="What this scene has to accomplish — the one thing the story needs from it"></textarea>
+            </div>
+            <div class="form-group">
+                <label>The turn</label>
+                <span class="hint">What is different by the end? A scene should change something.</span>
+                <textarea id="processResolutionInput" placeholder="e.g. She arrives hopeful and leaves knowing he lied — the trust is gone"></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Setting</label>
+                    <span class="hint">Where and when</span>
+                    <input type="text" id="processOwnerInput" placeholder="e.g. The farmhouse kitchen, just before dawn">
+                </div>
+                <div class="form-group">
+                    <label>Last revised</label>
+                    <input type="date" id="processReviewedInput">
+                </div>
+            </div>
+            <div class="button-group">
+                <button class="export-action" onclick="exportActiveProcess()">Export this scene</button>
+                <button class="secondary" onclick="closeProcessModal()">Cancel</button>
+                <button onclick="saveProcessMeta()">Save</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const ICON_DUPLICATE = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="4.5" width="7.5" height="7.5" rx="1"/><path d="M2 9V3a1 1 0 0 1 1-1h6"/></svg>`;
+    const ICON_EXPORT = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 2v6.5M4 6L7 9l3-3"/><path d="M2.5 11.5h9"/></svg>`;
+    const ICON_DRAG = `<svg width="12" height="20" viewBox="0 0 12 20" fill="currentColor" aria-hidden="true"><circle cx="3" cy="4" r="1.5"/><circle cx="9" cy="4" r="1.5"/><circle cx="3" cy="10" r="1.5"/><circle cx="9" cy="10" r="1.5"/><circle cx="3" cy="16" r="1.5"/><circle cx="9" cy="16" r="1.5"/></svg>`;
+
+    // Beat-type labels shown to the writer. Internal keys stay
+    // entry/action/decision/resolution (colours, canvas, SVG key off them).
+    const TYPE_LABELS = {
+        entry: 'Establish',
+        action: 'Beat',
+        decision: 'Turn',
+        resolution: 'Land'
+    };
+
+    // Fields shown on every beat, whatever its type. `responsibleRole` (the
+    // unified role key) is relabelled per type. `sop` holds "what happens" and
+    // `draft` is where the writer drafts the actual prose.
+    const DEFAULT_FIELDS = [
+        { key: 'title', label: 'Beat name', type: 'text', placeholder: 'Short name for this beat' },
+        {
+            key: 'responsibleRole',
+            labelByType: {
+                entry: 'POV — whose eyes',
+                action: 'Who drives it',
+                decision: 'Who is at the centre',
+                resolution: 'Whose landing'
+            },
+            hint: 'The character this beat belongs to',
+            type: 'text',
+            placeholder: 'e.g. Mara'
+        },
+        { key: 'sop', label: 'What happens', hint: 'The action or exchange that moves the scene', type: 'textarea', placeholder: 'e.g. She finds the unsent letter in her mother\'s hand' },
+        { key: 'draft', label: 'Draft prose', hint: 'Write the actual lines here, or sketch what gets written', type: 'textarea', placeholder: 'Start drafting the beat…' }
+    ];
+
+    // Per-type craft prompts. These are enabled by default (see defaultStepFields)
+    // so each beat type opens with its tailored questions, but the writer can
+    // toggle them off or add their own via "Customise prompts".
+    const LEGACY_FIELDS = {
+        entry: [
+            { key: 'setting', label: 'Where & when', hint: 'Ground the reader: place, time of day, weather', type: 'text', placeholder: 'e.g. The farmhouse kitchen, just before dawn' },
+            { key: 'mood', label: 'Mood / atmosphere', hint: 'The felt tone you want to open on', type: 'text', placeholder: 'e.g. Hushed, raw, expectant' },
+            { key: 'sensory', label: 'Sensory anchor', hint: 'One concrete image, sound, or smell to open on', type: 'textarea', placeholder: 'e.g. Salt and diesel; the kettle ticking as it cools' },
+            { key: 'present', label: 'Who is on the page', hint: 'Characters present as the beat opens', type: 'text', placeholder: 'e.g. Mara, alone' }
+        ],
+        action: [
+            { key: 'wants', label: 'What they want', hint: 'The desire pushing the beat (often unspoken)', type: 'text', placeholder: 'e.g. To keep the morning ordinary for one more minute' },
+            { key: 'subtext', label: 'Subtext', hint: 'What is really going on beneath the surface', type: 'textarea', placeholder: 'e.g. She already senses this will undo something' },
+            { key: 'obstacle', label: 'What resists', hint: 'The friction or push-back in the beat', type: 'text', placeholder: 'e.g. He won\'t meet her eye' }
+        ],
+        decision: [
+            { key: 'complication', label: 'The complication', hint: 'What forces the choice — the obstacle or surprise', type: 'textarea', placeholder: 'e.g. The envelope is unsealed, unsent, decades old' },
+            { key: 'stakes', label: 'Stakes', hint: 'What stands to be lost or won here', type: 'text', placeholder: 'e.g. The mother she has carried since childhood' },
+            { key: 'shift', label: 'Emotional shift', hint: 'How the temperature changes across the beat', type: 'text', placeholder: 'e.g. From guarded calm to vertigo' }
+        ],
+        resolution: [
+            { key: 'changed', label: 'What changed', hint: 'The new situation by the end of the beat', type: 'textarea', placeholder: 'e.g. She knows now there was another child' },
+            { key: 'reveal', label: 'What we now know', hint: 'Information or meaning the beat delivers', type: 'textarea', placeholder: 'e.g. The inheritance was never the house — it was the secret' },
+            { key: 'hook', label: 'Hook forward', hint: 'The question or pull into the next scene', type: 'text', placeholder: 'e.g. Now she has to decide whether to tell her sister' }
+        ]
+    };
+
+    // Returns the full ordered list of fields visible for a step type:
+    // 5 defaults, then any enabled legacy fields (in original schema order),
+    // then any user-added custom fields (in creation order).
+    function getVisibleFields(stepType) {
+        const sf = (state.stepFields && state.stepFields[stepType]) || { enabledLegacy: [], custom: [] };
+        const enabled = new Set(sf.enabledLegacy);
+        const legacy = (LEGACY_FIELDS[stepType] || []).filter(f => enabled.has(f.key));
+        const custom = (sf.custom || []).map(f => ({ ...f, custom: true }));
+        return [...DEFAULT_FIELDS, ...legacy, ...custom];
+    }
+
+    function getFieldLabel(field, stepType) {
+        if (field.labelByType && field.labelByType[stepType]) return field.labelByType[stepType];
+        return field.label || field.key;
+    }
+
+    const TYPE_SUBTITLES = {
+        entry: 'Ground the reader in place, POV, and mood. The opening image is the promise the scene makes.',
+        action: 'Something happens. A character wants something and moves to get it — and the subtext does the real work.',
+        decision: 'The pivot. A complication forces a choice, and the scene\'s emotional temperature shifts.',
+        resolution: 'How the scene lands. Show what changed, what we now know, and the pull into what comes next.'
+    };
+
+    let state = {
+        version: '3.0',
+        activeProcessId: null,
+        sidebarCollapsed: false,
+        uncategorisedExpanded: true,
+        categories: [],
+        processes: [],
+        stepFields: { entry: { enabledLegacy: [], custom: [] }, action: { enabledLegacy: [], custom: [] }, decision: { enabledLegacy: [], custom: [] }, resolution: { enabledLegacy: [], custom: [] } }
+    };
+
+    let sourceCard = null;
+    let draggedCard = null;
+    let dragOffset = { x: 0, y: 0 };
+    let currentEditingCard = null;
+    let currentEditingConnection = null;
+    let currentSelectedType = 'action';
+    let dragSession = null;
+
+    function activeProc() {
+        return state.processes.find(p => p.id === state.activeProcessId) || null;
+    }
+
+    function genId(prefix) {
+        return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    }
+
+    function safeFilename(name, fallback) {
+        const base = (name || fallback).replace(/[^a-z0-9-_ ]/gi, '_').replace(/\s+/g, '-').toLowerCase();
+        return base || fallback;
+    }
+
+    function ensureStateShape() {
+        if (!state.version) state.version = '3.0';
+        if (state.activeProcessId === undefined) state.activeProcessId = null;
+        if (typeof state.sidebarCollapsed !== 'boolean') state.sidebarCollapsed = false;
+        if (typeof state.uncategorisedExpanded !== 'boolean') state.uncategorisedExpanded = true;
+        if (!['simple', 'default', 'context'].includes(state.cardDetail)) state.cardDetail = 'default';
+        if (!Array.isArray(state.categories)) state.categories = [];
+        if (!Array.isArray(state.processes)) state.processes = [];
+        // Custom/legacy field schema per step type. Initialise if missing.
+        if (!state.stepFields || typeof state.stepFields !== 'object') state.stepFields = {};
+        const seeded = defaultStepFields();
+        ['entry', 'action', 'decision', 'resolution'].forEach(t => {
+            if (!state.stepFields[t] || typeof state.stepFields[t] !== 'object') {
+                state.stepFields[t] = seeded[t];
+            }
+            if (!Array.isArray(state.stepFields[t].enabledLegacy)) state.stepFields[t].enabledLegacy = seeded[t].enabledLegacy;
+            if (!Array.isArray(state.stepFields[t].custom)) state.stepFields[t].custom = [];
+        });
+        state.processes.forEach(p => {
+            if (!p.meta) p.meta = { name: '', entryPoint: '', description: '', resolution: '', owner: '', lastReviewed: '' };
+            if (!Array.isArray(p.cards)) p.cards = [];
+            if (!Array.isArray(p.connections)) p.connections = [];
+            if (typeof p.cardCounter !== 'number') p.cardCounter = p.cards.length;
+            if (p.categoryId === undefined) p.categoryId = null;
+            // Soft-migrate old type-specific fields into the new unified defaults.
+            p.cards.forEach(migrateCardToUnifiedSchema);
+        });
+        state.categories.forEach(c => {
+            if (typeof c.expanded !== 'boolean') c.expanded = true;
+        });
+    }
+
+    // Non-destructive: copies old field values into the new unified field keys
+    // ONLY if the new field is empty. Original old fields are left in the card
+    // object so nothing is lost.
+    function migrateCardToUnifiedSchema(c) {
+        if (!c.responsibleRole) {
+            c.responsibleRole = c.receivingRole || c.decisionMaker || '';
+        }
+        if (!c.sop) {
+            c.sop = c.procedure || c.decisionCriteria || c.closureActions || '';
+        }
+        if (!c.escalationPoint) {
+            c.escalationPoint = c.escalationRoute || '';
+        }
+        if (typeof c.completionTrigger !== 'string') c.completionTrigger = '';
+    }
+
+    function clonedProcessWithNewIds(source) {
+        const proc = JSON.parse(JSON.stringify(source));
+        proc.id = genId('proc');
+        const idMap = new Map();
+        proc.cards = (proc.cards || []).map((c, i) => {
+            const newId = `card-${i + 1}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+            idMap.set(c.id, newId);
+            return { ...c, id: newId };
+        });
+        proc.connections = (proc.connections || [])
+            .map(c => ({
+                ...c,
+                id: genId('conn'),
+                from: idMap.get(c.from),
+                to: idMap.get(c.to)
+            }))
+            .filter(c => c.from && c.to);
+        proc.cardCounter = proc.cards.length;
+        return proc;
+    }
+
+    // ---------- Sessions ----------
+    // Each session is a self-contained workspace (its own processes, categories,
+    // field schema, active process). The "active" session's data is mirrored
+    // into `state` for compatibility with the existing rendering code; the
+    // helpers below keep that mirror in sync.
+    let sessions = [];
+    let activeSessionId = null;
+
+    function defaultStepFields() {
+        return {
+            entry: { enabledLegacy: ['setting', 'mood', 'sensory'], custom: [] },
+            action: { enabledLegacy: ['wants', 'subtext'], custom: [] },
+            decision: { enabledLegacy: ['complication', 'stakes', 'shift'], custom: [] },
+            resolution: { enabledLegacy: ['changed', 'reveal', 'hook'], custom: [] }
+        };
+    }
+
+    function makeBlankSession(name) {
+        return {
+            id: genId('session'),
+            name: name || 'Untitled novel',
+            activeProcessId: null,
+            uncategorisedExpanded: true,
+            categories: [],
+            processes: [],
+            stepFields: defaultStepFields()
+        };
+    }
+
+    function activeSession() {
+        return sessions.find(s => s.id === activeSessionId);
+    }
+
+    // Copy state's per-session fields back into the active session record.
+    // Called before any persistence or session swap.
+    function snapshotActiveSession() {
+        const sess = activeSession();
+        if (!sess) return;
+        sess.activeProcessId = state.activeProcessId;
+        sess.uncategorisedExpanded = state.uncategorisedExpanded;
+        sess.categories = state.categories;
+        sess.processes = state.processes;
+        sess.stepFields = state.stepFields;
+    }
+
+    // Pull the active session's data into state, so existing render/edit code
+    // (which reads state.processes etc.) operates on this session's data.
+    function loadActiveSessionIntoState() {
+        const sess = activeSession();
+        if (!sess) return;
+        state.activeProcessId = sess.activeProcessId;
+        state.uncategorisedExpanded = sess.uncategorisedExpanded !== false;
+        state.categories = sess.categories || [];
+        state.processes = sess.processes || [];
+        state.stepFields = sess.stepFields || defaultStepFields();
+    }
+
+    // Scene Studio uses its OWN storage key so it never shares data with, or
+    // gets picked up by, the Process Mapper tool (which uses processMapper_v3).
+    const STORAGE_KEY = 'sceneStudio_v1';
+
+    function saveState() {
+        try {
+            snapshotActiveSession();
+            const payload = {
+                app: 'scene-studio',
+                version: '3.1',
+                sidebarCollapsed: state.sidebarCollapsed,
+                cardDetail: state.cardDetail,
+                activeSessionId,
+                sessions
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        } catch (e) {
+            console.warn('Save failed:', e);
+        }
+    }
+
+    function loadState() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                const data = JSON.parse(raw);
+                if (Array.isArray(data.sessions) && data.sessions.length > 0) {
+                    sessions = data.sessions;
+                    activeSessionId = data.activeSessionId && sessions.find(s => s.id === data.activeSessionId)
+                        ? data.activeSessionId
+                        : sessions[0].id;
+                    state.sidebarCollapsed = !!data.sidebarCollapsed;
+                    state.cardDetail = ['simple', 'default', 'context'].includes(data.cardDetail) ? data.cardDetail : 'default';
+                    loadActiveSessionIntoState();
+                    ensureStateShape();
+                } else {
+                    // Older single-manuscript Scene Studio save — wrap into a manuscript
+                    migrateSingleSessionToMulti(data);
+                    saveState();
+                }
+                return;
+            }
+            // Fresh install — seed the example scene
+            seedWelcomeDemo();
+        } catch (e) {
+            console.warn('Load failed:', e);
+            ensureStateShape();
+        }
+    }
+
+    // Wrap a single-session v3.0 state into the multi-session structure.
+    function migrateSingleSessionToMulti(oldData) {
+        const sess = makeBlankSession('My first novel');
+        sess.activeProcessId = oldData.activeProcessId || null;
+        sess.uncategorisedExpanded = oldData.uncategorisedExpanded !== false;
+        sess.categories = oldData.categories || [];
+        sess.processes = oldData.processes || [];
+        sess.stepFields = oldData.stepFields || defaultStepFields();
+        sessions = [sess];
+        activeSessionId = sess.id;
+        state.sidebarCollapsed = !!oldData.sidebarCollapsed;
+        state.cardDetail = ['simple', 'default', 'context'].includes(oldData.cardDetail) ? oldData.cardDetail : 'default';
+        loadActiveSessionIntoState();
+        ensureStateShape();
+    }
+
+    function migrateFromV2(v2data) {
+        const procId = genId('proc');
+        const proc = {
+            id: procId,
+            categoryId: null,
+            meta: v2data.process || { name: '', entryPoint: '', description: '', resolution: '', owner: '', lastReviewed: '' },
+            cards: v2data.cards || [],
+            connections: v2data.connections || [],
+            cardCounter: v2data.cardCounter || (v2data.cards ? v2data.cards.length : 0)
+        };
+        const sess = makeBlankSession('My first novel');
+        sess.activeProcessId = procId;
+        sess.processes = [proc];
+        sessions = [sess];
+        activeSessionId = sess.id;
+        state.sidebarCollapsed = false;
+        state.cardDetail = 'default';
+        loadActiveSessionIntoState();
+        ensureStateShape();
+        saveState();
+    }
+
+    function toggleSidebar() {
+        state.sidebarCollapsed = !state.sidebarCollapsed;
+        document.body.classList.toggle('sidebar-collapsed', state.sidebarCollapsed);
+        saveState();
+    }
+
+    function renderSidebar() {
+        const body = document.getElementById('sidebarBody');
+        if (!body) return;
+
+        const byCategory = new Map();
+        state.categories.forEach(cat => byCategory.set(cat.id, []));
+        const uncat = [];
+        state.processes.forEach(p => {
+            if (p.categoryId && state.categories.find(c => c.id === p.categoryId)) {
+                byCategory.get(p.categoryId).push(p);
+            } else {
+                uncat.push(p);
+            }
+        });
+
+        let html = '';
+        for (const cat of state.categories) {
+            const procs = byCategory.get(cat.id) || [];
+            html += renderCategorySection(cat, procs, false);
+        }
+        html += renderCategorySection(
+            { id: '__uncat__', name: 'Unfiled', expanded: state.uncategorisedExpanded },
+            uncat,
+            true
+        );
+
+        body.innerHTML = html;
+
+        const count = state.processes.length;
+        document.getElementById('sidebarCount').textContent = `${count} scene${count === 1 ? '' : 's'}`;
+
+        if (dragSession && dragSession.moved) {
+            const el = document.querySelector(`.process-item[data-process-id="${dragSession.processId}"]`);
+            if (el) el.classList.add('drag-source');
+        }
+    }
+
+    function renderCategorySection(cat, procs, isUncategorised) {
+        const expandedClass = cat.expanded ? 'expanded' : '';
+        const uncatClass = isUncategorised ? 'uncategorised' : '';
+        const catIdData = isUncategorised ? 'null' : cat.id;
+
+        let actionButtons = '';
+        if (!isUncategorised) {
+            actionButtons = `
+                <button class="category-action" onclick="event.stopPropagation(); exportCategory('${cat.id}')" title="Export this category">${ICON_EXPORT}</button>
+                <button class="category-action" onclick="event.stopPropagation(); renameCategory('${cat.id}')" title="Rename">✎</button>
+                <button class="category-action delete" onclick="event.stopPropagation(); deleteCategory('${cat.id}')" title="Delete">×</button>
+            `;
+        }
+
+        let procItems = '';
+        if (procs.length === 0) {
+            procItems = `<div class="empty-category" data-cat-id="${catIdData}">${isUncategorised ? 'No unfiled scenes' : 'No scenes yet'}</div>`;
+        } else {
+            procItems = procs.map(p => renderProcessItem(p)).join('');
+        }
+
+        const catIdArg = isUncategorised ? "'__uncat__'" : `'${cat.id}'`;
+
+        return `
+            <div class="category-section ${expandedClass} ${uncatClass}" data-cat-id="${catIdData}">
+                <div class="category-header" onclick="toggleCategoryExpanded(${catIdArg})" data-cat-id="${catIdData}">
+                    <span class="category-chevron">▶</span>
+                    <span class="category-name">${escapeHtml(cat.name)}</span>
+                    <span class="category-actions">${actionButtons}</span>
+                </div>
+                <div class="process-list" data-cat-id="${catIdData}">${procItems}</div>
+            </div>
+        `;
+    }
+
+    function renderProcessItem(p) {
+        const isActive = p.id === state.activeProcessId;
+        const name = p.meta.name || 'Untitled scene';
+        return `
+            <div class="process-item ${isActive ? 'active' : ''}"
+                 data-process-id="${p.id}"
+                 onclick="setActiveProcess('${p.id}')">
+                <span class="drag-handle"
+                      onpointerdown="onProcessDragStart(event, '${p.id}')"
+                      onclick="event.stopPropagation()"
+                      title="Drag to reorder">${ICON_DRAG}</span>
+                <span class="process-indicator"></span>
+                <span class="process-name">${escapeHtml(name)}</span>
+                <span class="process-actions">
+                    <button class="process-action" onclick="event.stopPropagation(); duplicateProcess('${p.id}')" title="Duplicate">${ICON_DUPLICATE}</button>
+                    <button class="process-action" onclick="event.stopPropagation(); exportProcess('${p.id}')" title="Export this process">${ICON_EXPORT}</button>
+                    <button class="process-action delete" onclick="event.stopPropagation(); deleteProcess('${p.id}')" title="Delete">×</button>
+                </span>
+            </div>
+        `;
+    }
+
+    function onProcessDragStart(e, processId) {
+        if (e.button !== undefined && e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const handle = e.currentTarget;
+        try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+
+        dragSession = {
+            processId,
+            pointerId: e.pointerId,
+            startX: e.clientX,
+            startY: e.clientY,
+            moved: false,
+            hoverCatId: null,
+            hoverTimer: null
+        };
+
+        handle.addEventListener('pointermove', onProcessDragMove);
+        handle.addEventListener('pointerup', onProcessDragEnd);
+        handle.addEventListener('pointercancel', onProcessDragEnd);
+    }
+
+    function onProcessDragMove(e) {
+        if (!dragSession) return;
+        if (!dragSession.moved) {
+            const dx = e.clientX - dragSession.startX;
+            const dy = e.clientY - dragSession.startY;
+            if (Math.hypot(dx, dy) < 6) return;
+            dragSession.moved = true;
+            document.body.classList.add('dragging-process');
+            const el = document.querySelector(`.process-item[data-process-id="${dragSession.processId}"]`);
+            if (el) el.classList.add('drag-source');
+        }
+        autoScrollSidebar(e.clientY);
+        const elBelow = document.elementFromPoint(e.clientX, e.clientY);
+        const target = findDropTarget(elBelow, e.clientY);
+        showDropIndicator(target);
+        handleHoverExpand(elBelow);
+    }
+
+    function autoScrollSidebar(clientY) {
+        const body = document.getElementById('sidebarBody');
+        if (!body) return;
+        const rect = body.getBoundingClientRect();
+        const threshold = 40;
+        if (clientY < rect.top + threshold) body.scrollTop -= 6;
+        else if (clientY > rect.bottom - threshold) body.scrollTop += 6;
+    }
+
+    function findDropTarget(el, pointerY) {
+        let current = el;
+        while (current && current !== document.body) {
+            if (current.classList) {
+                if (current.classList.contains('process-item') && !current.classList.contains('drag-source')) {
+                    const rect = current.getBoundingClientRect();
+                    const midY = rect.top + rect.height / 2;
+                    return { type: pointerY < midY ? 'before' : 'after', element: current, processId: current.dataset.processId };
+                }
+                if (current.classList.contains('empty-category')) {
+                    return { type: 'into-empty', element: current, catId: current.dataset.catId };
+                }
+                if (current.classList.contains('process-list')) {
+                    return { type: 'append-list', element: current, catId: current.dataset.catId };
+                }
+                if (current.classList.contains('category-header')) {
+                    return { type: 'category-header', element: current, catId: current.dataset.catId };
+                }
+            }
+            current = current.parentElement;
+        }
+        return null;
+    }
+
+    function showDropIndicator(target) {
+        document.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+        document.querySelectorAll('.drop-into').forEach(el => el.classList.remove('drop-into'));
+        if (!target) return;
+        if (target.type === 'before' || target.type === 'after') {
+            const indicator = document.createElement('div');
+            indicator.className = 'drop-indicator';
+            if (target.type === 'before') {
+                target.element.parentElement.insertBefore(indicator, target.element);
+            } else {
+                target.element.parentElement.insertBefore(indicator, target.element.nextSibling);
+            }
+        } else if (target.type === 'into-empty') {
+            target.element.classList.add('drop-into');
+        } else if (target.type === 'append-list') {
+            const hasItems = target.element.querySelector('.process-item:not(.drag-source)');
+            if (!hasItems) target.element.classList.add('drop-into');
+        }
+    }
+
+    function handleHoverExpand(elBelow) {
+        if (!dragSession) return;
+        let current = elBelow;
+        let header = null;
+        while (current && current !== document.body) {
+            if (current.classList && current.classList.contains('category-header')) {
+                header = current;
+                break;
+            }
+            current = current.parentElement;
+        }
+        if (!header) { cancelHoverExpand(); return; }
+        const section = header.parentElement;
+        if (section.classList.contains('expanded')) { cancelHoverExpand(); return; }
+        const catId = header.dataset.catId;
+        if (dragSession.hoverCatId === catId) return;
+        cancelHoverExpand();
+        dragSession.hoverCatId = catId;
+        section.classList.add('hover-expand-pending');
+        dragSession.hoverTimer = setTimeout(() => {
+            if (catId === 'null') state.uncategorisedExpanded = true;
+            else {
+                const cat = state.categories.find(c => c.id === catId);
+                if (cat) cat.expanded = true;
+            }
+            renderSidebar();
+            if (dragSession) {
+                dragSession.hoverCatId = null;
+                dragSession.hoverTimer = null;
+            }
+        }, 600);
+    }
+
+    function cancelHoverExpand() {
+        if (!dragSession) return;
+        if (dragSession.hoverTimer) clearTimeout(dragSession.hoverTimer);
+        dragSession.hoverTimer = null;
+        dragSession.hoverCatId = null;
+        document.querySelectorAll('.category-section.hover-expand-pending')
+            .forEach(el => el.classList.remove('hover-expand-pending'));
+    }
+
+    function onProcessDragEnd(e) {
+        if (!dragSession) return;
+        const handle = e.currentTarget;
+        if (handle && handle.removeEventListener) {
+            handle.removeEventListener('pointermove', onProcessDragMove);
+            handle.removeEventListener('pointerup', onProcessDragEnd);
+            handle.removeEventListener('pointercancel', onProcessDragEnd);
+        }
+        cancelHoverExpand();
+        document.body.classList.remove('dragging-process');
+        const sess = dragSession;
+        const sourceEl = document.querySelector(`.process-item[data-process-id="${sess.processId}"]`);
+        if (sourceEl) sourceEl.classList.remove('drag-source');
+        if (!sess.moved) { dragSession = null; return; }
+        const elBelow = document.elementFromPoint(e.clientX, e.clientY);
+        const target = findDropTarget(elBelow, e.clientY);
+        document.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+        document.querySelectorAll('.drop-into').forEach(el => el.classList.remove('drop-into'));
+        dragSession = null;
+        if (target && target.type !== 'category-header') {
+            applyDrop(sess.processId, target);
+        } else {
+            renderSidebar();
+        }
+    }
+
+    function applyDrop(processId, target) {
+        let targetCategoryId, targetIndex;
+        if (target.type === 'into-empty' || target.type === 'append-list') {
+            targetCategoryId = target.catId === 'null' ? null : target.catId;
+            const inCat = state.processes.filter(p => {
+                if (p.id === processId) return false;
+                const procCat = (p.categoryId && state.categories.find(c => c.id === p.categoryId)) ? p.categoryId : null;
+                return procCat === targetCategoryId;
+            });
+            targetIndex = inCat.length;
+        } else if (target.type === 'before' || target.type === 'after') {
+            const targetProc = state.processes.find(p => p.id === target.processId);
+            if (!targetProc) return;
+            targetCategoryId = (targetProc.categoryId && state.categories.find(c => c.id === targetProc.categoryId)) ? targetProc.categoryId : null;
+            const inCat = state.processes.filter(p => {
+                if (p.id === processId) return false;
+                const procCat = (p.categoryId && state.categories.find(c => c.id === p.categoryId)) ? p.categoryId : null;
+                return procCat === targetCategoryId;
+            });
+            const targetIdxInCat = inCat.findIndex(p => p.id === target.processId);
+            if (targetIdxInCat === -1) return;
+            targetIndex = target.type === 'before' ? targetIdxInCat : targetIdxInCat + 1;
+        } else {
+            return;
+        }
+        moveProcess(processId, targetCategoryId, targetIndex);
+    }
+
+    function moveProcess(processId, targetCategoryId, targetIndexWithinCategory) {
+        const proc = state.processes.find(p => p.id === processId);
+        if (!proc) return;
+        proc.categoryId = targetCategoryId;
+        const grouped = new Map();
+        state.categories.forEach(c => grouped.set(c.id, []));
+        grouped.set(null, []);
+        state.processes.forEach(p => {
+            if (p.id === processId) return;
+            const key = (p.categoryId && state.categories.find(c => c.id === p.categoryId)) ? p.categoryId : null;
+            if (!grouped.has(key)) grouped.set(key, []);
+            grouped.get(key).push(p);
+        });
+        const targetKey = targetCategoryId;
+        if (!grouped.has(targetKey)) grouped.set(targetKey, []);
+        const arr = grouped.get(targetKey);
+        const insertAt = Math.max(0, Math.min(targetIndexWithinCategory, arr.length));
+        arr.splice(insertAt, 0, proc);
+        const newProcesses = [];
+        state.categories.forEach(c => {
+            newProcesses.push(...(grouped.get(c.id) || []));
+        });
+        newProcesses.push(...(grouped.get(null) || []));
+        state.processes = newProcesses;
+        saveState();
+        renderSidebar();
+    }
+
+    function createProcess() {
+        const name = prompt('Scene title:');
+        if (name === null) return;
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const proc = {
+            id: genId('proc'),
+            categoryId: null,
+            meta: { name: trimmed, entryPoint: '', description: '', resolution: '', owner: '', lastReviewed: '' },
+            cards: [],
+            connections: [],
+            cardCounter: 0
+        };
+        state.processes.push(proc);
+        state.activeProcessId = proc.id;
+        saveState();
+        renderSidebar();
+        renderAll();
+        renderProcessHeader();
+    }
+
+    function duplicateProcess(id) {
+        const original = state.processes.find(p => p.id === id);
+        if (!original) return;
+        const copy = clonedProcessWithNewIds(original);
+        copy.meta.name = (original.meta.name || 'Untitled scene') + ' (Copy)';
+        copy.categoryId = original.categoryId;
+        const idx = state.processes.findIndex(p => p.id === id);
+        state.processes.splice(idx + 1, 0, copy);
+        state.activeProcessId = copy.id;
+        saveState();
+        renderSidebar();
+        renderAll();
+        renderProcessHeader();
+    }
+
+    function deleteProcess(id) {
+        const proc = state.processes.find(p => p.id === id);
+        if (!proc) return;
+        if (!confirm(`Delete scene "${proc.meta.name || 'Untitled'}"?\n\nThis will remove all its beats and links. This cannot be undone.`)) return;
+        state.processes = state.processes.filter(p => p.id !== id);
+        if (state.activeProcessId === id) {
+            state.activeProcessId = state.processes.length > 0 ? state.processes[0].id : null;
+        }
+        saveState();
+        renderSidebar();
+        renderAll();
+        renderProcessHeader();
+    }
+
+    function setActiveProcess(id) {
+        if (state.activeProcessId === id) state.activeProcessId = null;
+        else state.activeProcessId = id;
+        cancelConnection();
+        saveState();
+        renderSidebar();
+        renderAll();
+        renderProcessHeader();
+    }
+
+    function createCategory() {
+        const name = prompt('Chapter name:');
+        if (name === null) return;
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        state.categories.push({ id: genId('cat'), name: trimmed, expanded: true });
+        saveState();
+        renderSidebar();
+    }
+
+    function renameCategory(id) {
+        const cat = state.categories.find(c => c.id === id);
+        if (!cat) return;
+        const newName = prompt('Rename chapter:', cat.name);
+        if (newName === null) return;
+        const trimmed = newName.trim();
+        if (trimmed) cat.name = trimmed;
+        saveState();
+        renderSidebar();
+    }
+
+    function deleteCategory(id) {
+        const cat = state.categories.find(c => c.id === id);
+        if (!cat) return;
+        const procsIn = state.processes.filter(p => p.categoryId === id).length;
+        let msg = `Delete chapter "${cat.name}"?`;
+        if (procsIn > 0) msg += `\n\n${procsIn} scene${procsIn === 1 ? '' : 's'} will be moved to Unfiled.`;
+        if (!confirm(msg)) return;
+        state.processes.forEach(p => { if (p.categoryId === id) p.categoryId = null; });
+        state.categories = state.categories.filter(c => c.id !== id);
+        saveState();
+        renderSidebar();
+    }
+
+    function toggleCategoryExpanded(id) {
+        if (id === '__uncat__') {
+            state.uncategorisedExpanded = !state.uncategorisedExpanded;
+        } else {
+            const cat = state.categories.find(c => c.id === id);
+            if (!cat) return;
+            cat.expanded = !cat.expanded;
+        }
+        saveState();
+        renderSidebar();
+    }
+
+    function renderProcessHeader() {
+        const proc = activeProc();
+        const titleEl = document.getElementById('processTitle');
+        if (!proc) {
+            document.body.classList.add('no-active-process');
+            titleEl.textContent = 'No scene selected';
+            titleEl.classList.add('unset');
+            return;
+        }
+        document.body.classList.remove('no-active-process');
+        if (proc.meta.name) {
+            titleEl.textContent = proc.meta.name;
+            titleEl.classList.remove('unset');
+        } else {
+            titleEl.textContent = 'Untitled scene';
+            titleEl.classList.add('unset');
+        }
+        document.getElementById('metaEntry').textContent = proc.meta.entryPoint || '—';
+        document.getElementById('metaOwner').textContent = proc.meta.owner || '—';
+        document.getElementById('metaReviewed').textContent = proc.meta.lastReviewed
+            ? new Date(proc.meta.lastReviewed).toLocaleDateString()
+            : '—';
+    }
+
+    function openProcessModal() {
+        const proc = activeProc();
+        if (!proc) return;
+        const sel = document.getElementById('processCategoryInput');
+        let opts = '<option value="">Unfiled</option>';
+        state.categories.forEach(c => {
+            opts += `<option value="${c.id}">${escapeHtml(c.name)}</option>`;
+        });
+        sel.innerHTML = opts;
+        sel.value = proc.categoryId || '';
+        document.getElementById('processNameInput').value = proc.meta.name || '';
+        document.getElementById('processEntryInput').value = proc.meta.entryPoint || '';
+        document.getElementById('processDescriptionInput').value = proc.meta.description || '';
+        document.getElementById('processResolutionInput').value = proc.meta.resolution || '';
+        document.getElementById('processOwnerInput').value = proc.meta.owner || '';
+        document.getElementById('processReviewedInput').value = proc.meta.lastReviewed || '';
+        document.getElementById('processModal').style.display = 'flex';
+    }
+
+    function closeProcessModal() {
+        document.getElementById('processModal').style.display = 'none';
+    }
+
+    function saveProcessMeta() {
+        const proc = activeProc();
+        if (!proc) return;
+        const newCatId = document.getElementById('processCategoryInput').value || null;
+        const categoryChanged = newCatId !== proc.categoryId;
+        proc.categoryId = newCatId;
+        proc.meta.name = document.getElementById('processNameInput').value.trim();
+        proc.meta.entryPoint = document.getElementById('processEntryInput').value.trim();
+        proc.meta.description = document.getElementById('processDescriptionInput').value.trim();
+        proc.meta.resolution = document.getElementById('processResolutionInput').value.trim();
+        proc.meta.owner = document.getElementById('processOwnerInput').value.trim();
+        proc.meta.lastReviewed = document.getElementById('processReviewedInput').value;
+        if (categoryChanged) {
+            const inCat = state.processes.filter(p => p.id !== proc.id && p.categoryId === newCatId).length;
+            moveProcess(proc.id, newCatId, inCat);
+        } else {
+            renderSidebar();
+        }
+        renderProcessHeader();
+        saveState();
+        closeProcessModal();
+    }
+
+    function addCard() {
+        const proc = activeProc();
+        if (!proc) return;
+        proc.cardCounter++;
+        const isFirst = proc.cards.length === 0;
+        const card = {
+            id: `card-${proc.cardCounter}-${Date.now()}`,
+            type: isFirst ? 'entry' : 'action',
+            title: isFirst ? 'Opening beat' : 'New beat',
+            responsibleRole: '', sop: '', draft: '',
+            setting: '', mood: '', sensory: '', present: '',
+            wants: '', subtext: '', obstacle: '',
+            complication: '', stakes: '', shift: '',
+            changed: '', reveal: '', hook: '',
+            x: 80 + (proc.cardCounter * 60) % 700,
+            y: 80 + Math.floor(proc.cardCounter / 12) * 180,
+            number: ''
+        };
+        proc.cards.push(card);
+        renderCard(card);
+        calculateNumbers();
+        drawConnections();
+        updateEmptyState();
+        saveState();
+    }
+
+    function getCardDisplay(card) {
+        const type = card.type || 'action';
+        const detail = state.cardDetail || 'default';
+        const notSet = '<em>not set</em>';
+
+        let role;
+        if (type === 'resolution' && !card.responsibleRole) {
+            role = '<span style="color: var(--type-resolution); font-weight: 600;">Scene lands</span>';
+        } else {
+            role = card.responsibleRole ? `<strong>${escapeHtml(card.responsibleRole)}</strong>` : notSet;
+        }
+
+        const whatHappens = { label: 'What happens', content: card.sop || 'Not written yet' };
+        const draftBox = { label: 'Draft', content: card.draft ? card.draft : 'No draft yet' };
+        const secondary = {
+            entry: { label: 'Mood', content: card.mood || 'Not set' },
+            action: { label: 'Subtext', content: card.subtext || 'Not set' },
+            decision: { label: 'Stakes', content: card.stakes || 'Not set' },
+            resolution: { label: 'Hook forward', content: card.hook || 'Not set' }
+        }[type] || { label: 'Notes', content: '' };
+
+        let summaries = [];
+        if (detail === 'simple') {
+            summaries = [];
+        } else if (detail === 'default') {
+            summaries = card.draft ? [draftBox] : [whatHappens];
+        } else { // context
+            summaries = card.draft ? [whatHappens, draftBox] : [whatHappens, secondary];
+        }
+
+        return { role, summaries };
+    }
+
+    function renderCard(card) {
+        const cardEl = document.createElement('div');
+        cardEl.className = 'card';
+        cardEl.id = card.id;
+        cardEl.dataset.type = card.type || 'action';
+        cardEl.style.left = card.x + 'px';
+        cardEl.style.top = card.y + 'px';
+        const display = getCardDisplay(card);
+        const summariesHtml = display.summaries.map(s => {
+            const text = s.content.length > 100 ? s.content.substring(0, 100) + '…' : s.content;
+            return `<div class="card-summary"><span class="card-summary-label">${escapeHtml(s.label)}</span>${escapeHtml(text)}</div>`;
+        }).join('');
+        const typeLabel = (TYPE_LABELS[card.type] || 'Beat').toUpperCase();
+        cardEl.innerHTML = `
+            <div class="card-controls">
+                <button class="card-btn connect-btn" onclick="event.stopPropagation(); startConnection('${card.id}')" title="Link to the next beat">→</button>
+                <button class="card-btn edit-btn" onclick="event.stopPropagation(); editCard('${card.id}')" title="Edit beat">✎</button>
+                <button class="card-btn delete-btn" onclick="event.stopPropagation(); deleteCard('${card.id}')" title="Delete">×</button>
+            </div>
+            <div class="card-header">
+                <div class="card-number">${card.number || '–'}</div>
+                <div class="card-type-badge">${typeLabel}</div>
+            </div>
+            <div class="card-title">${escapeHtml(card.title || 'Untitled beat')}</div>
+            <div class="card-role">${display.role}</div>
+            ${summariesHtml}
+        `;
+        attachCardInteraction(cardEl, card);
+        cardEl.addEventListener('dblclick', () => editCard(card.id));
+        document.getElementById('canvas').appendChild(cardEl);
+    }
+
+    // Card body interaction. In normal mode, pointerdown initiates drag.
+    // In connecting mode, pointerdown on a non-source card finalises the connection
+    // (so tap anywhere on the target card finalises). Source card body taps are ignored.
+    function attachCardInteraction(cardEl, card) {
+        let isDragging = false;
+        const startInteraction = (e) => {
+            if (document.body.classList.contains('view-mode')) return;
+            if (e.target.tagName === 'BUTTON') return;
+
+            if (sourceCard) {
+                e.preventDefault();
+                if (sourceCard !== card.id) {
+                    e.stopPropagation();
+                    finalizeConnection(card.id);
+                }
+                return;
+            }
+
+            e.preventDefault();
+            isDragging = true;
+            draggedCard = card;
+            cardEl.classList.add('dragging');
+            const rect = cardEl.getBoundingClientRect();
+            const cx = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+            const cy = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+            dragOffset.x = cx - rect.left;
+            dragOffset.y = cy - rect.top;
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+            document.addEventListener('touchmove', drag, { passive: false });
+            document.addEventListener('touchend', stopDrag);
+        };
+
+        const drag = (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            const canvas = document.getElementById('canvas');
+            const canvasRect = canvas.getBoundingClientRect();
+            const cx = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+            const cy = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+            card.x = Math.max(0, cx - canvasRect.left - dragOffset.x);
+            card.y = Math.max(0, cy - canvasRect.top - dragOffset.y);
+            cardEl.style.left = card.x + 'px';
+            cardEl.style.top = card.y + 'px';
+            drawConnections();
+        };
+
+        const stopDrag = () => {
+            if (isDragging) {
+                isDragging = false;
+                draggedCard = null;
+                cardEl.classList.remove('dragging');
+                saveState();
+            }
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+            document.removeEventListener('touchmove', drag);
+            document.removeEventListener('touchend', stopDrag);
+        };
+
+        cardEl.addEventListener('mousedown', startInteraction);
+        cardEl.addEventListener('touchstart', startInteraction, { passive: false });
+    }
+
+    function editCard(cardId) {
+        const proc = activeProc();
+        if (!proc) return;
+        const card = proc.cards.find(c => c.id === cardId);
+        if (!card) return;
+        currentEditingCard = card;
+        selectType(card.type || 'action');
+        document.getElementById('cardModal').style.display = 'flex';
+    }
+
+    function selectType(type) {
+        currentSelectedType = type;
+        document.querySelectorAll('.type-option').forEach(el => {
+            el.classList.toggle('selected', el.dataset.type === type);
+        });
+        renderFormFields();
+    }
+
+    function renderFormFields() {
+        const container = document.getElementById('dynamicFormFields');
+        container.innerHTML = '';
+        const stepType = currentSelectedType;
+        document.getElementById('cardModalSubtitle').textContent = TYPE_SUBTITLES[stepType] || '';
+        const fields = getVisibleFields(stepType);
+        for (const field of fields) {
+            if (field.type === 'durationPriority') container.appendChild(buildDurationPriority());
+            else container.appendChild(buildField(field, stepType));
+        }
+        // Footer: customize + add custom field
+        const footer = document.createElement('div');
+        footer.className = 'form-field-footer';
+        const customizeBtn = document.createElement('button');
+        customizeBtn.type = 'button';
+        customizeBtn.className = 'field-footer-btn';
+        customizeBtn.textContent = '⚙ Customise prompts';
+        customizeBtn.title = 'Turn the built-in craft prompts on or off for this beat type';
+        customizeBtn.onclick = () => openStepFieldsModal();
+        footer.appendChild(customizeBtn);
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'field-footer-btn';
+        addBtn.textContent = '+ Add your own prompt';
+        addBtn.title = 'Add a custom prompt to every ' + (TYPE_LABELS[stepType] || 'beat') + ' beat';
+        addBtn.onclick = () => openAddCustomFieldModal();
+        footer.appendChild(addBtn);
+        container.appendChild(footer);
+        populateFormFields();
+    }
+
+    function buildField(field, stepType) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'form-group';
+        const label = document.createElement('label');
+        label.textContent = getFieldLabel(field, stepType);
+        // Custom fields get a remove × so the user can delete them from this step type.
+        if (field.custom) {
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'custom-field-remove';
+            removeBtn.textContent = '×';
+            removeBtn.title = 'Remove this prompt from all ' + (TYPE_LABELS[stepType] || 'beat') + ' beats';
+            removeBtn.onclick = (e) => { e.preventDefault(); removeCustomField(stepType, field.key); };
+            label.appendChild(removeBtn);
+        }
+        wrapper.appendChild(label);
+        if (field.hint) {
+            const hint = document.createElement('span');
+            hint.className = 'hint';
+            hint.textContent = field.hint;
+            wrapper.appendChild(hint);
+        }
+        let input;
+        if (field.type === 'textarea') input = document.createElement('textarea');
+        else {
+            input = document.createElement('input');
+            input.type = field.type || 'text';
+        }
+        input.id = `field-${field.key}`;
+        if (field.placeholder) input.placeholder = field.placeholder;
+        wrapper.appendChild(input);
+        return wrapper;
+    }
+
+    function buildDurationPriority() {
+        const row = document.createElement('div');
+        row.className = 'form-row';
+        const durGroup = document.createElement('div');
+        durGroup.className = 'form-group';
+        const durLabel = document.createElement('label');
+        durLabel.textContent = 'Estimated duration';
+        durGroup.appendChild(durLabel);
+        const durWrapper = document.createElement('div');
+        durWrapper.className = 'duration-group';
+        const durInput = document.createElement('input');
+        durInput.type = 'number';
+        durInput.id = 'field-duration';
+        durInput.placeholder = '0';
+        durInput.min = '0';
+        durWrapper.appendChild(durInput);
+        const unitSelect = document.createElement('select');
+        unitSelect.id = 'field-durationUnit';
+        ['minutes', 'hours', 'days', 'weeks'].forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u;
+            opt.textContent = u.charAt(0).toUpperCase() + u.slice(1);
+            unitSelect.appendChild(opt);
+        });
+        durWrapper.appendChild(unitSelect);
+        durGroup.appendChild(durWrapper);
+        row.appendChild(durGroup);
+        const priGroup = document.createElement('div');
+        priGroup.className = 'form-group';
+        const priLabel = document.createElement('label');
+        priLabel.textContent = 'Priority';
+        priGroup.appendChild(priLabel);
+        const priSelect = document.createElement('select');
+        priSelect.id = 'field-priority';
+        [{v:'low',l:'Low'},{v:'medium',l:'Medium'},{v:'high',l:'High'},{v:'critical',l:'Critical'}].forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o.v;
+            opt.textContent = o.l;
+            priSelect.appendChild(opt);
+        });
+        priGroup.appendChild(priSelect);
+        row.appendChild(priGroup);
+        return row;
+    }
+
+    function populateFormFields() {
+        if (!currentEditingCard) return;
+        const fields = getVisibleFields(currentSelectedType);
+        for (const field of fields) {
+            if (field.type === 'durationPriority') {
+                const durEl = document.getElementById('field-duration');
+                const unitEl = document.getElementById('field-durationUnit');
+                const priEl = document.getElementById('field-priority');
+                if (durEl) durEl.value = currentEditingCard.duration || '';
+                if (unitEl) unitEl.value = currentEditingCard.durationUnit || 'hours';
+                if (priEl) priEl.value = currentEditingCard.priority || 'medium';
+            } else {
+                const el = document.getElementById(`field-${field.key}`);
+                if (el) el.value = currentEditingCard[field.key] || '';
+            }
+        }
+    }
+
+    function saveCard() {
+        if (!currentEditingCard) return;
+        currentEditingCard.type = currentSelectedType;
+        const fields = getVisibleFields(currentSelectedType);
+        for (const field of fields) {
+            if (field.type === 'durationPriority') {
+                const durEl = document.getElementById('field-duration');
+                const unitEl = document.getElementById('field-durationUnit');
+                const priEl = document.getElementById('field-priority');
+                if (durEl) currentEditingCard.duration = durEl.value;
+                if (unitEl) currentEditingCard.durationUnit = unitEl.value;
+                if (priEl) currentEditingCard.priority = priEl.value;
+            } else {
+                const el = document.getElementById(`field-${field.key}`);
+                if (el) currentEditingCard[field.key] = el.value.trim();
+            }
+        }
+        const old = document.getElementById(currentEditingCard.id);
+        if (old) old.remove();
+        renderCard(currentEditingCard);
+        calculateNumbers();
+        drawConnections();
+        closeCardModal();
+        saveState();
+    }
+
+    function deleteCardFromModal() {
+        if (!currentEditingCard) return;
+        if (confirm('Delete this beat? Any links will be removed too.')) {
+            deleteCard(currentEditingCard.id);
+            closeCardModal();
+        }
+    }
+
+    function closeCardModal() {
+        document.getElementById('cardModal').style.display = 'none';
+        currentEditingCard = null;
+    }
+
+    // ---------- Step fields modal (toggle legacy + see custom) ----------
+    function openStepFieldsModal() {
+        const stepType = currentSelectedType;
+        document.getElementById('sfStepTypeLabel').textContent = TYPE_LABELS[stepType] || 'beat';
+
+        const sf = state.stepFields[stepType] || { enabledLegacy: [], custom: [] };
+        const enabled = new Set(sf.enabledLegacy);
+
+        // Legacy section
+        const legacyList = document.getElementById('sfLegacyFieldList');
+        legacyList.innerHTML = '<div class="field-toggle-section-title">Craft prompts</div>';
+        const legacyForType = LEGACY_FIELDS[stepType] || [];
+        if (legacyForType.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'field-toggle-list-empty';
+            empty.textContent = 'No extra prompts for this beat type.';
+            legacyList.appendChild(empty);
+        } else {
+            legacyForType.forEach(field => {
+                const row = document.createElement('label');
+                row.className = 'field-toggle-row';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = enabled.has(field.key);
+                checkbox.onchange = () => toggleLegacyField(stepType, field.key, checkbox.checked);
+                row.appendChild(checkbox);
+                const wrap = document.createElement('div');
+                wrap.className = 'field-toggle-label-wrap';
+                const lbl = document.createElement('span');
+                lbl.className = 'field-toggle-label';
+                lbl.textContent = field.label || field.key;
+                wrap.appendChild(lbl);
+                if (field.hint) {
+                    const hint = document.createElement('span');
+                    hint.className = 'field-toggle-hint';
+                    hint.textContent = field.hint;
+                    wrap.appendChild(hint);
+                }
+                row.appendChild(wrap);
+                legacyList.appendChild(row);
+            });
+        }
+
+        // Custom section (read-only summary; add/remove happens in the step form)
+        const customList = document.getElementById('sfCustomFieldList');
+        customList.innerHTML = '<div class="field-toggle-section-title">Your own prompts</div>';
+        const customs = sf.custom || [];
+        if (customs.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'field-toggle-list-empty';
+            empty.textContent = 'No custom prompts yet. Use "+ Add your own prompt" in the beat.';
+            customList.appendChild(empty);
+        } else {
+            customs.forEach(field => {
+                const row = document.createElement('div');
+                row.className = 'field-toggle-row';
+                const wrap = document.createElement('div');
+                wrap.className = 'field-toggle-label-wrap';
+                const lbl = document.createElement('span');
+                lbl.className = 'field-toggle-label';
+                lbl.textContent = field.label;
+                wrap.appendChild(lbl);
+                const hint = document.createElement('span');
+                hint.className = 'field-toggle-hint';
+                hint.textContent = (field.type === 'textarea' ? 'Multi-line' : 'Single line') + (field.hint ? ' · ' + field.hint : '');
+                wrap.appendChild(hint);
+                row.appendChild(wrap);
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'custom-field-remove';
+                removeBtn.textContent = '×';
+                removeBtn.title = 'Remove this custom field';
+                removeBtn.onclick = () => {
+                    removeCustomField(stepType, field.key);
+                    openStepFieldsModal(); // refresh
+                };
+                row.appendChild(removeBtn);
+                customList.appendChild(row);
+            });
+        }
+
+        document.getElementById('stepFieldsModal').style.display = 'flex';
+    }
+
+    function closeStepFieldsModal() {
+        document.getElementById('stepFieldsModal').style.display = 'none';
+        renderFormFields(); // refresh the step form to reflect new toggles
+    }
+
+    function toggleLegacyField(stepType, fieldKey, enable) {
+        if (!state.stepFields[stepType]) state.stepFields[stepType] = { enabledLegacy: [], custom: [] };
+        const enabled = state.stepFields[stepType].enabledLegacy;
+        if (enable && !enabled.includes(fieldKey)) {
+            enabled.push(fieldKey);
+        } else if (!enable) {
+            state.stepFields[stepType].enabledLegacy = enabled.filter(k => k !== fieldKey);
+        }
+        saveState();
+    }
+
+    // ---------- Add custom field modal ----------
+    function openAddCustomFieldModal() {
+        document.getElementById('acfStepTypeLabel').textContent = TYPE_LABELS[currentSelectedType] || 'beat';
+        document.getElementById('acfLabel').value = '';
+        document.getElementById('acfType').value = 'text';
+        document.getElementById('acfHint').value = '';
+        document.getElementById('acfPlaceholder').value = '';
+        document.getElementById('addCustomFieldModal').style.display = 'flex';
+        setTimeout(() => document.getElementById('acfLabel').focus(), 100);
+    }
+
+    function closeAddCustomFieldModal() {
+        document.getElementById('addCustomFieldModal').style.display = 'none';
+    }
+
+    function addCustomField() {
+        const label = document.getElementById('acfLabel').value.trim();
+        if (!label) { alert('Label is required.'); return; }
+        const fieldType = document.getElementById('acfType').value;
+        const hint = document.getElementById('acfHint').value.trim();
+        const placeholder = document.getElementById('acfPlaceholder').value.trim();
+        const stepType = currentSelectedType;
+
+        const key = 'cf_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        const field = { key, label, type: fieldType };
+        if (hint) field.hint = hint;
+        if (placeholder) field.placeholder = placeholder;
+
+        if (!state.stepFields[stepType]) state.stepFields[stepType] = { enabledLegacy: [], custom: [] };
+        state.stepFields[stepType].custom.push(field);
+
+        saveState();
+        closeAddCustomFieldModal();
+        renderFormFields(); // re-render so the new field appears immediately
+    }
+
+    function removeCustomField(stepType, fieldKey) {
+        if (!confirm('Remove this prompt from all ' + (TYPE_LABELS[stepType] || 'beat') + ' beats?\n\nThe prompt goes away, but anything you already wrote in it stays saved.')) return;
+        if (!state.stepFields[stepType]) return;
+        state.stepFields[stepType].custom = state.stepFields[stepType].custom.filter(f => f.key !== fieldKey);
+        saveState();
+        renderFormFields();
+    }
+
+    function deleteCard(cardId) {
+        const proc = activeProc();
+        if (!proc) return;
+        proc.cards = proc.cards.filter(c => c.id !== cardId);
+        proc.connections = proc.connections.filter(c => c.from !== cardId && c.to !== cardId);
+        const el = document.getElementById(cardId);
+        if (el) el.remove();
+        calculateNumbers();
+        drawConnections();
+        updateEmptyState();
+        saveState();
+    }
+
+    // Connection mode: tap green arrow on source to begin, tap same arrow again to cancel,
+    // tap any other card (body or arrow) to finalise.
+    function startConnection(cardId) {
+        if (document.body.classList.contains('view-mode')) return;
+        if (sourceCard === cardId) {
+            cancelConnection();
+        } else if (sourceCard) {
+            finalizeConnection(cardId);
+        } else {
+            sourceCard = cardId;
+            document.querySelectorAll('.card').forEach(c => {
+                c.classList.remove('source-card', 'can-connect');
+                if (c.id === cardId) c.classList.add('source-card');
+                else c.classList.add('can-connect');
+            });
+            document.getElementById('modeIndicator').textContent = 'Tap a beat to link (or → again to cancel)';
+        }
+    }
+
+    function cancelConnection() {
+        sourceCard = null;
+        document.querySelectorAll('.card').forEach(c => c.classList.remove('source-card', 'can-connect'));
+        const ind = document.getElementById('modeIndicator');
+        if (ind) ind.textContent = '';
+    }
+
+    function finalizeConnection(toCardId) {
+        if (!sourceCard || sourceCard === toCardId) return;
+        addConnection(sourceCard, toCardId);
+        cancelConnection();
+    }
+
+    function addConnection(fromId, toId) {
+        const proc = activeProc();
+        if (!proc) return;
+        if (fromId === toId) return;
+        if (proc.connections.find(c => c.from === fromId && c.to === toId)) return;
+        proc.connections.push({
+            id: genId('conn'),
+            from: fromId,
+            to: toId,
+            condition: '',
+            notes: ''
+        });
+        calculateNumbers();
+        drawConnections();
+        saveState();
+    }
+
+    function editConnection(connId) {
+        if (document.body.classList.contains('view-mode')) return;
+        const proc = activeProc();
+        if (!proc) return;
+        const conn = proc.connections.find(c => c.id === connId);
+        if (!conn) return;
+        currentEditingConnection = conn;
+        document.getElementById('connCondition').value = conn.condition || '';
+        document.getElementById('connNotes').value = conn.notes || '';
+        document.getElementById('connectionModal').style.display = 'flex';
+    }
+
+    function saveConnection() {
+        if (!currentEditingConnection) return;
+        currentEditingConnection.condition = document.getElementById('connCondition').value.trim();
+        currentEditingConnection.notes = document.getElementById('connNotes').value.trim();
+        drawConnections();
+        closeConnectionModal();
+        saveState();
+    }
+
+    function deleteConnectionFromModal() {
+        const proc = activeProc();
+        if (!proc || !currentEditingConnection) return;
+        if (confirm('Remove this link?')) {
+            proc.connections = proc.connections.filter(c => c.id !== currentEditingConnection.id);
+            drawConnections();
+            closeConnectionModal();
+            saveState();
+        }
+    }
+
+    function closeConnectionModal() {
+        document.getElementById('connectionModal').style.display = 'none';
+        currentEditingConnection = null;
+    }
+
+    function calculateNumbers() {
+        const proc = activeProc();
+        if (!proc) return;
+        const cards = proc.cards;
+        const connections = proc.connections;
+        cards.forEach(c => c.number = '');
+        const incoming = new Map();
+        cards.forEach(c => incoming.set(c.id, 0));
+        connections.forEach(conn => {
+            if (incoming.has(conn.to)) incoming.set(conn.to, incoming.get(conn.to) + 1);
+        });
+        const starts = cards.filter(c => incoming.get(c.id) === 0);
+        if (starts.length === 0 && cards.length > 0) starts.push(...cards);
+        const levels = new Map();
+        const queue = starts.map(c => ({ card: c, level: 1 }));
+        starts.forEach(c => levels.set(c.id, 1));
+        while (queue.length > 0) {
+            const { card, level } = queue.shift();
+            const next = connections.filter(conn => conn.from === card.id).map(conn => cards.find(c => c.id === conn.to)).filter(Boolean);
+            next.forEach(n => {
+                const cur = levels.get(n.id) || 0;
+                const newLv = Math.max(cur, level + 1);
+                if (newLv !== cur) {
+                    levels.set(n.id, newLv);
+                    queue.push({ card: n, level: newLv });
+                }
+            });
+        }
+        const groups = new Map();
+        cards.forEach(c => {
+            const lv = levels.get(c.id) || 1;
+            if (!groups.has(lv)) groups.set(lv, []);
+            groups.get(lv).push(c);
+        });
+        groups.forEach((group, lv) => {
+            if (group.length === 1) {
+                group[0].number = lv.toString();
+            } else {
+                group.forEach((c, i) => {
+                    c.number = `${lv}${String.fromCharCode(97 + i)}`;
+                });
+            }
+        });
+        cards.forEach(c => {
+            const el = document.getElementById(c.id);
+            if (el) {
+                const nEl = el.querySelector('.card-number');
+                if (nEl) nEl.textContent = c.number || '–';
+            }
+        });
+    }
+
+    function drawConnections() {
+        // CRITICAL: scope this query to the canvas. document.querySelector('svg')
+        // returns the FIRST svg in DOM order — which is now a sidebar icon (drag
+        // handle), not the canvas svg. Lines appended to a 14px icon get clipped
+        // and are invisible. This was the cause of the "blue arrows missing" bug.
+        const canvas = document.getElementById('canvas');
+        const svg = canvas.querySelector('svg');
+        svg.querySelectorAll('line').forEach(l => l.remove());
+        canvas.querySelectorAll('.arrow-condition').forEach(b => b.remove());
+        const proc = activeProc();
+        if (!proc) return;
+        proc.connections.forEach(conn => {
+            const fromCard = document.getElementById(conn.from);
+            const toCard = document.getElementById(conn.to);
+            if (!fromCard || !toCard) return;
+            const fr = fromCard.getBoundingClientRect();
+            const tr = toCard.getBoundingClientRect();
+            const cr = canvas.getBoundingClientRect();
+            const fromCenter = { x: fr.left - cr.left + fr.width / 2, y: fr.top - cr.top + fr.height / 2 };
+            const toCenter = { x: tr.left - cr.left + tr.width / 2, y: tr.top - cr.top + tr.height / 2 };
+            const fromEdge = edgeIntersect(fromCenter, toCenter, {
+                x: fr.left - cr.left, y: fr.top - cr.top, width: fr.width, height: fr.height
+            });
+            const toEdge = edgeIntersect(toCenter, fromCenter, {
+                x: tr.left - cr.left, y: tr.top - cr.top, width: tr.width, height: tr.height
+            });
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', fromEdge.x);
+            line.setAttribute('y1', fromEdge.y);
+            line.setAttribute('x2', toEdge.x);
+            line.setAttribute('y2', toEdge.y);
+            line.setAttribute('class', 'arrow-line');
+            // Set stroke attributes inline so the line renders even if CSS var() doesn't
+            // resolve inside SVG presentation properties (a known quirk on some mobile browsers).
+            line.setAttribute('stroke', '#cf9f4a');
+            line.setAttribute('stroke-width', '2.5');
+            line.setAttribute('stroke-dasharray', '2 4');
+            line.setAttribute('stroke-linecap', 'round');
+            line.setAttribute('opacity', '0.75');
+            line.setAttribute('marker-end', 'url(#arrowhead)');
+            svg.appendChild(line);
+            const midX = (fromEdge.x + toEdge.x) / 2;
+            const midY = (fromEdge.y + toEdge.y) / 2;
+            const label = document.createElement('div');
+            label.className = 'arrow-condition' + (conn.condition ? '' : ' empty');
+            label.textContent = conn.condition || 'Set condition';
+            label.onclick = (e) => { e.stopPropagation(); editConnection(conn.id); };
+            label.style.left = midX + 'px';
+            label.style.top = midY + 'px';
+            label.style.transform = 'translate(-50%, -50%)';
+            canvas.appendChild(label);
+        });
+    }
+
+    function edgeIntersect(center, target, rect) {
+        const dx = target.x - center.x;
+        const dy = target.y - center.y;
+        const intersections = [];
+        if (dy < 0) {
+            const t = -rect.height / 2 / dy;
+            const x = center.x + dx * t;
+            if (x >= rect.x && x <= rect.x + rect.width) intersections.push({ x, y: rect.y });
+        }
+        if (dy > 0) {
+            const t = rect.height / 2 / dy;
+            const x = center.x + dx * t;
+            if (x >= rect.x && x <= rect.x + rect.width) intersections.push({ x, y: rect.y + rect.height });
+        }
+        if (dx < 0) {
+            const t = -rect.width / 2 / dx;
+            const y = center.y + dy * t;
+            if (y >= rect.y && y <= rect.y + rect.height) intersections.push({ x: rect.x, y });
+        }
+        if (dx > 0) {
+            const t = rect.width / 2 / dx;
+            const y = center.y + dy * t;
+            if (y >= rect.y && y <= rect.y + rect.height) intersections.push({ x: rect.x + rect.width, y });
+        }
+        if (intersections.length > 0) {
+            return intersections.reduce((closest, current) => {
+                const cd = Math.hypot(closest.x - target.x, closest.y - target.y);
+                const td = Math.hypot(current.x - target.x, current.y - target.y);
+                return td < cd ? current : closest;
+            });
+        }
+        return center;
+    }
+
+    function toggleViewMode() {
+        const on = document.getElementById('viewModeToggle').checked;
+        document.body.classList.toggle('view-mode', on);
+        document.getElementById('modeIndicator').textContent = on ? 'View mode — editing disabled' : '';
+        if (on) cancelConnection();
+    }
+
+    // ----- Save canvas as SVG image -----
+    // Manually rebuilds the active process as a portable SVG document. Cards in the
+    // HTML are divs, so we re-render each as SVG primitives (rounded rect + clipped
+    // colored left strip + text). Output is cropped to the content bounding box with
+    // a 50px margin and includes a header banner with the process name and metadata
+    // so the image is self-explanatory.
+    function exportCanvasAsSvg() {
+        const proc = activeProc();
+        if (!proc) return;
+        if (proc.cards.length === 0) {
+            alert('Add at least one beat before saving the scene map as an image.');
+            return;
+        }
+
+        const CARD_W = 240;
+        const PADDING = 50;
+        const HEADER_H = 70;
+        const TYPE_COLORS = {
+            entry: '#5a9a6a', action: '#5b6fa3',
+            decision: '#d4783a', resolution: '#7c6fae'
+        };
+
+        const cards = proc.cards;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        cards.forEach(c => {
+            const ch = getSvgCardHeight(c);
+            minX = Math.min(minX, c.x);
+            minY = Math.min(minY, c.y);
+            maxX = Math.max(maxX, c.x + CARD_W);
+            maxY = Math.max(maxY, c.y + ch);
+        });
+
+        const offX = PADDING - minX;
+        const offY = PADDING + HEADER_H - minY;
+        const svgW = (maxX - minX) + 2 * PADDING;
+        const svgH = (maxY - minY) + 2 * PADDING + HEADER_H;
+
+        // defs: arrowhead marker + a clipPath for each card's rounded shape
+        let defs = `<defs>
+            <marker id="arrowhead-export" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#cf9f4a" opacity="0.75"/>
+            </marker>`;
+        cards.forEach(card => {
+            const ch = getSvgCardHeight(card);
+            const cx = card.x + offX;
+            const cy = card.y + offY;
+            defs += `<clipPath id="cclip-${card.id}"><rect x="${cx}" y="${cy}" width="${CARD_W}" height="${ch}" rx="10"/></clipPath>`;
+        });
+        defs += `</defs>`;
+
+        // Header banner
+        let headerSvg = `<rect width="${svgW}" height="${HEADER_H}" fill="#FFFFFF" stroke="rgba(0,0,0,0.08)"/>`;
+        headerSvg += `<text x="${PADDING}" y="32" font-size="17" font-weight="700" fill="#1D1D1F">${svgEscape(proc.meta.name || 'Untitled scene')}</text>`;
+        const metaParts = [];
+        if (proc.meta.entryPoint) metaParts.push(`POV: ${proc.meta.entryPoint}`);
+        if (proc.meta.owner) metaParts.push(`Setting: ${proc.meta.owner}`);
+        if (proc.meta.lastReviewed) {
+            try {
+                metaParts.push(`Last revised: ${new Date(proc.meta.lastReviewed).toLocaleDateString()}`);
+            } catch (_) {}
+        }
+        if (metaParts.length) {
+            headerSvg += `<text x="${PADDING}" y="54" font-size="11" fill="#6E6E73">${svgEscape(metaParts.join('  ·  '))}</text>`;
+        }
+
+        // Connections (drawn before cards so they appear under them)
+        let connsSvg = '';
+        proc.connections.forEach(conn => {
+            const fromCard = cards.find(c => c.id === conn.from);
+            const toCard = cards.find(c => c.id === conn.to);
+            if (!fromCard || !toCard) return;
+
+            const fch = getSvgCardHeight(fromCard);
+            const tch = getSvgCardHeight(toCard);
+
+            const fcx = fromCard.x + offX + CARD_W / 2;
+            const fcy = fromCard.y + offY + fch / 2;
+            const tcx = toCard.x + offX + CARD_W / 2;
+            const tcy = toCard.y + offY + tch / 2;
+
+            const fromEdge = edgeIntersect(
+                { x: fcx, y: fcy }, { x: tcx, y: tcy },
+                { x: fromCard.x + offX, y: fromCard.y + offY, width: CARD_W, height: fch }
+            );
+            const toEdge = edgeIntersect(
+                { x: tcx, y: tcy }, { x: fcx, y: fcy },
+                { x: toCard.x + offX, y: toCard.y + offY, width: CARD_W, height: tch }
+            );
+
+            connsSvg += `<line x1="${fromEdge.x}" y1="${fromEdge.y}" x2="${toEdge.x}" y2="${toEdge.y}" stroke="#cf9f4a" stroke-width="2.5" stroke-dasharray="2 4" stroke-linecap="round" opacity="0.75" marker-end="url(#arrowhead-export)"/>`;
+
+            if (conn.condition) {
+                const midX = (fromEdge.x + toEdge.x) / 2;
+                const midY = (fromEdge.y + toEdge.y) / 2;
+                const text = truncateText(conn.condition, 30);
+                const approxW = text.length * 6.2 + 18;
+                connsSvg += `<rect x="${midX - approxW/2}" y="${midY - 11}" width="${approxW}" height="22" rx="11" fill="#FFFFFF" stroke="rgba(0,0,0,0.08)"/>`;
+                connsSvg += `<text x="${midX}" y="${midY + 4}" text-anchor="middle" font-size="11" font-weight="600" fill="#1D1D1F">${svgEscape(text)}</text>`;
+            }
+        });
+
+        // Cards
+        let cardsSvg = '';
+        cards.forEach(card => {
+            const ch = getSvgCardHeight(card);
+            cardsSvg += renderCardAsSvg(card, offX, offY, CARD_W, ch, TYPE_COLORS);
+        });
+
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+<rect width="${svgW}" height="${svgH}" fill="#F5F7FA"/>
+${defs}
+${headerSvg}
+${connsSvg}
+${cardsSvg}
+</svg>`;
+
+        const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+        downloadBlob(blob, safeFilename(proc.meta.name, 'process-map') + '.svg');
+    }
+
+    // Per-card height in the SVG export, based on how many summary boxes the
+    // current detail mode renders. 0 boxes (simple) → short card, 1 → medium, 2 → tall.
+    function getSvgCardHeight(card) {
+        const display = getCardDisplay(card);
+        const n = display.summaries.length;
+        if (n === 0) return 92;
+        if (n === 1) return 130;
+        return 174;
+    }
+
+    function setCardDetail(mode) {
+        if (!['simple', 'default', 'context'].includes(mode)) mode = 'default';
+        state.cardDetail = mode;
+        applyCardDetailClass();
+        saveState();
+        renderAll();
+    }
+
+    function applyCardDetailClass() {
+        const mode = state.cardDetail || 'default';
+        document.body.classList.remove('card-detail-simple', 'card-detail-default', 'card-detail-context');
+        document.body.classList.add(`card-detail-${mode}`);
+        document.querySelectorAll('.cdt-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.detail === mode);
+        });
+    }
+
+    function renderCardAsSvg(card, offX, offY, w, h, typeColors) {
+        const x = card.x + offX;
+        const y = card.y + offY;
+        const type = card.type || 'action';
+        const tc = typeColors[type] || '#0A66C2';
+        const display = getCardDisplay(card);
+        const roleText = stripHtml(display.role);
+        const title = truncateText(card.title || 'Untitled beat', 30);
+        const badgeColor = type === 'action' ? '#1D1D1F' : tc;
+
+        let g = '';
+        // White fill + colored 4px left strip, both clipped to the rounded card shape
+        g += `<g clip-path="url(#cclip-${card.id})">`;
+        g += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#FFFFFF"/>`;
+        g += `<rect x="${x}" y="${y}" width="4" height="${h}" fill="${tc}"/>`;
+        g += `</g>`;
+        // Outer border on top
+        g += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" fill="none" stroke="rgba(0,0,0,0.08)"/>`;
+        // Number badge
+        g += `<rect x="${x+14}" y="${y+13}" width="28" height="22" rx="4" fill="${badgeColor}"/>`;
+        g += `<text x="${x+28}" y="${y+28.5}" text-anchor="middle" font-size="11" font-weight="700" fill="#FFFFFF">${svgEscape(card.number || '–')}</text>`;
+        // Type badge
+        g += `<text x="${x+w-14}" y="${y+27}" text-anchor="end" font-size="9" font-weight="700" fill="#6E6E73" letter-spacing="0.5">${svgEscape((TYPE_LABELS[type] || 'Beat').toUpperCase())}</text>`;
+        // Title
+        g += `<text x="${x+14}" y="${y+57}" font-size="14" font-weight="600" fill="#1D1D1F">${svgEscape(title)}</text>`;
+        // Role
+        g += `<text x="${x+14}" y="${y+75}" font-size="10.5" fill="#6E6E73">${svgEscape(truncateText(roleText, 38))}</text>`;
+        // Summary boxes (1 for resolution, 2 for everything else)
+        const BOX_H = 38;
+        const BOX_GAP = 6;
+        const FIRST_BOX_Y = 84;
+        display.summaries.forEach((s, i) => {
+            const sy = y + FIRST_BOX_Y + i * (BOX_H + BOX_GAP);
+            const lines = wrapTextForSvg(s.content, 36, 2);
+            g += `<rect x="${x+14}" y="${sy}" width="${w-28}" height="${BOX_H}" rx="4" fill="#F5F7FA"/>`;
+            g += `<rect x="${x+14}" y="${sy}" width="2" height="${BOX_H}" fill="${tc}"/>`;
+            g += `<text x="${x+22}" y="${sy+12}" font-size="9" font-weight="700" fill="#1D1D1F" letter-spacing="0.5">${svgEscape(s.label.toUpperCase())}</text>`;
+            if (lines[0]) {
+                g += `<text x="${x+22}" y="${sy+25}" font-size="10" fill="#6E6E73">${svgEscape(lines[0])}</text>`;
+            }
+            if (lines[1]) {
+                g += `<text x="${x+22}" y="${sy+36}" font-size="10" fill="#6E6E73">${svgEscape(lines[1])}</text>`;
+            }
+        });
+        return g;
+    }
+
+    function truncateText(s, len) {
+        if (!s) return '';
+        s = String(s);
+        return s.length > len ? s.substring(0, len - 1) + '…' : s;
+    }
+
+    function wrapTextForSvg(text, charsPerLine, maxLines) {
+        if (!text) return [];
+        text = String(text).replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+        const lines = [];
+        let remaining = text;
+        while (lines.length < maxLines && remaining.length > 0) {
+            if (remaining.length <= charsPerLine) {
+                lines.push(remaining);
+                remaining = '';
+                break;
+            }
+            let breakPoint = remaining.lastIndexOf(' ', charsPerLine);
+            if (breakPoint === -1 || breakPoint < charsPerLine * 0.5) {
+                breakPoint = charsPerLine;
+            }
+            lines.push(remaining.substring(0, breakPoint));
+            remaining = remaining.substring(breakPoint).trim();
+        }
+        if (remaining.length > 0 && lines.length > 0) {
+            const last = lines[lines.length - 1];
+            const maxLen = charsPerLine - 1;
+            lines[lines.length - 1] = (last.length > maxLen ? last.substring(0, maxLen) : last) + '…';
+        }
+        return lines;
+    }
+
+    function stripHtml(html) {
+        if (!html) return '';
+        const div = document.createElement('div');
+        div.innerHTML = String(html);
+        return (div.textContent || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function svgEscape(s) {
+        if (s == null) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
+    }
+
+    function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function downloadJson(data, filename) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        downloadBlob(blob, filename);
+    }
+
+    function exportAll() {
+        const data = {
+            app: 'scene-studio',
+            schema: 1,
+            kind: 'all',
+            exportedAt: new Date().toISOString(),
+            payload: {
+                activeProcessId: state.activeProcessId,
+                categories: state.categories,
+                processes: state.processes,
+                stepFields: state.stepFields
+            }
+        };
+        const stamp = new Date().toISOString().slice(0, 10);
+        downloadJson(data, `scene-studio-manuscript-${stamp}.json`);
+    }
+
+    // Returns the stepFields schema relevant to a single process: only the step
+    // types actually used by its cards. Travels with the export so the receiving
+    // device can show the same fields.
+    function collectStepFieldsForProcess(proc) {
+        const usedTypes = new Set((proc.cards || []).map(c => c.type || 'action'));
+        const result = {};
+        usedTypes.forEach(type => {
+            const sf = state.stepFields[type];
+            if (sf && ((sf.enabledLegacy && sf.enabledLegacy.length) || (sf.custom && sf.custom.length))) {
+                result[type] = {
+                    enabledLegacy: [...(sf.enabledLegacy || [])],
+                    custom: (sf.custom || []).map(f => ({ ...f }))
+                };
+            }
+        });
+        return result;
+    }
+
+    // Merges incoming schema additively (used by single + category imports).
+    // Bulk imports replace state.stepFields entirely.
+    function mergeStepFields(incoming) {
+        if (!incoming || typeof incoming !== 'object') return;
+        ['entry', 'action', 'decision', 'resolution'].forEach(type => {
+            if (!incoming[type]) return;
+            if (!state.stepFields[type]) state.stepFields[type] = { enabledLegacy: [], custom: [] };
+            const target = state.stepFields[type];
+            // Legacy toggles: union
+            (incoming[type].enabledLegacy || []).forEach(k => {
+                if (!target.enabledLegacy.includes(k)) target.enabledLegacy.push(k);
+            });
+            // Custom fields: add any whose key isn't already present
+            const existingKeys = new Set(target.custom.map(f => f.key));
+            (incoming[type].custom || []).forEach(f => {
+                if (!existingKeys.has(f.key)) {
+                    target.custom.push({ ...f });
+                    existingKeys.add(f.key);
+                }
+            });
+        });
+    }
+
+    // ----- AI template -----
+    // Builds a JSON file the user can paste into any LLM alongside their PDF/document.
+    // Output of the LLM is a complete JSON object that imports as a single process.
+    // The _instructions, _field_reference, and _example fields are ignored by import().
+    function downloadAiTemplate() {
+        downloadJson(buildAiTemplate(), 'scene-beats-template.json');
+    }
+
+    function buildAiTemplate() {
+        return {
+            _instructions: [
+                "=== AI TEMPLATE FOR SCENE STUDIO ===",
+                "",
+                "You are turning a writer's synopsis, outline, or rough scene notes into a JSON file that Scene Studio can import. Scene Studio lays a single scene out as connected beat cards.",
+                "",
+                "=== HOW TO READ THIS FILE ===",
+                "  _instructions     - what you are reading now",
+                "  _field_reference  - the fields available on each beat type",
+                "  _example          - a complete worked example (one scene), ready to import",
+                "  app/kind/payload  - the skeleton to fill in and return",
+                "",
+                "=== OUTPUT RULES ===",
+                "Return exactly one JSON object and nothing else. No markdown fences, no commentary.",
+                "It MUST keep these three keys at the top level so Scene Studio recognises it:",
+                "  \"app\": \"scene-studio\",  \"kind\": \"scene\",  \"payload\": { ... }",
+                "It must parse with JSON.parse().",
+                "",
+                "=== STRUCTURE ===",
+                "{",
+                "  \"app\": \"scene-studio\",",
+                "  \"schema\": 1,",
+                "  \"kind\": \"scene\",",
+                "  \"payload\": { \"process\": { \"meta\": {...}, \"cards\": [...], \"connections\": [...], \"cardCounter\": N } }",
+                "}",
+                "(In Scene Studio a 'process' is one scene and each 'card' is one beat. Those internal names are kept for import compatibility.)",
+                "",
+                "=== BEAT TYPES (pick the truest one per beat) ===",
+                "- 'entry'       Establish: ground the reader in place, POV, mood (usually the first beat)",
+                "- 'action'      Beat: a character wants something and acts; an exchange that moves the scene",
+                "- 'decision'    Turn: a complication forces a choice and the emotional temperature shifts",
+                "- 'resolution'  Land: how the scene closes — what changed, what we now know, the hook onward",
+                "A scene usually opens with one 'entry' and ends with one 'resolution', with beats and turns between.",
+                "",
+                "=== BEAT LAYOUT ===",
+                "Lay beats left to right in a row. x: first 80, then +320 (80, 400, 720, 1040, ...). y: 80 for all.",
+                "Beat ids: 'beat-1', 'beat-2', ... Links: 'link-1', etc., with from/to beat ids. 'condition' is only for forks; otherwise ''.",
+                "",
+                "=== FIELDS ===",
+                "Fill what the source supports; use '' for anything the source is silent on (never null, never omit). Don't invent specifics. Leave 'draft' empty unless the source already has prose for that beat. Always set: id, type, title.",
+                "",
+                "=== NOW ===",
+                "Read the writer's source material and return one JSON object with payload.process filled in. Output nothing else."
+            ],
+            _field_reference: {
+                scene_meta: {
+                    name: "Scene title",
+                    entryPoint: "POV character and distance (e.g. 'Mara, close third')",
+                    description: "Purpose of the scene — the one thing the story needs from it",
+                    resolution: "The turn — what is different by the end",
+                    owner: "Setting — where and when",
+                    lastReviewed: "Leave as ''"
+                },
+                every_beat: {
+                    title: "Short beat name",
+                    responsibleRole: "Whose beat it is (POV for Establish, who acts for a Beat, etc.)",
+                    sop: "What happens — the action or exchange in this beat",
+                    draft: "Actual prose if the source has any; else ''"
+                },
+                establish_extra: { setting: "Where & when", mood: "Mood / atmosphere", sensory: "One concrete image, sound, or smell" },
+                beat_extra: { wants: "What they want (often unspoken)", subtext: "What's really going on underneath" },
+                turn_extra: { complication: "What forces the choice", stakes: "What's at risk", shift: "How the emotional temperature changes" },
+                land_extra: { changed: "The new situation by the end", reveal: "What we now know", hook: "The pull into the next scene" }
+            },
+            _example: {
+                app: "scene-studio",
+                schema: 1,
+                kind: "scene",
+                payload: {
+                    process: {
+                        meta: {
+                            name: "The letter on the kitchen table",
+                            entryPoint: "Mara, close third",
+                            description: "Force Mara to confront that her late mother kept a second family secret.",
+                            resolution: "She arrives grieving and steady; she leaves knowing her mother lied for thirty years.",
+                            owner: "The farmhouse kitchen, just before dawn",
+                            lastReviewed: ""
+                        },
+                        cards: [
+                            { id: "beat-1", type: "entry", title: "Dawn in the empty kitchen", x: 80, y: 80, responsibleRole: "Mara", sop: "She comes down before sunrise and stands in the doorway of her mother's kitchen.", draft: "", setting: "The farmhouse kitchen, the hour before sunrise", mood: "Hushed, raw, the morning after the funeral", sensory: "Cold lino underfoot; the kettle ticking as it cools" },
+                            { id: "beat-2", type: "action", title: "She finds the envelope", x: 400, y: 80, responsibleRole: "Mara", sop: "Sorting the post, she finds an envelope in her mother's hand, addressed to a name she doesn't know.", draft: "", wants: "To keep the morning ordinary for one more minute", subtext: "She already senses this will undo something" },
+                            { id: "beat-3", type: "decision", title: "Open it or leave it", x: 720, y: 80, responsibleRole: "Mara", sop: "She turns the unsealed, unsent envelope over and decides to open it.", draft: "", complication: "It is decades old and never posted", stakes: "The mother she has carried since childhood", shift: "From guarded calm to vertigo" },
+                            { id: "beat-4", type: "resolution", title: "What the letter holds", x: 1040, y: 80, responsibleRole: "Mara", sop: "She reads it and understands there was another child, another life.", draft: "", changed: "She knows her mother lied for thirty years", reveal: "The inheritance was never the house — it was the secret", hook: "Now she has to decide whether to tell her sister" }
+                        ],
+                        connections: [
+                            { id: "link-1", from: "beat-1", to: "beat-2", condition: "", notes: "" },
+                            { id: "link-2", from: "beat-2", to: "beat-3", condition: "", notes: "" },
+                            { id: "link-3", from: "beat-3", to: "beat-4", condition: "", notes: "" }
+                        ],
+                        cardCounter: 4
+                    }
+                }
+            },
+            app: "scene-studio",
+            schema: 1,
+            kind: "scene",
+            payload: {
+                process: {
+                    meta: { name: "", entryPoint: "", description: "", resolution: "", owner: "", lastReviewed: "" },
+                    cards: [],
+                    connections: [],
+                    cardCounter: 0
+                }
+            }
+        };
+    }
+
+    // ----- First-run example scene -----
+    // On a fresh start (no saved Scene Studio data), seed one example scene that
+    // shows how beats and the Draft box work. The writer can delete it any time,
+    // and we don't re-seed once they have any state.
+    function seedWelcomeDemo() {
+        const demoProc = buildWelcomeDemoProcess();
+        const sess = makeBlankSession('My first novel');
+        sess.activeProcessId = demoProc.id;
+        sess.processes = [demoProc];
+        sessions = [sess];
+        activeSessionId = sess.id;
+        state.sidebarCollapsed = false;
+        state.cardDetail = 'default';
+        loadActiveSessionIntoState();
+        ensureStateShape();
+        saveState();
+    }
+
+    // Re-adds the welcome demo to the CURRENT session.
+    function restoreWelcomeDemo() {
+        const demoProc = buildWelcomeDemoProcess();
+        state.processes.push(demoProc);
+        state.activeProcessId = demoProc.id;
+        saveState();
+        renderSidebar();
+        renderAll();
+        renderProcessHeader();
+    }
+
+    // ---------- Session UI ----------
+    function updateSessionPill() {
+        const el = document.getElementById('sessionPillName');
+        if (!el) return;
+        const sess = activeSession();
+        el.textContent = sess ? sess.name : 'Untitled novel';
+    }
+
+    function toggleSessionMenu() {
+        const menu = document.getElementById('sessionMenu');
+        if (!menu) return;
+        if (menu.classList.contains('open')) {
+            closeSessionMenu();
+            return;
+        }
+        populateSessionMenu();
+        menu.classList.add('open');
+        setTimeout(() => document.addEventListener('click', sessionMenuOutsideClick, true), 0);
+    }
+
+    function closeSessionMenu() {
+        const menu = document.getElementById('sessionMenu');
+        if (menu) menu.classList.remove('open');
+        document.removeEventListener('click', sessionMenuOutsideClick, true);
+    }
+
+    function sessionMenuOutsideClick(e) {
+        const switcher = document.querySelector('.session-switcher');
+        if (switcher && !switcher.contains(e.target)) {
+            closeSessionMenu();
+        }
+    }
+
+    function populateSessionMenu() {
+        const list = document.getElementById('sessionMenuList');
+        if (!list) return;
+        list.innerHTML = '';
+        sessions.forEach(s => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'session-menu-item' + (s.id === activeSessionId ? ' active' : '');
+            const proc = (s.processes || []).length;
+            const cat = (s.categories || []).length;
+            item.textContent = s.name + ' (' + proc + ' scene' + (proc === 1 ? '' : 's') + (cat ? ', ' + cat + ' chapter' + (cat === 1 ? '' : 's') : '') + ')';
+            item.title = s.name;
+            item.onclick = () => { closeSessionMenu(); switchSession(s.id); };
+            list.appendChild(item);
+        });
+    }
+
+    function switchSession(id) {
+        if (id === activeSessionId) return;
+        const target = sessions.find(s => s.id === id);
+        if (!target) return;
+        snapshotActiveSession();
+        activeSessionId = id;
+        loadActiveSessionIntoState();
+        ensureStateShape();
+        saveState();
+        updateSessionPill();
+        renderSidebar();
+        renderAll();
+        renderProcessHeader();
+        applyCardDetailClass();
+    }
+
+    function loadJsonAsSession() {
+        closeSessionMenu();
+        const input = document.getElementById('sessionImportFile');
+        if (input) input.click();
+    }
+
+    function handleSessionImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                const suggested = file.name.replace(/\.json$/i, '').replace(/[-_]/g, ' ').trim() || 'Imported';
+                const name = prompt('Name this manuscript:', suggested);
+                if (!name || !name.trim()) return;
+                addSessionFromImport(name.trim(), data);
+            } catch (err) {
+                alert('Could not read file: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = ''; // allow reimporting same filename later
+    }
+
+    // Build a new manuscript from an imported Scene Studio file. Accepts a full
+    // manuscript, a chapter, or a single scene. Always creates a fresh manuscript
+    // and switches to it; never touches the current one.
+    function addSessionFromImport(name, data) {
+        if (!data || data.app !== 'scene-studio') {
+            alert('This isn\'t a Scene Studio file.\n\nOnly files exported from Scene Studio can be opened as a manuscript.');
+            return;
+        }
+        const payload = data.payload || {};
+        const sess = makeBlankSession(name);
+        try {
+            if (data.kind === 'all') {
+                sess.categories = (payload.categories || []).map(c => ({ ...c }));
+                sess.processes = (payload.processes || []).map(p => clonedProcessWithNewIds(p));
+                sess.stepFields = payload.stepFields && typeof payload.stepFields === 'object' ? payload.stepFields : defaultStepFields();
+                sess.activeProcessId = sess.processes[0] ? sess.processes[0].id : null;
+            } else if (data.kind === 'chapter') {
+                const catMap = new Map();
+                sess.categories = (payload.categories || []).map(c => {
+                    const nc = { id: genId('cat'), name: c.name, expanded: true };
+                    catMap.set(c.id, nc.id);
+                    return nc;
+                });
+                sess.processes = (payload.processes || []).map(p => {
+                    const np = clonedProcessWithNewIds(p);
+                    np.categoryId = catMap.get(np.categoryId) || null;
+                    return np;
+                });
+                sess.stepFields = payload.stepFields && typeof payload.stepFields === 'object' ? payload.stepFields : defaultStepFields();
+                sess.activeProcessId = sess.processes[0] ? sess.processes[0].id : null;
+            } else if (data.kind === 'scene') {
+                if (!payload.process || (!payload.process.cards && !payload.process.meta)) {
+                    alert('Could not read the scene in this file.');
+                    return;
+                }
+                const proc = clonedProcessWithNewIds(payload.process);
+                proc.categoryId = null;
+                sess.processes = [proc];
+                sess.activeProcessId = proc.id;
+                if (payload.stepFields && typeof payload.stepFields === 'object') {
+                    sess.stepFields = payload.stepFields;
+                }
+            } else {
+                alert('Unrecognised Scene Studio file.');
+                return;
+            }
+        } catch (e) {
+            alert('Error processing file: ' + e.message);
+            return;
+        }
+        snapshotActiveSession();
+        sessions.push(sess);
+        activeSessionId = sess.id;
+        loadActiveSessionIntoState();
+        ensureStateShape();
+        saveState();
+        updateSessionPill();
+        renderSidebar();
+        renderAll();
+        renderProcessHeader();
+    }
+
+    function renameCurrentSession() {
+        closeSessionMenu();
+        const sess = activeSession();
+        if (!sess) return;
+        const newName = prompt('Rename manuscript:', sess.name);
+        if (!newName || !newName.trim()) return;
+        sess.name = newName.trim();
+        saveState();
+        updateSessionPill();
+    }
+
+    function deleteCurrentSession() {
+        closeSessionMenu();
+        if (sessions.length <= 1) {
+            alert('You cannot delete your only manuscript. Create another one first if you want to remove this.');
+            return;
+        }
+        const sess = activeSession();
+        if (!sess) return;
+        const procCount = (sess.processes || []).length;
+        const catCount = (sess.categories || []).length;
+        if (!confirm('Delete manuscript "' + sess.name + '"?\n\n' + procCount + ' scene' + (procCount === 1 ? '' : 's') + ' and ' + catCount + ' chapter' + (catCount === 1 ? '' : 's') + ' will be permanently deleted.\n\nThis cannot be undone.')) return;
+        sessions = sessions.filter(s => s.id !== activeSessionId);
+        activeSessionId = sessions[0].id;
+        loadActiveSessionIntoState();
+        ensureStateShape();
+        saveState();
+        updateSessionPill();
+        renderSidebar();
+        renderAll();
+        renderProcessHeader();
+    }
+
+    function buildWelcomeDemoProcess() {
+        return {
+            id: genId('proc'),
+            categoryId: null,
+            meta: {
+                name: 'Example scene — “The letter on the table”',
+                entryPoint: 'Mara, close third',
+                description: 'An example scene to show how Scene Studio works. Each card is a beat. Click a beat to open it, read the craft prompts, and draft prose in the Draft box. Add beats with “+ Add beat”, drag them around, and link them with the → button to show how one beat causes the next. Use “Customise prompts” inside a beat to add your own. Delete this scene whenever you like (hover its row in the sidebar and click ×).',
+                resolution: 'You have opened a beat, read its prompts, and written a line or two in its Draft box.',
+                owner: 'The farmhouse kitchen, just before dawn',
+                lastReviewed: ''
+            },
+            cards: [
+                {
+                    id: 'demo-beat-1', type: 'entry', title: 'Dawn in the empty kitchen', x: 80, y: 80,
+                    responsibleRole: 'Mara',
+                    sop: 'She comes down before sunrise and stands in the doorway of her mother\u2019s kitchen, not yet turning on the light.',
+                    draft: 'The kitchen kept her mother\u2019s shape in it \u2014 the cardigan on the chair, the mug turned upside down to dry, a life paused mid-gesture. Mara stood in the doorway and did not reach for the light.',
+                    setting: 'The farmhouse kitchen, the hour before sunrise',
+                    mood: 'Hushed, raw \u2014 the morning after the funeral',
+                    sensory: 'Cold lino underfoot; the kettle ticking as it cools; the cardigan still on the chair'
+                },
+                {
+                    id: 'demo-beat-2', type: 'action', title: 'She finds the envelope', x: 400, y: 80,
+                    responsibleRole: 'Mara',
+                    sop: 'Sorting the backlog of post, she finds an envelope in her mother\u2019s handwriting, addressed to a name she has never heard.',
+                    draft: '',
+                    wants: 'To keep the morning ordinary for one minute longer',
+                    subtext: 'Some part of her already knows this will undo something'
+                },
+                {
+                    id: 'demo-beat-3', type: 'decision', title: 'Open it or leave it', x: 720, y: 80,
+                    responsibleRole: 'Mara',
+                    sop: 'She turns the envelope over \u2014 unsealed, unsent \u2014 and decides to open it.',
+                    draft: '',
+                    complication: 'The envelope is decades old and was never posted',
+                    stakes: 'The version of her mother she has carried since she was a child',
+                    shift: 'From guarded calm to vertigo'
+                },
+                {
+                    id: 'demo-beat-4', type: 'resolution', title: 'What the letter holds', x: 1040, y: 80,
+                    responsibleRole: 'Mara',
+                    sop: 'She reads it and understands there was another child, another life her mother never named.',
+                    draft: '',
+                    changed: 'She knows now that her mother lied for thirty years',
+                    reveal: 'The inheritance was never the house \u2014 it was the secret',
+                    hook: 'Now she has to decide whether to tell her sister'
+                }
+            ],
+            connections: [
+                { id: 'demo-link-1', from: 'demo-beat-1', to: 'demo-beat-2', condition: '', notes: '' },
+                { id: 'demo-link-2', from: 'demo-beat-2', to: 'demo-beat-3', condition: '', notes: '' },
+                { id: 'demo-link-3', from: 'demo-beat-3', to: 'demo-beat-4', condition: '', notes: '' }
+            ],
+            cardCounter: 4
+        };
+    }
+
+    function exportProcess(id) {
+        const proc = state.processes.find(p => p.id === id);
+        if (!proc) return;
+        const data = {
+            app: 'scene-studio',
+            schema: 1,
+            kind: 'scene',
+            exportedAt: new Date().toISOString(),
+            payload: {
+                process: proc,
+                stepFields: collectStepFieldsForProcess(proc)
+            }
+        };
+        downloadJson(data, `scene-${safeFilename(proc.meta.name, 'scene')}.json`);
+    }
+
+    function exportActiveProcess() {
+        const proc = activeProc();
+        if (proc) exportProcess(proc.id);
+    }
+
+    function exportCategory(categoryId) {
+        const cat = state.categories.find(c => c.id === categoryId);
+        if (!cat) return;
+        const procs = state.processes.filter(p => p.categoryId === categoryId);
+        if (procs.length === 0) {
+            alert(`The chapter "${cat.name}" has no scenes to export.`);
+            return;
+        }
+        // Union of stepFields across all processes in the category
+        const stepFields = {};
+        procs.forEach(p => {
+            const sf = collectStepFieldsForProcess(p);
+            Object.keys(sf).forEach(type => {
+                if (!stepFields[type]) stepFields[type] = { enabledLegacy: [], custom: [] };
+                sf[type].enabledLegacy.forEach(k => {
+                    if (!stepFields[type].enabledLegacy.includes(k)) stepFields[type].enabledLegacy.push(k);
+                });
+                const existingKeys = new Set(stepFields[type].custom.map(f => f.key));
+                sf[type].custom.forEach(f => {
+                    if (!existingKeys.has(f.key)) { stepFields[type].custom.push(f); existingKeys.add(f.key); }
+                });
+            });
+        });
+        const data = {
+            app: 'scene-studio',
+            schema: 1,
+            kind: 'chapter',
+            exportedAt: new Date().toISOString(),
+            payload: {
+                categories: [cat],
+                processes: procs,
+                stepFields
+            }
+        };
+        downloadJson(data, `chapter-${safeFilename(cat.name, 'chapter')}.json`);
+    }
+
+    function importProject(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (!data || data.app !== 'scene-studio') {
+                    alert('This isn\'t a Scene Studio file.\n\nIt may have come from a different app. Only files exported from Scene Studio can be imported here.');
+                    return;
+                }
+                const payload = data.payload || {};
+                if (data.kind === 'chapter') {
+                    importCategoryBundle(payload);
+                } else if (data.kind === 'all') {
+                    importBulk(payload);
+                } else if (data.kind === 'scene') {
+                    importSingleProcess(payload);
+                } else {
+                    alert('Unrecognised Scene Studio file.');
+                }
+            } catch (err) {
+                alert('Import failed: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+    }
+
+    function importBulk(payload) {
+        const incomingProcs = payload.processes || [];
+        const incomingCats = payload.categories || [];
+        if (state.processes.length > 0) {
+            if (!confirm(`Replace all ${state.processes.length} existing scene${state.processes.length === 1 ? '' : 's'} and ${state.categories.length} chapter${state.categories.length === 1 ? '' : 's'} in this manuscript with the imported ${incomingProcs.length} scene${incomingProcs.length === 1 ? '' : 's'}?\n\nThis cannot be undone.`)) return;
+        }
+        state.categories = incomingCats;
+        state.processes = incomingProcs;
+        state.stepFields = (payload.stepFields && typeof payload.stepFields === 'object') ? payload.stepFields : {};
+        ensureStateShape();
+        state.activeProcessId = payload.activeProcessId && state.processes.find(p => p.id === payload.activeProcessId)
+            ? payload.activeProcessId
+            : (state.processes.length > 0 ? state.processes[0].id : null);
+        saveState();
+        renderSidebar();
+        renderAll();
+        renderProcessHeader();
+    }
+
+    function importCategoryBundle(payload) {
+        const incomingCats = payload.categories || [];
+        const incomingProcs = payload.processes || [];
+        if (incomingProcs.length === 0 && incomingCats.length === 0) {
+            alert('The imported file is empty.');
+            return;
+        }
+        const catIdMap = new Map();
+        incomingCats.forEach(cat => {
+            const newCat = { id: genId('cat'), name: cat.name, expanded: true };
+            state.categories.push(newCat);
+            catIdMap.set(cat.id, newCat.id);
+        });
+        let firstAddedId = null;
+        incomingProcs.forEach(p => {
+            const newProc = clonedProcessWithNewIds(p);
+            if (newProc.categoryId && catIdMap.has(newProc.categoryId)) {
+                newProc.categoryId = catIdMap.get(newProc.categoryId);
+            } else {
+                newProc.categoryId = null;
+            }
+            state.processes.push(newProc);
+            if (!firstAddedId) firstAddedId = newProc.id;
+        });
+        mergeStepFields(payload.stepFields);
+        if (firstAddedId) state.activeProcessId = firstAddedId;
+        saveState();
+        renderSidebar();
+        renderAll();
+        renderProcessHeader();
+    }
+
+    function importSingleProcess(payload) {
+        if (!payload.process || (!payload.process.cards && !payload.process.meta)) {
+            alert('This scene file could not be read.');
+            return;
+        }
+        const proc = clonedProcessWithNewIds(payload.process);
+        proc.categoryId = null;
+        state.processes.push(proc);
+        state.activeProcessId = proc.id;
+        mergeStepFields(payload.stepFields);
+        ensureStateShape();
+        saveState();
+        renderSidebar();
+        renderAll();
+        renderProcessHeader();
+    }
+
+    function renderAll() {
+        const canvas = document.getElementById('canvas');
+        canvas.querySelectorAll('.card').forEach(el => el.remove());
+        canvas.querySelectorAll('.arrow-condition').forEach(el => el.remove());
+        const svg = canvas.querySelector('svg');
+        svg.querySelectorAll('line').forEach(l => l.remove());
+        const proc = activeProc();
+        if (proc) {
+            proc.cards.forEach(renderCard);
+            calculateNumbers();
+            drawConnections();
+        }
+        updateEmptyState();
+    }
+
+    function updateEmptyState() {
+        const emptyEl = document.getElementById('emptyState');
+        const titleEl = document.getElementById('emptyStateTitle');
+        const bodyEl = document.getElementById('emptyStateBody');
+        const proc = activeProc();
+        if (!proc) {
+            emptyEl.style.display = 'block';
+            if (state.processes.length === 0) {
+                titleEl.textContent = 'A blank page';
+                bodyEl.innerHTML = 'Open the sidebar (☰) and click <strong>+ New scene</strong> to begin.';
+            } else {
+                titleEl.textContent = 'No scene selected';
+                bodyEl.innerHTML = 'Choose a scene from the sidebar to open its beats.';
+            }
+        } else if (proc.cards.length === 0) {
+            emptyEl.style.display = 'block';
+            titleEl.textContent = proc.meta.name || 'Untitled scene';
+            bodyEl.innerHTML = 'Click <strong>+ Add beat</strong> to drop your first beat. Set POV, setting, and the turn in <strong>Scene settings</strong>.';
+        } else {
+            emptyEl.style.display = 'none';
+        }
+    }
+
+    function escapeHtml(s) {
+        if (s === null || s === undefined) return '';
+        return String(s).replace(/[&<>"']/g, m => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        })[m]);
+    }
+
+    window.addEventListener('resize', () => setTimeout(drawConnections, 100));
+
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('modal')) {
+            if (e.target.id === 'cardModal') closeCardModal();
+            if (e.target.id === 'connectionModal') closeConnectionModal();
+            if (e.target.id === 'processModal') closeProcessModal();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeCardModal();
+            closeConnectionModal();
+            closeProcessModal();
+            cancelConnection();
+        }
+    });
+
+    loadState();
+    ensureStateShape();
+    if (state.sidebarCollapsed) document.body.classList.add('sidebar-collapsed');
+    applyCardDetailClass();
+    updateSessionPill();
+    renderSidebar();
+    renderAll();
+    renderProcessHeader();
+</script>
+</body>
+</html>
