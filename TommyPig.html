@@ -33,7 +33,7 @@
     min-width:min(70vw,330px); padding:16px 26px; border:none; border-radius:999px;
     background:linear-gradient(#ff9d52,#f4633a); color:#fff;
     font-family:inherit; font-size:clamp(18px,5.2vw,24px); font-weight:bold; letter-spacing:.3px;
-    box-shadow:0 6px 0 #b53d1c, 0 10px 18px #0003; cursor:pointer; z-index:6;
+    box-shadow:0 6px 0 #b53d1c, 0 10px 18px #0003; cursor:pointer; z-index:11;
     transition:transform .08s, box-shadow .08s, opacity .3s; text-shadow:0 2px 0 #0002;
   }
   #btn:active { transform:translateX(-50%) translateY(4px); box-shadow:0 2px 0 #b53d1c, 0 5px 10px #0003; }
@@ -510,6 +510,9 @@ const DAYS = {
 const COLLECT_COUNT = 5;
 let day = 1, collected = 0, buildStage = 0, piles = [], walkBusy = false;
 let camMode = 'home', chaseT = 0, shakeT = 0, fireOn = false, theEnd = false;
+const CAM_DEFAULT = { y: 5.4, z: 10.5, lookY: 1.4 };
+const CAM_ROOFTOP = { y: 6.6, z: 13.5, lookY: 2.7 };
+let camHome = { ...CAM_DEFAULT };
 
 function updateBadge() {
   const d = DAYS[day];
@@ -527,6 +530,7 @@ function startDay(n) {
   pig.visible = true; pig.scale.setScalar(1);
   wolf.visible = false; wolf.position.set(-14, 0, 1.5); wolf.rotation.set(0,0,0);
   camMode = 'home';
+  camHome = { ...CAM_DEFAULT };
   updateBadge();
 
   /* scatter piles */
@@ -759,6 +763,7 @@ function shakeHouse() {
     () => { house.position.x = ox; });
 }
 function wolfClimbs() {
+  camHome = { ...CAM_ROOFTOP };
   showNarr('nar', 'The sneaky wolf climbed up… up… up… onto the roof!');
   const back = HOUSE_POS.clone().add(new THREE.Vector3(2.8, 0, -1.6));
   faceToward(wolf, back);
@@ -814,6 +819,7 @@ function wolfDownChimney() {
           wolf.rotation.z = p * Math.PI * 2;
         }, () => {
           wolf.rotation.z = 0; wolf.scale.setScalar(1);
+          camHome = { ...CAM_DEFAULT };
           sndThud();
           setBtn('Next ▸', wolfRunsAway, 'blue');
         });
@@ -947,9 +953,9 @@ function animate() {
     camera.lookAt(pig.position.x + 1.5, 1.4, 0);
   } else {
     /* home camera, gentle sway */
-    const target = new THREE.Vector3(0.5 + Math.sin(bobT * 0.25) * 0.3, 5.4, 10.5);
+    const target = new THREE.Vector3(0.5 + Math.sin(bobT * 0.25) * 0.3, camHome.y, camHome.z);
     camera.position.lerp(target, 0.05);
-    let look = new THREE.Vector3(0.5, 1.4, 0);
+    let look = new THREE.Vector3(0.5, camHome.lookY, 0);
     if (shakeT > 0) { shakeT -= dt; look.x += (Math.random()-0.5) * 0.25; look.y += (Math.random()-0.5) * 0.25; }
     camera.lookAt(look);
   }
