@@ -43,15 +43,6 @@
   #btn.blue { background:linear-gradient(#6fc3ef,#2f7fc4); box-shadow:0 6px 0 #1f5a8e, 0 10px 18px #0003; }
   #btn.blue:active { box-shadow:0 2px 0 #1f5a8e, 0 5px 10px #0003; }
 
-  /* ---- fullscreen toggle ---- */
-  #fsBtn {
-    position:fixed; right:10px; bottom:max(14px, env(safe-area-inset-bottom)); z-index:7;
-    width:48px; height:48px; border:3px solid #8a5a33; border-radius:14px;
-    background:#ffffffd9; color:#6a431f; font-size:22px; line-height:1; cursor:pointer;
-    font-family:inherit; box-shadow:0 3px 0 #00000022;
-  }
-  #fsBtn:active { transform:translateY(2px); box-shadow:none; }
-
   /* ---- full-screen fades / cards ---- */
   #fade { position:fixed; inset:0; background:#0a1030; opacity:0; pointer-events:none; transition:opacity 1.1s; z-index:8; }
   #nightText {
@@ -90,7 +81,6 @@
 
 <div id="narration"><span class="who"></span><span class="txt"></span></div>
 <div id="badge"></div>
-<button id="fsBtn" title="Fullscreen">⛶</button>
 <button id="btn" class="hidden"></button>
 
 <div id="fade"></div>
@@ -524,7 +514,6 @@ function startDay(n) {
   if (house) { scene.remove(house); house = null; }
   debris.forEach(d => scene.remove(d.m)); debris = [];
   pig.position.set(-2.5, 0, 2.2); pig.rotation.y = Math.PI * 0.4;
-  pig.visible = true; pig.scale.setScalar(1);
   wolf.visible = false; wolf.position.set(-14, 0, 1.5); wolf.rotation.set(0,0,0);
   camMode = 'home';
   updateBadge();
@@ -602,28 +591,10 @@ function doBuild() {
     setTimeout(() => {
       say([{ who: 'nar', text: DAYS[day].built }], () => {
         hideNarr();
-        goInside(() => {
-          if (day === 3) lockPhase(); else wolfArrives();
-        });
+        if (day === 3) lockPhase(); else wolfArrives();
       });
     }, 700);
   }
-}
-
-function goInside(cb) {
-  const doorstep = HOUSE_POS.clone().add(new THREE.Vector3(0, 0, 2.2));
-  faceToward(pig, doorstep);
-  walkTo(pig, doorstep, 3.2, () => {
-    faceToward(pig, HOUSE_POS);
-    sndClick();
-    /* pig pops in through the door */
-    tween(0.3, p => pig.scale.setScalar(1 - easeIn(p)), () => {
-      pig.visible = false;
-      pig.scale.setScalar(1);
-      showNarr('nar', 'The little pig went inside and shut the door behind him.');
-      setTimeout(() => { hideNarr(); cb(); }, 1600);
-    });
-  });
 }
 
 function lockPhase() {
@@ -642,6 +613,9 @@ function lockPhase() {
 
 function wolfArrives() {
   hideBtn();
+  /* pig hides beside the house */
+  const hide = HOUSE_POS.clone().add(new THREE.Vector3(-2.2, 0, 0.6));
+  walkTo(pig, hide, 3.5, () => { faceToward(pig, new THREE.Vector3(-14, 0, 1.5)); });
   wolf.visible = true;
   const stand = HOUSE_POS.clone().add(new THREE.Vector3(-4.2, 0, 2.6));
   faceToward(wolf, stand);
@@ -693,13 +667,6 @@ function blowDown() {
       });
     });
     scene.remove(house); house = null;
-    /* the startled pig tumbles out into the open! */
-    pig.visible = true;
-    pig.position.copy(HOUSE_POS); pig.position.y = 0;
-    faceToward(pig, wolf.position);
-    pig.scale.setScalar(0.01);
-    tween(0.35, p => pig.scale.setScalar(easeOut(p)));
-    sparkle(HOUSE_POS.clone().setY(1), 0xf6a9be);
     setTimeout(() => {
       setBtn('🏃 Run, little pig, run!', startChase);
     }, 1300);
@@ -828,13 +795,7 @@ function wolfRunsAway() {
   faceToward(wolf, away);
   walkTo(wolf, away, 7, () => { wolf.visible = false; }, true);
   setTimeout(() => {
-    /* the door opens and the pig comes out to celebrate */
-    pig.visible = true;
-    pig.position.copy(HOUSE_POS).add(new THREE.Vector3(0, 0, 1.9));
-    pig.position.y = 0;
-    pig.scale.setScalar(0.01);
-    sndClick();
-    tween(0.3, p => pig.scale.setScalar(easeOut(p)));
+    /* pig comes out to celebrate */
     const front = HOUSE_POS.clone().add(new THREE.Vector3(0, 0, 3.2));
     faceToward(pig, front);
     walkTo(pig, front, 3, () => {
@@ -854,28 +815,6 @@ function showTheEnd() {
     document.getElementById('endScreen').classList.remove('gone');
   }, 2200);
 }
-
-/* ---------- fullscreen toggle ---------- */
-const fsBtn = document.getElementById('fsBtn');
-const fsRoot = document.documentElement;
-const fsSupported = !!(fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen);
-if (!fsSupported) fsBtn.style.display = 'none'; // e.g. iPhone Safari
-function inFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
-fsBtn.addEventListener('click', () => {
-  audio(); sndClick();
-  if (inFullscreen()) {
-    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-  } else {
-    (fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen).call(fsRoot);
-  }
-});
-['fullscreenchange', 'webkitfullscreenchange'].forEach(ev =>
-  document.addEventListener(ev, () => {
-    fsBtn.textContent = inFullscreen() ? '⛶' : '⛶';
-    fsBtn.title = inFullscreen() ? 'Exit fullscreen' : 'Fullscreen';
-    sizeIt();
-  })
-);
 
 /* ---------- title / restart ---------- */
 document.getElementById('beginBtn').addEventListener('click', () => {
