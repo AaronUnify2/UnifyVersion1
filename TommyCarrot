@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tommy and the Enormous Carrot — A Storybook Game</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; overflow:hidden; touch-action:none; background:#b8e0f2;
+    font-family:"Comic Sans MS","Chalkboard SE","Marker Felt","Trebuchet MS",sans-serif; }
+  #c { position:fixed; inset:0; display:block; }
+
+  /* ---- narration card ---- */
+  #narration {
+    position:fixed; top:max(12px, env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    width:min(92vw,560px); background:#FFF8E4; border:3px solid #7a5230; border-radius:18px;
+    padding:12px 16px; font-family:Georgia,'Times New Roman',serif; font-style:italic;
+    font-size:clamp(16px,4.4vw,21px); color:#46310f; line-height:1.35; text-align:center;
+    box-shadow:0 4px 0 #00000022; opacity:0; transition:opacity .4s; pointer-events:none; z-index:5;
+  }
+  #narration .who { font-style:normal; font-size:1.25em; margin-right:6px; }
+
+  /* ---- team badge ---- */
+  #badge {
+    position:fixed; left:10px; bottom:max(14px, env(safe-area-inset-bottom)); z-index:5;
+    background:#ffffffd9; border:3px solid #7a5230; border-radius:14px; padding:6px 12px;
+    font-weight:bold; color:#5d3f15; font-size:clamp(14px,4vw,18px); display:none; letter-spacing:1px;
+  }
+
+  /* ---- fullscreen toggle ---- */
+  #fsBtn {
+    position:fixed; right:10px; bottom:max(14px, env(safe-area-inset-bottom)); z-index:7;
+    width:48px; height:48px; border:3px solid #7a5230; border-radius:14px;
+    background:#ffffffd9; color:#5d3f15; font-size:22px; line-height:1; cursor:pointer;
+    font-family:inherit; box-shadow:0 3px 0 #00000022;
+  }
+  #fsBtn:active { transform:translateY(2px); box-shadow:none; }
+
+  /* ---- big action button ---- */
+  #btn {
+    position:fixed; bottom:max(18px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    min-width:min(70vw,330px); padding:16px 26px; border:none; border-radius:999px;
+    background:linear-gradient(#ffa14f,#ec7016) ; color:#fff;
+    font-family:inherit; font-size:clamp(18px,5.2vw,24px); font-weight:bold; letter-spacing:.3px;
+    box-shadow:0 6px 0 #a8470a, 0 10px 18px #0003; cursor:pointer; z-index:11;
+    transition:transform .08s, box-shadow .08s, opacity .3s; text-shadow:0 2px 0 #0002;
+  }
+  #btn:active { transform:translateX(-50%) translateY(4px); box-shadow:0 2px 0 #a8470a, 0 5px 10px #0003; }
+  #btn.hidden { opacity:0; pointer-events:none; }
+  #btn.blue { background:linear-gradient(#6fc3ef,#2f7fc4); box-shadow:0 6px 0 #1f5a8e, 0 10px 18px #0003; }
+  #btn.blue:active { box-shadow:0 2px 0 #1f5a8e, 0 5px 10px #0003; }
+  #btn.green { background:linear-gradient(#8fd06a,#4a9a3e); box-shadow:0 6px 0 #2f6b28, 0 10px 18px #0003; }
+  #btn.green:active { box-shadow:0 2px 0 #2f6b28, 0 5px 10px #0003; }
+  #btn.red { background:linear-gradient(#ff8a5c,#e8512f); box-shadow:0 6px 0 #a93316, 0 10px 18px #0003;
+    animation:wiggle 1.6s ease-in-out infinite; }
+  #btn.red:active { box-shadow:0 2px 0 #a93316, 0 5px 10px #0003; animation:none; }
+  @keyframes wiggle {
+    0%,100% { transform:translateX(-50%) rotate(0deg); }
+    8% { transform:translateX(-50%) rotate(-2deg) scale(1.03); }
+    16% { transform:translateX(-50%) rotate(2deg) scale(1.03); }
+    24% { transform:translateX(-50%) rotate(0deg); }
+  }
+  @media (prefers-reduced-motion: reduce) { #btn.red { animation:none; } }
+
+  /* ---- title & end screens ---- */
+  .screen {
+    position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; padding:5vw; transition:opacity .7s;
+    background:linear-gradient(#cdeaf7 0%, #f6e7b6 50%, #b9d77f 100%);
+  }
+  .screen.gone { opacity:0; pointer-events:none; }
+  .screen .cast { font-size:clamp(26px,7.5vw,46px); letter-spacing:3px; }
+  .screen h1 {
+    font-family:Georgia,serif; color:#b35a10; font-size:clamp(30px,8.6vw,52px);
+    line-height:1.12; margin:14px 0 6px; text-shadow:0 3px 0 #ffffff88;
+  }
+  .screen p { color:#6b5230; font-size:clamp(15px,4.4vw,19px); margin-bottom:26px; font-family:Georgia,serif; font-style:italic; }
+  .screen button {
+    padding:16px 34px; border:none; border-radius:999px; font-family:inherit; font-weight:bold;
+    font-size:clamp(19px,5.4vw,24px); color:#fff; cursor:pointer;
+    background:linear-gradient(#ffa14f,#ec7016); box-shadow:0 6px 0 #a8470a, 0 10px 18px #0003;
+  }
+  .screen button:active { transform:translateY(4px); box-shadow:0 2px 0 #a8470a; }
+  #endScreen { background:linear-gradient(#ffd9a3 0%, #f6e7b6 45%, #a8cf72 100%); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="narration"><span class="who"></span><span class="txt"></span></div>
+<div id="badge"></div>
+<button id="fsBtn" title="Fullscreen">⛶</button>
+<button id="btn" class="hidden"></button>
+
+<div id="titleScreen" class="screen">
+  <div class="cast">👩‍🌾👨‍🌾🚜🐶🐱🐈‍⬛🐔🦆👦</div>
+  <h1>Tommy and the<br>Enormous Carrot</h1>
+  <p>A storybook from our very own farm</p>
+  <button id="beginBtn">📖 Begin the story</button>
+</div>
+
+<div id="endScreen" class="screen gone">
+  <div class="cast">🥕 🍲 👦</div>
+  <h1>The End</h1>
+  <p>…and Tommy pulled the hardest of all,<br>the strongest little boy on the whole farm!</p>
+  <button id="againBtn">↺ Read it again</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =========================================================
+   TOMMY AND THE ENORMOUS CARROT — a farm storybook
+   Cast: Mum, Dad & the grey-and-gold Fergie, Teddy the
+   cavoodle, Ringo & Rose the cats, the hens & the runner
+   duck — and Tommy, who saves the day.
+   ========================================================= */
+
+/* ---------- tiny sound kit ---------- */
+let AC = null;
+function audio() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(freq, dur, type, vol, slideTo) {
+  const ac = audio(); if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type || 'sine'; o.frequency.setValueAtTime(freq, ac.currentTime);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, ac.currentTime + dur);
+  g.gain.setValueAtTime(vol || 0.18, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + dur + 0.05);
+}
+function noise(dur, vol, freq) {
+  const ac = audio(); if (!ac) return;
+  const len = Math.floor(ac.sampleRate * dur);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq || 700; f.Q.value = 0.6;
+  const g = ac.createGain(); g.gain.value = vol || 0.25;
+  src.connect(f).connect(g).connect(ac.destination); src.start();
+}
+const sndThud   = () => tone(150, 0.18, 'sine', 0.3, 60);
+const sndClick  = () => tone(1200, 0.07, 'square', 0.1);
+const sndDing   = () => { tone(660,0.3,'triangle',0.12); setTimeout(()=>tone(880,0.4,'triangle',0.12),140); };
+const sndBoing  = (n) => tone(180 + n*60, 0.3, 'sine', 0.22, 460 + n*120);
+const sndWater  = () => noise(0.7, 0.2, 1800);
+const sndStrain = () => { tone(85, 0.45, 'sawtooth', 0.13, 65); noise(0.35, 0.12, 220); };
+const sndPopBig = () => { noise(0.35, 0.4, 600); tone(220, 0.5, 'square', 0.22, 950); };
+const sndWhee   = () => tone(280, 0.8, 'sawtooth', 0.12, 1100);
+const sndBark   = () => { tone(260, 0.09, 'square', 0.2, 170); setTimeout(()=>tone(260,0.09,'square',0.2,170),160); };
+const sndMeow   = (f) => tone(f || 720, 0.5, 'sawtooth', 0.1, (f || 720) * 0.5);
+const sndQuack  = () => { tone(330, 0.16, 'sawtooth', 0.18, 200); setTimeout(()=>tone(310,0.16,'sawtooth',0.16,190),220); };
+const sndPutt   = () => tone(58 + Math.random()*10, 0.09, 'square', 0.13);
+const sndRev    = () => { tone(55, 0.9, 'sawtooth', 0.2, 140); noise(0.8, 0.18, 160); };
+const sndGiggle = () => { tone(700,0.1,'sine',0.14,900); setTimeout(()=>tone(800,0.1,'sine',0.14,1000),130); setTimeout(()=>tone(900,0.12,'sine',0.14,1150),260); };
+function cluckChorus(n) {
+  for (let k = 0; k < (n || 6); k++) {
+    setTimeout(() => tone(520 + Math.random()*300, 0.07, 'square', 0.11, 300), k * 130 + Math.random()*60);
+  }
+}
+
+/* ---------- three.js scene ---------- */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xb8e0f2);
+scene.fog = new THREE.Fog(0xb8e0f2, 35, 100);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 300);
+function sizeIt() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', sizeIt); sizeIt();
+
+const hemi = new THREE.HemisphereLight(0xfff7df, 0x8aa362, 0.95); scene.add(hemi);
+const sunL = new THREE.DirectionalLight(0xfff2cf, 0.85); sunL.position.set(5, 12, 8); scene.add(sunL);
+
+function lam(color) { return new THREE.MeshLambertMaterial({ color }); }
+
+/* paddock */
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(180, 100), lam(0xa9c96a));
+ground.rotation.x = -Math.PI / 2; scene.add(ground);
+
+/* veggie garden rows behind */
+for (let i = 0; i < 4; i++) {
+  const row = new THREE.Mesh(new THREE.BoxGeometry(16, 0.25, 0.9), lam(0x7a5230));
+  row.position.set(2, 0.12, -7 - i * 1.6); scene.add(row);
+  for (let j = 0; j < 7; j++) {
+    const sprout = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.4, 6), lam(0x4f9e4a));
+    sprout.position.set(-4.5 + j * 2.2, 0.4, -7 - i * 1.6); scene.add(sprout);
+  }
+}
+/* farmhouse + shed */
+const barn = new THREE.Group();
+const barnBody = new THREE.Mesh(new THREE.BoxGeometry(5.5, 3.2, 4), lam(0xe8e2d2)); barnBody.position.y = 1.6; barn.add(barnBody);
+const barnRoof = new THREE.Mesh(new THREE.ConeGeometry(4.4, 1.9, 4), lam(0x8a3d33));
+barnRoof.rotation.y = Math.PI / 4; barnRoof.position.y = 4.1; barn.add(barnRoof);
+const barnDoor = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.9, 0.12), lam(0x6f4a26)); barnDoor.position.set(-1.2, 0.95, 2.02); barn.add(barnDoor);
+const barnWin = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.9, 0.1), lam(0xbfe6ff)); barnWin.position.set(1.2, 1.7, 2.02); barn.add(barnWin);
+barn.position.set(-10, 0, -13); scene.add(barn);
+const shed = new THREE.Group();
+const shedBody = new THREE.Mesh(new THREE.BoxGeometry(4.5, 2.4, 3.4), lam(0x9aa0a6)); shedBody.position.y = 1.2; shed.add(shedBody);
+const shedRoof = new THREE.Mesh(new THREE.BoxGeometry(4.9, 0.18, 3.8), lam(0x6e747c)); shedRoof.position.y = 2.5; shedRoof.rotation.z = 0.08; shed.add(shedRoof);
+shed.position.set(12, 0, -14); scene.add(shed);
+/* fence */
+for (let i = 0; i < 13; i++) {
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 1.1, 6), lam(0x9a6a3a));
+  post.position.set(-14 + i * 3.2, 0.55, -18); scene.add(post);
+}
+const railTop = new THREE.Mesh(new THREE.BoxGeometry(42, 0.12, 0.12), lam(0x9a6a3a));
+railTop.position.set(4, 0.95, -18); scene.add(railTop);
+const railBot = railTop.clone(); railBot.position.y = 0.55; scene.add(railBot);
+/* gum trees on the horizon */
+function gum(x, z, s) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 2.4, 8), lam(0xcfc4ae));
+  trunk.position.y = 1.2; g.add(trunk);
+  [[0,3.0,0],[-0.7,2.5,0.2],[0.7,2.6,-0.2]].forEach(p => {
+    const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.85, 12, 10), lam(0x6e8f5e));
+    leaf.position.set(p[0], p[1], p[2]); g.add(leaf);
+  });
+  g.position.set(x, 0, z); g.scale.setScalar(s || 1); scene.add(g);
+}
+[[-18,-10,1.2],[-15,-15,1.0],[18,-9,1.3],[22,-13,1.1],[7,-16,0.9],[-5,-16,1.1]].forEach(t => gum(t[0], t[1], t[2]));
+/* clouds + sun */
+const clouds = [];
+const cloudMat = lam(0xffffff);
+for (let i = 0; i < 7; i++) {
+  const c = new THREE.Group();
+  for (let j = 0; j < 3; j++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(1.1 + Math.random(), 12, 10), cloudMat);
+    p.position.set(j * 1.4 - 1.4, Math.random()*0.4, 0); c.add(p);
+  }
+  c.position.set(-28 + i * 11, 11 + Math.random()*4, -22 - Math.random()*8);
+  scene.add(c); clouds.push(c);
+}
+const sunBall = new THREE.Mesh(new THREE.SphereGeometry(2.2, 16, 14),
+  new THREE.MeshBasicMaterial({ color: 0xffe27a })); sunBall.position.set(17, 13, -28); scene.add(sunBall);
+const flowerCols = [0xff8fb1, 0xffd54f, 0xffffff, 0xb39ddb];
+for (let i = 0; i < 22; i++) {
+  const f = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), lam(flowerCols[i % 4]));
+  f.position.set(-14 + Math.random()*32, 0.12, 2.5 + Math.random()*8);
+  scene.add(f);
+}
+
+function blobShadow(r) {
+  const m = new THREE.Mesh(new THREE.CircleGeometry(r, 20),
+    new THREE.MeshBasicMaterial({ color: 0x4a5e23, transparent: true, opacity: 0.26 }));
+  m.rotation.x = -Math.PI / 2; m.position.y = 0.02; return m;
+}
+
+/* ---------- the carrot patch ---------- */
+const CARROT_X = -4.8;
+const patch = new THREE.Mesh(new THREE.CircleGeometry(2.0, 22), lam(0x7a5230));
+patch.rotation.x = -Math.PI / 2; patch.position.set(CARROT_X, 0.03, 0); scene.add(patch);
+const mound = new THREE.Mesh(new THREE.SphereGeometry(0.9, 16, 12), lam(0x8a5e36));
+mound.scale.set(1, 0.3, 1); mound.position.set(CARROT_X, 0, 0); mound.visible = false; scene.add(mound);
+const hole = new THREE.Mesh(new THREE.CircleGeometry(0.95, 20), lam(0x3a2812));
+hole.rotation.x = -Math.PI / 2; hole.position.set(CARROT_X, 0.04, 0); hole.visible = false; scene.add(hole);
+
+/* the carrot: a long orange root + feathery green tops */
+const plant = new THREE.Group(); plant.position.set(CARROT_X, 0, 0); scene.add(plant);
+const root = new THREE.Group(); plant.add(root);
+const carrotBody = new THREE.Mesh(new THREE.ConeGeometry(0.95, 3.6, 16), lam(0xf07f1f));
+carrotBody.rotation.x = Math.PI; carrotBody.position.y = -1.3; root.add(carrotBody);
+const carrotShoulder = new THREE.Mesh(new THREE.SphereGeometry(0.95, 16, 12), lam(0xf07f1f));
+carrotShoulder.scale.y = 0.55; carrotShoulder.position.y = 0.5; root.add(carrotShoulder);
+/* little ring lines on the carrot */
+for (let i = 0; i < 3; i++) {
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.82 - i*0.2, 0.82 - i*0.2, 0.05, 14), lam(0xd96a10));
+  ring.position.y = -0.3 - i * 0.8; root.add(ring);
+}
+const leaves = new THREE.Group(); plant.add(leaves);
+for (let i = 0; i < 7; i++) {
+  const a = (i / 7) * Math.PI * 2;
+  const frond = new THREE.Group();
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 1.0, 6), lam(0x4f9e4a));
+  stem.position.y = 0.5; frond.add(stem);
+  for (let k = 0; k < 3; k++) {
+    const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.2 - k*0.04, 8, 6), lam(0x57b04f));
+    tuft.scale.set(0.7, 1.4, 0.55);
+    tuft.position.y = 0.85 + k * 0.32; frond.add(tuft);
+  }
+  frond.position.set(Math.cos(a) * 0.3, 0, Math.sin(a) * 0.3);
+  frond.rotation.z = -Math.cos(a) * 0.5; frond.rotation.x = Math.sin(a) * 0.5;
+  leaves.add(frond);
+}
+const GROW = [
+  { rootY: -3.4, leafS: 0.001, leafY: 0.0 },
+  { rootY: -3.4, leafS: 0.45,  leafY: 0.0 },
+  { rootY: -1.7, leafS: 1.0,   leafY: 0.15 },
+  { rootY: -1.1, leafS: 1.6,   leafY: 0.55 },
+  { rootY: -0.55, leafS: 2.3,  leafY: 1.0 },
+];
+function setGrowth(stage, animated) {
+  const G = GROW[stage];
+  if (!animated) {
+    root.position.y = G.rootY; leaves.scale.setScalar(G.leafS); leaves.position.y = G.leafY;
+    return;
+  }
+  const r0 = root.position.y, s0 = leaves.scale.x, y0 = leaves.position.y;
+  tween(0.6, p => {
+    const e = 1 + 0.45 * Math.sin(Math.min(p * 1.4, 1) * Math.PI);
+    const q = easeOut(p);
+    root.position.y = r0 + (G.rootY - r0) * q;
+    leaves.scale.setScalar((s0 + (G.leafS - s0) * q) * (p < 1 ? e * 0.6 + 0.4 : 1));
+    leaves.position.y = y0 + (G.leafY - y0) * q;
+  });
+}
+setGrowth(0, false);
+
+/* ---------- the rope ---------- */
+const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1, 8), lam(0xc9b27c));
+rope.rotation.z = Math.PI / 2; rope.visible = false; scene.add(rope);
+let ropeEndX = 0;
+function updateRope(endX) {
+  ropeEndX = endX;
+  const startX = CARROT_X + 0.7;
+  const len = Math.max(endX - startX, 0.5);
+  rope.scale.y = len;
+  rope.position.set(startX + len / 2, 0.78, 0);
+  rope.visible = true;
+}
+
+/* ---------- people ---------- */
+function makeHead(g, skin, y, eyeColor, eyeSize) {
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 18, 14), lam(skin));
+  head.position.y = y; g.add(head);
+  [-0.12, 0.12].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(eyeSize || 0.045, 8, 6), lam(eyeColor || 0x222222));
+    e.position.set(x, y + 0.05, 0.29); g.add(e);
+  });
+  return head;
+}
+function makeMum() {
+  const g = new THREE.Group();
+  [[-0.15],[0.15]].forEach(p => {  // jeans
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.55, 8), lam(0x4e6c95));
+    leg.position.set(p[0], 0.28, 0); g.add(leg);
+  });
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 14), lam(0x4ba38f)); // teal shirt
+  torso.scale.set(1, 1.25, 0.8); torso.position.y = 0.92; g.add(torso);
+  makeHead(g, 0xf2c9a0, 1.74);
+  /* brown hair with a ponytail */
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.37, 14, 12), lam(0x6b4a2f));
+  hair.scale.set(1, 0.78, 1); hair.position.set(0, 1.88, -0.05); g.add(hair);
+  const pony1 = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), lam(0x6b4a2f));
+  pony1.position.set(0, 1.62, -0.34); g.add(pony1);
+  const pony2 = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), lam(0x6b4a2f));
+  pony2.position.set(0, 1.4, -0.4); g.add(pony2);
+  /* straw sun hat */
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.05, 14), lam(0xe9c46a));
+  brim.position.y = 2.0; g.add(brim);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.2, 12), lam(0xe9c46a));
+  cap.position.y = 2.1; g.add(cap);
+  g.add(blobShadow(0.5));
+  return g;
+}
+function makeDad() {
+  const g = new THREE.Group();
+  [[-0.16],[0.16]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.58, 8), lam(0x44597a));
+    leg.position.set(p[0], 0.29, 0); g.add(leg);
+  });
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.46, 16, 14), lam(0xc4453a)); // red work shirt
+  torso.scale.set(1, 1.25, 0.85); torso.position.y = 0.98; g.add(torso);
+  makeHead(g, 0xf2c9a0, 1.84);
+  /* short brown hair */
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.36, 14, 12), lam(0x5d3f26));
+  hair.scale.set(1, 0.62, 1); hair.position.set(0, 2.0, -0.04); g.add(hair);
+  g.add(blobShadow(0.52));
+  return g;
+}
+function makeTommy() {
+  const g = new THREE.Group();
+  [[-0.12],[0.12]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.3, 8), lam(0x3a4a66));
+    leg.position.set(p[0], 0.15, 0); g.add(leg);
+  });
+  /* little blue jumper, with a hood bump at the back */
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 14), lam(0x3f6fb5));
+  torso.scale.set(1, 1.1, 0.85); torso.position.y = 0.6; g.add(torso);
+  const hood = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), lam(0x35609e));
+  hood.position.set(0, 0.92, -0.26); g.add(hood);
+  /* big happy head, blue eyes */
+  makeHead(g, 0xf6d9b8, 1.28, 0x4a90d9, 0.055);
+  /* blond hair with a soft fringe */
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.36, 14, 12), lam(0xf2d98a));
+  hair.scale.set(1, 0.66, 1); hair.position.set(0, 1.44, -0.03); g.add(hair);
+  const fringe = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), lam(0xf2d98a));
+  fringe.scale.set(1, 0.4, 0.7); fringe.position.set(0, 1.42, 0.16); g.add(fringe);
+  g.add(blobShadow(0.4));
+  g.scale.setScalar(0.8);
+  return g;
+}
+
+/* ---------- animals ---------- */
+function makeTeddy() {  // brown cavoodle — extra curly!
+  const g = new THREE.Group();
+  const brown = lam(0x9c6b3d), curl = lam(0x8a5a33);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 12), brown);
+  body.scale.set(1, 0.95, 1.3); body.position.y = 0.48; g.add(body);
+  /* fluffy curls */
+  [[-0.25,0.7,0.1],[0.25,0.7,0.1],[0,0.78,-0.15],[-0.2,0.62,-0.35],[0.2,0.62,-0.35]].forEach(p => {
+    const c = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), curl);
+    c.position.set(p[0], p[1], p[2]); g.add(c);
+  });
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), brown);
+  head.position.set(0, 0.95, 0.42); g.add(head);
+  const topknot = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), curl);
+  topknot.position.set(0, 1.18, 0.36); g.add(topknot);
+  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), curl);
+  snout.scale.z = 1.3; snout.position.set(0, 0.86, 0.66); g.add(snout);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), lam(0x222222));
+  nose.position.set(0, 0.88, 0.8); g.add(nose);
+  [-0.1, 0.1].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), lam(0x222222));
+    e.position.set(x, 1.0, 0.64); g.add(e);
+  });
+  [-0.24, 0.24].forEach(x => {  // floppy curly ears
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), curl);
+    ear.scale.set(0.55, 1.2, 0.55); ear.position.set(x, 0.88, 0.34); g.add(ear);
+  });
+  [[-0.15,0.3],[0.15,0.3],[-0.15,-0.3],[0.15,-0.3]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.3, 8), curl);
+    leg.position.set(p[0], 0.15, p[1]); g.add(leg);
+  });
+  const tail = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), curl);  // pom tail
+  tail.position.set(0, 0.7, -0.6); g.add(tail);
+  g.userData.tail = tail;
+  g.add(blobShadow(0.42));
+  return g;
+}
+function makeRingo() {  // lean silver tabby
+  const g = new THREE.Group();
+  const silver = lam(0xb4b9c1), dark = lam(0x7e838c);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 12), silver);
+  body.scale.set(0.95, 0.9, 1.45); body.position.y = 0.36; g.add(body);
+  for (let i = 0; i < 3; i++) {  // tabby stripes
+    const s = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.07, 0.1), dark);
+    s.position.set(0, 0.58, -0.25 + i * 0.22); g.add(s);
+  }
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), silver);
+  head.position.set(0, 0.74, 0.42); g.add(head);
+  [-0.09, 0.09].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), lam(0xd9c24a));  // sharp yellow eyes
+    e.position.set(x, 0.78, 0.61); g.add(e);
+  });
+  [-0.11, 0.11].forEach(x => {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 8), dark);
+    ear.position.set(x, 0.95, 0.36); g.add(ear);
+  });
+  [[-0.11,0.26],[0.11,0.26],[-0.11,-0.26],[0.11,-0.26]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.24, 8), dark);
+    leg.position.set(p[0], 0.12, p[1]); g.add(leg);
+  });
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.055, 0.65, 8), dark);
+  tail.rotation.x = 0.5; tail.position.set(0, 0.58, -0.6); g.add(tail);
+  g.add(blobShadow(0.34));
+  return g;
+}
+function makeRose() {  // fluffy black cat
+  const g = new THREE.Group();
+  const black = lam(0x35353d), fluff = lam(0x2a2a31);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 12), black);
+  body.scale.set(1.1, 1.0, 1.3); body.position.y = 0.4; g.add(body);
+  /* extra fluff */
+  [[-0.26,0.5,0.05],[0.26,0.5,0.05],[0,0.6,-0.2],[0,0.45,0.3]].forEach(p => {
+    const f = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), fluff);
+    f.position.set(p[0], p[1], p[2]); g.add(f);
+  });
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 12), black);
+  head.position.set(0, 0.82, 0.36); g.add(head);
+  [-0.1, 0.1].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), lam(0x9ad94a));  // green eyes
+    e.position.set(x, 0.86, 0.56); g.add(e);
+  });
+  [-0.12, 0.12].forEach(x => {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.18, 8), fluff);
+    ear.position.set(x, 1.04, 0.3); g.add(ear);
+  });
+  [[-0.12,0.24],[0.12,0.24],[-0.12,-0.24],[0.12,-0.24]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.24, 8), fluff);
+    leg.position.set(p[0], 0.12, p[1]); g.add(leg);
+  });
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.7, 8), fluff);  // big plume tail
+  tail.rotation.x = -0.6; tail.position.set(0, 0.72, -0.62); g.add(tail);
+  g.add(blobShadow(0.38));
+  return g;
+}
+function makeHen() {  // red hyline
+  const g = new THREE.Group();
+  const red = lam(0xb5562a), darkR = lam(0x8e3f1d);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), red);
+  body.scale.set(0.95, 0.95, 1.25); body.position.y = 0.24; g.add(body);
+  const tailF = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.28, 8), darkR);
+  tailF.rotation.x = -1.0; tailF.position.set(0, 0.4, -0.24); g.add(tailF);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), red);
+  head.position.set(0, 0.46, 0.18); g.add(head);
+  const comb = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.09, 0.1), lam(0xe23b3b));
+  comb.position.set(0, 0.57, 0.16); g.add(comb);
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.1, 6), lam(0xf2a93a));
+  beak.rotation.x = Math.PI / 2; beak.position.set(0, 0.45, 0.29); g.add(beak);
+  [-0.05, 0.05].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 5), lam(0x222222));
+    e.position.set(x, 0.49, 0.25); g.add(e);
+  });
+  g.add(blobShadow(0.18));
+  return g;
+}
+function makeDuck() {  // white Indian runner — stands tall like a bottle!
+  const g = new THREE.Group();
+  const white = lam(0xf6f4ec);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), white);
+  body.scale.set(0.9, 1.9, 0.95); body.position.y = 0.42; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), white);
+  head.position.set(0, 0.86, 0.06); g.add(head);
+  const bill = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 8), lam(0xf2a93a));
+  bill.rotation.x = Math.PI / 2; bill.position.set(0, 0.84, 0.21); g.add(bill);
+  [-0.05, 0.05].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 5), lam(0x222222));
+    e.position.set(x, 0.89, 0.13); g.add(e);
+  });
+  g.add(blobShadow(0.18));
+  return g;
+}
+
+/* ---------- the grey & gold Fergie ---------- */
+function makeTractor() {
+  const g = new THREE.Group();
+  const grey = lam(0x9aa0a6), gold = lam(0xc8a23a), darkT = lam(0x2c2c32);
+  /* gold engine block below, grey bonnet above — the classic FE35 look */
+  const engine = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.6, 0.8), gold);
+  engine.position.set(0.5, 0.75, 0); g.add(engine);
+  const bonnet = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 0.7), grey);
+  bonnet.position.set(0.5, 1.3, 0); g.add(bonnet);
+  const noseT = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.85, 0.72), grey);
+  noseT.position.set(1.45, 1.05, 0); g.add(noseT);
+  const seatBack = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.55), grey);
+  seatBack.position.set(-0.95, 1.25, 0); g.add(seatBack);
+  const wheelArchL = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.14, 0.3), grey);
+  wheelArchL.position.set(-0.7, 1.78, 0.62); g.add(wheelArchL);
+  const wheelArchR = wheelArchL.clone(); wheelArchR.position.z = -0.62; g.add(wheelArchR);
+  /* steering wheel */
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 6), darkT);
+  col.rotation.z = 0.6; col.position.set(-0.35, 1.65, 0); g.add(col);
+  const wheelS = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.03, 8, 14), darkT);
+  wheelS.rotation.y = Math.PI / 2; wheelS.rotation.z = 0.6; wheelS.position.set(-0.5, 1.82, 0); g.add(wheelS);
+  /* exhaust */
+  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8), darkT);
+  pipe.position.set(0.7, 1.95, 0.18); g.add(pipe);
+  g.userData.exhaust = new THREE.Vector3(0.7, 2.4, 0.18);
+  /* wheels in holders so they can spin */
+  g.userData.wheels = [];
+  function wheel(r, w, x, z) {
+    const holder = new THREE.Group();
+    const tyre = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 18), darkT);
+    tyre.rotation.x = Math.PI / 2; holder.add(tyre);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.5, r * 0.5, w + 0.02, 12), gold);
+    hub.rotation.x = Math.PI / 2; holder.add(hub);
+    holder.position.set(x, r, z);
+    g.add(holder); g.userData.wheels.push(holder);
+  }
+  wheel(0.85, 0.3, -0.7, 0.75); wheel(0.85, 0.3, -0.7, -0.75);
+  wheel(0.42, 0.2, 1.2, 0.55);  wheel(0.42, 0.2, 1.2, -0.55);
+  /* seated driver (Dad), shown while driving */
+  const driver = new THREE.Group();
+  const dTorso = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 12), lam(0xc4453a));
+  dTorso.scale.set(1, 1.2, 0.8); dTorso.position.y = 0.3; driver.add(dTorso);
+  const dHead = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 12), lam(0xf2c9a0));
+  dHead.position.y = 0.95; driver.add(dHead);
+  const dHair = new THREE.Mesh(new THREE.SphereGeometry(0.27, 12, 10), lam(0x5d3f26));
+  dHair.scale.set(1, 0.6, 1); dHair.position.set(0, 1.08, -0.03); driver.add(dHair);
+  driver.position.set(-0.85, 1.55, 0);
+  g.add(driver); g.userData.driver = driver;
+  return g;
+}
+const tractor = makeTractor();
+tractor.visible = false; scene.add(tractor);
+let engineOn = false, engineT = 0, wheelSpin = 0;
+
+/* ---------- cast & slots ---------- */
+const mum = makeMum();     scene.add(mum);   mum.visible = false;
+const dad = makeDad();     scene.add(dad);   dad.visible = false;
+const teddy = makeTeddy(); scene.add(teddy); teddy.visible = false;
+const ringo = makeRingo(); scene.add(ringo); ringo.visible = false;
+const rose = makeRose();   scene.add(rose);  rose.visible = false;
+const tommy = makeTommy(); scene.add(tommy); tommy.visible = false;
+const birds = [];
+for (let i = 0; i < 9; i++) { const h = makeHen(); h.visible = false; scene.add(h); birds.push(h); }
+const duck = makeDuck(); duck.visible = false; scene.add(duck); birds.push(duck);
+
+const SLOT = { mum: -2.7, dad: -1.55, teddy: -0.6, ringo: 0.15, rose: 0.85, birdsFrom: 1.5, tommy: 4.3 };
+
+/* ---------- animation plumbing ---------- */
+const tweens = [];
+function tween(dur, fn, done) { tweens.push({ t: 0, dur, fn, done }); }
+const easeOut = p => 1 - Math.pow(1 - p, 3);
+const easeIn  = p => p * p * p;
+
+const walkers = [];
+function walkTo(obj, target, speed, done, opts) {
+  opts = opts || {};
+  walkers.push({ obj, target: target.clone(), speed, done, t: 0,
+    hop: opts.hop !== false, hopH: opts.hopH || 0.12 });
+}
+function faceToward(obj, target) {
+  obj.rotation.y = Math.atan2(target.x - obj.position.x, target.z - obj.position.z);
+}
+
+let puffs = [], confetti = [];
+function soilBurst(at, big) {
+  const n = big ? 26 : 9;
+  for (let i = 0; i < n; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.08 + Math.random()*0.09, 7, 5),
+      new THREE.MeshBasicMaterial({ color: i % 3 ? 0x7a5230 : 0x5a3c1c, transparent: true, opacity: 1 }));
+    p.position.copy(at);
+    p.userData.v = new THREE.Vector3((Math.random()-0.5) * (big?6:3), (big?4.5:2.2) + Math.random()*2.5, (Math.random()-0.5) * (big?6:3));
+    p.userData.life = 0.9; p.userData.g = true;
+    scene.add(p); puffs.push(p);
+  }
+}
+function smokePuff(at, dark) {
+  const p = new THREE.Mesh(new THREE.SphereGeometry(0.13 + Math.random()*0.1, 8, 6),
+    new THREE.MeshBasicMaterial({ color: dark ? 0x55555c : 0xcccccc, transparent: true, opacity: 0.7 }));
+  p.position.copy(at);
+  p.userData.v = new THREE.Vector3((Math.random()-0.5)*0.4, 1.2 + Math.random()*0.6, (Math.random()-0.5)*0.4);
+  p.userData.life = 1.3;
+  scene.add(p); puffs.push(p);
+}
+function sparkle(at, color) {
+  for (let i = 0; i < 7; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5),
+      new THREE.MeshBasicMaterial({ color: color || 0xffe066, transparent: true, opacity: 1 }));
+    p.position.copy(at);
+    p.userData.v = new THREE.Vector3((Math.random()-0.5)*3, 2 + Math.random()*2, (Math.random()-0.5)*3);
+    p.userData.life = 0.7;
+    scene.add(p); puffs.push(p);
+  }
+}
+function feathers(at) {
+  for (let i = 0; i < 10; i++) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.2),
+      new THREE.MeshBasicMaterial({ color: i % 3 ? 0xb5562a : 0xf6f4ec, side: THREE.DoubleSide, transparent: true, opacity: 1 }));
+    p.position.copy(at);
+    p.userData.v = new THREE.Vector3((Math.random()-0.5)*2, 1 + Math.random()*1.5, (Math.random()-0.5)*2);
+    p.userData.life = 1.4;
+    scene.add(p); puffs.push(p);
+  }
+}
+function waterDrops(at) {
+  for (let i = 0; i < 16; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.07, 7, 5),
+      new THREE.MeshBasicMaterial({ color: 0x6fc3ef, transparent: true, opacity: 0.9 }));
+    p.position.copy(at).add(new THREE.Vector3((Math.random()-0.5)*1.6, 2.4 + Math.random()*0.8, (Math.random()-0.5)*1.6));
+    p.userData.v = new THREE.Vector3(0, -2.2 - Math.random(), 0);
+    p.userData.life = 1.1;
+    scene.add(p); puffs.push(p);
+  }
+}
+function dropConfetti() {
+  const cols = [0xff6b8a, 0xffd54f, 0x7ed46a, 0x6fc3ef, 0xf07f1f];
+  for (let i = 0; i < 70; i++) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.18),
+      new THREE.MeshBasicMaterial({ color: cols[i % 5], side: THREE.DoubleSide }));
+    p.position.set(-8 + Math.random()*16, 7 + Math.random()*6, -3 + Math.random()*6);
+    p.userData.v = 1 + Math.random()*1.2;
+    p.userData.r = (Math.random()-0.5) * 4;
+    scene.add(p); confetti.push(p);
+  }
+}
+
+/* ---------- UI helpers ---------- */
+const narrEl = document.getElementById('narration');
+const narrWho = narrEl.querySelector('.who');
+const narrTxt = narrEl.querySelector('.txt');
+const btn = document.getElementById('btn');
+const badge = document.getElementById('badge');
+
+function showNarr(who, text) {
+  narrWho.textContent = who || '📖';
+  narrTxt.textContent = ' ' + text;
+  narrEl.style.opacity = 1;
+}
+function hideNarr() { narrEl.style.opacity = 0; }
+
+let btnAction = null;
+function setBtn(label, action, color) {
+  btn.textContent = label;
+  btn.className = color ? color : '';
+  btnAction = action;
+}
+function hideBtn() { btn.classList.add('hidden'); btnAction = null; }
+btn.addEventListener('click', () => {
+  audio();
+  if (btnAction) { const a = btnAction; btnAction = null; a(); }
+});
+
+function say(lines, cb, btnLabel) {
+  let i = 0;
+  function step() {
+    const L = lines[i];
+    showNarr(L.who, L.text);
+    if (L.snd) L.snd();
+    i++;
+    if (i < lines.length) setBtn(btnLabel || 'Next ▸', step, 'blue');
+    else setBtn(btnLabel || 'Next ▸', () => { cb && cb(); }, 'blue');
+  }
+  step();
+}
+
+/* ---------- camera ---------- */
+let camHome = { x: -2.8, y: 4.6, z: 10.0, lookX: -3.4, lookY: 1.2 };
+let shakeT = 0, bobT = 0;
+function camForRound(r) {
+  camHome = { x: -1.9 + r * 0.6, y: 4.7 + r * 0.3, z: 10.0 + r * 1.15, lookX: -2.8 + r * 0.55, lookY: 1.2 };
+}
+
+/* ---------- story state ---------- */
+let round = 0;            // 1 Mum · 2 +Fergie · 3 +Teddy · 4 +cats · 5 +birds · 6 +Tommy
+let growStage = 0;
+let pullers = [];         // { obj, baseX, amp }
+let tractorPulling = false;
+let theEnd = false, tumbled = false;
+
+const BADGES = ['', '🥕👩‍🌾', '🥕👩‍🌾👨‍🌾🚜', '🥕👩‍🌾👨‍🌾🐶', '🥕👩‍🌾👨‍🌾🐶🐱🐈‍⬛', '🥕👩‍🌾👨‍🌾🐶🐱🐈‍⬛🐔🦆', '🥕👩‍🌾👨‍🌾🐶🐱🐈‍⬛🐔🦆👦'];
+function updateBadge() {
+  badge.style.display = 'block';
+  badge.textContent = BADGES[round];
+}
+
+function addPuller(obj, amp) {
+  obj.userData.baseX = obj.position.x;
+  pullers.push({ obj, baseX: obj.position.x, amp: amp || 0.28 });
+}
+
+function resetStory() {
+  round = 0; growStage = 0; theEnd = false; tumbled = false;
+  pullers = []; tractorPulling = false;
+  [mum, dad, teddy, ringo, rose, tommy, ...birds].forEach(c => {
+    c.visible = false; c.position.set(16, 0, 0); c.rotation.set(0, 0, 0);
+  });
+  tractor.visible = false; tractor.position.set(18, 0, 0); tractor.rotation.set(0, 0, 0);
+  tractor.userData.driver.visible = true;
+  engineOn = false;
+  plant.position.set(CARROT_X, 0, 0); plant.rotation.set(0, 0, 0);
+  setGrowth(0, false);
+  mound.visible = false; hole.visible = false; rope.visible = false;
+  confetti.forEach(c => scene.remove(c)); confetti = [];
+  camHome = { x: -2.8, y: 4.6, z: 10.0, lookX: -3.4, lookY: 1.2 };
+  badge.style.display = 'none';
+}
+
+/* ================= ACT ONE — Mum grows the carrot ================= */
+function startStory() {
+  resetStory();
+  mum.visible = true;
+  mum.position.set(-11, 0, 2);
+  say([
+    { who: '📖', text: 'Once upon a time, on our very own farm, Mum planted a tiny carrot seed in her vegetable garden.' },
+  ], () => {
+    hideNarr();
+    const spot = new THREE.Vector3(CARROT_X - 2.0, 0, 0.6);
+    faceToward(mum, spot);
+    walkTo(mum, spot, 3.0, () => {
+      faceToward(mum, new THREE.Vector3(CARROT_X, 0, 0));
+      setBtn('🌱 Plant the seed!', plantSeed, 'green');
+    });
+  }, '▸ Turn the page');
+}
+function plantSeed() {
+  hideBtn();
+  tween(0.8, p => { mum.rotation.x = 0.5 * Math.sin(p * Math.PI); });
+  setTimeout(() => {
+    sndClick(); soilBurst(new THREE.Vector3(CARROT_X, 0.3, 0), false);
+    mound.visible = true; mound.scale.set(0.6, 0.2, 0.6);
+    showNarr('👩‍🌾', '“Grow, little carrot,” said Mum. “Grow sweet, and grow strong!”');
+    setBtn('💧 Water it!', waterIt, 'green');
+  }, 500);
+}
+function waterIt() {
+  hideBtn(); sndWater();
+  waterDrops(new THREE.Vector3(CARROT_X, 0, 0));
+  setTimeout(() => {
+    growStage = 1; setGrowth(1, true); sndBoing(0);
+    showNarr('📖', 'And the rain fell, and the sun shone… and a little green sprout popped up!');
+    setBtn('☀️ Grow, carrot, grow!', growMore, 'green');
+  }, 900);
+}
+function growMore() {
+  hideBtn();
+  growStage++;
+  setGrowth(growStage, true);
+  sndBoing(growStage);
+  sparkle(new THREE.Vector3(CARROT_X, 1 + growStage * 0.4, 0), 0xbef27a);
+  mound.scale.setScalar(0.6 + growStage * 0.25); mound.scale.y = 0.2 + growStage * 0.06;
+  const lines = [null, null,
+    'The carrot grew…',
+    '…and it GREW…',
+    '…and it GREW — until it was absolutely ENORMOUS!'];
+  showNarr('📖', lines[growStage]);
+  if (growStage < 4) {
+    setTimeout(() => setBtn('☀️ Grow, carrot, grow!', growMore, 'green'), 500);
+  } else {
+    shakeT = 0.4; sndThud();
+    setTimeout(() => {
+      say([{ who: '👩‍🌾', text: '“Goodness me!” said Mum. “Time to pull up that enormous carrot!”' }], () => {
+        hideNarr(); mumGrabsRope();
+      });
+    }, 1200);
+  }
+}
+
+/* ================= ACT TWO — the great carrot pull ================= */
+function mumGrabsRope() {
+  round = 1; updateBadge(); camForRound(1);
+  const slot = new THREE.Vector3(SLOT.mum, 0, 0);
+  faceToward(mum, slot);
+  walkTo(mum, slot, 3.0, () => {
+    faceToward(mum, new THREE.Vector3(CARROT_X, 0, 0));
+    addPuller(mum);
+    updateRope(SLOT.mum + 0.3);
+    sndClick();
+    showNarr('📖', 'Mum tied a good strong rope around the carrot top, and held on tight.');
+    setBtn('💪 PULL!', doPull, 'red');
+  });
+}
+
+function doPull() {
+  hideBtn();
+  const success = round === 6;
+  showNarr('📖', success
+    ? 'Tommy pulled… and they ALL pulled… with all their might…'
+    : round === 2 ? 'The old Fergie revved… and everyone pulled…'
+    : 'They pulled… and they PULLED…');
+  sndStrain(); setTimeout(sndStrain, 500); setTimeout(sndStrain, 1000);
+  if (tractorPulling) { sndRev(); setTimeout(sndRev, 700); }
+  const ropeBaseX = rope.position.x;
+  tween(1.6, p => {
+    const tug = Math.max(Math.sin(p * Math.PI * 3), 0);
+    pullers.forEach(P => {
+      P.obj.position.x = P.baseX + tug * P.amp;
+      P.obj.rotation.z = -tug * 0.26;
+    });
+    rope.position.x = ropeBaseX + tug * 0.12;
+    plant.rotation.z = tug * 0.016 * round;
+    leaves.rotation.y = Math.sin(p * 24) * 0.06 * tug;
+    if (tractorPulling) {
+      tractor.rotation.z = -tug * 0.05;
+      wheelSpin = tug * 14;
+      if (Math.random() < 0.35) smokePuff(tractor.userData.exhaust.clone().applyMatrix4(tractor.matrixWorld), true);
+      if (Math.random() < 0.3) soilBurst(tractor.position.clone().add(new THREE.Vector3(-0.7, 0.2, 0.7)), false);
+    }
+    if (Math.random() < 0.18) soilBurst(new THREE.Vector3(CARROT_X + 0.7, 0.2, 0.4), false);
+  }, () => {
+    pullers.forEach(P => { P.obj.position.x = P.baseX; P.obj.rotation.z = 0; });
+    rope.position.x = ropeBaseX;
+    plant.rotation.z = 0; leaves.rotation.y = 0;
+    tractor.rotation.z = 0; wheelSpin = 0;
+    if (success) carrotPops();
+    else FAILS[round]();
+  });
+}
+
+/* ---- after each failed pull ---- */
+const FAILS = {
+  1: () => {  // Mum alone → call Dad on the Fergie
+    sndThud(); shakeT = 0.3;
+    say([
+      { who: '📖', text: '…but the carrot would NOT budge!' },
+      { who: '📖', text: 'So Mum called for Dad — and Dad came rumbling up the paddock on his grey and gold Fergie!', snd: sndRev },
+    ], () => { hideNarr(); fergieArrives(); });
+  },
+  2: () => {  // even the tractor fails!
+    sndThud(); shakeT = 0.4;
+    say([
+      { who: '📖', text: 'The Fergie huffed and puffed and spun its wheels…' },
+      { who: '📖', text: '…but even the TRACTOR couldn’t pull it out!' },
+      { who: '👨‍🌾', text: '“Well I never!” said Dad. “Teddy! Come and help!”', snd: sndBark },
+    ], () => { hideNarr(); parkFergie(); });
+  },
+  3: () => {
+    sndThud(); shakeT = 0.3;
+    say([
+      { who: '📖', text: '…but the carrot would NOT budge!' },
+      { who: '📖', text: 'So Teddy barked for Ringo and Rose!', snd: sndMeow },
+    ], () => { hideNarr(); catsArrive(); });
+  },
+  4: () => {
+    sndThud(); shakeT = 0.3;
+    say([
+      { who: '📖', text: '…but the carrot would NOT budge!' },
+      { who: '📖', text: 'So the cats called for the chooks — all the little red hens, and the white runner duck too!', snd: () => cluckChorus(8) },
+    ], () => { hideNarr(); birdsArrive(); });
+  },
+  5: () => {
+    sndThud(); shakeT = 0.4;
+    say([
+      { who: '📖', text: '…but STILL the enormous carrot would not budge!' },
+      { who: '📖', text: 'Then a little voice called out: “I’ll help!”' },
+      { who: '👦', text: 'It was TOMMY!', snd: sndGiggle },
+    ], () => { hideNarr(); tommyArrives(); });
+  },
+};
+
+/* ---- arrivals ---- */
+function fergieArrives() {
+  round = 2; updateBadge(); camForRound(2);
+  tractor.visible = true;
+  tractor.position.set(17, 0, 0); tractor.rotation.y = Math.PI;  // facing -x, driving in
+  engineOn = true;
+  const stopAt = 2.6;
+  tween(3.2, p => {
+    tractor.position.x = 17 + (stopAt - 17) * easeOut(p);
+    wheelSpin = 6 * (1 - p * 0.4);
+  }, () => {
+    wheelSpin = 0;
+    /* turn around so the towbar faces the carrot */
+    tween(1.0, p => { tractor.rotation.y = Math.PI - Math.PI * easeOut(p); }, () => {
+      tractor.rotation.y = 0;
+      sndClick();
+      updateRope(tractor.position.x - 1.7);
+      showNarr('👨‍🌾', '“Hitch her up!” said Dad, and he tied the rope to the old grey Fergie.');
+      setBtn('💪 PULL!', doPull, 'red');
+    });
+  });
+}
+function parkFergie() {
+  /* Dad parks the tractor by the shed and joins the rope by hand */
+  engineOn = true;
+  const from = tractor.position.clone();
+  const park = new THREE.Vector3(9, 0, -5);
+  faceToward(tractor, park);
+  tween(2.2, p => {
+    tractor.position.lerpVectors(from, park, easeOut(p));
+    wheelSpin = 5 * (1 - p);
+  }, () => {
+    engineOn = false; wheelSpin = 0;
+    smokePuff(tractor.userData.exhaust.clone().applyMatrix4(tractor.matrixWorld), true);
+    tractor.userData.driver.visible = false;
+    /* Dad hops down and walks to the rope */
+    dad.visible = true;
+    dad.position.copy(park).add(new THREE.Vector3(-1.2, 0, 1.2));
+    round = 3; updateBadge(); camForRound(3);
+    updateRope(SLOT.teddy + 0.4);
+    const slot = new THREE.Vector3(SLOT.dad, 0, 0);
+    faceToward(dad, slot);
+    walkTo(dad, slot, 3.2, () => {
+      faceToward(dad, new THREE.Vector3(CARROT_X, 0, 0));
+      addPuller(dad);
+      teddyArrives();
+    });
+  });
+}
+function teddyArrives() {
+  teddy.visible = true;
+  teddy.position.set(15, 0, 2.5);
+  sndBark();
+  const slot = new THREE.Vector3(SLOT.teddy, 0, 0);
+  faceToward(teddy, slot);
+  walkTo(teddy, slot, 4.6, () => {
+    faceToward(teddy, new THREE.Vector3(CARROT_X, 0, 0));
+    addPuller(teddy, 0.24);
+    say([{ who: '🐶', text: 'Teddy came bounding over, wagging his curly tail, and took the rope in his teeth.' }],
+      () => { hideNarr(); setBtn('💪 PULL!', doPull, 'red'); });
+  }, { hopH: 0.16 });
+}
+function catsArrive() {
+  round = 4; updateBadge(); camForRound(4);
+  updateRope(SLOT.rose + 0.4);
+  ringo.visible = true; ringo.position.set(15, 0, -2);
+  rose.visible = true;  rose.position.set(16, 0, 3);
+  sndMeow(760); setTimeout(() => sndMeow(580), 400);
+  const s1 = new THREE.Vector3(SLOT.ringo, 0, 0), s2 = new THREE.Vector3(SLOT.rose, 0, 0);
+  faceToward(ringo, s1); faceToward(rose, s2);
+  let arrived = 0;
+  const both = () => {
+    arrived++;
+    if (arrived < 2) return;
+    say([{ who: '🐱', text: 'Ringo the silver tabby and fluffy black Rose came padding over, and held on tight.' }],
+      () => { hideNarr(); setBtn('💪 PULL!', doPull, 'red'); });
+  };
+  walkTo(ringo, s1, 4.2, () => { faceToward(ringo, new THREE.Vector3(CARROT_X, 0, 0)); addPuller(ringo, 0.2); both(); }, { hopH: 0.1 });
+  walkTo(rose, s2, 3.8, () => { faceToward(rose, new THREE.Vector3(CARROT_X, 0, 0)); addPuller(rose, 0.2); both(); }, { hopH: 0.1 });
+}
+function birdsArrive() {
+  round = 5; updateBadge(); camForRound(5);
+  updateRope(SLOT.birdsFrom + 2.4);
+  cluckChorus(10); setTimeout(sndQuack, 1200);
+  let arrived = 0;
+  birds.forEach((b, i) => {
+    b.visible = true;
+    b.position.set(14 + Math.random()*4, 0, -4 + Math.random()*8);
+    const isDuck = i === birds.length - 1;
+    const tx = SLOT.birdsFrom + (i % 5) * 0.5 + (isDuck ? 2.6 : 0);
+    const tz = i < 5 ? 0.42 : -0.42;
+    const slot = new THREE.Vector3(isDuck ? SLOT.birdsFrom + 2.6 : tx, 0, isDuck ? 0 : tz);
+    faceToward(b, slot);
+    setTimeout(() => {
+      walkTo(b, slot, 2.6 + Math.random()*1.2, () => {
+        faceToward(b, new THREE.Vector3(CARROT_X, 0, 0));
+        addPuller(b, 0.12);
+        arrived++;
+        if (arrived === birds.length) {
+          say([{ who: '🐔', text: 'All ten of them flapped and fluttered to the rope — even the little white duck!' , snd: sndQuack }],
+            () => { hideNarr(); setBtn('💪 PULL!', doPull, 'red'); });
+        }
+      }, { hopH: 0.07 });
+    }, i * 220);
+  });
+}
+function tommyArrives() {
+  round = 6; updateBadge(); camForRound(6);
+  updateRope(SLOT.tommy + 0.3);
+  tommy.visible = true;
+  tommy.position.set(15, 0, 3.5);
+  sndGiggle();
+  const slot = new THREE.Vector3(SLOT.tommy, 0, 0);
+  faceToward(tommy, slot);
+  walkTo(tommy, slot, 2.6, () => {
+    faceToward(tommy, new THREE.Vector3(CARROT_X, 0, 0));
+    addPuller(tommy, 0.32);
+    sparkle(tommy.position.clone().setY(1.2), 0xffe066);
+    say([{ who: '👦', text: 'Little Tommy toddled up and held on at the very end of the rope, with his two little hands.' }],
+      () => { hideNarr(); setBtn('💪 PULL, TOMMY, PULL!', doPull, 'red'); });
+  }, { hopH: 0.14 });
+}
+
+/* ================= ACT THREE — POP! ================= */
+function carrotPops() {
+  sndPopBig(); shakeT = 0.8; sndWhee();
+  hole.visible = true; mound.visible = false; rope.visible = false;
+  soilBurst(new THREE.Vector3(CARROT_X, 0.5, 0), true);
+  showNarr('📖', 'POP!!! Out came the enormous carrot at last!');
+  /* the carrot flies up and lands beside the hole */
+  const land = new THREE.Vector3(CARROT_X - 2.8, 1.15, 1.2);
+  const from = plant.position.clone();
+  tween(1.0, p => {
+    plant.position.lerpVectors(from, land, p);
+    plant.position.y = from.y + (land.y - from.y) * p + Math.sin(p * Math.PI) * 3.4;
+    plant.rotation.z = p * 1.5;
+  }, () => {
+    sndThud(); soilBurst(land.clone().setY(0.3), false);
+  });
+  tumbled = true;
+  /* mammals & Tommy tumble backwards */
+  [mum, dad, teddy, ringo, rose, tommy].forEach((c, i) => {
+    if (!c.visible) return;
+    const fx = c.userData.baseX + 0.8 + i * 0.1;
+    tween(0.5 + i * 0.05, p => {
+      c.position.x = c.userData.baseX + (fx - c.userData.baseX) * easeOut(p);
+      c.position.y = Math.sin(p * Math.PI) * 0.5;
+      c.rotation.z = -1.45 * easeOut(p);
+    });
+  });
+  /* the birds go flying with a great flurry of feathers! */
+  birds.forEach((b, i) => {
+    feathers(b.position.clone().setY(0.5));
+    const lx = b.position.x + 1.2 + Math.random()*1.6;
+    const lz = b.position.z + (Math.random()-0.5)*2.5;
+    const from2 = b.position.clone();
+    tween(0.7 + Math.random()*0.3, p => {
+      b.position.x = from2.x + (lx - from2.x) * p;
+      b.position.z = from2.z + (lz - from2.z) * p;
+      b.position.y = Math.sin(p * Math.PI) * (1.2 + Math.random()*0.8);
+      b.rotation.z = Math.sin(p * Math.PI * 2) * 0.6;
+    }, () => { b.rotation.z = 0; b.position.y = 0; });
+  });
+  cluckChorus(8); setTimeout(sndQuack, 600);
+  setTimeout(() => setBtn('Next ▸', everyoneUp, 'blue'), 1900);
+}
+function everyoneUp() {
+  hideBtn();
+  showNarr('📖', 'Everyone tumbled over in a great big heap — and they laughed and laughed!');
+  [mum, dad, teddy, ringo, rose, tommy].forEach((c, i) => {
+    if (!c.visible) return;
+    setTimeout(() => {
+      sndBoing(i);
+      tween(0.4, p => {
+        c.rotation.z = -1.45 * (1 - easeOut(p));
+        c.position.y = Math.sin(p * Math.PI) * 0.3;
+      }, () => { c.position.y = 0; });
+    }, i * 180);
+  });
+  setTimeout(() => setBtn('Next ▸', cheer, 'blue'), 2200);
+}
+function cheer() {
+  hideBtn(); sndDing();
+  [mum, dad, teddy, ringo, rose, tommy, ...birds].forEach((c, i) => {
+    if (c.visible) { c.userData.party = true; c.userData.pi = i; }
+  });
+  say([
+    { who: '📖', text: '“And do you know who did it?” laughed Dad. “Our TOMMY pulled the hardest of all!”', snd: sndGiggle },
+    { who: '📖', text: 'That night, Mum cooked a great big pot of yummy carrot soup.' },
+    { who: '📖', text: 'And there was plenty for everyone — Mum and Dad, Teddy, Ringo and Rose, all the chooks and the little duck…' },
+    { who: '👦', text: '…and most of all, for TOMMY — the strongest little boy on the whole farm!', snd: sndDing },
+  ], showTheEnd, '▸');
+}
+function showTheEnd() {
+  hideBtn(); hideNarr();
+  theEnd = true; dropConfetti(); sndDing();
+  setTimeout(() => {
+    document.getElementById('endScreen').classList.remove('gone');
+  }, 2400);
+}
+
+/* ---------- fullscreen toggle ---------- */
+const fsBtn = document.getElementById('fsBtn');
+const fsRoot = document.documentElement;
+const fsSupported = !!(fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen);
+if (!fsSupported) fsBtn.style.display = 'none'; // e.g. iPhone Safari
+function inFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+fsBtn.addEventListener('click', () => {
+  audio(); sndClick();
+  if (inFullscreen()) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else {
+    (fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen).call(fsRoot);
+  }
+});
+['fullscreenchange', 'webkitfullscreenchange'].forEach(ev =>
+  document.addEventListener(ev, () => {
+    fsBtn.title = inFullscreen() ? 'Exit fullscreen' : 'Fullscreen';
+    sizeIt();
+  })
+);
+
+/* ---------- title / restart ---------- */
+document.getElementById('beginBtn').addEventListener('click', () => {
+  audio(); sndDing();
+  document.getElementById('titleScreen').classList.add('gone');
+  startStory();
+});
+document.getElementById('againBtn').addEventListener('click', () => {
+  audio(); sndClick();
+  document.getElementById('endScreen').classList.add('gone');
+  [mum, dad, teddy, ringo, rose, tommy, ...birds].forEach(c => { c.userData.party = false; });
+  startStory();
+});
+
+/* ---------- main loop ---------- */
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  bobT += dt;
+
+  /* tweens */
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const tw = tweens[i];
+    tw.t += dt;
+    const p = Math.min(tw.t / tw.dur, 1);
+    tw.fn(p);
+    if (p >= 1) { tweens.splice(i, 1); if (tw.done) tw.done(); }
+  }
+  /* walkers */
+  for (let i = walkers.length - 1; i >= 0; i--) {
+    const w = walkers[i];
+    const dx = w.target.x - w.obj.position.x;
+    const dz = w.target.z - w.obj.position.z;
+    const dist = Math.hypot(dx, dz);
+    const step = w.speed * dt;
+    w.t += dt;
+    if (dist <= step) {
+      w.obj.position.set(w.target.x, 0, w.target.z);
+      walkers.splice(i, 1); if (w.done) w.done();
+    } else {
+      w.obj.position.x += dx / dist * step;
+      w.obj.position.z += dz / dist * step;
+      if (w.hop) w.obj.position.y = Math.abs(Math.sin(w.t * 10)) * w.hopH;
+    }
+  }
+  /* tractor engine & wheels */
+  if (engineOn) {
+    engineT += dt;
+    if (engineT > 0.16) {
+      engineT = 0; sndPutt();
+      if (Math.random() < 0.5) smokePuff(tractor.userData.exhaust.clone().applyMatrix4(tractor.matrixWorld), false);
+    }
+  }
+  if (wheelSpin) tractor.userData.wheels.forEach(w => { w.rotation.z -= wheelSpin * dt; });
+
+  /* camera */
+  const target = new THREE.Vector3(
+    camHome.x + Math.sin(bobT * 0.25) * 0.3, camHome.y, camHome.z);
+  camera.position.lerp(target, 0.05);
+  let look = new THREE.Vector3(camHome.lookX, camHome.lookY, 0);
+  if (shakeT > 0) { shakeT -= dt; look.x += (Math.random()-0.5) * 0.3; look.y += (Math.random()-0.5) * 0.3; }
+  camera.lookAt(look);
+
+  /* idles & party hops */
+  [mum, dad, teddy, ringo, rose, tommy, ...birds].forEach((c, i) => {
+    if (!c.visible) return;
+    const walking = walkers.find(w => w.obj === c);
+    if (walking) return;
+    if (c.userData.party) {
+      c.position.y = Math.abs(Math.sin(bobT * 5 + c.userData.pi * 1.1)) * (c === tommy ? 0.3 : 0.2);
+    }
+  });
+  if (teddy.visible && teddy.userData.tail) teddy.userData.tail.position.x = Math.sin(bobT * 9) * 0.06;
+  leaves.rotation.z = Math.sin(bobT * 1.2) * 0.03;
+
+  /* particles */
+  for (let i = puffs.length - 1; i >= 0; i--) {
+    const p = puffs[i];
+    if (p.userData.g) p.userData.v.y -= 9.8 * dt;
+    p.position.addScaledVector(p.userData.v, dt);
+    p.userData.life -= dt;
+    p.material.opacity = Math.max(p.userData.life, 0);
+    if (p.userData.life <= 0 || p.position.y < 0) { scene.remove(p); puffs.splice(i, 1); }
+  }
+  /* confetti */
+  for (let i = confetti.length - 1; i >= 0; i--) {
+    const c = confetti[i];
+    c.position.y -= c.userData.v * dt;
+    c.rotation.x += c.userData.r * dt; c.rotation.y += c.userData.r * 0.7 * dt;
+    if (c.position.y < 0.05) c.position.y = 7 + Math.random()*4;
+  }
+  clouds.forEach((c, i) => { c.position.x += dt * (0.14 + i * 0.03); if (c.position.x > 60) c.position.x = -40; });
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
