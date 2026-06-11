@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>The Enormous Turnip — A Storybook Game</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; overflow:hidden; touch-action:none; background:#b8e0f2;
+    font-family:"Comic Sans MS","Chalkboard SE","Marker Felt","Trebuchet MS",sans-serif; }
+  #c { position:fixed; inset:0; display:block; }
+
+  /* ---- narration card ---- */
+  #narration {
+    position:fixed; top:max(12px, env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    width:min(92vw,560px); background:#FFF8E4; border:3px solid #7a5230; border-radius:18px;
+    padding:12px 16px; font-family:Georgia,'Times New Roman',serif; font-style:italic;
+    font-size:clamp(16px,4.4vw,21px); color:#46310f; line-height:1.35; text-align:center;
+    box-shadow:0 4px 0 #00000022; opacity:0; transition:opacity .4s; pointer-events:none; z-index:5;
+  }
+  #narration .who { font-style:normal; font-size:1.25em; margin-right:6px; }
+
+  /* ---- team badge ---- */
+  #badge {
+    position:fixed; left:10px; bottom:max(14px, env(safe-area-inset-bottom)); z-index:5;
+    background:#ffffffd9; border:3px solid #7a5230; border-radius:14px; padding:6px 12px;
+    font-weight:bold; color:#5d3f15; font-size:clamp(15px,4.4vw,19px); display:none; letter-spacing:2px;
+  }
+
+  /* ---- fullscreen toggle ---- */
+  #fsBtn {
+    position:fixed; right:10px; bottom:max(14px, env(safe-area-inset-bottom)); z-index:7;
+    width:48px; height:48px; border:3px solid #7a5230; border-radius:14px;
+    background:#ffffffd9; color:#5d3f15; font-size:22px; line-height:1; cursor:pointer;
+    font-family:inherit; box-shadow:0 3px 0 #00000022;
+  }
+  #fsBtn:active { transform:translateY(2px); box-shadow:none; }
+
+  /* ---- big action button ---- */
+  #btn {
+    position:fixed; bottom:max(18px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    min-width:min(70vw,330px); padding:16px 26px; border:none; border-radius:999px;
+    background:linear-gradient(#b48cf2,#7b4fd0); color:#fff;
+    font-family:inherit; font-size:clamp(18px,5.2vw,24px); font-weight:bold; letter-spacing:.3px;
+    box-shadow:0 6px 0 #54338f, 0 10px 18px #0003; cursor:pointer; z-index:11;
+    transition:transform .08s, box-shadow .08s, opacity .3s; text-shadow:0 2px 0 #0002;
+  }
+  #btn:active { transform:translateX(-50%) translateY(4px); box-shadow:0 2px 0 #54338f, 0 5px 10px #0003; }
+  #btn.hidden { opacity:0; pointer-events:none; }
+  #btn.blue { background:linear-gradient(#6fc3ef,#2f7fc4); box-shadow:0 6px 0 #1f5a8e, 0 10px 18px #0003; }
+  #btn.blue:active { box-shadow:0 2px 0 #1f5a8e, 0 5px 10px #0003; }
+  #btn.green { background:linear-gradient(#8fd06a,#4a9a3e); box-shadow:0 6px 0 #2f6b28, 0 10px 18px #0003; }
+  #btn.green:active { box-shadow:0 2px 0 #2f6b28, 0 5px 10px #0003; }
+  #btn.red { background:linear-gradient(#ff8a5c,#e8512f); box-shadow:0 6px 0 #a93316, 0 10px 18px #0003;
+    animation:wiggle 1.6s ease-in-out infinite; }
+  #btn.red:active { box-shadow:0 2px 0 #a93316, 0 5px 10px #0003; animation:none; }
+  @keyframes wiggle {
+    0%,100% { transform:translateX(-50%) rotate(0deg); }
+    8% { transform:translateX(-50%) rotate(-2deg) scale(1.03); }
+    16% { transform:translateX(-50%) rotate(2deg) scale(1.03); }
+    24% { transform:translateX(-50%) rotate(0deg); }
+  }
+  @media (prefers-reduced-motion: reduce) { #btn.red { animation:none; } }
+
+  /* ---- title & end screens ---- */
+  .screen {
+    position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; padding:5vw; transition:opacity .7s;
+    background:linear-gradient(#cdeaf7 0%, #f6e7b6 50%, #b9d77f 100%);
+  }
+  .screen.gone { opacity:0; pointer-events:none; }
+  .screen .cast { font-size:clamp(34px,10vw,62px); letter-spacing:4px; }
+  .screen h1 {
+    font-family:Georgia,serif; color:#5d3a86; font-size:clamp(34px,10vw,56px);
+    line-height:1.1; margin:14px 0 6px; text-shadow:0 3px 0 #ffffff88;
+  }
+  .screen p { color:#6b5230; font-size:clamp(15px,4.4vw,19px); margin-bottom:26px; font-family:Georgia,serif; font-style:italic; }
+  .screen button {
+    padding:16px 34px; border:none; border-radius:999px; font-family:inherit; font-weight:bold;
+    font-size:clamp(19px,5.4vw,24px); color:#fff; cursor:pointer;
+    background:linear-gradient(#b48cf2,#7b4fd0); box-shadow:0 6px 0 #54338f, 0 10px 18px #0003;
+  }
+  .screen button:active { transform:translateY(4px); box-shadow:0 2px 0 #54338f; }
+  #endScreen { background:linear-gradient(#ffd9a3 0%, #f6e7b6 45%, #a8cf72 100%); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="narration"><span class="who"></span><span class="txt"></span></div>
+<div id="badge"></div>
+<button id="fsBtn" title="Fullscreen">⛶</button>
+<button id="btn" class="hidden"></button>
+
+<div id="titleScreen" class="screen">
+  <div class="cast">👨‍🌾👵👧🐕🐈🐭</div>
+  <h1>The Enormous<br>Turnip</h1>
+  <p>An interactive storybook for little listeners</p>
+  <button id="beginBtn">📖 Begin the story</button>
+</div>
+
+<div id="endScreen" class="screen gone">
+  <div class="cast">🍲 ❤️ 🐭</div>
+  <h1>The End</h1>
+  <p>…and there was hot turnip soup for everyone —<br>even the littlest mouse!</p>
+  <button id="againBtn">↺ Read it again</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =========================================================
+   THE ENORMOUS TURNIP — a tap-through storybook in three.js
+   ========================================================= */
+
+/* ---------- tiny sound kit ---------- */
+let AC = null;
+function audio() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(freq, dur, type, vol, slideTo) {
+  const ac = audio(); if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type || 'sine'; o.frequency.setValueAtTime(freq, ac.currentTime);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, ac.currentTime + dur);
+  g.gain.setValueAtTime(vol || 0.18, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + dur + 0.05);
+}
+function noise(dur, vol, freq) {
+  const ac = audio(); if (!ac) return;
+  const len = Math.floor(ac.sampleRate * dur);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq || 700; f.Q.value = 0.6;
+  const g = ac.createGain(); g.gain.value = vol || 0.25;
+  src.connect(f).connect(g).connect(ac.destination); src.start();
+}
+const sndThud   = () => tone(150, 0.18, 'sine', 0.3, 60);
+const sndClick  = () => tone(1200, 0.07, 'square', 0.1);
+const sndDing   = () => { tone(660,0.3,'triangle',0.12); setTimeout(()=>tone(880,0.4,'triangle',0.12),140); };
+const sndBoing  = (n) => tone(180 + n*60, 0.3, 'sine', 0.22, 460 + n*120);
+const sndWater  = () => noise(0.7, 0.2, 1800);
+const sndStrain = () => { tone(85, 0.45, 'sawtooth', 0.13, 65); noise(0.35, 0.12, 220); };
+const sndPopBig = () => { noise(0.35, 0.4, 600); tone(220, 0.5, 'square', 0.22, 950); };
+const sndBark   = () => { tone(230, 0.09, 'square', 0.2, 150); setTimeout(()=>tone(230,0.09,'square',0.2,150),160); };
+const sndMeow   = () => tone(720, 0.5, 'sawtooth', 0.1, 360);
+const sndSqueak = () => { tone(1500, 0.14, 'sine', 0.16, 1950); setTimeout(()=>tone(1600,0.12,'sine',0.14,2000),170); };
+const sndHello  = () => tone(440, 0.18, 'triangle', 0.14, 560);
+
+/* ---------- three.js scene ---------- */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xb8e0f2);
+scene.fog = new THREE.Fog(0xb8e0f2, 32, 90);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 300);
+function sizeIt() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', sizeIt); sizeIt();
+
+const hemi = new THREE.HemisphereLight(0xfff7df, 0x8aa362, 0.95); scene.add(hemi);
+const sunL = new THREE.DirectionalLight(0xfff2cf, 0.85); sunL.position.set(5, 12, 8); scene.add(sunL);
+
+function lam(color) { return new THREE.MeshLambertMaterial({ color }); }
+
+/* golden farm field */
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(160, 90), lam(0xa9c96a));
+ground.rotation.x = -Math.PI / 2; scene.add(ground);
+
+/* tilled vegetable rows behind the action */
+for (let i = 0; i < 4; i++) {
+  const row = new THREE.Mesh(new THREE.BoxGeometry(16, 0.25, 0.9), lam(0x7a5230));
+  row.position.set(2, 0.12, -6 - i * 1.6); scene.add(row);
+  for (let j = 0; j < 7; j++) {
+    const sprout = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.4, 6), lam(0x4f9e4a));
+    sprout.position.set(-4.5 + j * 2.2, 0.4, -6 - i * 1.6); scene.add(sprout);
+  }
+}
+/* red barn */
+const barn = new THREE.Group();
+const barnBody = new THREE.Mesh(new THREE.BoxGeometry(5.5, 3.4, 4), lam(0xc4453a)); barnBody.position.y = 1.7; barn.add(barnBody);
+const barnRoof = new THREE.Mesh(new THREE.ConeGeometry(4.4, 2.0, 4), lam(0x6f4a26));
+barnRoof.rotation.y = Math.PI / 4; barnRoof.position.y = 4.4; barn.add(barnRoof);
+const barnDoor = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.0, 0.12), lam(0x8a5a33)); barnDoor.position.set(0, 1.0, 2.02); barn.add(barnDoor);
+[[-0.6,0.6],[0.6,-0.6]].forEach(d => {
+  const x = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.0, 0.06), lam(0xf2e6d4));
+  x.position.set(0, 1.0, 2.1); x.rotation.z = Math.atan2(d[0], d[1]) * 0.45; barn.add(x);
+});
+barn.position.set(-9, 0, -12); scene.add(barn);
+/* fence along the back */
+for (let i = 0; i < 12; i++) {
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 1.1, 6), lam(0x9a6a3a));
+  post.position.set(-12 + i * 3.2, 0.55, -16); scene.add(post);
+}
+const railTop = new THREE.Mesh(new THREE.BoxGeometry(38, 0.12, 0.12), lam(0x9a6a3a));
+railTop.position.set(4, 0.95, -16); scene.add(railTop);
+const railBot = railTop.clone(); railBot.position.y = 0.55; scene.add(railBot);
+/* clouds + a smiling sun spot */
+const clouds = [];
+const cloudMat = lam(0xffffff);
+for (let i = 0; i < 7; i++) {
+  const c = new THREE.Group();
+  for (let j = 0; j < 3; j++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(1.1 + Math.random(), 12, 10), cloudMat);
+    p.position.set(j * 1.4 - 1.4, Math.random()*0.4, 0); c.add(p);
+  }
+  c.position.set(-28 + i * 11, 11 + Math.random()*4, -20 - Math.random()*8);
+  scene.add(c); clouds.push(c);
+}
+const sunBall = new THREE.Mesh(new THREE.SphereGeometry(2.2, 16, 14),
+  new THREE.MeshBasicMaterial({ color: 0xffe27a })); sunBall.position.set(16, 13, -26); scene.add(sunBall);
+/* flowers */
+const flowerCols = [0xff8fb1, 0xffd54f, 0xffffff, 0xb39ddb];
+for (let i = 0; i < 24; i++) {
+  const f = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), lam(flowerCols[i % 4]));
+  f.position.set(-14 + Math.random()*30, 0.12, 2 + Math.random()*8);
+  scene.add(f);
+}
+
+function blobShadow(r) {
+  const m = new THREE.Mesh(new THREE.CircleGeometry(r, 20),
+    new THREE.MeshBasicMaterial({ color: 0x4a5e23, transparent: true, opacity: 0.26 }));
+  m.rotation.x = -Math.PI / 2; m.position.y = 0.02; return m;
+}
+
+/* ---------- the turnip patch ---------- */
+const TURNIP_X = -4.2;
+const patch = new THREE.Mesh(new THREE.CircleGeometry(2.2, 22), lam(0x7a5230));
+patch.rotation.x = -Math.PI / 2; patch.position.set(TURNIP_X, 0.03, 0); scene.add(patch);
+const mound = new THREE.Mesh(new THREE.SphereGeometry(1.0, 16, 12), lam(0x8a5e36));
+mound.scale.set(1, 0.32, 1); mound.position.set(TURNIP_X, 0, 0); mound.visible = false; scene.add(mound);
+const hole = new THREE.Mesh(new THREE.CircleGeometry(1.15, 20), lam(0x3a2812));
+hole.rotation.x = -Math.PI / 2; hole.position.set(TURNIP_X, 0.04, 0); hole.visible = false; scene.add(hole);
+
+/* the turnip itself: a root (mostly buried) + a crown of leaves */
+const plant = new THREE.Group(); plant.position.set(TURNIP_X, 0, 0); scene.add(plant);
+const root = new THREE.Group(); plant.add(root);
+const rootBall = new THREE.Mesh(new THREE.SphereGeometry(1.35, 22, 18), lam(0xf3ead8));
+rootBall.scale.y = 1.12; root.add(rootBall);
+const rootTop = new THREE.Mesh(new THREE.SphereGeometry(1.18, 20, 16), lam(0xa86fc9));
+rootTop.position.y = 0.62; root.add(rootTop);
+const rootTip = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.7, 10), lam(0xe7dcc4));
+rootTip.rotation.x = Math.PI; rootTip.position.y = -1.75; root.add(rootTip);
+const leaves = new THREE.Group(); plant.add(leaves);
+for (let i = 0; i < 7; i++) {
+  const a = (i / 7) * Math.PI * 2;
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.9, 6), lam(0x4f9e4a));
+  stem.position.set(Math.cos(a) * 0.28, 0.42, Math.sin(a) * 0.28);
+  stem.rotation.z = -Math.cos(a) * 0.5; stem.rotation.x = Math.sin(a) * 0.5;
+  leaves.add(stem);
+  const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), lam(0x57b04f));
+  leaf.scale.set(0.55, 1.25, 0.35);
+  leaf.position.set(Math.cos(a) * 0.62, 0.95, Math.sin(a) * 0.62);
+  leaf.rotation.z = -Math.cos(a) * 0.55; leaf.rotation.x = Math.sin(a) * 0.55;
+  leaves.add(leaf);
+}
+/* growth stages: how far the root pokes out + leaf size */
+const GROW = [
+  { rootY: -2.6, leafS: 0.001, leafY: 0.0 },   // nothing yet
+  { rootY: -2.6, leafS: 0.45,  leafY: 0.0 },   // a little sprout
+  { rootY: -1.55, leafS: 1.0,  leafY: 0.0 },   // peeking out
+  { rootY: -1.0,  leafS: 1.6,  leafY: 0.55 },  // big!
+  { rootY: -0.45, leafS: 2.2,  leafY: 1.1 },   // ENORMOUS
+];
+function setGrowth(stage, animated) {
+  const G = GROW[stage];
+  if (!animated) {
+    root.position.y = G.rootY; leaves.scale.setScalar(G.leafS); leaves.position.y = G.leafY;
+    return;
+  }
+  const r0 = root.position.y, s0 = leaves.scale.x, y0 = leaves.position.y;
+  tween(0.6, p => {
+    const e = 1 + 0.45 * Math.sin(Math.min(p * 1.4, 1) * Math.PI); // overshoot boing
+    const q = easeOut(p);
+    root.position.y = r0 + (G.rootY - r0) * q;
+    leaves.scale.setScalar((s0 + (G.leafS - s0) * q) * (p < 1 ? e * 0.6 + 0.4 : 1));
+    leaves.position.y = y0 + (G.leafY - y0) * q;
+  });
+}
+setGrowth(0, false);
+
+/* ---------- the pulling team ---------- */
+function makeHead(g, skin, y) {
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 18, 14), lam(skin));
+  head.position.y = y; g.add(head);
+  [-0.12, 0.12].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), lam(0x222222));
+    e.position.set(x, y + 0.05, 0.29); g.add(e);
+  });
+  return head;
+}
+function makeFarmer() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 18, 14), lam(0x4e7ab5)); // blue overalls
+  body.scale.set(1, 1.2, 0.85); body.position.y = 0.75; g.add(body);
+  [[-0.18],[0.18]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.45, 8), lam(0x3a5c8a));
+    leg.position.set(p[0], 0.22, 0); g.add(leg);
+  });
+  makeHead(g, 0xf2c9a0, 1.62);
+  /* straw hat */
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.06, 14), lam(0xe9c46a));
+  brim.position.y = 1.86; g.add(brim);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.24, 12), lam(0xe9c46a));
+  cap.position.y = 1.99; g.add(cap);
+  g.add(blobShadow(0.55));
+  return g;
+}
+function makeGrandma() {
+  const g = new THREE.Group();
+  const dress = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.25, 14), lam(0xb07ec9));
+  dress.position.y = 0.62; g.add(dress);
+  makeHead(g, 0xf2c9a0, 1.5);
+  const bun = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), lam(0xe8e6e1));
+  bun.position.set(0, 1.78, -0.18); g.add(bun);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.36, 14, 12), lam(0xe8e6e1));
+  hair.scale.set(1, 0.7, 1); hair.position.set(0, 1.66, -0.06); g.add(hair);
+  g.add(blobShadow(0.5));
+  return g;
+}
+function makeGirl() {
+  const g = new THREE.Group();
+  const dress = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.95, 14), lam(0xe25555));
+  dress.position.y = 0.48; g.add(dress);
+  makeHead(g, 0xf6d3ab, 1.18);
+  [-0.3, 0.3].forEach(x => {
+    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), lam(0xd8a23a));
+    tail.scale.y = 1.5; tail.position.set(x, 1.12, -0.05); g.add(tail);
+  });
+  const fringe = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), lam(0xd8a23a));
+  fringe.scale.set(1, 0.6, 1); fringe.position.set(0, 1.38, -0.04); g.add(fringe);
+  g.add(blobShadow(0.42));
+  g.scale.setScalar(0.92);
+  return g;
+}
+function makeDog() {
+  const g = new THREE.Group();
+  const brown = lam(0xa3744a), dark = lam(0x7a5230);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), brown);
+  body.scale.set(1, 0.9, 1.35); body.position.y = 0.5; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 12), brown);
+  head.position.set(0, 0.98, 0.42); g.add(head);
+  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), dark);
+  snout.scale.z = 1.4; snout.position.set(0, 0.9, 0.68); g.add(snout);
+  [-0.1, 0.1].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), lam(0x222222));
+    e.position.set(x, 1.05, 0.65); g.add(e);
+  });
+  [-0.22, 0.22].forEach(x => {  // floppy ears
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), dark);
+    ear.scale.set(0.5, 1.2, 0.5); ear.position.set(x, 0.94, 0.32); g.add(ear);
+  });
+  [[-0.16,0.3],[0.16,0.3],[-0.16,-0.3],[0.16,-0.3]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.32, 8), dark);
+    leg.position.set(p[0], 0.16, p[1]); g.add(leg);
+  });
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.45, 8), brown);
+  tail.rotation.x = -Math.PI * 0.3; tail.position.set(0, 0.78, -0.6); g.add(tail);
+  g.add(blobShadow(0.45));
+  return g;
+}
+function makeCat() {
+  const g = new THREE.Group();
+  const orange = lam(0xe89b4a), dark = lam(0xc2772a);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 12), orange);
+  body.scale.set(1, 0.95, 1.3); body.position.y = 0.38; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 12), orange);
+  head.position.set(0, 0.78, 0.32); g.add(head);
+  [-0.1, 0.1].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), lam(0x254b1e));
+    e.position.set(x, 0.82, 0.53); g.add(e);
+  });
+  [-0.12, 0.12].forEach(x => {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 8), dark);
+    ear.position.set(x, 1.0, 0.26); g.add(ear);
+  });
+  [[-0.12,0.22],[0.12,0.22],[-0.12,-0.22],[0.12,-0.22]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.24, 8), dark);
+    leg.position.set(p[0], 0.12, p[1]); g.add(leg);
+  });
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.6, 8), dark);
+  tail.rotation.x = 0.5; tail.position.set(0, 0.62, -0.5); g.add(tail);
+  g.add(blobShadow(0.35));
+  return g;
+}
+function makeMouse() {
+  const g = new THREE.Group();
+  const gray = lam(0xb0aab8), pinkM = lam(0xf0b9c8);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.18, 14, 10), gray);
+  body.scale.set(1, 0.9, 1.3); body.position.y = 0.18; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), gray);
+  head.position.set(0, 0.34, 0.2); g.add(head);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), pinkM);
+  nose.position.set(0, 0.32, 0.34); g.add(nose);
+  [-0.05, 0.05].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), lam(0x222222));
+    e.position.set(x, 0.38, 0.3); g.add(e);
+  });
+  [-0.09, 0.09].forEach(x => {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), pinkM);
+    ear.scale.z = 0.4; ear.position.set(x, 0.46, 0.14); g.add(ear);
+  });
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.03, 0.5, 6), pinkM);
+  tail.rotation.x = Math.PI / 2.4; tail.position.set(0, 0.14, -0.4); g.add(tail);
+  g.add(blobShadow(0.2));
+  return g;
+}
+
+/* cast in pulling order, with their line slots */
+const CAST = [
+  { name: 'the farmer',      emoji: '👨‍🌾', make: makeFarmer,  slot: -1.9, hop: 0.12,
+    greet: null, snd: null },
+  { name: 'Grandma',         emoji: '👵', make: makeGrandma, slot: -0.7, hop: 0.1,
+    greet: '“I’ll help!” said Grandma, and she held on tight to the farmer.', snd: sndHello },
+  { name: 'the little girl', emoji: '👧', make: makeGirl,    slot: 0.4,  hop: 0.13,
+    greet: '“I’ll help!” said the little girl, and she held on tight to Grandma.', snd: sndHello },
+  { name: 'the dog',         emoji: '🐕', make: makeDog,     slot: 1.4,  hop: 0.14,
+    greet: '“Woof woof!” said the dog, and he held on tight to the little girl.', snd: sndBark },
+  { name: 'the cat',         emoji: '🐈', make: makeCat,     slot: 2.25, hop: 0.13,
+    greet: '“Meow!” said the cat, and she held on tight to the dog.', snd: sndMeow },
+  { name: 'the mouse',       emoji: '🐭', make: makeMouse,   slot: 2.95, hop: 0.1,
+    greet: '“Squeak squeak!” said the littlest mouse, and he held on tight to the cat.', snd: sndSqueak },
+];
+const chars = CAST.map(C => {
+  const g = C.make();
+  g.visible = false;
+  g.position.set(14, 0, 0);
+  scene.add(g);
+  return g;
+});
+
+/* ---------- animation plumbing ---------- */
+const tweens = [];
+function tween(dur, fn, done) { tweens.push({ t: 0, dur, fn, done }); }
+const easeOut = p => 1 - Math.pow(1 - p, 3);
+const easeIn  = p => p * p * p;
+
+const walkers = [];
+function walkTo(obj, target, speed, done, opts) {
+  opts = opts || {};
+  walkers.push({ obj, target: target.clone(), speed, done, t: 0,
+    hop: opts.hop !== false, hopH: opts.hopH || 0.12 });
+}
+function faceToward(obj, target) {
+  obj.rotation.y = Math.atan2(target.x - obj.position.x, target.z - obj.position.z);
+}
+
+let puffs = [], confetti = [];
+function soilBurst(at, big) {
+  const n = big ? 26 : 9;
+  for (let i = 0; i < n; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.08 + Math.random()*0.09, 7, 5),
+      new THREE.MeshBasicMaterial({ color: i % 3 ? 0x7a5230 : 0x5a3c1c, transparent: true, opacity: 1 }));
+    p.position.copy(at);
+    p.userData.v = new THREE.Vector3((Math.random()-0.5) * (big?6:3), (big?4.5:2.2) + Math.random()*2.5, (Math.random()-0.5) * (big?6:3));
+    p.userData.life = 0.9; p.userData.g = true;
+    scene.add(p); puffs.push(p);
+  }
+}
+function sparkle(at, color) {
+  for (let i = 0; i < 7; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5),
+      new THREE.MeshBasicMaterial({ color: color || 0xffe066, transparent: true, opacity: 1 }));
+    p.position.copy(at);
+    p.userData.v = new THREE.Vector3((Math.random()-0.5)*3, 2 + Math.random()*2, (Math.random()-0.5)*3);
+    p.userData.life = 0.7;
+    scene.add(p); puffs.push(p);
+  }
+}
+function waterDrops(at) {
+  for (let i = 0; i < 16; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.07, 7, 5),
+      new THREE.MeshBasicMaterial({ color: 0x6fc3ef, transparent: true, opacity: 0.9 }));
+    p.position.copy(at).add(new THREE.Vector3((Math.random()-0.5)*1.6, 2.4 + Math.random()*0.8, (Math.random()-0.5)*1.6));
+    p.userData.v = new THREE.Vector3(0, -2.2 - Math.random(), 0);
+    p.userData.life = 1.1;
+    scene.add(p); puffs.push(p);
+  }
+}
+function dropConfetti() {
+  const cols = [0xff6b8a, 0xffd54f, 0x7ed46a, 0x6fc3ef, 0xb48cf2];
+  for (let i = 0; i < 70; i++) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.18),
+      new THREE.MeshBasicMaterial({ color: cols[i % 5], side: THREE.DoubleSide }));
+    p.position.set(-8 + Math.random()*14, 7 + Math.random()*6, -3 + Math.random()*6);
+    p.userData.v = 1 + Math.random()*1.2;
+    p.userData.r = (Math.random()-0.5) * 4;
+    scene.add(p); confetti.push(p);
+  }
+}
+
+/* ---------- UI helpers ---------- */
+const narrEl = document.getElementById('narration');
+const narrWho = narrEl.querySelector('.who');
+const narrTxt = narrEl.querySelector('.txt');
+const btn = document.getElementById('btn');
+const badge = document.getElementById('badge');
+
+const WHO = { nar: '📖' };
+function showNarr(who, text) {
+  narrWho.textContent = WHO[who] || who || '📖';
+  narrTxt.textContent = ' ' + text;
+  narrEl.style.opacity = 1;
+}
+function hideNarr() { narrEl.style.opacity = 0; }
+
+let btnAction = null;
+function setBtn(label, action, color) {
+  btn.textContent = label;
+  btn.className = color ? color : '';
+  btnAction = action;
+}
+function hideBtn() { btn.classList.add('hidden'); btnAction = null; }
+btn.addEventListener('click', () => {
+  audio();
+  if (btnAction) { const a = btnAction; btnAction = null; a(); }
+});
+
+function say(lines, cb, btnLabel) {
+  let i = 0;
+  function step() {
+    const L = lines[i];
+    showNarr(L.who, L.text);
+    if (L.snd) L.snd();
+    i++;
+    if (i < lines.length) setBtn(btnLabel || 'Next ▸', step, 'blue');
+    else setBtn(btnLabel || 'Next ▸', () => { cb && cb(); }, 'blue');
+  }
+  step();
+}
+
+/* ---------- camera ---------- */
+let camHome = { x: -2.5, y: 4.6, z: 10.0, lookX: -3.2, lookY: 1.2 };
+let shakeT = 0, bobT = 0;
+function camForTeam(n) { // widen as the line grows
+  camHome = { x: -1.6 + n * 0.45, y: 4.8 + n * 0.25, z: 10.5 + n * 0.85, lookX: -2.4 + n * 0.4, lookY: 1.2 };
+}
+
+/* ---------- story state ---------- */
+let team = 0;        // how many are pulling
+let growStage = 0;
+let theEnd = false, tumbled = false;
+
+function updateBadge() {
+  badge.style.display = 'block';
+  badge.textContent = CAST.slice(0, team).map(c => c.emoji).join('') + ' 🥬';
+}
+
+function resetStory() {
+  team = 0; growStage = 0; theEnd = false; tumbled = false;
+  chars.forEach(c => { c.visible = false; c.position.set(14, 0, 0); c.rotation.set(0, 0, 0); });
+  plant.position.set(TURNIP_X, 0, 0); plant.rotation.set(0, 0, 0);
+  setGrowth(0, false);
+  mound.visible = false; hole.visible = false;
+  confetti.forEach(c => scene.remove(c)); confetti = [];
+  camHome = { x: -2.5, y: 4.6, z: 10.0, lookX: -3.2, lookY: 1.2 };
+  badge.style.display = 'none';
+}
+
+function startStory() {
+  resetStory();
+  /* farmer walks in from the barn side */
+  const farmer = chars[0];
+  farmer.visible = true;
+  farmer.position.set(-11, 0, 2);
+  say([
+    { who: '📖', text: 'Once upon a time, an old farmer planted a tiny turnip seed in his garden.' },
+  ], () => {
+    hideNarr();
+    const spot = new THREE.Vector3(TURNIP_X - 2.0, 0, 0.6);
+    faceToward(farmer, spot);
+    walkTo(farmer, spot, 3.0, () => {
+      faceToward(farmer, new THREE.Vector3(TURNIP_X, 0, 0));
+      setBtn('🌱 Plant the seed!', plantSeed, 'green');
+    });
+  }, '▸ Turn the page');
+}
+
+function plantSeed() {
+  hideBtn();
+  const farmer = chars[0];
+  /* a little bow as he tucks it in */
+  tween(0.8, p => { farmer.rotation.x = 0.5 * Math.sin(p * Math.PI); });
+  setTimeout(() => {
+    sndClick(); soilBurst(new THREE.Vector3(TURNIP_X, 0.3, 0), false);
+    mound.visible = true; mound.scale.set(0.6, 0.2, 0.6);
+    showNarr('📖', '“Grow, little turnip,” said the farmer. “Grow sweet, and grow strong!”');
+    setBtn('💧 Water it!', waterIt, 'green');
+  }, 500);
+}
+function waterIt() {
+  hideBtn(); sndWater();
+  waterDrops(new THREE.Vector3(TURNIP_X, 0, 0));
+  setTimeout(() => {
+    growStage = 1; setGrowth(1, true); sndBoing(0);
+    showNarr('📖', 'And the rain fell, and the sun shone… and a little green sprout popped up!');
+    setBtn('☀️ Grow, turnip, grow!', growMore, 'green');
+  }, 900);
+}
+function growMore() {
+  hideBtn();
+  growStage++;
+  setGrowth(growStage, true);
+  sndBoing(growStage);
+  sparkle(new THREE.Vector3(TURNIP_X, 1 + growStage * 0.4, 0), 0xbef27a);
+  mound.scale.setScalar(0.6 + growStage * 0.25); mound.scale.y = 0.2 + growStage * 0.06;
+  const lines = [null, null,
+    'The turnip grew…',
+    '…and it GREW…',
+    '…and it GREW — until it was absolutely ENORMOUS!'];
+  showNarr('📖', lines[growStage]);
+  if (growStage < 4) {
+    setTimeout(() => setBtn('☀️ Grow, turnip, grow!', growMore, 'green'), 500);
+  } else {
+    shakeT = 0.4; sndThud();
+    setTimeout(() => {
+      say([{ who: '📖', text: '“Hooray!” said the farmer. “Time to pull up my enormous turnip!”' }], () => {
+        hideNarr(); joinLine(0);
+      });
+    }, 1200);
+  }
+}
+
+/* ---- the pulling rounds ---- */
+function joinLine(i) {
+  const C = CAST[i], g = chars[i];
+  team = i + 1;
+  updateBadge();
+  camForTeam(team);
+  g.visible = true;
+  const slot = new THREE.Vector3(TURNIP_X + 1.35 + C.slot + 1.9, 0, 0); // measured from turnip edge
+  faceToward(g, slot);
+  walkTo(g, slot, 3.4, () => {
+    faceToward(g, new THREE.Vector3(TURNIP_X, 0, 0));
+    g.userData.baseX = g.position.x;
+    if (C.greet) {
+      if (C.snd) C.snd();
+      say([{ who: C.emoji, text: C.greet }], () => { hideNarr(); readyToPull(); });
+    } else {
+      readyToPull();
+    }
+  }, { hopH: C.hop });
+}
+function readyToPull() {
+  setBtn('💪 PULL!', doPull, 'red');
+}
+function doPull() {
+  hideBtn();
+  const members = chars.slice(0, team);
+  const success = team === CAST.length;
+  showNarr('📖', success
+    ? 'They pulled… and they PULLED… and they pulled with ALL THEIR MIGHT…'
+    : 'They pulled… and they PULLED…');
+  sndStrain(); setTimeout(sndStrain, 500); setTimeout(sndStrain, 1000);
+  tween(1.5, p => {
+    const tug = Math.max(Math.sin(p * Math.PI * 3), 0);
+    members.forEach((c, i) => {
+      c.position.x = c.userData.baseX + tug * (0.28 + i * 0.02);
+      c.rotation.z = -tug * 0.28;
+    });
+    /* turnip strains a little more each round */
+    plant.rotation.z = tug * 0.018 * team;
+    leaves.rotation.y = Math.sin(p * 24) * 0.06 * tug;
+    if (Math.random() < 0.2) soilBurst(new THREE.Vector3(TURNIP_X + 0.8, 0.2, 0.4), false);
+  }, () => {
+    members.forEach(c => { c.position.x = c.userData.baseX; c.rotation.z = 0; });
+    plant.rotation.z = 0; leaves.rotation.y = 0;
+    if (success) turnipPops();
+    else pullFails();
+  });
+}
+function pullFails() {
+  sndThud(); shakeT = 0.3;
+  const next = CAST[team];
+  say([
+    { who: '📖', text: '…but the turnip would NOT budge!' },
+    { who: '📖', text: `So ${CAST[team - 1].name} called for ${next.name}!` },
+  ], () => {
+    hideNarr(); joinLine(team);
+  });
+}
+
+/* ---- POP! ---- */
+function turnipPops() {
+  sndPopBig(); shakeT = 0.8; sndWhee();
+  hole.visible = true; mound.visible = false;
+  soilBurst(new THREE.Vector3(TURNIP_X, 0.5, 0), true);
+  showNarr('📖', 'POP!!! Out came the enormous turnip at last!');
+  /* the turnip flies up and lands beside the hole */
+  const land = new THREE.Vector3(TURNIP_X - 2.6, 1.05, 1.0);
+  const from = plant.position.clone();
+  tween(1.0, p => {
+    plant.position.lerpVectors(from, land, p);
+    plant.position.y = from.y + (land.y - from.y) * p + Math.sin(p * Math.PI) * 3.2;
+    plant.rotation.z = p * 1.45;
+  }, () => {
+    sndThud(); soilBurst(land.clone().setY(0.3), false);
+  });
+  /* everyone tumbles over backwards! */
+  tumbled = true;
+  chars.slice(0, team).forEach((c, i) => {
+    const fx = c.userData.baseX + 0.8 + i * 0.12;
+    tween(0.5 + i * 0.06, p => {
+      c.position.x = c.userData.baseX + (fx - c.userData.baseX) * easeOut(p);
+      c.position.y = Math.sin(p * Math.PI) * (0.5 + i * 0.05);
+      c.rotation.z = -1.45 * easeOut(p);
+    });
+  });
+  setTimeout(() => setBtn('Next ▸', everyoneUp, 'blue'), 1800);
+}
+function sndWhee() { tone(280, 0.8, 'sawtooth', 0.12, 1100); }
+function everyoneUp() {
+  hideBtn();
+  showNarr('📖', 'Everyone tumbled over in a great big heap — and then they laughed and laughed!');
+  chars.slice(0, team).forEach((c, i) => {
+    setTimeout(() => {
+      sndBoing(i);
+      tween(0.4, p => {
+        c.rotation.z = -1.45 * (1 - easeOut(p));
+        c.position.y = Math.sin(p * Math.PI) * 0.3;
+      }, () => { c.position.y = 0; });
+    }, i * 180);
+  });
+  setTimeout(() => setBtn('Next ▸', supper, 'blue'), 2200);
+}
+function supper() {
+  hideBtn();
+  sndDing();
+  /* everyone hops with joy around the turnip */
+  chars.slice(0, team).forEach((c, i) => { c.userData.party = true; c.userData.pi = i; });
+  say([
+    { who: '📖', text: 'That night, they cooked a great big pot of hot turnip soup for supper.' },
+    { who: '📖', text: 'And there was plenty for everyone… even the littlest mouse!', snd: sndSqueak },
+  ], showTheEnd, '▸');
+}
+function showTheEnd() {
+  hideBtn(); hideNarr();
+  theEnd = true; dropConfetti(); sndDing();
+  setTimeout(() => {
+    document.getElementById('endScreen').classList.remove('gone');
+  }, 2400);
+}
+
+/* ---------- fullscreen toggle ---------- */
+const fsBtn = document.getElementById('fsBtn');
+const fsRoot = document.documentElement;
+const fsSupported = !!(fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen);
+if (!fsSupported) fsBtn.style.display = 'none'; // e.g. iPhone Safari
+function inFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+fsBtn.addEventListener('click', () => {
+  audio(); sndClick();
+  if (inFullscreen()) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else {
+    (fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen).call(fsRoot);
+  }
+});
+['fullscreenchange', 'webkitfullscreenchange'].forEach(ev =>
+  document.addEventListener(ev, () => {
+    fsBtn.title = inFullscreen() ? 'Exit fullscreen' : 'Fullscreen';
+    sizeIt();
+  })
+);
+
+/* ---------- title / restart ---------- */
+document.getElementById('beginBtn').addEventListener('click', () => {
+  audio(); sndDing();
+  document.getElementById('titleScreen').classList.add('gone');
+  startStory();
+});
+document.getElementById('againBtn').addEventListener('click', () => {
+  audio(); sndClick();
+  document.getElementById('endScreen').classList.add('gone');
+  chars.forEach(c => { c.userData.party = false; });
+  startStory();
+});
+
+/* ---------- main loop ---------- */
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  bobT += dt;
+
+  /* tweens */
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const tw = tweens[i];
+    tw.t += dt;
+    const p = Math.min(tw.t / tw.dur, 1);
+    tw.fn(p);
+    if (p >= 1) { tweens.splice(i, 1); if (tw.done) tw.done(); }
+  }
+  /* walkers */
+  for (let i = walkers.length - 1; i >= 0; i--) {
+    const w = walkers[i];
+    const dx = w.target.x - w.obj.position.x;
+    const dz = w.target.z - w.obj.position.z;
+    const dist = Math.hypot(dx, dz);
+    const step = w.speed * dt;
+    w.t += dt;
+    if (dist <= step) {
+      w.obj.position.set(w.target.x, 0, w.target.z);
+      walkers.splice(i, 1); if (w.done) w.done();
+    } else {
+      w.obj.position.x += dx / dist * step;
+      w.obj.position.z += dz / dist * step;
+      if (w.hop) w.obj.position.y = Math.abs(Math.sin(w.t * 10)) * w.hopH;
+    }
+  }
+  /* camera */
+  const target = new THREE.Vector3(
+    camHome.x + Math.sin(bobT * 0.25) * 0.3, camHome.y, camHome.z);
+  camera.position.lerp(target, 0.05);
+  let look = new THREE.Vector3(camHome.lookX, camHome.lookY, 0);
+  if (shakeT > 0) { shakeT -= dt; look.x += (Math.random()-0.5) * 0.3; look.y += (Math.random()-0.5) * 0.3; }
+  camera.lookAt(look);
+
+  /* gentle idles, party hops, leaf sway */
+  chars.forEach((c, i) => {
+    if (!c.visible) return;
+    const walking = walkers.find(w => w.obj === c);
+    if (walking) return;
+    if (c.userData.party) {
+      c.position.y = Math.abs(Math.sin(bobT * 5 + c.userData.pi * 1.1)) * 0.25;
+    } else if (!tumbled || theEnd) {
+      c.rotation.z = c.rotation.z * 0.9 + Math.sin(bobT * 2.4 + i) * 0.015 * 0.1;
+    }
+  });
+  leaves.rotation.z = Math.sin(bobT * 1.2) * 0.035;
+
+  /* particles */
+  for (let i = puffs.length - 1; i >= 0; i--) {
+    const p = puffs[i];
+    if (p.userData.g) p.userData.v.y -= 9.8 * dt;
+    p.position.addScaledVector(p.userData.v, dt);
+    p.userData.life -= dt;
+    p.material.opacity = Math.max(p.userData.life, 0);
+    if (p.userData.life <= 0 || p.position.y < 0) { scene.remove(p); puffs.splice(i, 1); }
+  }
+  /* confetti */
+  for (let i = confetti.length - 1; i >= 0; i--) {
+    const c = confetti[i];
+    c.position.y -= c.userData.v * dt;
+    c.rotation.x += c.userData.r * dt; c.rotation.y += c.userData.r * 0.7 * dt;
+    if (c.position.y < 0.05) c.position.y = 7 + Math.random()*4;
+  }
+  /* drifting clouds */
+  clouds.forEach((c, i) => { c.position.x += dt * (0.14 + i * 0.03); if (c.position.x > 60) c.position.x = -40; });
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
