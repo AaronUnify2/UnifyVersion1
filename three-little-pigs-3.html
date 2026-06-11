@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>The Three Little Pigs — A Storybook Game</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; overflow:hidden; touch-action:none; background:#aee3f5;
+    font-family:"Comic Sans MS","Chalkboard SE","Marker Felt","Trebuchet MS",sans-serif; }
+  #c { position:fixed; inset:0; display:block; }
+
+  /* ---- narration card ---- */
+  #narration {
+    position:fixed; top:max(12px, env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    width:min(92vw,560px); background:#FFF8E4; border:3px solid #8a5a33; border-radius:18px;
+    padding:12px 16px; font-family:Georgia,'Times New Roman',serif; font-style:italic;
+    font-size:clamp(16px,4.4vw,21px); color:#4a3018; line-height:1.35; text-align:center;
+    box-shadow:0 4px 0 #00000022; opacity:0; transition:opacity .4s; pointer-events:none; z-index:5;
+  }
+  #narration .who { font-style:normal; font-size:1.25em; margin-right:6px; }
+
+  /* ---- day badge & counter ---- */
+  #badge {
+    position:fixed; left:10px; bottom:max(14px, env(safe-area-inset-bottom)); z-index:5;
+    background:#ffffffd9; border:3px solid #8a5a33; border-radius:14px; padding:6px 12px;
+    font-weight:bold; color:#6a431f; font-size:clamp(13px,3.6vw,16px); display:none;
+  }
+
+  /* ---- big action button ---- */
+  #btn {
+    position:fixed; bottom:max(18px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    min-width:min(70vw,330px); padding:16px 26px; border:none; border-radius:999px;
+    background:linear-gradient(#ff9d52,#f4633a); color:#fff;
+    font-family:inherit; font-size:clamp(18px,5.2vw,24px); font-weight:bold; letter-spacing:.3px;
+    box-shadow:0 6px 0 #b53d1c, 0 10px 18px #0003; cursor:pointer; z-index:6;
+    transition:transform .08s, box-shadow .08s, opacity .3s; text-shadow:0 2px 0 #0002;
+  }
+  #btn:active { transform:translateX(-50%) translateY(4px); box-shadow:0 2px 0 #b53d1c, 0 5px 10px #0003; }
+  #btn.hidden { opacity:0; pointer-events:none; }
+  #btn.green { background:linear-gradient(#7ed46a,#3da144); box-shadow:0 6px 0 #2a7330, 0 10px 18px #0003; }
+  #btn.green:active { box-shadow:0 2px 0 #2a7330, 0 5px 10px #0003; }
+  #btn.blue { background:linear-gradient(#6fc3ef,#2f7fc4); box-shadow:0 6px 0 #1f5a8e, 0 10px 18px #0003; }
+  #btn.blue:active { box-shadow:0 2px 0 #1f5a8e, 0 5px 10px #0003; }
+
+  /* ---- fullscreen toggle ---- */
+  #fsBtn {
+    position:fixed; right:10px; bottom:max(14px, env(safe-area-inset-bottom)); z-index:7;
+    width:48px; height:48px; border:3px solid #8a5a33; border-radius:14px;
+    background:#ffffffd9; color:#6a431f; font-size:22px; line-height:1; cursor:pointer;
+    font-family:inherit; box-shadow:0 3px 0 #00000022;
+  }
+  #fsBtn:active { transform:translateY(2px); box-shadow:none; }
+
+  /* ---- full-screen fades / cards ---- */
+  #fade { position:fixed; inset:0; background:#0a1030; opacity:0; pointer-events:none; transition:opacity 1.1s; z-index:8; }
+  #nightText {
+    position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:#fff; z-index:9; opacity:0; pointer-events:none; transition:opacity .8s; text-align:center; padding:0 7vw;
+  }
+  #nightText .moon { font-size:clamp(44px,14vw,80px); }
+  #nightText .line { font-family:Georgia,serif; font-style:italic; font-size:clamp(18px,5.5vw,26px); margin-top:14px; }
+
+  /* ---- title & end screens ---- */
+  .screen {
+    position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; padding:5vw; transition:opacity .7s;
+    background:linear-gradient(#ffe9b8 0%, #ffd1a3 45%, #b6e6a0 100%);
+  }
+  .screen.gone { opacity:0; pointer-events:none; }
+  .screen .houses { font-size:clamp(40px,12vw,72px); letter-spacing:6px; }
+  .screen h1 {
+    font-family:Georgia,serif; color:#6a3b12; font-size:clamp(34px,10vw,58px);
+    line-height:1.1; margin:14px 0 6px; text-shadow:0 3px 0 #ffffff88;
+  }
+  .screen p { color:#7c5430; font-size:clamp(15px,4.4vw,19px); margin-bottom:26px; font-family:Georgia,serif; font-style:italic; }
+  .screen button {
+    padding:16px 34px; border:none; border-radius:999px; font-family:inherit; font-weight:bold;
+    font-size:clamp(19px,5.4vw,24px); color:#fff; cursor:pointer;
+    background:linear-gradient(#ff9d52,#f4633a); box-shadow:0 6px 0 #b53d1c, 0 10px 18px #0003;
+  }
+  .screen button:active { transform:translateY(4px); box-shadow:0 2px 0 #b53d1c; }
+  #endScreen { background:linear-gradient(#2b2160 0%, #5a3e8f 55%, #2f6b4f 100%); }
+  #endScreen h1 { color:#ffe9b8; text-shadow:0 3px 0 #00000055; }
+  #endScreen p { color:#ffe9d6; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="narration"><span class="who"></span><span class="txt"></span></div>
+<div id="badge"></div>
+<button id="fsBtn" title="Fullscreen">⛶</button>
+<button id="btn" class="hidden"></button>
+
+<div id="fade"></div>
+<div id="nightText">
+  <div class="moon">🌙</div>
+  <div class="line"></div>
+</div>
+
+<div id="titleScreen" class="screen">
+  <div class="houses">🌾 🪵 🧱</div>
+  <h1>The Three<br>Little Pigs</h1>
+  <p>An interactive storybook for little listeners</p>
+  <button id="beginBtn">📖 Begin the story</button>
+</div>
+
+<div id="endScreen" class="screen gone">
+  <div class="houses">🐷 ❤️ 🏠</div>
+  <h1>The End</h1>
+  <p>…and the little pig lived happily ever after,<br>safe and warm in the house of bricks.</p>
+  <button id="againBtn">↺ Read it again</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =========================================================
+   THE THREE LITTLE PIGS — a tap-through storybook in three.js
+   ========================================================= */
+
+/* ---------- tiny sound kit (WebAudio, all synthesized) ---------- */
+let AC = null;
+function audio() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(freq, dur, type, vol, slideTo) {
+  const ac = audio(); if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type || 'sine'; o.frequency.setValueAtTime(freq, ac.currentTime);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, ac.currentTime + dur);
+  g.gain.setValueAtTime(vol || 0.18, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + dur + 0.05);
+}
+function noise(dur, vol, freq) { // filtered noise — for huffing & puffing
+  const ac = audio(); if (!ac) return;
+  const len = Math.floor(ac.sampleRate * dur);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq || 700; f.Q.value = 0.6;
+  const g = ac.createGain(); g.gain.value = vol || 0.25;
+  src.connect(f).connect(g).connect(ac.destination); src.start();
+}
+const sndPop   = () => tone(520, 0.12, 'square', 0.12, 980);
+const sndThud  = () => tone(150, 0.18, 'sine', 0.3, 60);
+const sndBuild = () => { tone(330, 0.1, 'square', 0.1, 392); setTimeout(()=>tone(392,0.12,'square',0.1,494),90); };
+const sndHuff  = () => noise(0.9, 0.3, 600);
+const sndYelp  = () => tone(900, 0.45, 'sawtooth', 0.16, 220);
+const sndClick = () => tone(1200, 0.07, 'square', 0.1);
+const sndDing  = () => { tone(660,0.3,'triangle',0.12); setTimeout(()=>tone(880,0.4,'triangle',0.12),140); };
+const sndFire  = () => noise(1.2, 0.18, 300);
+
+/* ---------- three.js scene ---------- */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const scene = new THREE.Scene();
+const SKY_DAY = new THREE.Color(0xaee3f5);
+scene.background = SKY_DAY.clone();
+scene.fog = new THREE.Fog(0xaee3f5, 30, 90);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 300);
+function sizeIt() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', sizeIt); sizeIt();
+
+const hemi = new THREE.HemisphereLight(0xfff6e0, 0x88aa66, 0.95); scene.add(hemi);
+const sun  = new THREE.DirectionalLight(0xfff2cf, 0.85); sun.position.set(6, 12, 8); scene.add(sun);
+const fireLight = new THREE.PointLight(0xff7722, 0, 14); scene.add(fireLight);
+
+function lam(color) { return new THREE.MeshLambertMaterial({ color }); }
+
+/* ground — a long meadow so the chase has room to run */
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(320, 90), lam(0x96cb6d));
+ground.rotation.x = -Math.PI / 2; ground.position.set(60, 0, 0); scene.add(ground);
+
+/* soft rolling hills on the horizon */
+const hillMat = lam(0x7fba5e);
+for (let i = 0; i < 14; i++) {
+  const h = new THREE.Mesh(new THREE.SphereGeometry(7 + Math.random()*6, 16, 12), hillMat);
+  h.scale.y = 0.45; h.position.set(-30 + i * 14 + Math.random()*4, 0, -22 - Math.random()*8);
+  scene.add(h);
+}
+/* puffy clouds */
+const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+const clouds = [];
+for (let i = 0; i < 8; i++) {
+  const c = new THREE.Group();
+  for (let j = 0; j < 3; j++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(1.2 + Math.random(), 12, 10), cloudMat);
+    p.position.set(j * 1.4 - 1.4, Math.random()*0.4, 0); c.add(p);
+  }
+  c.position.set(-25 + i * 16, 11 + Math.random()*4, -16 - Math.random()*10);
+  scene.add(c); clouds.push(c);
+}
+/* trees + flowers */
+function tree(x, z, s) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.4, 8), lam(0x8a5a33));
+  trunk.position.y = 0.7; g.add(trunk);
+  const leaf = new THREE.Mesh(new THREE.SphereGeometry(1.15, 14, 12), lam(0x4f9e4a));
+  leaf.position.y = 2.0; leaf.scale.y = 1.15; g.add(leaf);
+  g.position.set(x, 0, z); g.scale.setScalar(s || 1); scene.add(g);
+}
+[[-9,-7,1.2],[-12,-2,0.9],[9,-8,1.3],[12,-3,1.0],[-6,-11,1.1],[14,-9,1.4],
+ [24,-6,1.1],[34,-9,1.3],[46,-5,1.0],[58,-8,1.2],[72,-6,1.1],[86,-9,1.3],[100,-5,1.1]
+].forEach(t => tree(t[0], t[1], t[2]));
+const flowerCols = [0xff8fb1, 0xffd54f, 0xff7043, 0xb39ddb];
+for (let i = 0; i < 40; i++) {
+  const f = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), lam(flowerCols[i % 4]));
+  f.position.set(-14 + Math.random()*40, 0.12, -10 + Math.random()*16);
+  scene.add(f);
+}
+
+/* blob shadows */
+function blobShadow(r) {
+  const m = new THREE.Mesh(new THREE.CircleGeometry(r, 20),
+    new THREE.MeshBasicMaterial({ color: 0x2e5e23, transparent: true, opacity: 0.28 }));
+  m.rotation.x = -Math.PI / 2; m.position.y = 0.02; return m;
+}
+
+/* ---------- characters ---------- */
+function makePig() {
+  const g = new THREE.Group();
+  const pink = lam(0xf6a9be), dark = lam(0xe27d99);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.62, 20, 16), pink);
+  body.scale.set(1, 0.92, 1.08); body.position.y = 0.66; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.46, 20, 16), pink);
+  head.position.set(0, 1.38, 0.18); g.add(head);
+  const snout = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.16, 14), dark);
+  snout.rotation.x = Math.PI / 2; snout.position.set(0, 1.34, 0.62); g.add(snout);
+  [-0.06, 0.06].forEach(x => {
+    const n = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), lam(0x9c4a63));
+    n.position.set(x, 1.34, 0.705); g.add(n);
+  });
+  [-0.17, 0.17].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), lam(0x222222));
+    e.position.set(x, 1.5, 0.56); g.add(e);
+  });
+  [-0.26, 0.26].forEach(x => {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.26, 10), dark);
+    ear.position.set(x, 1.78, 0.08); ear.rotation.z = x > 0 ? -0.35 : 0.35; g.add(ear);
+  });
+  [[-0.26,0.22],[0.26,0.22],[-0.26,-0.22],[0.26,-0.22]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.34, 10), dark);
+    leg.position.set(p[0], 0.17, p[1]); g.add(leg);
+  });
+  const tail = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.035, 8, 14, Math.PI * 1.5), dark);
+  tail.position.set(0, 0.78, -0.66); g.add(tail);
+  g.add(blobShadow(0.7));
+  return g;
+}
+function makeWolf() {
+  const g = new THREE.Group();
+  const gray = lam(0x6f7480), darkg = lam(0x4d5160);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.78, 20, 16), gray);
+  body.scale.set(1, 1.05, 1.2); body.position.y = 0.9; g.add(body);
+  const chest = new THREE.Mesh(new THREE.SphereGeometry(0.45, 14, 12), lam(0xb9bdc7));
+  chest.position.set(0, 0.85, 0.55); g.add(chest);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 20, 16), gray);
+  head.position.set(0, 1.95, 0.25); g.add(head);
+  const snout = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.55, 12), darkg);
+  snout.rotation.x = Math.PI / 2; snout.position.set(0, 1.86, 0.72); g.add(snout);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), lam(0x1c1c22));
+  nose.position.set(0, 1.86, 1.0); g.add(nose);
+  [-0.18, 0.18].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 6), lam(0xffcb3a));
+    e.position.set(x, 2.08, 0.62); g.add(e);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), lam(0x111111));
+    pupil.position.set(x, 2.08, 0.675); g.add(pupil);
+  });
+  [-0.28, 0.28].forEach(x => {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.4, 10), darkg);
+    ear.position.set(x, 2.42, 0.1); g.add(ear);
+  });
+  [[-0.3,0.3],[0.3,0.3],[-0.3,-0.3],[0.3,-0.3]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.5, 10), darkg);
+    leg.position.set(p[0], 0.25, p[1]); g.add(leg);
+  });
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.8, 10), darkg);
+  tail.rotation.x = Math.PI * 0.65; tail.position.set(0, 1.05, -1.05); g.add(tail);
+  g.add(blobShadow(0.9));
+  return g;
+}
+
+const pig = makePig();  scene.add(pig);
+const wolf = makeWolf(); scene.add(wolf); wolf.visible = false;
+
+/* ---------- collectible piles ---------- */
+function makePile(type) {
+  const g = new THREE.Group();
+  if (type === 1) {            // straw sheaf
+    const sheaf = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.8, 10), lam(0xe9c46a));
+    sheaf.position.y = 0.4; g.add(sheaf);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.1, 10), lam(0xb98a3a));
+    band.position.y = 0.42; g.add(band);
+  } else if (type === 2) {     // crossed sticks
+    for (let i = 0; i < 3; i++) {
+      const s = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.0, 8), lam(0x8a5a33));
+      s.rotation.z = Math.PI / 2; s.rotation.y = i * 1.0; s.position.y = 0.12 + i * 0.07; g.add(s);
+    }
+  } else {                     // little brick stack
+    const bm = lam(0xc0504d);
+    [[0,-0.12,0],[0.3,-0.12,0],[0.15,0.1,0]].forEach(p => {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.2, 0.22), bm);
+      b.position.set(p[0], 0.22 + p[1], p[2]); g.add(b);
+    });
+  }
+  return g;
+}
+
+/* ---------- houses (built in 3 tap-stages, blown apart piece by piece) ---------- */
+const HOUSE_POS = new THREE.Vector3(2.4, 0, -1.2);
+let house = null;
+
+function stageify(meshes) { meshes.forEach(m => { m.visible = false; }); return meshes; }
+
+function makeStrawHouse() {
+  const g = new THREE.Group(); g.position.copy(HOUSE_POS);
+  const straw = lam(0xe9c46a), strawD = lam(0xd4a843);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.6, 1.5, 14), straw); base.position.y = 0.75;
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.05, 0.12), lam(0x8a5a33)); door.position.set(0, 0.55, 1.52);
+  const tufts = [];
+  for (let i = 0; i < 5; i++) {
+    const t = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), strawD);
+    const a = i / 5 * Math.PI * 2; t.position.set(Math.cos(a) * 1.45, 1.4, Math.sin(a) * 1.45); tufts.push(t);
+  }
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(2.0, 1.5, 14), strawD); roof.position.y = 2.25;
+  const top = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), straw); top.position.y = 3.0;
+  g.add(base, door, roof, top, ...tufts);
+  g.userData.stages = [stageify([base]), stageify([door, ...tufts]), stageify([roof, top])];
+  scene.add(g); return g;
+}
+function makeStickHouse() {
+  const g = new THREE.Group(); g.position.copy(HOUSE_POS);
+  const wood = lam(0x9a6a3a), woodD = lam(0x6f4a26);
+  const walls = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.7, 2.6), wood); walls.position.y = 0.85;
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.1, 0.12), woodD); door.position.set(0, 0.58, 1.33);
+  const sticks = [];
+  for (let i = 0; i < 4; i++) {
+    const s = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 2.9, 8), woodD);
+    s.rotation.z = Math.PI / 2; s.position.set(0, 0.45 + i * 0.4, 1.32); sticks.push(s);
+  }
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(2.5, 1.5, 4), woodD);
+  roof.rotation.y = Math.PI / 4; roof.position.y = 2.45;
+  g.add(walls, door, roof, ...sticks);
+  g.userData.stages = [stageify([walls]), stageify([door, ...sticks]), stageify([roof])];
+  scene.add(g); return g;
+}
+function makeBrickHouse() {
+  const g = new THREE.Group(); g.position.copy(HOUSE_POS);
+  const brick = lam(0xc0504d), brickD = lam(0x96362f);
+  const walls = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.9, 2.8), brick); walls.position.y = 0.95;
+  /* simple brick lines */
+  const lines = [];
+  for (let i = 0; i < 3; i++) {
+    const l = new THREE.Mesh(new THREE.BoxGeometry(3.02, 0.05, 2.82), lam(0xead9c8));
+    l.position.y = 0.5 + i * 0.5; lines.push(l);
+  }
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.75, 1.15, 0.12), lam(0x6f4a26)); door.position.set(0, 0.6, 1.43);
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), lam(0xffcb3a)); knob.position.set(0.22, 0.6, 1.51);
+  const winMat = new THREE.MeshLambertMaterial({ color: 0xbfe6ff, emissive: 0x000000 });
+  const win1 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.1), winMat); win1.position.set(-0.95, 1.15, 1.42);
+  const win2 = win1.clone(); win2.position.x = 0.95;
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(2.6, 1.4, 4), brickD);
+  roof.rotation.y = Math.PI / 4; roof.position.y = 2.6;
+  const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.1, 0.55), brickD);
+  chimney.position.set(0.85, 3.0, 0); 
+  const chimTop = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.18, 0.7), brick);
+  chimTop.position.set(0.85, 3.6, 0);
+  g.add(walls, door, knob, roof, chimney, chimTop, win1, win2, ...lines);
+  g.userData.stages = [stageify([walls, ...lines]), stageify([door, knob, win1, win2]), stageify([roof, chimney, chimTop])];
+  g.userData.windows = winMat;
+  g.userData.chimneyTop = new THREE.Vector3(0.85, 3.7, 0).add(HOUSE_POS);
+  g.userData.doorPos = door.position.clone().add(HOUSE_POS);
+  scene.add(g); return g;
+}
+const HOUSE_MAKERS = { 1: makeStrawHouse, 2: makeStickHouse, 3: makeBrickHouse };
+
+/* ---------- animation plumbing ---------- */
+const tweens = [];
+function tween(dur, fn, done) { tweens.push({ t: 0, dur, fn, done }); }
+const easeOut = p => 1 - Math.pow(1 - p, 3);
+const easeIn  = p => p * p * p;
+
+const walkers = [];
+function walkTo(obj, target, speed, done, hop) {
+  walkers.push({ obj, target: target.clone(), speed, done, hop: hop !== false, t: 0 });
+}
+function faceToward(obj, target) {
+  obj.rotation.y = Math.atan2(target.x - obj.position.x, target.z - obj.position.z);
+}
+
+let debris = [];      // flying house pieces
+let puffs = [];       // wind / smoke particles
+let confetti = [];
+let flames = null;
+
+function blowParticles(from, toward) {
+  for (let i = 0; i < 18; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.12 + Math.random()*0.12, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 }));
+    p.position.copy(from);
+    const dir = toward.clone().sub(from).normalize();
+    p.userData.v = dir.multiplyScalar(4 + Math.random()*3)
+      .add(new THREE.Vector3((Math.random()-0.5)*1.4, (Math.random()-0.2)*1.4, (Math.random()-0.5)*1.4));
+    p.userData.life = 0.9 + Math.random()*0.4;
+    scene.add(p); puffs.push(p);
+  }
+}
+function smokePuff(at) {
+  const p = new THREE.Mesh(new THREE.SphereGeometry(0.16 + Math.random()*0.14, 8, 6),
+    new THREE.MeshBasicMaterial({ color: 0xdddddd, transparent: true, opacity: 0.7 }));
+  p.position.copy(at).add(new THREE.Vector3((Math.random()-0.5)*0.2, 0, (Math.random()-0.5)*0.2));
+  p.userData.v = new THREE.Vector3((Math.random()-0.5)*0.3, 1.1 + Math.random()*0.5, (Math.random()-0.5)*0.3);
+  p.userData.life = 1.6;
+  scene.add(p); puffs.push(p);
+}
+function sparkle(at, color) {
+  for (let i = 0; i < 7; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5),
+      new THREE.MeshBasicMaterial({ color: color || 0xffe066, transparent: true, opacity: 1 }));
+    p.position.copy(at);
+    p.userData.v = new THREE.Vector3((Math.random()-0.5)*3, 2 + Math.random()*2, (Math.random()-0.5)*3);
+    p.userData.life = 0.7;
+    scene.add(p); puffs.push(p);
+  }
+}
+function makeFlames(at) {
+  const g = new THREE.Group(); g.position.copy(at);
+  for (let i = 0; i < 3; i++) {
+    const f = new THREE.Mesh(new THREE.ConeGeometry(0.16 - i*0.04, 0.5 - i*0.1, 8),
+      new THREE.MeshBasicMaterial({ color: [0xff5a1f, 0xff9d2e, 0xffd94a][i] }));
+    f.position.y = 0.1 + i * 0.08; g.add(f);
+  }
+  scene.add(g); return g;
+}
+function dropConfetti() {
+  const cols = [0xff6b8a, 0xffd54f, 0x7ed46a, 0x6fc3ef, 0xb39ddb];
+  for (let i = 0; i < 70; i++) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.18),
+      new THREE.MeshBasicMaterial({ color: cols[i % 5], side: THREE.DoubleSide }));
+    p.position.set(-6 + Math.random()*16, 7 + Math.random()*6, -4 + Math.random()*6);
+    p.userData.v = 1 + Math.random()*1.2;
+    p.userData.r = (Math.random()-0.5) * 4;
+    scene.add(p); confetti.push(p);
+  }
+}
+
+/* ---------- UI helpers ---------- */
+const narrEl = document.getElementById('narration');
+const narrWho = narrEl.querySelector('.who');
+const narrTxt = narrEl.querySelector('.txt');
+const btn = document.getElementById('btn');
+const badge = document.getElementById('badge');
+const fade = document.getElementById('fade');
+const nightText = document.getElementById('nightText');
+const nightLine = nightText.querySelector('.line');
+
+const WHO = { nar: '📖', pig: '🐷', wolf: '🐺' };
+function showNarr(who, text) {
+  narrWho.textContent = WHO[who] || '📖';
+  narrTxt.textContent = ' ' + text;
+  narrEl.style.opacity = 1;
+}
+function hideNarr() { narrEl.style.opacity = 0; }
+
+let btnAction = null;
+function setBtn(label, action, color) {
+  btn.textContent = label;
+  btn.className = color ? color : '';
+  btnAction = action;
+}
+function hideBtn() { btn.classList.add('hidden'); btnAction = null; }
+btn.addEventListener('click', () => {
+  audio();
+  if (btnAction) { const a = btnAction; btnAction = null; a(); }
+});
+
+/* sequential dialogue: tap "Next" through lines, then continue */
+function say(lines, cb, btnLabel) {
+  let i = 0;
+  function step() {
+    const L = lines[i];
+    showNarr(L.who, L.text);
+    if (L.snd) L.snd();
+    i++;
+    if (i < lines.length) setBtn(btnLabel || 'Next ▸', step, 'blue');
+    else setBtn(btnLabel || 'Next ▸', () => { cb && cb(); }, 'blue');
+  }
+  step();
+}
+
+/* ---------- story state ---------- */
+const DAYS = {
+  1: { label: 'straw',  emoji: '🌾', intro: 'Once upon a time, a little pig set out to build a house of straw.',
+       built: 'Soon the little pig had built a cosy house of straw.' },
+  2: { label: 'sticks', emoji: '🪵', intro: 'The next day, the little pig decided to build a stronger house of sticks.',
+       built: 'Soon the little pig had built a fine house of sticks.' },
+  3: { label: 'bricks', emoji: '🧱', intro: 'On the third day, the little pig worked hard to build a house of bricks.',
+       built: 'At last the little pig had built a strong, sturdy house of bricks!' },
+};
+const COLLECT_COUNT = 5;
+let day = 1, collected = 0, buildStage = 0, piles = [], walkBusy = false;
+let camMode = 'home', chaseT = 0, shakeT = 0, fireOn = false, theEnd = false;
+
+function updateBadge() {
+  const d = DAYS[day];
+  badge.style.display = 'block';
+  badge.textContent = `Day ${day} ${d.emoji} ${d.label}`;
+}
+
+/* ---------- phases ---------- */
+function startDay(n) {
+  day = n; collected = 0; buildStage = 0; fireOn = false;
+  /* reset world */
+  if (house) { scene.remove(house); house = null; }
+  debris.forEach(d => scene.remove(d.m)); debris = [];
+  pig.position.set(-2.5, 0, 2.2); pig.rotation.y = Math.PI * 0.4;
+  pig.visible = true; pig.scale.setScalar(1);
+  wolf.visible = false; wolf.position.set(-14, 0, 1.5); wolf.rotation.set(0,0,0);
+  camMode = 'home';
+  updateBadge();
+
+  /* scatter piles */
+  piles.forEach(p => scene.remove(p)); piles = [];
+  const spots = [[-5,3.5],[-1,5],[3.5,4.2],[6,2],[-6.5,0.5]];
+  for (let i = 0; i < COLLECT_COUNT; i++) {
+    const p = makePile(day);
+    p.position.set(spots[i][0] + (Math.random()-0.5), 0, spots[i][1] + (Math.random()-0.5));
+    scene.add(p); piles.push(p);
+  }
+  house = HOUSE_MAKERS[day]();
+
+  say([{ who: 'nar', text: DAYS[day].intro }], () => {
+    hideNarr(); collectPhase();
+  }, '▸ Turn the page');
+}
+
+function collectPhase() {
+  const d = DAYS[day];
+  setBtn(`${d.emoji} Collect ${d.label}  (${collected}/${COLLECT_COUNT})`, doCollect, 'green');
+}
+function doCollect() {
+  if (!piles.length) return;
+  /* nearest pile */
+  piles.sort((a, b) => a.position.distanceTo(pig.position) - b.position.distanceTo(pig.position));
+  const target = piles[0];
+  hideBtn();
+  faceToward(pig, target.position);
+  walkTo(pig, target.position, 3.2, () => {
+    sndPop(); sparkle(target.position.clone().setY(0.5));
+    tween(0.25, p => target.scale.setScalar(1 - p), () => {
+      scene.remove(target);
+      piles = piles.filter(x => x !== target);
+      collected++;
+      if (collected >= COLLECT_COUNT) {
+        sndDing();
+        say([{ who: 'pig', text: `That's all the ${DAYS[day].label} I need!` }], () => {
+          hideNarr(); goBuild();
+        });
+      } else {
+        btn.classList.remove('hidden');
+        collectPhase();
+      }
+    });
+  });
+}
+
+function goBuild() {
+  hideBtn();
+  const spot = HOUSE_POS.clone().add(new THREE.Vector3(-2.6, 0, 1.6));
+  faceToward(pig, spot);
+  walkTo(pig, spot, 3.2, () => {
+    faceToward(pig, HOUSE_POS);
+    setBtn('🔨 Build the house!', doBuild, 'green');
+  });
+}
+function doBuild() {
+  const stages = house.userData.stages;
+  const stage = stages[buildStage];
+  sndBuild();
+  stage.forEach(m => {
+    m.visible = true;
+    const sy = m.scale.y;
+    m.scale.y = 0.01;
+    tween(0.45, p => { m.scale.y = sy * easeOut(p); });
+  });
+  sparkle(HOUSE_POS.clone().setY(1 + buildStage), 0xfff3b0);
+  buildStage++;
+  if (buildStage < stages.length) {
+    setBtn(['🔨 Build the walls!', '🚪 Add the door!', '🏠 Put on the roof!'][buildStage], doBuild, 'green');
+  } else {
+    hideBtn();
+    setTimeout(() => {
+      say([{ who: 'nar', text: DAYS[day].built }], () => {
+        hideNarr();
+        goInside(() => {
+          if (day === 3) lockPhase(); else wolfArrives();
+        });
+      });
+    }, 700);
+  }
+}
+
+function goInside(cb) {
+  const doorstep = HOUSE_POS.clone().add(new THREE.Vector3(0, 0, 2.2));
+  faceToward(pig, doorstep);
+  walkTo(pig, doorstep, 3.2, () => {
+    faceToward(pig, HOUSE_POS);
+    sndClick();
+    /* pig pops in through the door */
+    tween(0.3, p => pig.scale.setScalar(1 - easeIn(p)), () => {
+      pig.visible = false;
+      pig.scale.setScalar(1);
+      showNarr('nar', 'The little pig went inside and shut the door behind him.');
+      setTimeout(() => { hideNarr(); cb(); }, 1600);
+    });
+  });
+}
+
+function lockPhase() {
+  setBtn('🔒 Lock the door!', () => {
+    sndClick(); sndThud();
+    const lock = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, 0.1), lam(0xffcb3a));
+    lock.position.copy(house.userData.doorPos).add(new THREE.Vector3(-0.2, 0, 0.1));
+    scene.add(lock);
+    house.userData.lock = lock;
+    sparkle(lock.position, 0xffcb3a);
+    say([{ who: 'nar', text: 'Click! The little pig locked the door, nice and tight.' }], () => {
+      hideNarr(); wolfArrives();
+    });
+  }, 'green');
+}
+
+function wolfArrives() {
+  hideBtn();
+  wolf.visible = true;
+  const stand = HOUSE_POS.clone().add(new THREE.Vector3(-4.2, 0, 2.6));
+  faceToward(wolf, stand);
+  showNarr('nar', 'But then… along came the Big Bad Wolf!');
+  sndThud();
+  walkTo(wolf, stand, 2.4, () => {
+    faceToward(wolf, HOUSE_POS);
+    say([
+      { who: 'wolf', text: '“Little pig, little pig, let me come in!”' },
+      { who: 'pig',  text: '“Not by the hair on my chinny chin chin!”' },
+      { who: 'wolf', text: '“Then I’ll HUFF, and I’ll PUFF, and I’ll BLOW your house in!”' },
+    ], () => {
+      hideNarr();
+      if (day === 3) blowFail(); else blowDown();
+    });
+  });
+}
+
+function wolfBlow(cb) {
+  /* rear back, then blow */
+  sndHuff();
+  tween(0.5, p => { wolf.rotation.x = -0.35 * Math.sin(p * Math.PI); });
+  setTimeout(() => {
+    sndHuff();
+    const mouth = wolf.position.clone().add(new THREE.Vector3(0, 1.9, 0)).add(
+      HOUSE_POS.clone().sub(wolf.position).normalize().multiplyScalar(1.0));
+    blowParticles(mouth, HOUSE_POS.clone().setY(1.2));
+    tween(0.4, p => { wolf.rotation.x = 0.3 * Math.sin(p * Math.PI); }, cb);
+  }, 550);
+}
+
+function blowDown() {
+  showNarr('nar', 'So he huffed… and he puffed…');
+  wolfBlow(() => {
+    showNarr('nar', '…and he BLEW the house in!');
+    sndThud(); shakeT = 0.5;
+    /* turn house pieces into tumbling debris */
+    const pieces = [];
+    house.children.forEach(m => { if (m.visible) pieces.push(m); });
+    pieces.forEach(m => {
+      const wp = new THREE.Vector3(); m.getWorldPosition(wp);
+      house.remove(m); m.position.copy(wp); scene.add(m);
+      const dir = wp.clone().sub(wolf.position).setY(0).normalize();
+      debris.push({
+        m,
+        v: dir.multiplyScalar(3 + Math.random()*4).add(new THREE.Vector3(0, 3 + Math.random()*3, 0)),
+        av: new THREE.Vector3(Math.random()*6-3, Math.random()*6-3, Math.random()*6-3),
+        life: 2.4,
+      });
+    });
+    scene.remove(house); house = null;
+    /* the startled pig tumbles out into the open! */
+    pig.visible = true;
+    pig.position.copy(HOUSE_POS); pig.position.y = 0;
+    faceToward(pig, wolf.position);
+    pig.scale.setScalar(0.01);
+    tween(0.35, p => pig.scale.setScalar(easeOut(p)));
+    sparkle(HOUSE_POS.clone().setY(1), 0xf6a9be);
+    setTimeout(() => {
+      setBtn('🏃 Run, little pig, run!', startChase);
+    }, 1300);
+  });
+}
+
+function startChase() {
+  hideBtn();
+  showNarr('nar', 'The little pig ran as fast as his trotters could carry him!');
+  camMode = 'chase'; chaseT = 0;
+  pig.position.set(0, 0, 1.2);  pig.rotation.y = Math.PI / 2;
+  wolf.position.set(-4.5, 0, 1.2); wolf.rotation.y = Math.PI / 2; wolf.rotation.x = 0;
+  pig.userData.run = 6.2; wolf.userData.run = 5.6;
+}
+function endChase() {
+  pig.userData.run = 0; wolf.userData.run = 0;
+  hideNarr();
+  nightFade(
+    day === 1 ? 'The little pig escaped! The moon rose on the first day…'
+              : 'Safe again! The moon rose on the second day…',
+    () => startDay(day + 1)
+  );
+}
+function nightFade(line, cb) {
+  fade.style.opacity = 1;
+  setTimeout(() => {
+    nightLine.textContent = line;
+    nightText.style.opacity = 1;
+    setBtn('☀️ The next morning ▸', () => {
+      nightText.style.opacity = 0;
+      hideBtn();
+      setTimeout(() => { cb(); fade.style.opacity = 0; }, 400);
+    }, 'blue');
+  }, 1200);
+}
+
+/* ---- day 3: the house stands ---- */
+function blowFail() {
+  showNarr('nar', 'So he huffed… and he puffed…');
+  wolfBlow(() => {
+    shakeHouse();
+    showNarr('nar', 'He huffed and he puffed again…');
+    setTimeout(() => wolfBlow(() => {
+      shakeHouse();
+      say([
+        { who: 'nar', text: '…but the brick house would NOT fall down!' },
+        { who: 'wolf', text: '“Grrr! Then I’ll climb down your chimney!”', snd: sndThud },
+      ], () => { hideNarr(); wolfClimbs(); });
+    }), 900);
+  });
+}
+function shakeHouse() {
+  if (!house) return;
+  sndThud();
+  const ox = house.position.x;
+  tween(0.5, p => { house.position.x = ox + Math.sin(p * 28) * 0.07 * (1 - p); },
+    () => { house.position.x = ox; });
+}
+function wolfClimbs() {
+  showNarr('nar', 'The sneaky wolf climbed up… up… up… onto the roof!');
+  const back = HOUSE_POS.clone().add(new THREE.Vector3(2.8, 0, -1.6));
+  faceToward(wolf, back);
+  walkTo(wolf, back, 2.6, () => {
+    const top = house.userData.chimneyTop.clone().add(new THREE.Vector3(0, 0.4, 0));
+    const from = wolf.position.clone();
+    faceToward(wolf, HOUSE_POS);
+    tween(1.6, p => {
+      const e = easeOut(p);
+      wolf.position.lerpVectors(from, top, e);
+      wolf.position.y = from.y + (top.y - from.y) * e + Math.sin(p * Math.PI) * 0.6;
+    }, () => {
+      wolf.scale.setScalar(0.8);
+      say([{ who: 'pig', text: '“Quick! I’ll light a fire in the fireplace!”' }], () => {
+        hideNarr();
+        setBtn('🔥 Light the fire!', lightFire, 'green');
+      });
+    });
+  });
+}
+function lightFire() {
+  hideBtn();
+  fireOn = true; sndFire();
+  fireLight.position.copy(HOUSE_POS).add(new THREE.Vector3(0, 1, 1));
+  fireLight.intensity = 1.4;
+  house.userData.windows.emissive.setHex(0xff8c2a);
+  flames = makeFlames(house.userData.chimneyTop.clone().add(new THREE.Vector3(0, -0.15, 0)));
+  showNarr('nar', 'The little pig lit a warm, crackling fire — and put a big pot on to boil!');
+  setBtn('Next ▸', wolfDownChimney, 'blue');
+}
+function wolfDownChimney() {
+  hideBtn(); hideNarr();
+  showNarr('nar', 'Down the chimney came the wolf…');
+  const top = wolf.position.clone();
+  const inChim = top.clone().setY(2.2);
+  tween(1.1, p => { wolf.position.lerpVectors(top, inChim, easeIn(p)); }, () => {
+    setTimeout(() => {
+      /* YEOW! */
+      sndYelp(); shakeT = 0.6;
+      showNarr('wolf', '“YEOWWW! HOT HOT HOT!”');
+      smokePuff(house.userData.chimneyTop); smokePuff(house.userData.chimneyTop);
+      const up = top.clone().setY(7.5);
+      tween(0.55, p => {
+        wolf.position.lerpVectors(inChim, up, easeOut(p));
+        wolf.rotation.z = p * Math.PI * 2;
+      }, () => {
+        /* arc down to the ground, far from the house */
+        const land = new THREE.Vector3(11, 0, 3);
+        const start = wolf.position.clone();
+        tween(0.9, p => {
+          wolf.position.lerpVectors(start, land, p);
+          wolf.position.y = start.y * (1 - p) + Math.sin(p * Math.PI) * 1.5;
+          wolf.rotation.z = p * Math.PI * 2;
+        }, () => {
+          wolf.rotation.z = 0; wolf.scale.setScalar(1);
+          sndThud();
+          setBtn('Next ▸', wolfRunsAway, 'blue');
+        });
+      });
+    }, 700);
+  });
+}
+function wolfRunsAway() {
+  hideBtn();
+  showNarr('nar', 'And the Big Bad Wolf ran away over the hills — and never, ever came back!');
+  const away = new THREE.Vector3(30, 0, 6);
+  faceToward(wolf, away);
+  walkTo(wolf, away, 7, () => { wolf.visible = false; }, true);
+  setTimeout(() => {
+    /* the door opens and the pig comes out to celebrate */
+    pig.visible = true;
+    pig.position.copy(HOUSE_POS).add(new THREE.Vector3(0, 0, 1.9));
+    pig.position.y = 0;
+    pig.scale.setScalar(0.01);
+    sndClick();
+    tween(0.3, p => pig.scale.setScalar(easeOut(p)));
+    const front = HOUSE_POS.clone().add(new THREE.Vector3(0, 0, 3.2));
+    faceToward(pig, front);
+    walkTo(pig, front, 3, () => {
+      faceToward(pig, camera.position);
+      sndDing();
+      say([
+        { who: 'pig', text: '“Hooray! My house of bricks kept me safe!”' },
+        { who: 'nar', text: 'And the little pig lived happily ever after in his strong little house.' },
+      ], showTheEnd, '▸');
+    });
+  }, 1600);
+}
+function showTheEnd() {
+  hideBtn(); hideNarr();
+  theEnd = true; dropConfetti(); sndDing();
+  setTimeout(() => {
+    document.getElementById('endScreen').classList.remove('gone');
+  }, 2200);
+}
+
+/* ---------- fullscreen toggle ---------- */
+const fsBtn = document.getElementById('fsBtn');
+const fsRoot = document.documentElement;
+const fsSupported = !!(fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen);
+if (!fsSupported) fsBtn.style.display = 'none'; // e.g. iPhone Safari
+function inFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+fsBtn.addEventListener('click', () => {
+  audio(); sndClick();
+  if (inFullscreen()) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else {
+    (fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen).call(fsRoot);
+  }
+});
+['fullscreenchange', 'webkitfullscreenchange'].forEach(ev =>
+  document.addEventListener(ev, () => {
+    fsBtn.textContent = inFullscreen() ? '⛶' : '⛶';
+    fsBtn.title = inFullscreen() ? 'Exit fullscreen' : 'Fullscreen';
+    sizeIt();
+  })
+);
+
+/* ---------- title / restart ---------- */
+document.getElementById('beginBtn').addEventListener('click', () => {
+  audio(); sndDing();
+  document.getElementById('titleScreen').classList.add('gone');
+  startDay(1);
+});
+document.getElementById('againBtn').addEventListener('click', () => {
+  audio(); sndClick();
+  document.getElementById('endScreen').classList.add('gone');
+  theEnd = false;
+  confetti.forEach(c => scene.remove(c)); confetti = [];
+  if (flames) { scene.remove(flames); flames = null; }
+  fireLight.intensity = 0;
+  if (house && house.userData.lock) scene.remove(house.userData.lock);
+  startDay(1);
+});
+
+/* ---------- main loop ---------- */
+const clock = new THREE.Clock();
+let bobT = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  bobT += dt;
+
+  /* tweens */
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const tw = tweens[i];
+    tw.t += dt;
+    const p = Math.min(tw.t / tw.dur, 1);
+    tw.fn(p);
+    if (p >= 1) { tweens.splice(i, 1); if (tw.done) tw.done(); }
+  }
+  /* walkers */
+  for (let i = walkers.length - 1; i >= 0; i--) {
+    const w = walkers[i];
+    const d = w.target.clone().sub(w.obj.position); d.y = 0;
+    const dist = d.length();
+    const step = w.speed * dt;
+    w.t += dt;
+    if (dist <= step) {
+      w.obj.position.x = w.target.x; w.obj.position.z = w.target.z; w.obj.position.y = 0;
+      walkers.splice(i, 1); if (w.done) w.done();
+    } else {
+      d.normalize().multiplyScalar(step);
+      w.obj.position.add(d);
+      if (w.hop) w.obj.position.y = Math.abs(Math.sin(w.t * 10)) * 0.12;
+    }
+  }
+  /* chase running */
+  if (camMode === 'chase') {
+    chaseT += dt;
+    if (pig.userData.run) {
+      pig.position.x += pig.userData.run * dt;
+      pig.position.y = Math.abs(Math.sin(bobT * 13)) * 0.18;
+      wolf.position.x += wolf.userData.run * dt;
+      wolf.position.y = Math.abs(Math.sin(bobT * 11)) * 0.22;
+      if (Math.random() < 0.25) {
+        const dust = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 5),
+          new THREE.MeshBasicMaterial({ color: 0xd9c9a8, transparent: true, opacity: 0.6 }));
+        dust.position.copy(pig.position).setY(0.1);
+        dust.userData.v = new THREE.Vector3(-1, 0.8, 0); dust.userData.life = 0.5;
+        scene.add(dust); puffs.push(dust);
+      }
+      if (chaseT > 4.6) endChase();
+    }
+    camera.position.lerp(new THREE.Vector3(pig.position.x + 1.5, 3.2, 9.5), 0.12);
+    camera.lookAt(pig.position.x + 1.5, 1.4, 0);
+  } else {
+    /* home camera, gentle sway */
+    const target = new THREE.Vector3(0.5 + Math.sin(bobT * 0.25) * 0.3, 5.4, 10.5);
+    camera.position.lerp(target, 0.05);
+    let look = new THREE.Vector3(0.5, 1.4, 0);
+    if (shakeT > 0) { shakeT -= dt; look.x += (Math.random()-0.5) * 0.25; look.y += (Math.random()-0.5) * 0.25; }
+    camera.lookAt(look);
+  }
+  /* idle bobs */
+  if (!walkers.find(w => w.obj === pig) && !pig.userData.run) {
+    pig.position.y = Math.sin(bobT * 3) * 0.03 + 0.0;
+    pig.rotation.z = Math.sin(bobT * 3) * 0.02;
+  }
+  if (wolf.visible && !walkers.find(w => w.obj === wolf) && !wolf.userData.run) {
+    wolf.rotation.z = Math.sin(bobT * 2.4) * 0.02;
+  }
+  /* debris physics */
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const d = debris[i];
+    d.v.y -= 9.8 * dt;
+    d.m.position.addScaledVector(d.v, dt);
+    d.m.rotation.x += d.av.x * dt; d.m.rotation.y += d.av.y * dt; d.m.rotation.z += d.av.z * dt;
+    d.life -= dt;
+    if (d.m.position.y < -2 || d.life <= 0) { scene.remove(d.m); debris.splice(i, 1); }
+  }
+  /* particles */
+  for (let i = puffs.length - 1; i >= 0; i--) {
+    const p = puffs[i];
+    p.position.addScaledVector(p.userData.v, dt);
+    p.userData.life -= dt;
+    p.material.opacity = Math.max(p.userData.life, 0);
+    if (p.userData.life <= 0) { scene.remove(p); puffs.splice(i, 1); }
+  }
+  /* fire */
+  if (fireOn && flames) {
+    flames.children.forEach((f, i) => {
+      f.scale.y = 1 + Math.sin(bobT * 12 + i * 2) * 0.25;
+      f.scale.x = f.scale.z = 1 + Math.sin(bobT * 9 + i) * 0.15;
+    });
+    fireLight.intensity = 1.2 + Math.sin(bobT * 11) * 0.3;
+    if (Math.random() < 0.06 && house) smokePuff(house.userData.chimneyTop);
+  }
+  /* confetti */
+  for (let i = confetti.length - 1; i >= 0; i--) {
+    const c = confetti[i];
+    c.position.y -= c.userData.v * dt;
+    c.rotation.x += c.userData.r * dt; c.rotation.y += c.userData.r * 0.7 * dt;
+    if (c.position.y < 0.05) c.position.y = 7 + Math.random()*4;
+  }
+  /* drifting clouds */
+  clouds.forEach((c, i) => { c.position.x += dt * (0.15 + i * 0.03); if (c.position.x > 80) c.position.x = -40; });
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
