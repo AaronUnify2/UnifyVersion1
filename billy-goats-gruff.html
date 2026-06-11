@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>The Three Billy Goats Gruff — A Storybook Game</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; overflow:hidden; touch-action:none; background:#9fd8f0;
+    font-family:"Comic Sans MS","Chalkboard SE","Marker Felt","Trebuchet MS",sans-serif; }
+  #c { position:fixed; inset:0; display:block; }
+
+  /* ---- narration card ---- */
+  #narration {
+    position:fixed; top:max(12px, env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    width:min(92vw,560px); background:#FFF8E4; border:3px solid #5b6a3a; border-radius:18px;
+    padding:12px 16px; font-family:Georgia,'Times New Roman',serif; font-style:italic;
+    font-size:clamp(16px,4.4vw,21px); color:#39431f; line-height:1.35; text-align:center;
+    box-shadow:0 4px 0 #00000022; opacity:0; transition:opacity .4s; pointer-events:none; z-index:5;
+  }
+  #narration .who { font-style:normal; font-size:1.25em; margin-right:6px; }
+
+  /* ---- badge ---- */
+  #badge {
+    position:fixed; left:10px; bottom:max(14px, env(safe-area-inset-bottom)); z-index:5;
+    background:#ffffffd9; border:3px solid #5b6a3a; border-radius:14px; padding:6px 12px;
+    font-weight:bold; color:#46541f; font-size:clamp(13px,3.6vw,16px); display:none;
+  }
+
+  /* ---- fullscreen toggle ---- */
+  #fsBtn {
+    position:fixed; right:10px; bottom:max(14px, env(safe-area-inset-bottom)); z-index:7;
+    width:48px; height:48px; border:3px solid #5b6a3a; border-radius:14px;
+    background:#ffffffd9; color:#46541f; font-size:22px; line-height:1; cursor:pointer;
+    font-family:inherit; box-shadow:0 3px 0 #00000022;
+  }
+  #fsBtn:active { transform:translateY(2px); box-shadow:none; }
+
+  /* ---- big action button ---- */
+  #btn {
+    position:fixed; bottom:max(18px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    min-width:min(70vw,330px); padding:16px 26px; border:none; border-radius:999px;
+    background:linear-gradient(#8fd06a,#4a9a3e); color:#fff;
+    font-family:inherit; font-size:clamp(18px,5.2vw,24px); font-weight:bold; letter-spacing:.3px;
+    box-shadow:0 6px 0 #2f6b28, 0 10px 18px #0003; cursor:pointer; z-index:11;
+    transition:transform .08s, box-shadow .08s, opacity .3s; text-shadow:0 2px 0 #0002;
+  }
+  #btn:active { transform:translateX(-50%) translateY(4px); box-shadow:0 2px 0 #2f6b28, 0 5px 10px #0003; }
+  #btn.hidden { opacity:0; pointer-events:none; }
+  #btn.blue { background:linear-gradient(#6fc3ef,#2f7fc4); box-shadow:0 6px 0 #1f5a8e, 0 10px 18px #0003; }
+  #btn.blue:active { box-shadow:0 2px 0 #1f5a8e, 0 5px 10px #0003; }
+  #btn.red { background:linear-gradient(#ff8a5c,#e8512f); box-shadow:0 6px 0 #a93316, 0 10px 18px #0003; }
+  #btn.red:active { box-shadow:0 2px 0 #a93316, 0 5px 10px #0003; }
+
+  /* ---- title & end screens ---- */
+  .screen {
+    position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; padding:5vw; transition:opacity .7s;
+    background:linear-gradient(#bfe7f7 0%, #dff2c8 55%, #9ccf72 100%);
+  }
+  .screen.gone { opacity:0; pointer-events:none; }
+  .screen .goats { font-size:clamp(40px,12vw,72px); letter-spacing:6px; }
+  .screen h1 {
+    font-family:Georgia,serif; color:#3e5418; font-size:clamp(32px,9.4vw,54px);
+    line-height:1.12; margin:14px 0 6px; text-shadow:0 3px 0 #ffffff88;
+  }
+  .screen p { color:#55682c; font-size:clamp(15px,4.4vw,19px); margin-bottom:26px; font-family:Georgia,serif; font-style:italic; }
+  .screen button {
+    padding:16px 34px; border:none; border-radius:999px; font-family:inherit; font-weight:bold;
+    font-size:clamp(19px,5.4vw,24px); color:#fff; cursor:pointer;
+    background:linear-gradient(#8fd06a,#4a9a3e); box-shadow:0 6px 0 #2f6b28, 0 10px 18px #0003;
+  }
+  .screen button:active { transform:translateY(4px); box-shadow:0 2px 0 #2f6b28; }
+  #endScreen { background:linear-gradient(#fde9a8 0%, #c8e6a0 55%, #7fb95e 100%); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="narration"><span class="who"></span><span class="txt"></span></div>
+<div id="badge"></div>
+<button id="fsBtn" title="Fullscreen">⛶</button>
+<button id="btn" class="hidden"></button>
+
+<div id="titleScreen" class="screen">
+  <div class="goats">🐐 🐐 🐐</div>
+  <h1>The Three Billy<br>Goats Gruff</h1>
+  <p>An interactive storybook for little listeners</p>
+  <button id="beginBtn">📖 Begin the story</button>
+</div>
+
+<div id="endScreen" class="screen gone">
+  <div class="goats">🐐 🌼 ⛰️</div>
+  <h1>The End</h1>
+  <p>“Snip, snap, snout —<br>this tale’s told out!”</p>
+  <button id="againBtn">↺ Read it again</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =========================================================
+   THE THREE BILLY GOATS GRUFF — a tap-through storybook
+   ========================================================= */
+
+/* ---------- tiny sound kit ---------- */
+let AC = null;
+function audio() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(freq, dur, type, vol, slideTo) {
+  const ac = audio(); if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type || 'sine'; o.frequency.setValueAtTime(freq, ac.currentTime);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, ac.currentTime + dur);
+  g.gain.setValueAtTime(vol || 0.18, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + dur + 0.05);
+}
+function noise(dur, vol, freq) {
+  const ac = audio(); if (!ac) return;
+  const len = Math.floor(ac.sampleRate * dur);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq || 700; f.Q.value = 0.6;
+  const g = ac.createGain(); g.gain.value = vol || 0.25;
+  src.connect(f).connect(g).connect(ac.destination); src.start();
+}
+const sndThud   = () => tone(150, 0.18, 'sine', 0.3, 60);
+const sndClick  = () => tone(1200, 0.07, 'square', 0.1);
+const sndDing   = () => { tone(660,0.3,'triangle',0.12); setTimeout(()=>tone(880,0.4,'triangle',0.12),140); };
+const sndGrowl  = () => tone(140, 0.6, 'sawtooth', 0.18, 70);
+const sndRise   = () => tone(90, 0.7, 'sawtooth', 0.15, 220);
+const sndWhee   = () => tone(300, 0.9, 'sawtooth', 0.16, 1100);
+const sndSplash = () => { noise(0.55, 0.4, 260); tone(240, 0.35, 'sine', 0.15, 70); };
+const sndMunch  = () => noise(0.12, 0.18, 1400);
+
+/* ---------- three.js scene ---------- */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fd8f0);
+scene.fog = new THREE.Fog(0x9fd8f0, 35, 95);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 300);
+function sizeIt() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', sizeIt); sizeIt();
+
+const hemi = new THREE.HemisphereLight(0xfdfbef, 0x7ba562, 0.95); scene.add(hemi);
+const sunL = new THREE.DirectionalLight(0xfff4d2, 0.85); sunL.position.set(-6, 12, 8); scene.add(sunL);
+
+function lam(color) { return new THREE.MeshLambertMaterial({ color }); }
+
+/* meadow banks + river + hillside */
+const meadow = new THREE.Mesh(new THREE.PlaneGeometry(60, 90), lam(0x8fc468));
+meadow.rotation.x = -Math.PI / 2; meadow.position.set(-32.5, 0, 0); scene.add(meadow);
+const hillsideGround = new THREE.Mesh(new THREE.PlaneGeometry(60, 90), lam(0x79bb52));
+hillsideGround.rotation.x = -Math.PI / 2; hillsideGround.position.set(32.5, 0, 0); scene.add(hillsideGround);
+const river = new THREE.Mesh(new THREE.PlaneGeometry(5, 90), lam(0x4aa3df));
+river.rotation.x = -Math.PI / 2; river.position.set(0, 0.01, 0); scene.add(river);
+/* drifting ripples */
+const ripples = [];
+for (let i = 0; i < 10; i++) {
+  const r = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6),
+    new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.7 }));
+  r.scale.y = 0.15;
+  r.position.set(-1.8 + Math.random()*3.6, 0.04, -30 + Math.random()*60);
+  scene.add(r); ripples.push(r);
+}
+
+/* mountains on the horizon */
+for (let i = 0; i < 5; i++) {
+  const x = -26 + i * 13 + Math.random()*3;
+  const h = 9 + Math.random()*5;
+  const m = new THREE.Mesh(new THREE.ConeGeometry(7 + Math.random()*3, h, 6), lam(0x8d99a6));
+  m.position.set(x, h/2, -34); scene.add(m);
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(2.6, h*0.32, 6), lam(0xf4f8fb));
+  cap.position.set(x, h - h*0.16, -34); scene.add(cap);
+}
+/* clouds */
+const cloudMat = lam(0xffffff);
+const clouds = [];
+for (let i = 0; i < 7; i++) {
+  const c = new THREE.Group();
+  for (let j = 0; j < 3; j++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(1.1 + Math.random(), 12, 10), cloudMat);
+    p.position.set(j * 1.4 - 1.4, Math.random()*0.4, 0); c.add(p);
+  }
+  c.position.set(-30 + i * 11, 12 + Math.random()*4, -20 - Math.random()*8);
+  scene.add(c); clouds.push(c);
+}
+/* the lush hillside hump on the right */
+const hump = new THREE.Mesh(new THREE.SphereGeometry(11, 20, 16), lam(0x6db347));
+hump.scale.y = 0.35; hump.position.set(14, -0.6, -7); scene.add(hump);
+/* trees & flowers & grass tufts */
+function tree(x, z, s) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.4, 8), lam(0x7a5230));
+  trunk.position.y = 0.7; g.add(trunk);
+  const leaf = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.4, 10), lam(0x3f8a44));
+  leaf.position.y = 2.3; g.add(leaf);
+  g.position.set(x, 0, z); g.scale.setScalar(s || 1); scene.add(g);
+}
+[[-10,-7,1.2],[-14,-3,1.0],[-8,-12,1.1],[10,-9,1.2],[15,-4,1.0],[19,-10,1.4],[-18,-8,1.3],[24,-6,1.1]]
+  .forEach(t => tree(t[0], t[1], t[2]));
+const flowerCols = [0xff8fb1, 0xffd54f, 0xffffff, 0xb39ddb];
+for (let i = 0; i < 26; i++) {
+  const f = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), lam(flowerCols[i % 4]));
+  const right = i % 2 === 0;
+  f.position.set(right ? 4.5 + Math.random()*12 : -16 + Math.random()*11, 0.12, -8 + Math.random()*13);
+  scene.add(f);
+}
+for (let i = 0; i < 22; i++) {
+  const g = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 5), lam(0x5da83e));
+  g.position.set(4.5 + Math.random()*13, 0.2, -7 + Math.random()*12);
+  scene.add(g);
+}
+
+/* ---------- the bridge ---------- */
+const bridge = new THREE.Group();
+const wood = lam(0x9a6a3a), woodD = lam(0x6f4a26);
+const deck = new THREE.Mesh(new THREE.BoxGeometry(7.4, 0.22, 1.7), wood);
+deck.position.y = 0.85; bridge.add(deck);
+for (let i = 0; i < 9; i++) {
+  const plank = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.24, 1.72), woodD);
+  plank.position.set(-3.2 + i * 0.8, 0.85, 0); bridge.add(plank);
+}
+[[-3.4, 0.85], [3.4, 0.85], [-3.4, -0.85], [3.4, -0.85]].forEach(p => {
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1.7, 8), woodD);
+  post.position.set(p[0], 0.85, p[1]); bridge.add(post);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), wood);
+  ball.position.set(p[0], 1.78, p[1]); bridge.add(ball);
+});
+[-0.85, 0.85].forEach(z => {
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(7.0, 0.12, 0.12), wood);
+  rail.position.set(0, 1.5, z); bridge.add(rail);
+});
+/* ramps at each end */
+[-1, 1].forEach(side => {
+  const ramp = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.18, 1.7), wood);
+  ramp.position.set(side * 4.3, 0.45, 0);
+  ramp.rotation.z = side * 0.52; bridge.add(ramp);
+});
+scene.add(bridge);
+
+/* blob shadows */
+function blobShadow(r) {
+  const m = new THREE.Mesh(new THREE.CircleGeometry(r, 20),
+    new THREE.MeshBasicMaterial({ color: 0x2e5e23, transparent: true, opacity: 0.26 }));
+  m.rotation.x = -Math.PI / 2; m.position.y = 0.02; return m;
+}
+
+/* ---------- characters ---------- */
+function makeGoat(size, bodyHex, hornHex) {
+  const g = new THREE.Group();
+  const coat = lam(bodyHex), dark = lam(hornHex);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.6, 20, 16), coat);
+  body.scale.set(1, 0.95, 1.25); body.position.y = 0.72; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 18, 14), coat);
+  head.position.set(0, 1.42, 0.6); g.add(head);
+  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), coat);
+  muzzle.scale.set(0.85, 0.75, 1.1); muzzle.position.set(0, 1.32, 0.92); g.add(muzzle);
+  const noseTip = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), lam(0x47372a));
+  noseTip.position.set(0, 1.32, 1.1); g.add(noseTip);
+  [-0.13, 0.13].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), lam(0x222222));
+    e.position.set(x, 1.5, 0.84); g.add(e);
+  });
+  /* droopy ears */
+  [-0.3, 0.3].forEach(x => {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), coat);
+    ear.scale.set(0.55, 1.1, 0.4); ear.position.set(x, 1.36, 0.5);
+    ear.rotation.z = x > 0 ? -0.7 : 0.7; g.add(ear);
+  });
+  /* horns, swept back */
+  [-0.14, 0.14].forEach(x => {
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.42, 8), dark);
+    horn.position.set(x, 1.72, 0.42); horn.rotation.x = -0.7; g.add(horn);
+  });
+  /* little beard */
+  const beard = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.22, 8), dark);
+  beard.rotation.x = Math.PI; beard.position.set(0, 1.12, 0.92); g.add(beard);
+  [[-0.24,0.34],[0.24,0.34],[-0.24,-0.34],[0.24,-0.34]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.46, 8), dark);
+    leg.position.set(p[0], 0.23, p[1]); g.add(leg);
+  });
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.26, 8), coat);
+  tail.rotation.x = -Math.PI * 0.7; tail.position.set(0, 1.0, -0.78); g.add(tail);
+  g.add(blobShadow(0.62));
+  g.scale.setScalar(size);
+  return g;
+}
+function makeTroll() {
+  const g = new THREE.Group();
+  const skin = lam(0x6e8b5e), skinD = lam(0x53704a);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(1.0, 20, 16), skin);
+  body.scale.set(1.15, 1.0, 0.95); body.position.y = 1.0; g.add(body);
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 12), lam(0x9ab57f));
+  belly.position.set(0, 0.88, 0.55); g.add(belly);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.62, 20, 16), skin);
+  head.position.set(0, 2.25, 0.1); g.add(head);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), skinD);
+  nose.scale.set(0.9, 1.2, 1.1); nose.position.set(0, 2.16, 0.68); g.add(nose);
+  [-0.26, 0.26].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), lam(0xffd23a));
+    e.position.set(x, 2.42, 0.5); g.add(e);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), lam(0x111111));
+    pupil.position.set(x, 2.42, 0.59); g.add(pupil);
+  });
+  /* shaggy hair */
+  for (let i = 0; i < 6; i++) {
+    const h = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.5, 6), lam(0x3c4a36));
+    const a = (i / 6) * Math.PI - Math.PI / 2;
+    h.position.set(Math.sin(a) * 0.42, 2.75, -0.05 + Math.cos(a) * 0.18);
+    h.rotation.z = -Math.sin(a) * 0.5; g.add(h);
+  }
+  /* two stubby teeth */
+  [-0.12, 0.12].forEach(x => {
+    const t = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.14, 0.06), lam(0xfafafa));
+    t.position.set(x, 1.92, 0.56); g.add(t);
+  });
+  /* arms with fists */
+  [-1, 1].forEach(s => {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 1.1, 10), skin);
+    arm.position.set(s * 1.05, 1.35, 0.1); arm.rotation.z = s * 0.5; g.add(arm);
+    const fist = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 10), skinD);
+    fist.position.set(s * 1.35, 0.9, 0.1); g.add(fist);
+  });
+  g.scale.setScalar(1.15);
+  return g;
+}
+
+/* the three goats, lined up in the meadow */
+const GOATS = [
+  { size: 0.62, color: 0xf6f1e4, horn: 0xb9a98c, clop: 1150, speed: 3.6, hop: 0.1,
+    label: 'Little Goat', emoji: '🐐',
+    intro: 'First came the littlest Billy Goat Gruff. Trip-trap, trip-trap, went his little hooves on the bridge.',
+    iam: '“It is only I, the littlest Billy Goat Gruff, going up to the hillside to eat the sweet green grass.”',
+    plead: '“Oh, please don’t eat me — I’m far too little! Wait for my brother. He is MUCH bigger than me!”',
+    crossed: 'And the littlest goat skipped safely up the hillside, to the sweet green grass.' },
+  { size: 0.95, color: 0xc9a06a, horn: 0x7a5230, clop: 700, speed: 3.2, hop: 0.13,
+    label: 'Middle Goat', emoji: '🐐',
+    intro: 'Next came the middle Billy Goat Gruff. Trip-trap! Trip-trap! went his hooves on the bridge.',
+    iam: '“It is only I, the middle Billy Goat Gruff, going up to the hillside to eat the sweet green grass.”',
+    plead: '“Oh, don’t eat me — wait a moment more! My brother is coming, and he is MUCH bigger than me!”',
+    crossed: 'And the middle goat trotted safely up the hillside, to the sweet green grass.' },
+  { size: 1.32, color: 0x8e8e95, horn: 0x3c3c44, clop: 360, speed: 2.7, hop: 0.16,
+    label: 'Big Goat', emoji: '🐐',
+    intro: 'Then came the BIG Billy Goat Gruff. TRIP-TRAP! TRIP-TRAP! The whole bridge creaked and groaned under his hooves.',
+    iam: '“IT IS I! THE BIG BILLY GOAT GRUFF!”',
+    crossed: '' },
+];
+const goats = GOATS.map((G, i) => {
+  const g = makeGoat(G.size, G.color, G.horn);
+  g.position.set(-8 - i * 2.2, 0, 1.2 + i * 0.9);
+  g.rotation.y = Math.PI / 2;
+  scene.add(g);
+  return g;
+});
+const GRAZE_SPOTS = [[6.8, 1.6], [8.4, -0.4], [10.6, 1.0]];
+
+const troll = makeTroll(); scene.add(troll);
+const TROLL_HIDE = new THREE.Vector3(1.3, -3.4, 1.45);
+const TROLL_UP   = new THREE.Vector3(1.3, -0.85, 1.45);
+troll.position.copy(TROLL_HIDE);
+troll.rotation.y = -0.5;
+let trollUp = false;
+
+/* ---------- animation plumbing ---------- */
+const tweens = [];
+function tween(dur, fn, done) { tweens.push({ t: 0, dur, fn, done }); }
+const easeOut = p => 1 - Math.pow(1 - p, 3);
+const easeIn  = p => p * p * p;
+
+const walkers = [];
+function walkTo(obj, target, speed, done, opts) {
+  opts = opts || {};
+  const startDist = Math.hypot(target.x - obj.position.x, target.z - obj.position.z) || 0.0001;
+  walkers.push({ obj, target: target.clone(), speed, done, t: 0,
+    hop: opts.hop !== false, hopH: opts.hopH || 0.12,
+    clop: opts.clop || 0, clopT: 0.2,
+    startY: obj.position.y, startDist });
+}
+function walkPath(obj, pts, speed, done, opts) {
+  let i = 0;
+  function next() {
+    if (i >= pts.length) { if (done) done(); return; }
+    const p = pts[i++];
+    const v = new THREE.Vector3(p[0], p[1], p[2]);
+    faceToward(obj, v);
+    walkTo(obj, v, speed, next, opts);
+  }
+  next();
+}
+function faceToward(obj, target) {
+  obj.rotation.y = Math.atan2(target.x - obj.position.x, target.z - obj.position.z);
+}
+
+let puffs = [], confetti = [];
+function sparkle(at, color) {
+  for (let i = 0; i < 7; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5),
+      new THREE.MeshBasicMaterial({ color: color || 0xffe066, transparent: true, opacity: 1 }));
+    p.position.copy(at);
+    p.userData.v = new THREE.Vector3((Math.random()-0.5)*3, 2 + Math.random()*2, (Math.random()-0.5)*3);
+    p.userData.life = 0.7;
+    scene.add(p); puffs.push(p);
+  }
+}
+function splash(at) {
+  for (let i = 0; i < 22; i++) {
+    const blue = Math.random() < 0.6;
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.1 + Math.random()*0.1, 8, 6),
+      new THREE.MeshBasicMaterial({ color: blue ? 0x6fc3ef : 0xffffff, transparent: true, opacity: 0.95 }));
+    p.position.copy(at);
+    p.userData.v = new THREE.Vector3((Math.random()-0.5)*4, 3.5 + Math.random()*3, (Math.random()-0.5)*4);
+    p.userData.life = 0.9; p.userData.g = true;
+    scene.add(p); puffs.push(p);
+  }
+}
+function dropConfetti() {
+  const cols = [0xff6b8a, 0xffd54f, 0x7ed46a, 0x6fc3ef, 0xffffff];
+  for (let i = 0; i < 70; i++) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.18),
+      new THREE.MeshBasicMaterial({ color: cols[i % 5], side: THREE.DoubleSide }));
+    p.position.set(2 + Math.random()*14, 7 + Math.random()*6, -4 + Math.random()*7);
+    p.userData.v = 1 + Math.random()*1.2;
+    p.userData.r = (Math.random()-0.5) * 4;
+    scene.add(p); confetti.push(p);
+  }
+}
+
+/* ---------- UI helpers ---------- */
+const narrEl = document.getElementById('narration');
+const narrWho = narrEl.querySelector('.who');
+const narrTxt = narrEl.querySelector('.txt');
+const btn = document.getElementById('btn');
+const badge = document.getElementById('badge');
+
+const WHO = { nar: '📖', goat: '🐐', troll: '👹' };
+function showNarr(who, text) {
+  narrWho.textContent = WHO[who] || '📖';
+  narrTxt.textContent = ' ' + text;
+  narrEl.style.opacity = 1;
+}
+function hideNarr() { narrEl.style.opacity = 0; }
+
+let btnAction = null;
+function setBtn(label, action, color) {
+  btn.textContent = label;
+  btn.className = color ? color : '';
+  btnAction = action;
+}
+function hideBtn() { btn.classList.add('hidden'); btnAction = null; }
+btn.addEventListener('click', () => {
+  audio();
+  if (btnAction) { const a = btnAction; btnAction = null; a(); }
+});
+
+function say(lines, cb, btnLabel) {
+  let i = 0;
+  function step() {
+    const L = lines[i];
+    showNarr(L.who, L.text);
+    if (L.snd) L.snd();
+    i++;
+    if (i < lines.length) setBtn(btnLabel || 'Next ▸', step, 'blue');
+    else setBtn(btnLabel || 'Next ▸', () => { cb && cb(); }, 'blue');
+  }
+  step();
+}
+
+/* ---------- camera ---------- */
+const CAM_DEFAULT  = { x: 0,   y: 5.2, z: 12.5, lookX: 0,   lookY: 1.3 };
+const CAM_HILLSIDE = { x: 7.5, y: 5.0, z: 12.0, lookX: 8.5, lookY: 1.2 };
+let camHome = { ...CAM_DEFAULT };
+let shakeT = 0, bobT = 0;
+
+/* ---------- story state ---------- */
+let gi = 0;           // which goat is crossing
+let grazing = [false, false, false];
+let theEnd = false;
+
+function updateBadge() {
+  const G = GOATS[gi];
+  badge.style.display = 'block';
+  badge.textContent = `Goat ${gi + 1} of 3 ${G.emoji} ${G.label}`;
+}
+
+const MID_BRIDGE = -1.1;   // where the goat stops to meet the troll
+
+function resetStory() {
+  gi = 0; theEnd = false;
+  grazing = [false, false, false];
+  goats.forEach((g, i) => {
+    g.position.set(-8 - i * 2.2, 0, 1.2 + i * 0.9);
+    g.rotation.set(0, Math.PI / 2, 0);
+    g.visible = true;
+  });
+  troll.position.copy(TROLL_HIDE); troll.rotation.set(0, -0.5, 0);
+  troll.visible = true; trollUp = false;
+  confetti.forEach(c => scene.remove(c)); confetti = [];
+  camHome = { ...CAM_DEFAULT };
+}
+
+function startStory() {
+  resetStory();
+  say([
+    { who: 'nar', text: 'Once upon a time there were three billy goats, and the name of all three was “Gruff.”' },
+    { who: 'nar', text: 'To reach the sweet green grass on the hillside, they had to cross a bridge over a rushing river…' },
+    { who: 'nar', text: '…and under that bridge lived a great, ugly TROLL!', snd: sndGrowl },
+  ], () => { hideNarr(); goatTurn(); }, '▸ Turn the page');
+}
+
+function goatTurn() {
+  updateBadge();
+  const G = GOATS[gi];
+  setBtn(`${G.emoji} Trip-trap across the bridge!`, crossToMiddle);
+}
+
+function crossToMiddle() {
+  hideBtn();
+  const G = GOATS[gi], g = goats[gi];
+  showNarr('nar', G.intro);
+  const opts = { clop: G.clop, hopH: G.hop };
+  walkPath(g, [
+    [-5.2, 0, 0], [-3.6, 0, 0], [-2.9, 0.95, 0], [MID_BRIDGE, 0.97, 0],
+  ], G.speed, () => {
+    faceToward(g, new THREE.Vector3(5, 1, 0));
+    setTimeout(trollAppears, 500);
+  }, opts);
+}
+
+function trollAppears() {
+  sndRise(); shakeT = 0.4;
+  const from = troll.position.clone();
+  tween(0.9, p => {
+    troll.position.lerpVectors(from, TROLL_UP, easeOut(p));
+  }, () => {
+    trollUp = true;
+    faceToward(troll, goats[gi].position);
+    const G = GOATS[gi];
+    if (gi < 2) {
+      say([
+        { who: 'troll', text: '“WHO’S that trip-trapping over MY bridge?!”', snd: sndGrowl },
+        { who: 'goat',  text: G.iam },
+        { who: 'troll', text: '“Oh no you’re not — I’m coming to GOBBLE YOU UP!”', snd: sndGrowl },
+        { who: 'goat',  text: G.plead },
+        { who: 'troll', text: '“Hmph! Bigger, you say? Very well then… BE OFF with you!”' },
+      ], () => {
+        hideNarr();
+        setBtn('🐐 Hurry across!', hurryAcross);
+      });
+    } else {
+      say([
+        { who: 'troll', text: '“WHO’S that trip-trapping over MY bridge?!”', snd: sndGrowl },
+        { who: 'goat',  text: G.iam, snd: sndThud },
+        { who: 'troll', text: '“Then I’m coming to GOBBLE YOU UP!”', snd: sndGrowl },
+        { who: 'goat',  text: '“Well, come along then! I have two great horns — and I’m not one bit afraid of YOU!”' },
+      ], () => {
+        hideNarr();
+        setBtn('💥 CHARGE!', doCharge, 'red');
+      });
+    }
+  });
+}
+
+function trollSinks(cb) {
+  trollUp = false;
+  const from = troll.position.clone();
+  tween(0.8, p => { troll.position.lerpVectors(from, TROLL_HIDE, easeIn(p)); }, cb);
+}
+
+function hurryAcross() {
+  hideBtn(); hideNarr();
+  const G = GOATS[gi], g = goats[gi];
+  trollSinks();
+  const spot = GRAZE_SPOTS[gi];
+  walkPath(g, [
+    [2.9, 0.95, 0], [3.6, 0, 0], [spot[0], 0, spot[1]],
+  ], G.speed + 1.2, () => {
+    faceToward(g, new THREE.Vector3(spot[0] + 1, 0, spot[1] + 2));
+    grazing[gi] = true;
+    sndDing();
+    say([{ who: 'nar', text: G.crossed }], () => {
+      hideNarr(); gi++; goatTurn();
+    }, '▸ Next');
+  }, { clop: G.clop, hopH: G.hop });
+}
+
+/* ---- the big goat's charge ---- */
+function doCharge() {
+  hideBtn(); hideNarr();
+  const g = goats[2];
+  /* rear back… */
+  const startX = g.position.x;
+  tween(0.45, p => { g.position.x = startX - 0.7 * Math.sin(p * Math.PI / 2); }, () => {
+    /* …CHARGE! */
+    tone(GOATS[2].clop, 0.3, 'square', 0.15, GOATS[2].clop * 1.6);
+    const fromX = g.position.x;
+    tween(0.3, p => {
+      g.position.x = fromX + (1.1 - fromX) * easeIn(p);
+      g.rotation.x = -0.45 * Math.sin(p * Math.PI);
+    }, () => {
+      g.rotation.x = 0;
+      trollHit();
+    });
+  });
+}
+function trollHit() {
+  sndThud(); shakeT = 0.55; sndWhee();
+  trollUp = false;
+  showNarr('nar', 'The big billy goat butted that troll high into the air —');
+  const from = troll.position.clone();
+  const land = new THREE.Vector3(1.3, -0.9, 14);
+  tween(1.15, p => {
+    troll.position.lerpVectors(from, land, p);
+    troll.position.y = from.y + (land.y - from.y) * p + Math.sin(p * Math.PI) * 5.2;
+    troll.rotation.x = p * Math.PI * 3;
+  }, () => {
+    sndSplash();
+    splash(troll.position.clone().setY(0.2));
+    showNarr('nar', '— SPLASH! Right into the rushing river!');
+    /* float away downstream, bobbing */
+    const s = troll.position.clone();
+    tween(2.4, p => {
+      troll.position.z = s.z + p * 20;
+      troll.position.y = -1.6 + Math.sin(p * 16) * 0.18;
+      troll.rotation.x = Math.PI / 2;
+    }, () => {
+      troll.visible = false;
+      say([{ who: 'nar', text: 'And the river carried that old troll far, far away — and he was never, ever seen again.' }],
+        bigGoatCrosses, '▸ Next');
+    });
+    /* the big goat trots back to a tidy spot on the bridge */
+    const g = goats[2];
+    tween(0.5, p => { g.position.x = 1.1 - p * 0.8; });
+  });
+}
+function bigGoatCrosses() {
+  hideBtn(); hideNarr();
+  const g = goats[2], spot = GRAZE_SPOTS[2];
+  walkPath(g, [
+    [2.9, 0.95, 0], [3.6, 0, 0], [spot[0], 0, spot[1]],
+  ], GOATS[2].speed + 1, () => {
+    faceToward(g, new THREE.Vector3(spot[0] + 1, 0, spot[1] + 2));
+    grazing[2] = true;
+    finale();
+  }, { clop: GOATS[2].clop, hopH: GOATS[2].hop });
+}
+function finale() {
+  camHome = { ...CAM_HILLSIDE };
+  sndDing();
+  say([
+    { who: 'nar', text: 'Up on the hillside, the three billy goats ate the sweet green grass…', snd: sndMunch },
+    { who: 'nar', text: '…and they ate, and they ate, until they were ever so fat and happy!', snd: sndMunch },
+    { who: 'nar', text: '“Snip, snap, snout — this tale’s told out!”' },
+  ], showTheEnd, '▸');
+}
+function showTheEnd() {
+  hideBtn(); hideNarr();
+  theEnd = true; dropConfetti(); sndDing();
+  setTimeout(() => {
+    document.getElementById('endScreen').classList.remove('gone');
+  }, 2400);
+}
+
+/* ---------- fullscreen toggle ---------- */
+const fsBtn = document.getElementById('fsBtn');
+const fsRoot = document.documentElement;
+const fsSupported = !!(fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen);
+if (!fsSupported) fsBtn.style.display = 'none'; // e.g. iPhone Safari
+function inFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+fsBtn.addEventListener('click', () => {
+  audio(); sndClick();
+  if (inFullscreen()) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else {
+    (fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen).call(fsRoot);
+  }
+});
+['fullscreenchange', 'webkitfullscreenchange'].forEach(ev =>
+  document.addEventListener(ev, () => {
+    fsBtn.title = inFullscreen() ? 'Exit fullscreen' : 'Fullscreen';
+    sizeIt();
+  })
+);
+
+/* ---------- title / restart ---------- */
+document.getElementById('beginBtn').addEventListener('click', () => {
+  audio(); sndDing();
+  document.getElementById('titleScreen').classList.add('gone');
+  startStory();
+});
+document.getElementById('againBtn').addEventListener('click', () => {
+  audio(); sndClick();
+  document.getElementById('endScreen').classList.add('gone');
+  startStory();
+});
+
+/* ---------- main loop ---------- */
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  bobT += dt;
+
+  /* tweens */
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const tw = tweens[i];
+    tw.t += dt;
+    const p = Math.min(tw.t / tw.dur, 1);
+    tw.fn(p);
+    if (p >= 1) { tweens.splice(i, 1); if (tw.done) tw.done(); }
+  }
+  /* walkers */
+  for (let i = walkers.length - 1; i >= 0; i--) {
+    const w = walkers[i];
+    const dx = w.target.x - w.obj.position.x;
+    const dz = w.target.z - w.obj.position.z;
+    const dist = Math.hypot(dx, dz);
+    const step = w.speed * dt;
+    w.t += dt;
+    if (dist <= step) {
+      w.obj.position.copy(w.target);
+      walkers.splice(i, 1); if (w.done) w.done();
+    } else {
+      w.obj.position.x += dx / dist * step;
+      w.obj.position.z += dz / dist * step;
+      const frac = Math.min(Math.max(1 - dist / w.startDist, 0), 1);
+      const baseY = w.startY + (w.target.y - w.startY) * frac;
+      w.obj.position.y = baseY + (w.hop ? Math.abs(Math.sin(w.t * 10)) * w.hopH : 0);
+      if (w.clop) {
+        w.clopT += dt;
+        if (w.clopT > 0.24) { w.clopT = 0; tone(w.clop, 0.07, 'square', 0.09, w.clop * 0.6); }
+      }
+    }
+  }
+  /* camera */
+  const target = new THREE.Vector3(
+    camHome.x + Math.sin(bobT * 0.25) * 0.3, camHome.y, camHome.z);
+  camera.position.lerp(target, 0.05);
+  let look = new THREE.Vector3(camHome.lookX, camHome.lookY, 0);
+  if (shakeT > 0) { shakeT -= dt; look.x += (Math.random()-0.5) * 0.25; look.y += (Math.random()-0.5) * 0.25; }
+  camera.lookAt(look);
+
+  /* idle & grazing animations */
+  goats.forEach((g, i) => {
+    const walking = walkers.find(w => w.obj === g);
+    if (!walking) {
+      if (grazing[i]) {
+        /* munch-munch: dip the head down rhythmically */
+        g.rotation.x = Math.max(Math.sin(bobT * 1.6 + i * 2), 0) * 0.22;
+      } else {
+        g.rotation.z = Math.sin(bobT * 2.6 + i) * 0.02;
+      }
+    }
+  });
+  /* troll idle: looming sway + fist shake */
+  if (trollUp) {
+    troll.rotation.z = Math.sin(bobT * 2.2) * 0.05;
+    troll.position.y = TROLL_UP.y + Math.sin(bobT * 1.6) * 0.06;
+  }
+  /* particles */
+  for (let i = puffs.length - 1; i >= 0; i--) {
+    const p = puffs[i];
+    if (p.userData.g) p.userData.v.y -= 9.8 * dt;
+    p.position.addScaledVector(p.userData.v, dt);
+    p.userData.life -= dt;
+    p.material.opacity = Math.max(p.userData.life, 0);
+    if (p.userData.life <= 0) { scene.remove(p); puffs.splice(i, 1); }
+  }
+  /* confetti */
+  for (let i = confetti.length - 1; i >= 0; i--) {
+    const c = confetti[i];
+    c.position.y -= c.userData.v * dt;
+    c.rotation.x += c.userData.r * dt; c.rotation.y += c.userData.r * 0.7 * dt;
+    if (c.position.y < 0.05) c.position.y = 7 + Math.random()*4;
+  }
+  /* drifting ripples & clouds */
+  ripples.forEach(r => { r.position.z += dt * 1.6; if (r.position.z > 30) r.position.z = -30; });
+  clouds.forEach((c, i) => { c.position.x += dt * (0.14 + i * 0.03); if (c.position.x > 60) c.position.x = -40; });
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
