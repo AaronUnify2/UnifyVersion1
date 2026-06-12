@@ -52,6 +52,30 @@
   #btn.red { background:linear-gradient(#ff8a5c,#e8512f); box-shadow:0 6px 0 #a93316, 0 10px 18px #0003; }
   #btn.red:active { box-shadow:0 2px 0 #a93316, 0 5px 10px #0003; }
 
+  /* ---- drag-the-goat hint ---- */
+  #dragHint { position:fixed; left:0; top:0; width:110px; margin:-90px 0 0 -55px; text-align:center;
+    pointer-events:none; z-index:6; display:none; }
+  #dragHint .arrow { font-size:40px; animation:slideRight 1.1s ease-in-out infinite; text-shadow:0 2px 8px #0005; }
+  #dragHint .finger { font-size:44px; text-shadow:0 2px 6px #0004; }
+  @keyframes slideRight { 0%{transform:translateX(-16px);opacity:.4} 50%{transform:translateX(16px);opacity:1} 100%{transform:translateX(-16px);opacity:.4} }
+
+  /* ---- hold-to-charge control ---- */
+  #charge { position:fixed; bottom:max(18px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    z-index:11; text-align:center; transition:opacity .3s; }
+  #charge.hidden { opacity:0; pointer-events:none; }
+  #chargeLabel { color:#fff; font-weight:bold; font-size:clamp(17px,4.8vw,22px);
+    text-shadow:0 2px 0 #0007, 0 0 12px #0005; margin-bottom:8px; }
+  #chargeBtn { position:relative; width:118px; height:118px; margin:0 auto; border:none; background:none;
+    touch-action:none; -webkit-user-select:none; user-select:none; }
+  #chargeRing { position:absolute; inset:0; border-radius:50%;
+    background:conic-gradient(#ff8a5c 0deg, #ffffff2e 0deg); }
+  #chargeCore { position:absolute; inset:9px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #e8814f, #b2492a 75%); border:4px solid #fff;
+    display:flex; align-items:center; justify-content:center; font-size:46px;
+    box-shadow:0 5px 12px #0005; animation:chargePulse 1.4s ease-in-out infinite; }
+  @keyframes chargePulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+  @media (prefers-reduced-motion: reduce) { #chargeCore { animation:none; } }
+
   /* ---- title & end screens ---- */
   .screen {
     position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center;
@@ -81,6 +105,12 @@
 <div id="badge"></div>
 <button id="fsBtn" title="Fullscreen">⛶</button>
 <button id="btn" class="hidden"></button>
+
+<div id="charge" class="hidden">
+  <div id="chargeLabel">HOLD to CHARGE! 💢</div>
+  <button id="chargeBtn"><div id="chargeRing"></div><div id="chargeCore">🐐</div></button>
+</div>
+<div id="dragHint"><div class="arrow">➜</div><div class="finger">👆</div></div>
 
 <div id="titleScreen" class="screen">
   <div class="goats">🐐 🐐 🐐</div>
@@ -452,7 +482,7 @@ function showNarr(who, text) {
 }
 function hideNarr() { narrEl.style.opacity = 0; }
 
-let btnAction = null;
+let btnAction = null, lastBtnTap = 0;
 function setBtn(label, action, color) {
   btn.textContent = label;
   btn.className = color ? color : '';
@@ -461,6 +491,9 @@ function setBtn(label, action, color) {
 function hideBtn() { btn.classList.add('hidden'); btnAction = null; }
 btn.addEventListener('click', () => {
   audio();
+  const now = performance.now();
+  if (now - lastBtnTap < 500) return;   // no machine-gun tapping!
+  lastBtnTap = now;
   if (btnAction) { const a = btnAction; btnAction = null; a(); }
 });
 
@@ -475,6 +508,117 @@ function say(lines, cb, btnLabel) {
     else setBtn(btnLabel || 'Next ▸', () => { cb && cb(); }, 'blue');
   }
   step();
+}
+
+function projectToScreen(pos) {
+  const v = pos.clone().project(camera);
+  return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight, behind: v.z > 1 };
+}
+
+/* ---------- drag the goat along a path ---------- */
+const dragHint = document.getElementById('dragHint');
+let dragMode = null, dragLastX = null;
+
+function buildPath(start, restPts) {
+  const pts = [start.clone(), ...restPts.map(p => new THREE.Vector3(p[0], p[1], p[2]))];
+  const lens = [0];
+  for (let i = 1; i < pts.length; i++) lens.push(lens[i - 1] + pts[i].distanceTo(pts[i - 1]));
+  return { pts, lens, total: lens[lens.length - 1] };
+}
+function pathPoint(path, t) {
+  t = Math.min(Math.max(t, 0), path.total);
+  let i = 1;
+  while (i < path.lens.length - 1 && path.lens[i] < t) i++;
+  const segLen = path.lens[i] - path.lens[i - 1] || 0.0001;
+  const f = (t - path.lens[i - 1]) / segLen;
+  return path.pts[i - 1].clone().lerp(path.pts[i], f);
+}
+function startDrag(goat, restPts, opts, onDone) {
+  hideBtn();
+  const path = buildPath(goat.position, restPts);
+  dragMode = { goat, path, t: 0, clop: opts.clop, hopH: opts.hopH, clopAcc: 0, hopPhase: 0, onDone };
+  dragHint.style.display = 'block';
+}
+function dragAdvance(dxPx) {
+  const d = dragMode;
+  const dT = dxPx * d.path.total / (window.innerWidth * 1.05);
+  d.t = Math.min(Math.max(d.t + dT, 0), d.path.total);
+  const pos = pathPoint(d.path, d.t);
+  const ahead = pathPoint(d.path, Math.min(d.t + 0.15, d.path.total));
+  if (ahead.distanceTo(pos) > 0.01) faceToward(d.goat, ahead);
+  d.hopPhase += Math.abs(dT) * 6;
+  d.goat.position.set(pos.x, pos.y + Math.abs(Math.sin(d.hopPhase)) * d.hopH, pos.z);
+  d.clopAcc += Math.abs(dT);
+  if (d.clopAcc > 0.55) { d.clopAcc = 0; tone(d.clop, 0.07, 'square', 0.09, d.clop * 0.6); }
+  if (d.t >= d.path.total - 0.02) {
+    const cb = d.onDone;
+    d.goat.position.copy(pathPoint(d.path, d.path.total));
+    dragMode = null; dragLastX = null;
+    dragHint.style.display = 'none';
+    cb();
+  }
+}
+canvas.addEventListener('pointerdown', e => {
+  audio();
+  if (dragMode) { dragLastX = e.clientX; canvas.setPointerCapture(e.pointerId); }
+});
+canvas.addEventListener('pointermove', e => {
+  if (dragMode && dragLastX !== null) {
+    const dx = e.clientX - dragLastX;
+    dragLastX = e.clientX;
+    dragAdvance(dx);
+  }
+});
+['pointerup', 'pointercancel'].forEach(ev => canvas.addEventListener(ev, () => { dragLastX = null; }));
+
+/* ---------- hold-to-CHARGE ---------- */
+const chargeEl = document.getElementById('charge');
+const chargeBtn = document.getElementById('chargeBtn');
+const chargeRing = document.getElementById('chargeRing');
+let chargeActive = false, chargeHeld = false, chargeP = 0, chargeBaseX = 0, chargeToneT = 0;
+const sndBleat = () => { tone(540, 0.18, 'sawtooth', 0.16, 420); setTimeout(() => tone(500, 0.22, 'sawtooth', 0.14, 360), 190); };
+
+function showCharge() {
+  hideBtn();
+  chargeP = 0; chargeActive = true; chargeHeld = false;
+  chargeBaseX = goats[2].position.x;
+  chargeRing.style.background = 'conic-gradient(#ff8a5c 0deg, #ffffff2e 0deg)';
+  chargeEl.classList.remove('hidden');
+}
+function hideCharge() { chargeActive = false; chargeHeld = false; chargeEl.classList.add('hidden'); }
+
+chargeBtn.addEventListener('pointerdown', e => {
+  audio();
+  if (!chargeActive) return;
+  chargeHeld = true;
+  chargeBtn.setPointerCapture(e.pointerId);
+});
+['pointerup', 'pointercancel'].forEach(ev => chargeBtn.addEventListener(ev, () => {
+  if (!chargeActive || !chargeHeld) return;
+  chargeHeld = false;
+  if (chargeP > 0.06 && chargeP < 1) {   // let go too soon — a wobbly little stumble!
+    sndBleat();
+    const g = goats[2], released = chargeP;
+    chargeP = 0;
+    chargeRing.style.background = 'conic-gradient(#ff8a5c 0deg, #ffffff2e 0deg)';
+    tween(0.5, p => {
+      g.position.x = chargeBaseX - 0.85 * released * (1 - easeOut(p));
+      g.rotation.x = -0.25 * released * (1 - easeOut(p)) + Math.sin(p * Math.PI * 4) * 0.05 * (1 - p);
+    }, () => { g.position.x = chargeBaseX; g.rotation.x = 0; });
+  }
+}));
+function chargeNow() {
+  hideCharge();
+  tone(360, 0.3, 'square', 0.15, 580);
+  const g = goats[2];
+  const fromX = g.position.x;
+  tween(0.28, p => {
+    g.position.x = fromX + (1.1 - fromX) * easeIn(p);
+    g.rotation.x = -0.25 * (1 - p) - 0.2 * Math.sin(p * Math.PI);
+  }, () => {
+    g.rotation.x = 0;
+    trollHit();
+  });
 }
 
 /* ---------- camera ---------- */
@@ -499,6 +643,8 @@ const MID_BRIDGE = -1.1;   // where the goat stops to meet the troll
 function resetStory() {
   gi = 0; theEnd = false;
   grazing = [false, false, false];
+  dragMode = null; dragLastX = null; dragHint.style.display = 'none';
+  hideCharge();
   goats.forEach((g, i) => {
     g.position.set(-8 - i * 2.2, 0, 1.2 + i * 0.9);
     g.rotation.set(0, Math.PI / 2, 0);
@@ -522,20 +668,18 @@ function startStory() {
 function goatTurn() {
   updateBadge();
   const G = GOATS[gi];
-  setBtn(`${G.emoji} Trip-trap across the bridge!`, crossToMiddle);
+  say([{ who: 'nar', text: G.intro }], beginCross, '▸');
 }
-
-function crossToMiddle() {
-  hideBtn();
+function beginCross() {
   const G = GOATS[gi], g = goats[gi];
-  showNarr('nar', G.intro);
-  const opts = { clop: G.clop, hopH: G.hop };
-  walkPath(g, [
-    [-5.2, 0, 0], [-3.6, 0, 0], [-2.9, 0.95, 0], [MID_BRIDGE, 0.97, 0],
-  ], G.speed, () => {
+  showNarr('📖', `Drag the ${G.label.toLowerCase()} across the bridge! 👉`);
+  startDrag(g, [
+    [-3.6, 0, 0], [-2.9, 0.95, 0], [MID_BRIDGE, 0.97, 0],
+  ], { clop: G.clop, hopH: G.hop }, () => {
+    hideNarr();
     faceToward(g, new THREE.Vector3(5, 1, 0));
     setTimeout(trollAppears, 500);
-  }, opts);
+  });
 }
 
 function trollAppears() {
@@ -556,7 +700,7 @@ function trollAppears() {
         { who: 'troll', text: '“Hmph! Bigger, you say? Very well then… BE OFF with you!”' },
       ], () => {
         hideNarr();
-        setBtn('🐐 Hurry across!', hurryAcross);
+        hurryAcross();
       });
     } else {
       say([
@@ -565,8 +709,8 @@ function trollAppears() {
         { who: 'troll', text: '“Then I’m coming to GOBBLE YOU UP!”', snd: sndGrowl },
         { who: 'goat',  text: '“Well, come along then! I have two great horns — and I’m not one bit afraid of YOU!”' },
       ], () => {
-        hideNarr();
-        setBtn('💥 CHARGE!', doCharge, 'red');
+        showNarr('🐐', 'Press and HOLD the button to CHARGE! 💢');
+        showCharge();
       });
     }
   });
@@ -579,41 +723,24 @@ function trollSinks(cb) {
 }
 
 function hurryAcross() {
-  hideBtn(); hideNarr();
+  hideBtn();
   const G = GOATS[gi], g = goats[gi];
   trollSinks();
+  showNarr('📖', 'Hurry! Drag the goat across to the sweet green grass! 👉');
   const spot = GRAZE_SPOTS[gi];
-  walkPath(g, [
+  startDrag(g, [
     [2.9, 0.95, 0], [3.6, 0, 0], [spot[0], 0, spot[1]],
-  ], G.speed + 1.2, () => {
+  ], { clop: G.clop, hopH: G.hop }, () => {
     faceToward(g, new THREE.Vector3(spot[0] + 1, 0, spot[1] + 2));
     grazing[gi] = true;
     sndDing();
     say([{ who: 'nar', text: G.crossed }], () => {
       hideNarr(); gi++; goatTurn();
     }, '▸ Next');
-  }, { clop: G.clop, hopH: G.hop });
-}
-
-/* ---- the big goat's charge ---- */
-function doCharge() {
-  hideBtn(); hideNarr();
-  const g = goats[2];
-  /* rear back… */
-  const startX = g.position.x;
-  tween(0.45, p => { g.position.x = startX - 0.7 * Math.sin(p * Math.PI / 2); }, () => {
-    /* …CHARGE! */
-    tone(GOATS[2].clop, 0.3, 'square', 0.15, GOATS[2].clop * 1.6);
-    const fromX = g.position.x;
-    tween(0.3, p => {
-      g.position.x = fromX + (1.1 - fromX) * easeIn(p);
-      g.rotation.x = -0.45 * Math.sin(p * Math.PI);
-    }, () => {
-      g.rotation.x = 0;
-      trollHit();
-    });
   });
 }
+
+/* ---- the big goat's charge is now hold-to-CHARGE (see chargeNow above) ---- */
 function trollHit() {
   sndThud(); shakeT = 0.55; sndWhee();
   trollUp = false;
@@ -645,15 +772,17 @@ function trollHit() {
   });
 }
 function bigGoatCrosses() {
-  hideBtn(); hideNarr();
+  hideBtn();
   const g = goats[2], spot = GRAZE_SPOTS[2];
-  walkPath(g, [
+  showNarr('📖', 'Drag the Big Billy Goat across to join his brothers! 👉');
+  startDrag(g, [
     [2.9, 0.95, 0], [3.6, 0, 0], [spot[0], 0, spot[1]],
-  ], GOATS[2].speed + 1, () => {
+  ], { clop: GOATS[2].clop, hopH: GOATS[2].hop }, () => {
     faceToward(g, new THREE.Vector3(spot[0] + 1, 0, spot[1] + 2));
     grazing[2] = true;
+    hideNarr();
     finale();
-  }, { clop: GOATS[2].clop, hopH: GOATS[2].hop });
+  });
 }
 function finale() {
   camHome = { ...CAM_HILLSIDE };
@@ -743,6 +872,27 @@ function animate() {
       }
     }
   }
+  /* hold-to-CHARGE: the big goat backs up further and further */
+  if (chargeActive && chargeHeld) {
+    chargeP = Math.min(chargeP + dt / 1.7, 1);
+    const g = goats[2];
+    g.position.x = chargeBaseX - 0.85 * chargeP + Math.sin(bobT * 30) * 0.02 * chargeP;
+    g.rotation.x = -0.25 * chargeP;
+    chargeRing.style.background = `conic-gradient(#ff8a5c ${chargeP * 360}deg, #ffffff2e ${chargeP * 360}deg)`;
+    chargeToneT += dt;
+    if (chargeToneT > 0.16) {
+      chargeToneT = 0;
+      tone(120 + chargeP * 260, 0.12, 'square', 0.09);
+      if (Math.random() < 0.5) sparkle(g.position.clone().add(new THREE.Vector3(0.4, 0.1, 0.2)), 0xc9b27c);
+    }
+    if (chargeP >= 1) { chargeActive = false; chargeHeld = false; hideNarr(); chargeNow(); }
+  }
+  /* keep the drag hint floating over the goat */
+  if (dragMode) {
+    const s = projectToScreen(dragMode.goat.position.clone().add(new THREE.Vector3(0, 1.6, 0)));
+    if (!s.behind) { dragHint.style.left = s.x + 'px'; dragHint.style.top = s.y + 'px'; }
+  }
+
   /* camera */
   const target = new THREE.Vector3(
     camHome.x + Math.sin(bobT * 0.25) * 0.3, camHome.y, camHome.z);
