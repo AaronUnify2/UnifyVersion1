@@ -277,7 +277,7 @@ for (let i = 0; i < 7; i++) {
   scene.add(c); clouds.push(c);
 }
 const SUN_HOME = new THREE.Vector3(17, 13, -28);
-const SUN_NEAR = new THREE.Vector3(1.2, 8.2, -14);   // close enough to see & tap on a portrait phone
+const SUN_NEAR = new THREE.Vector3(1.0, 5.6, -13);   // close & low enough to tap below the story card
 const sunBall = new THREE.Mesh(new THREE.SphereGeometry(2.2, 16, 14),
   new THREE.MeshBasicMaterial({ color: 0xffe27a })); sunBall.position.copy(SUN_HOME); scene.add(sunBall);
 const flowerCols = [0xff8fb1, 0xffd54f, 0xffffff, 0xb39ddb];
@@ -635,7 +635,7 @@ const birds = [];
 for (let i = 0; i < 9; i++) { const h = makeHen(); h.visible = false; scene.add(h); birds.push(h); }
 const duck = makeDuck(); duck.visible = false; scene.add(duck); birds.push(duck);
 
-const SLOT = { mum: -2.7, dad: -1.55, teddy: -0.6, ringo: 0.15, rose: 0.85, birdsFrom: 1.5, tommy: 4.3 };
+const SLOT = { mum: -2.7, dad: -1.55, teddy: -0.3, ringo: 0.45, rose: 1.15, birdsFrom: 1.8, tommy: 4.6 };
 
 /* ---------- animation plumbing ---------- */
 const tweens = [];
@@ -760,7 +760,7 @@ function say(lines, cb, btnLabel) {
 /* ---------- tap-the-world targets ---------- */
 const tapHint = document.getElementById('tapHint');
 let tapTarget = null;   // { getPos: () => Vector3, action }
-function setTapTarget(getPos, action) { tapTarget = { getPos, action }; tapHint.style.display = 'block'; }
+function setTapTarget(getPos, action) { hideBtn(); tapTarget = { getPos, action }; tapHint.style.display = 'block'; }
 function clearTapTarget() { tapTarget = null; tapHint.style.display = 'none'; }
 function projectToScreen(pos) {
   const v = pos.clone().project(camera);
@@ -791,6 +791,7 @@ function layoutHandle() {
   pullFill.style.width = Math.round(pullProgress * 100) + '%';
 }
 function showPull(label) {
+  hideBtn();
   pullLabel.textContent = label || 'Slide to PULL! ➜';
   pullProgress = 0; pullZone = 0; pullActive = true;
   pullEl.classList.remove('hidden');
@@ -913,13 +914,15 @@ function plantSeed() {
 }
 let rainCloud = null;
 function summonCloud() {
+  /* tilt the view up a touch so the sky targets sit clear of the story card */
+  camHome = { x: -2.8, y: 4.4, z: 10.8, lookX: -3.2, lookY: 4.0 };
   rainCloud = new THREE.Group();
   const cm = lam(0xdce6ee);
   [[-0.9, 0, 0], [0, 0.3, 0], [0.9, 0, 0]].forEach(p => {
     const s = new THREE.Mesh(new THREE.SphereGeometry(0.75 + Math.random() * 0.2, 12, 10), cm);
     s.position.set(p[0], p[1], p[2]); rainCloud.add(s);
   });
-  rainCloud.position.set(CARROT_X - 13, 4.8, 0.5);
+  rainCloud.position.set(CARROT_X - 13, 3.8, 0.5);
   scene.add(rainCloud);
   tween(1.5, p => { rainCloud.position.x = CARROT_X - 13 + 12.6 * easeOut(p); }, () => {
     showNarr('📖', 'Here comes a rain cloud! Tap it to water the seed! 👆');
@@ -933,8 +936,8 @@ function waterIt() {
   setTimeout(() => {
     if (rainCloud) {
       const c = rainCloud; rainCloud = null;
-      const x0 = c.position.x;
-      tween(2.2, p => { c.position.x = x0 + 16 * p; c.position.y = 4.8 + p; }, () => scene.remove(c));
+      const x0 = c.position.x, y0 = c.position.y;
+      tween(2.2, p => { c.position.x = x0 + 16 * p; c.position.y = y0 + p; }, () => scene.remove(c));
     }
   }, 900);
   setTimeout(() => {
@@ -1131,10 +1134,10 @@ function teddyArrives() {
   teddy.visible = true;
   teddy.position.set(15, 0, 2.5);
   sndBark();
-  const slot = new THREE.Vector3(SLOT.teddy, 0, 0);
+  const slot = new THREE.Vector3(SLOT.teddy, 0, 0.4);   // beside the rope — out of Dad's personal space!
   faceToward(teddy, slot);
   walkTo(teddy, slot, 4.6, () => {
-    faceToward(teddy, new THREE.Vector3(CARROT_X, 0, 0));
+    faceToward(teddy, new THREE.Vector3(CARROT_X, 0, 0.4));
     addPuller(teddy, 0.24);
     say([{ who: '🐶', text: 'Teddy came bounding over, wagging his curly tail, and took the rope in his teeth.' }],
       () => { hideNarr(); showPull('Slide to PULL! ➜'); });
@@ -1146,7 +1149,7 @@ function catsArrive() {
   ringo.visible = true; ringo.position.set(15, 0, -2);
   rose.visible = true;  rose.position.set(16, 0, 3);
   sndMeow(760); setTimeout(() => sndMeow(580), 400);
-  const s1 = new THREE.Vector3(SLOT.ringo, 0, 0), s2 = new THREE.Vector3(SLOT.rose, 0, 0);
+  const s1 = new THREE.Vector3(SLOT.ringo, 0, -0.35), s2 = new THREE.Vector3(SLOT.rose, 0, 0.35);
   faceToward(ringo, s1); faceToward(rose, s2);
   let arrived = 0;
   const both = () => {
