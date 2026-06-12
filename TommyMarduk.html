@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Enūma Eliš — When On High</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; overflow:hidden; touch-action:none; background:#05070f;
+    font-family:Georgia,'Times New Roman',serif; }
+  #c { position:fixed; inset:0; display:block; }
+
+  /* cinematic vignette */
+  #vignette { position:fixed; inset:0; pointer-events:none; z-index:2;
+    background:radial-gradient(ellipse at center, transparent 55%, #00000088 100%); }
+
+  /* ---- narration panel ---- */
+  #panel {
+    position:fixed; bottom:max(20px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    width:min(92vw, 640px); background:#0c142cdd; border:1px solid #caa75a;
+    border-radius:4px; padding:18px 56px 18px 22px; z-index:10; cursor:pointer;
+    box-shadow:0 0 0 1px #00000066, 0 10px 30px #000000aa;
+    transition:opacity .35s;
+  }
+  #panel::before, #panel::after { content:'✦'; position:absolute; top:-11px; color:#caa75a; font-size:14px; }
+  #panel::before { left:14px; } #panel::after { right:14px; }
+  #panel.hidden { opacity:0; pointer-events:none; }
+  #panelText {
+    color:#e8d6a4; font-size:clamp(16px,4.2vw,19px); line-height:1.55; letter-spacing:.02em;
+    transition:opacity .3s; min-height:2.8em;
+  }
+  #panelText .v { font-style:italic; color:#f1e3bd; }
+  #nextGlyph {
+    position:absolute; right:14px; bottom:12px; color:#caa75a; font-size:22px;
+    animation:glyphPulse 2.2s ease-in-out infinite;
+  }
+  @keyframes glyphPulse { 0%,100%{opacity:.45} 50%{opacity:1} }
+
+  /* ---- tablet (act title) cards ---- */
+  #tablet {
+    position:fixed; inset:0; z-index:11; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; background:#05070fd8; cursor:pointer;
+    opacity:0; pointer-events:none; transition:opacity .8s;
+  }
+  #tablet.show { opacity:1; pointer-events:auto; }
+  #tablet .rule { width:min(46vw,260px); height:1px; background:linear-gradient(90deg,transparent,#caa75a,transparent); margin:18px 0; }
+  #tabletTitle { color:#caa75a; font-size:clamp(13px,3.4vw,16px); letter-spacing:.55em; text-indent:.55em; }
+  #tabletName { color:#ecd9a6; font-size:clamp(26px,7.5vw,40px); letter-spacing:.18em; text-indent:.18em; margin-top:10px; font-variant:small-caps; }
+  #tabletSub { color:#9b8a5e; font-style:italic; font-size:clamp(14px,3.8vw,17px); margin-top:8px; }
+
+  /* ---- screens ---- */
+  #fade { position:fixed; inset:0; background:#000; opacity:1; pointer-events:none; transition:opacity 1.2s; z-index:9; }
+  .screen {
+    position:fixed; inset:0; z-index:12; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; padding:6vw; background:#05070f; transition:opacity 1s;
+  }
+  .screen.gone { opacity:0; pointer-events:none; }
+  .screen .star { color:#caa75a; font-size:clamp(26px,7vw,40px); letter-spacing:.4em; text-indent:.4em; }
+  .screen h1 { color:#ecd9a6; font-size:clamp(34px,10vw,62px); letter-spacing:.14em; margin:18px 0 4px; font-variant:small-caps; font-weight:normal; }
+  .screen h2 { color:#caa75a; font-size:clamp(14px,4vw,18px); letter-spacing:.5em; text-indent:.5em; font-weight:normal; }
+  .screen p { color:#9b8a5e; font-style:italic; margin-top:22px; font-size:clamp(14px,4vw,17px); max-width:520px; line-height:1.6; }
+  .screen button {
+    margin-top:38px; padding:14px 44px; background:none; border:1px solid #caa75a; color:#ecd9a6;
+    font-family:inherit; font-size:clamp(15px,4.2vw,18px); letter-spacing:.25em; text-indent:.25em;
+    cursor:pointer; transition:background .3s;
+  }
+  .screen button:hover, .screen button:active { background:#caa75a22; }
+
+  /* ---- corner controls ---- */
+  .ctl {
+    position:fixed; top:max(12px, env(safe-area-inset-top)); z-index:10; width:42px; height:42px;
+    background:#0c142cb0; border:1px solid #caa75a88; color:#caa75a; border-radius:3px;
+    font-size:19px; cursor:pointer; font-family:inherit;
+  }
+  #muteBtn { right:12px; }
+  #fsBtn { right:62px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vignette"></div>
+<div id="fade"></div>
+
+<div id="panel" class="hidden">
+  <div id="panelText"></div>
+  <div id="nextGlyph">❯</div>
+</div>
+
+<div id="tablet">
+  <div id="tabletTitle"></div>
+  <div class="rule"></div>
+  <div id="tabletName"></div>
+  <div id="tabletSub"></div>
+</div>
+
+<button id="muteBtn" class="ctl" title="Sound">♪</button>
+<button id="fsBtn" class="ctl" title="Fullscreen">⛶</button>
+
+<div id="titleScreen" class="screen">
+  <div class="star">✦ ✦ ✦</div>
+  <h1>Enūma Eliš</h1>
+  <h2>WHEN ON HIGH</h2>
+  <p>The death of Apsu, the wrath of Tiamat,<br>and the making of the world.<br><br>After the Babylonian epic of creation.</p>
+  <button id="beginBtn">B E G I N</button>
+</div>
+
+<div id="endScreen" class="screen gone">
+  <div class="star">✦</div>
+  <h1>The Fifty Names</h1>
+  <p>“Let them be remembered; let the first-comer recite them.<br>Let the wise and learned confer about them together.<br>Let the father repeat them and teach them to his son.”<br><br>— Enūma Eliš, Tablet VII</p>
+  <button id="againBtn">R E A D &nbsp; A G A I N</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ===================================================================
+   ENŪMA ELIŠ — a slow, cinematic storybook
+   Tiny gods on the body of a dead colossus, adrift in Babylonian space.
+   =================================================================== */
+
+/* ---------------- audio: ambient drone score ---------------- */
+let AC = null, master = null, muted = false;
+let padNodes = [];
+function audio() {
+  if (!AC) {
+    try {
+      AC = new (window.AudioContext || window.webkitAudioContext)();
+      master = AC.createGain(); master.gain.value = 0.55; master.connect(AC.destination);
+    } catch (e) {}
+  }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function setPad(freqs, vol) {
+  const ac = audio(); if (!ac) return;
+  /* fade out the old chord */
+  padNodes.forEach(n => {
+    n.g.gain.cancelScheduledValues(ac.currentTime);
+    n.g.gain.setValueAtTime(n.g.gain.value, ac.currentTime);
+    n.g.gain.linearRampToValueAtTime(0, ac.currentTime + 2.5);
+    n.oscs.forEach(o => o.stop(ac.currentTime + 2.7));
+  });
+  padNodes = [];
+  if (!freqs) return;
+  freqs.forEach((f, i) => {
+    const g = ac.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime((vol || 0.035) * (i === 0 ? 1.3 : 1), ac.currentTime + 3.5);
+    const o1 = ac.createOscillator(); o1.type = 'sine'; o1.frequency.value = f;
+    const o2 = ac.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 1.004;
+    const o3 = ac.createOscillator(); o3.type = 'triangle'; o3.frequency.value = f * 2.002;
+    const g3 = ac.createGain(); g3.gain.value = 0.18;
+    o1.connect(g); o2.connect(g); o3.connect(g3).connect(g);
+    g.connect(master);
+    o1.start(); o2.start(); o3.start();
+    padNodes.push({ g, oscs: [o1, o2, o3] });
+  });
+}
+function tone(freq, dur, type, vol, slideTo) {
+  const ac = audio(); if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type || 'sine'; o.frequency.setValueAtTime(freq, ac.currentTime);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, ac.currentTime + dur);
+  g.gain.setValueAtTime(vol || 0.15, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  o.connect(g).connect(master || ac.destination); o.start(); o.stop(ac.currentTime + dur + 0.05);
+}
+function noiseBurst(dur, vol, freq) {
+  const ac = audio(); if (!ac) return;
+  const len = Math.floor(ac.sampleRate * dur);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq || 400;
+  const g = ac.createGain(); g.gain.value = vol || 0.3;
+  src.connect(f).connect(g).connect(master || ac.destination); src.start();
+}
+const sndBoom    = () => { tone(58, 1.6, 'sine', 0.5, 24); noiseBurst(1.4, 0.4, 220); };
+const sndShimmer = () => { [880, 1108, 1318, 1760].forEach((f, i) => setTimeout(() => tone(f, 2.2, 'triangle', 0.05), i * 130)); };
+const sndDeath   = () => { tone(196, 3.5, 'sine', 0.22, 49); };
+const sndPage    = () => tone(520, 0.08, 'sine', 0.05, 420);
+
+/* ---------------- three.js ---------------- */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05070f);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1200);
+function sizeIt() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', sizeIt); sizeIt();
+
+/* palette */
+const GOLD = 0xd9a843, LAPIS = 0x24407a, TERRA = 0xa05c34, TERRA_D = 0x7a4426,
+      SKIN = 0xd8a06a, EMBER = 0xffb347, VOID = 0x070310, VIOLET = 0x5b2a7a;
+function lam(c, e, ei) {
+  const m = new THREE.MeshLambertMaterial({ color: c });
+  if (e) { m.emissive = new THREE.Color(e); m.emissiveIntensity = ei == null ? 1 : ei; }
+  return m;
+}
+function bas(c, opacity) {
+  return new THREE.MeshBasicMaterial({ color: c, transparent: opacity != null, opacity: opacity == null ? 1 : opacity });
+}
+
+/* persistent starfield */
+function makeStars(n, rMin, rMax, size, color) {
+  const pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const u = Math.random() * 2 - 1, ph = Math.random() * Math.PI * 2;
+    const s = Math.sqrt(1 - u * u);
+    const r = rMin + Math.random() * (rMax - rMin);
+    pos[i*3] = s * Math.cos(ph) * r; pos[i*3+1] = u * r; pos[i*3+2] = s * Math.sin(ph) * r;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  return new THREE.Points(g, new THREE.PointsMaterial({ color: color || 0xbcc8ee, size: size || 1.2, sizeAttenuation: true }));
+}
+scene.add(makeStars(1600, 320, 520, 1.4));
+scene.add(makeStars(500, 180, 300, 0.9, 0x8e9cc8));
+
+const ambient = new THREE.AmbientLight(0x1a2038, 1); scene.add(ambient);
+const keyLight = new THREE.DirectionalLight(0xcfd6ff, 0.35); keyLight.position.set(-30, 50, 60); scene.add(keyLight);
+
+/* ---------------- tweens & helpers ---------------- */
+const tweens = [];
+function tween(dur, fn, done) { tweens.push({ t: 0, dur, fn, done }); }
+const easeIO = p => p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p + 2, 2) / 2;
+const easeOut = p => 1 - Math.pow(1 - p, 3);
+function v3(a) { return new THREE.Vector3(a[0], a[1], a[2]); }
+function disposeGroup(g) {
+  g.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose());
+  });
+}
+
+/* ===================================================================
+   BUILDERS
+   =================================================================== */
+
+/* a tiny god in tiered Babylonian dress, posed in profile */
+function makeGod(opts) {
+  opts = opts || {};
+  const g = new THREE.Group();
+  const robe = opts.robe || LAPIS, trim = opts.trim || GOLD;
+  /* flounced tiered robe (kaunakes) */
+  for (let i = 0; i < 4; i++) {
+    const r = 0.16 - i * 0.026;
+    const tier = new THREE.Mesh(new THREE.CylinderGeometry(r, r + 0.035, 0.13, 12), lam(robe));
+    tier.position.y = 0.08 + i * 0.12; g.add(tier);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.037, r + 0.037, 0.018, 12), lam(trim));
+    band.position.y = 0.145 + i * 0.12; g.add(band);
+  }
+  /* chest & arms folded forward */
+  const chest = new THREE.Mesh(new THREE.SphereGeometry(0.105, 12, 10), lam(robe));
+  chest.scale.set(1, 1.1, 0.8); chest.position.y = 0.585; g.add(chest);
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.17, 8), lam(SKIN));
+  arm.rotation.x = Math.PI / 2.4; arm.position.set(0, 0.56, 0.1); g.add(arm);
+  /* head, beard, horned cap */
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 10), lam(SKIN));
+  head.position.y = 0.74; g.add(head);
+  const beard = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.1, 0.045), lam(0x14110c));
+  beard.position.set(0, 0.665, 0.055); g.add(beard);
+  for (let i = 0; i < 3; i++) {
+    const ridge = new THREE.Mesh(new THREE.BoxGeometry(0.074, 0.01, 0.05), lam(0x2a241a));
+    ridge.position.set(0, 0.69 - i * 0.028, 0.056); g.add(ridge);
+  }
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.1, 10), lam(trim));
+  cap.position.y = 0.84; g.add(cap);
+  [-1, 1].forEach(s => {
+    const horn = new THREE.Mesh(new THREE.TorusGeometry(0.028, 0.009, 6, 10, Math.PI), lam(trim));
+    horn.position.set(s * 0.055, 0.8, 0); horn.rotation.y = s * 0.4; g.add(horn);
+  });
+  if (opts.lantern) {
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.3, 6), lam(0x4a3a22));
+    stick.position.set(0, 0.55, 0.16); stick.rotation.x = 0.5; g.add(stick);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), bas(EMBER));
+    lamp.position.set(0, 0.68, 0.25); g.add(lamp);
+  }
+  if (opts.h) g.scale.setScalar(opts.h / 0.9);
+  return g;
+}
+
+/* Marduk — gold, four burning eyes, storm motes */
+function makeMarduk(h) {
+  const g = makeGod({ robe: 0x8a5e1e, trim: 0xf2cf6e });
+  [-0.028, 0.028].forEach(x => [0.755, 0.725].forEach(y => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 5), bas(0xbfe8ff));
+    eye.position.set(x, y, 0.068); g.add(eye);
+  }));
+  /* orbiting storm motes */
+  const motes = new THREE.Group();
+  for (let i = 0; i < 10; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 5), bas(0x9fd8ff, 0.9));
+    m.userData.a = (i / 10) * Math.PI * 2;
+    m.userData.r = 0.22 + (i % 3) * 0.06;
+    m.userData.y = 0.3 + (i % 4) * 0.14;
+    motes.add(m);
+  }
+  g.add(motes);
+  g.userData.motes = motes;
+  if (h) g.scale.setScalar(h / 0.9);
+  return g;
+}
+
+/* the colossus Apsu, lying along +X (feet -X, head +X), masculine light */
+function makeApsu() {
+  const g = new THREE.Group();
+  const body = lam(TERRA), shade = lam(TERRA_D), gold = lam(GOLD);
+  const glows = { mats: [], lights: [] };
+  function glowMat() {
+    const m = lam(0xc98a3a, EMBER, 0.85);
+    glows.mats.push(m); return m;
+  }
+  /* torso */
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(7, 24, 18), body);
+  torso.scale.set(1.7, 0.62, 1.0); torso.position.set(8, 1.2, 0); g.add(torso);
+  const abdomen = new THREE.Mesh(new THREE.SphereGeometry(5.4, 22, 16), body);
+  abdomen.scale.set(1.5, 0.55, 0.86); abdomen.position.set(-2, 0.8, 0); g.add(abdomen);
+  /* heart-line of ember light down the chest */
+  for (let i = 0; i < 7; i++) {
+    const seam = new THREE.Mesh(new THREE.SphereGeometry(0.55 - i * 0.04, 10, 8), glowMat());
+    seam.position.set(12.5 - i * 2.4, 4.6 - i * 0.28, 0); g.add(seam);
+  }
+  /* pectoral ridges */
+  [-2.6, 2.6].forEach(z => {
+    const pec = new THREE.Mesh(new THREE.SphereGeometry(3.4, 16, 12), shade);
+    pec.scale.set(1.1, 0.5, 0.9); pec.position.set(11, 3.4, z); g.add(pec);
+  });
+  /* legs, together, tapering away */
+  const thigh = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 2.4, 13, 18), body);
+  thigh.rotation.z = Math.PI / 2; thigh.position.set(-13.5, 1.4, 0); g.add(thigh);
+  const shin = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 1.5, 11, 16), shade);
+  shin.rotation.z = Math.PI / 2; shin.position.set(-24.5, 1.2, 0); g.add(shin);
+  const feet = new THREE.Mesh(new THREE.BoxGeometry(3, 3.4, 4.6), shade);
+  feet.position.set(-30.6, 1.6, 0); g.add(feet);
+  /* arms by the sides; near hand open, palm to the sky */
+  [-1, 1].forEach(s => {
+    const upper = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.5, 9, 14), body);
+    upper.rotation.z = Math.PI / 2; upper.rotation.y = s * 0.12;
+    upper.position.set(8.5, 2.2, s * 7.6); g.add(upper);
+    const fore = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.1, 9, 14), shade);
+    fore.rotation.z = Math.PI / 2; fore.position.set(0.5, 1.6, s * 8.3); g.add(fore);
+  });
+  const palm = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.9, 3.4), body);
+  palm.position.set(-5.5, 1.5, 8.6); g.add(palm);
+  for (let i = 0; i < 4; i++) {
+    const finger = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.32, 3.4, 10), shade);
+    finger.rotation.z = Math.PI / 2;
+    finger.position.set(-9.2, 1.5, 7.4 + i * 0.85); g.add(finger);
+  }
+  const thumb = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.3, 2.4, 10), shade);
+  thumb.rotation.x = Math.PI / 2.6; thumb.position.set(-4.4, 1.5, 10.4); g.add(thumb);
+  /* head — serene, crowned, bearded */
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(4.4, 22, 18), body);
+  skull.scale.set(1.1, 1, 0.95); skull.position.set(20.5, 2.4, 0); g.add(skull);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 1.1), shade);
+  nose.position.set(21.2, 5.6, 0); g.add(nose);
+  /* closed eyes — two quiet lines */
+  [-1.9, 1.9].forEach(z => {
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.16, 0.5), lam(0x3a2415));
+    lid.position.set(20.6, 5.4, z); g.add(lid);
+  });
+  /* the great square beard, tiered */
+  for (let i = 0; i < 4; i++) {
+    const tier = new THREE.Mesh(new THREE.BoxGeometry(2.6 - i * 0.2, 0.85, 4.6 - i * 0.5), lam(i % 2 ? 0x2a241a : 0x1c1812));
+    tier.position.set(24.2 + i * 0.55, 3.6 - i * 0.5, 0); g.add(tier);
+  }
+  /* horned crown */
+  const crown = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 3, 2.6, 14), gold);
+  crown.rotation.z = Math.PI / 2; crown.position.set(17.2, 6.2, 0); g.add(crown);
+  [-1, 1].forEach(s => {
+    const horn = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.3, 8, 12, Math.PI), gold);
+    horn.position.set(17.2, 6.6, s * 2.6); horn.rotation.y = Math.PI / 2; g.add(horn);
+  });
+  /* the inner light of Apsu */
+  const l1 = new THREE.PointLight(EMBER, 1.6, 60); l1.position.set(11, 5, 0); g.add(l1);
+  const l2 = new THREE.PointLight(EMBER, 1.0, 50); l2.position.set(-3, 4, 0); g.add(l2);
+  glows.lights.push(l1, l2);
+  g.userData.glows = glows;
+  return g;
+}
+
+/* Tiamat as a darkness — a sinuous occluding silhouette with violet edges */
+function makeTiamat(scale) {
+  const g = new THREE.Group();
+  const dark = bas(VOID);
+  /* coiled serpentine mass */
+  const coil = [[0,0,0],[6,4,-2],[12,10,0],[14,18,2],[10,25,0],[2,30,-2],[-4,36,0]];
+  coil.forEach((p, i) => {
+    const r = 7 - i * 0.55;
+    const seg = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 12), dark);
+    seg.position.set(p[0], p[1], p[2]); g.add(seg);
+  });
+  /* feminine crowned head of night */
+  const head = new THREE.Mesh(new THREE.SphereGeometry(5.4, 16, 14), dark);
+  head.position.set(-6, 41, 0); g.add(head);
+  for (let i = 0; i < 7; i++) {
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.9, 5.5, 6), dark);
+    const a = -0.9 + i * 0.3;
+    spike.position.set(-6 + Math.sin(a) * 5.4, 41 + Math.cos(a) * 5.4 + 2, 0);
+    spike.rotation.z = -a; g.add(spike);
+  }
+  /* eyes of violet */
+  const eyes = [];
+  [-1.8, 1.8].forEach(z => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 6), bas(0xb06ae0));
+    e.position.set(-10.5, 41.5, z); g.add(e); eyes.push(e);
+  });
+  /* the mouth — a void that can open */
+  const mouth = new THREE.Mesh(new THREE.CircleGeometry(2.6, 24), bas(0x000000));
+  mouth.position.set(-11.3, 38.6, 0); mouth.rotation.y = -Math.PI / 2;
+  const mouthRim = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.16, 8, 28), bas(0x8a4ab8, 0.8));
+  mouthRim.position.copy(mouth.position); mouthRim.rotation.y = -Math.PI / 2;
+  mouth.scale.setScalar(0.12); mouthRim.scale.setScalar(0.12);
+  g.add(mouth, mouthRim);
+  g.userData.mouth = mouth; g.userData.mouthRim = mouthRim; g.userData.eyes = eyes;
+  const rim = new THREE.PointLight(0x7a3aa8, 0.7, 90); rim.position.set(8, 30, 14); g.add(rim);
+  g.scale.setScalar(scale || 1);
+  return g;
+}
+
+/* the god-engine: rings of gold turning about a burning heart */
+function makeEngine(scale) {
+  const g = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.85, 1), bas(EMBER));
+  g.add(core);
+  const halo = new THREE.PointLight(EMBER, 2.2, 30); g.add(halo);
+  const rings = [];
+  [1.6, 2.3, 3.1].forEach((r, i) => {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.1 - i * 0.015, 10, 60), lam(GOLD, 0x6a4a10, 0.6));
+    ring.rotation.x = Math.PI / 2 + i * 0.45; ring.rotation.y = i * 0.7;
+    g.add(ring); rings.push(ring);
+  });
+  /* vein-conduits anchoring it into the flesh */
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const vein = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.3, 5, 8), lam(0x6e3326, 0x42150e, 0.5));
+    vein.position.set(Math.cos(a) * 4.2, Math.sin(a) * 3.4, -1.5);
+    vein.rotation.z = a + Math.PI / 2; g.add(vein);
+  }
+  g.userData = { core, rings, halo };
+  g.scale.setScalar(scale || 1);
+  return g;
+}
+
+/* the chamber within the colossus — a cathedral of flesh and rib */
+function makeChamber() {
+  const g = new THREE.Group();
+  const wall = new THREE.Mesh(new THREE.SphereGeometry(16, 24, 18), new THREE.MeshLambertMaterial({ color: 0x3a1812, side: THREE.BackSide }));
+  wall.scale.set(1.5, 1, 1); g.add(wall);
+  for (let i = 0; i < 7; i++) {
+    const rib = new THREE.Mesh(new THREE.TorusGeometry(11 - Math.abs(i - 3) * 1.2, 0.55, 8, 26, Math.PI), lam(0x55241a));
+    rib.position.set(-9 + i * 3, -3, 0);
+    rib.rotation.y = Math.PI / 2; g.add(rib);
+  }
+  return g;
+}
+
+/* a silhouetted monster of the deep (variant 0-3), violet-eyed */
+function makeMonster(variant, s) {
+  const g = new THREE.Group();
+  const dark = bas(0x0a0512);
+  if (variant === 0) {          /* mušḫuššu — horned serpent-dragon */
+    for (let i = 0; i < 5; i++) {
+      const seg = new THREE.Mesh(new THREE.SphereGeometry(0.34 - i * 0.03, 10, 8), dark);
+      seg.position.set(-i * 0.45, 0.3 + Math.sin(i * 1.2) * 0.18, 0); g.add(seg);
+    }
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.7, 8), dark);
+    head.rotation.z = -Math.PI / 2; head.position.set(0.55, 0.46, 0); g.add(head);
+    [-0.1, 0.1].forEach(z => {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.3, 6), dark);
+      horn.position.set(0.3, 0.75, z); g.add(horn);
+    });
+  } else if (variant === 1) {   /* scorpion-man */
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.6, 8), dark);
+    torso.position.y = 0.55; g.add(torso);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 7), dark);
+    head.position.y = 0.95; g.add(head);
+    for (let i = 0; i < 5; i++) {
+      const seg = new THREE.Mesh(new THREE.SphereGeometry(0.16 - i * 0.015, 8, 6), dark);
+      seg.position.set(-0.3 - i * 0.22, 0.2 + i * 0.17, 0); g.add(seg);
+    }
+    const sting = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.3, 6), dark);
+    sting.position.set(-1.35, 1.1, 0); sting.rotation.z = 0.9; g.add(sting);
+  } else if (variant === 2) {   /* bull-man */
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.4), dark);
+    body.position.y = 0.5; g.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 7), dark);
+    head.position.set(0.5, 0.85, 0); g.add(head);
+    [-0.14, 0.14].forEach(z => {
+      const horn = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.03, 6, 10, Math.PI), dark);
+      horn.position.set(0.5, 0.98, z); g.add(horn);
+    });
+    [[0.3,0.18],[0.3,-0.18],[-0.3,0.18],[-0.3,-0.18]].forEach(p => {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 6), dark);
+      leg.position.set(p[0], 0.25, p[1]); g.add(leg);
+    });
+  } else {                      /* fish-man */
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 0.55, 8), dark);
+    torso.position.y = 0.5; g.add(torso);
+    const cloak = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.55, 8), dark);
+    cloak.position.y = 1.0; g.add(cloak);
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.5, 6), dark);
+    tail.position.set(-0.32, 0.3, 0); tail.rotation.z = 1.2; g.add(tail);
+  }
+  /* burning violet eyes */
+  const ex = variant === 0 ? 0.55 : variant === 2 ? 0.55 : 0;
+  const ey = variant === 0 ? 0.5 : variant === 1 ? 0.97 : variant === 2 ? 0.88 : 0.85;
+  [-0.06, 0.06].forEach(z => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 5), bas(0xc06af0));
+    e.position.set(ex + 0.05, ey, z); g.add(e);
+  });
+  g.scale.setScalar(s || 1);
+  return g;
+}
+
+/* a flowing particle stream along a curve (winds, rivers) */
+function makeStream(curvePts, n, color, size) {
+  const curve = new THREE.CatmullRomCurve3(curvePts.map(p => v3(p)));
+  const pos = new Float32Array(n * 3);
+  const offs = new Float32Array(n);
+  for (let i = 0; i < n; i++) offs[i] = Math.random();
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: color, size: size || 0.5, sizeAttenuation: true, transparent: true, opacity: 0.9 }));
+  pts.userData = { curve, offs, n, speed: 0.12 };
+  pts.userData.update = (t) => {
+    const a = geo.attributes.position.array;
+    for (let i = 0; i < n; i++) {
+      const u = (offs[i] + t * pts.userData.speed) % 1;
+      const p = curve.getPoint(u);
+      a[i*3] = p.x; a[i*3+1] = p.y; a[i*3+2] = p.z;
+    }
+    geo.attributes.position.needsUpdate = true;
+  };
+  return pts;
+}
+
+/* drifting god-sparks (the first deities, born as embers of light) */
+function makeSparks(n, spread, color) {
+  const g = new THREE.Group();
+  for (let i = 0; i < n; i++) {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(0.18 + Math.random() * 0.18, 6, 5), bas(color || 0xffe9a8, 0.95));
+    s.position.set((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread * 0.6, (Math.random() - 0.5) * spread * 0.5);
+    s.userData.ph = Math.random() * Math.PI * 2;
+    g.add(s);
+  }
+  g.userData.update = (t) => {
+    g.children.forEach(s => {
+      s.position.y += Math.sin(t * 0.7 + s.userData.ph) * 0.004;
+      s.material.opacity = 0.55 + Math.sin(t * 1.3 + s.userData.ph) * 0.4;
+    });
+  };
+  return g;
+}
+
+/* ===================================================================
+   THE SCENES
+   =================================================================== */
+const q = s => `<span class="v">${s}</span>`;
+
+const SCENES = [
+
+/* ---------- TABLET I ---------- */
+{
+  tablet: ['TABLET I', 'The Waters Before the World', 'in which nothing yet has a name'],
+  pad: [55, 82.4, 110, 164.8],
+  build(st) {
+    /* Apsu as a standing colossus of light, far left; Tiamat darkness far right */
+    const apsuLight = makeGod({ robe: 0xc98a3a, trim: 0xf2cf6e, h: 26 });
+    apsuLight.traverse(o => { if (o.material && o.material.emissive !== undefined) { o.material.emissive = new THREE.Color(0xb87a20); o.material.emissiveIntensity = 0.55; } });
+    apsuLight.position.set(-46, -14, -60); apsuLight.rotation.y = 0.7;
+    st.add(apsuLight);
+    const gl = new THREE.PointLight(EMBER, 2, 120); gl.position.set(-40, 4, -50); st.add(gl);
+    const tia = makeTiamat(1.1); tia.position.set(52, -28, -80); tia.rotation.y = -0.5; st.add(tia);
+    const sparks = makeSparks(26, 46); sparks.position.set(0, -2, -55); st.add(sparks);
+    return { update: (dt, t) => { sparks.userData.update(t); gl.intensity = 1.8 + Math.sin(t * 0.8) * 0.3; } };
+  },
+  shots: [
+    { pos: [0, 2, 30], look: [0, -2, -60], drift: [0, 0, -1], lines: [
+      `${q('When on high the heaven had not been named, and the earth beneath had no name')} — there was only the mingling: Apsu the begetter, a warmth of golden light, and Tiamat the mother, a darkness vast and tidal.`,
+      `No field had been formed. No marsh. No god had appeared, nor been called by name, nor had any destiny been fixed.`,
+    ]},
+    { pos: [-6, 0, 12], look: [4, -4, -60], drift: [0.4, 0, -0.6], lines: [
+      `Then, in the place where light and darkness mingled — sparks. The first gods kindled into being, tiny as embers, and they grew, and they multiplied.`,
+      `And they were ${q('noisy')}.`,
+    ]},
+  ],
+},
+
+/* ---------- the plot ---------- */
+{
+  pad: [49, 73.4, 98],
+  build(st) {
+    const apsu = makeApsu(); apsu.position.set(0, -4, -26); st.add(apsu);
+    const sparks = makeSparks(18, 26, 0xffe9a8); sparks.position.set(8, 6, -22); st.add(sparks);
+    const tia = makeTiamat(0.9); tia.position.set(70, -10, -150); st.add(tia);
+    return {
+      tia,
+      update: (dt, t) => {
+        sparks.userData.update(t);
+        apsu.userData.glows.lights.forEach((l, i) => { l.intensity = (i ? 1 : 1.6) + Math.sin(t * 0.9 + i) * 0.25; });
+      },
+    };
+  },
+  shots: [
+    { pos: [-8, 10, 26], look: [12, 2, -26], drift: [0.5, 0, 0], lines: [
+      `The young gods danced upon the body of their father, and surged within the belly of their mother, and their clamour gave Apsu no rest, by day or by night.`,
+      `And Apsu opened his mouth and said to Tiamat: ${q('“Their ways have become grievous to me. By day I cannot rest, by night I cannot sleep. I shall destroy them — and let silence be restored, that we may sleep.”')}`,
+    ]},
+    { pos: [10, 6, 40], look: [60, 0, -140], glide: 4, on(api) { tween(3, p => { api.tia.position.z = -150 - p * 30; }); }, lines: [
+      `But Tiamat, when she heard it, was furious, and cried out against her own beloved: ${q('“What? Shall we destroy that which we ourselves have made? Their ways are grievous — but let us bear it in kindness.”')}`,
+      `And she withdrew her darkness far across the deep. But Apsu would not be turned, and with his vizier Mummu he set his face to the destruction of the gods, his children.`,
+    ]},
+  ],
+},
+
+/* ---------- the murder of Apsu ---------- */
+{
+  pad: [46.2, 69.3, 92.5],
+  build(st) {
+    const apsu = makeApsu(); apsu.position.set(0, -4, -26); st.add(apsu);
+    const ea = makeGod({ robe: 0x1d6a5e, trim: GOLD, h: 1.1 });
+    ea.position.set(16, 3.6, -19); ea.rotation.y = 0.8; st.add(ea);
+    const spell = makeSparks(10, 4, 0x9fe8d8); spell.position.set(19, 4.5, -22); st.add(spell);
+    return {
+      apsu, spell,
+      update: (dt, t) => { spell.userData.update(t); },
+      killGlow() {
+        sndDeath();
+        const g = apsu.userData.glows;
+        tween(5, p => {
+          const k = 1 - easeIO(p);
+          g.mats.forEach(m => m.emissiveIntensity = 0.85 * k);
+          g.lights.forEach((l, i) => l.intensity = (i ? 1 : 1.6) * k);
+          ambient.intensity = 1 - p * 0.35;
+        });
+      },
+    };
+  },
+  shots: [
+    { pos: [14, 6, -8], look: [19, 4, -24], glide: 3, lines: [
+      `But cunning Ea, the cleverest of the gods, perceived the plot. And he fashioned a spell — a holy incantation, surpassing all others — and he recited it over the waters.`,
+      `And sleep poured over Apsu the begetter. Deep slept the deep.`,
+    ]},
+    { pos: [-2, 14, 30], look: [10, 0, -26], glide: 5, on(api) { setTimeout(() => api.killGlow(), 2500); }, lines: [
+      `Then Ea loosed the sinews of Apsu, and tore off his crown, and took for himself the mantle of his radiance.`,
+      `${q('And he slew him.')}`,
+      `And the first light of the cosmos went out of the world, and the great body began its long drifting — a dead colossus upon the night, golden only at the seams, like a coal that remembers fire.`,
+    ]},
+  ],
+},
+
+/* ---------- TABLET II : the crossing ---------- */
+{
+  tablet: ['TABLET II', 'The Body', 'in which the gods dwell upon their father'],
+  pad: [61.7, 92.5, 123.5, 185],
+  build(st) {
+    const apsu = makeApsu();
+    apsu.userData.glows.mats.forEach(m => m.emissiveIntensity = 0.18);
+    apsu.userData.glows.lights.forEach(l => l.intensity = 0.35);
+    apsu.position.set(0, -4, 0); st.add(apsu);
+    /* a file of pilgrims crossing the open hand with lanterns */
+    const pilgrims = new THREE.Group();
+    const robes = [0x24407a, 0x1d6a5e, 0x6e2a3a, 0x24407a, 0x554066];
+    robes.forEach((r, i) => {
+      const p = makeGod({ robe: r, trim: GOLD, lantern: true, h: 0.85 });
+      p.position.set(-8.6 + i * 1.15, -1.95, 8.6 - i * 0.12);
+      p.rotation.y = Math.PI / 2 + 0.15;
+      pilgrims.add(p);
+    });
+    st.add(pilgrims);
+    const lamps = new THREE.PointLight(EMBER, 0.9, 12); lamps.position.set(-6.5, -1, 8.6); st.add(lamps);
+    return {
+      update: (dt, t) => {
+        pilgrims.children.forEach((p, i) => {
+          p.position.x += dt * 0.16;
+          p.position.y = -1.95 + Math.abs(Math.sin(t * 4 + i)) * 0.015;
+        });
+        lamps.position.x += dt * 0.16;
+      },
+    };
+  },
+  shots: [
+    { pos: [-16, 4, 36], look: [0, -2, 0], drift: [0.6, -0.1, -0.4], glide: 0.1, lines: [
+      `Upon the body of slain Apsu, Ea founded his dwelling, and named it ${q('apsû')}, the deep; and there the gods made their home — small as grains upon the breast of their dead father.`,
+    ]},
+    { pos: [-9, -0.6, 13.5], look: [-3, -2.2, 7.5], glide: 4, drift: [0.25, 0, 0], lines: [
+      `His open hand was their plain. His fingers were their causeways. They crossed the palm in caravans, lanterns swinging, and the journey from wrist to fingertip took a day.`,
+      `His ribs were their mountains. His closed eye was a lake of stillness that no one dared to cross. And ever the body drifted on, through the silence between the stars.`,
+    ]},
+  ],
+},
+
+/* ---------- the engine ---------- */
+{
+  pad: [65.4, 98, 130.8, 196],
+  build(st) {
+    st.add(makeChamber());
+    const eng = makeEngine(1.2); eng.position.set(0, 0, 0); st.add(eng);
+    const watchers = new THREE.Group();
+    [0x24407a, 0x1d6a5e, 0x6e2a3a].forEach((r, i) => {
+      const p = makeGod({ robe: r, trim: GOLD, h: 1 });
+      p.position.set(-4.5 + i * 1.1, -5.6, 6.2); p.rotation.y = 0.2 - i * 0.2;
+      watchers.add(p);
+    });
+    st.add(watchers);
+    return {
+      eng,
+      update: (dt, t) => {
+        eng.userData.rings.forEach((r, i) => { r.rotation.z += dt * (0.12 + i * 0.07); r.rotation.x += dt * 0.03 * (i + 1); });
+        const pulse = 1 + Math.sin(t * 1.4) * 0.12;
+        eng.userData.core.scale.setScalar(pulse);
+        eng.userData.halo.intensity = 1.8 + Math.sin(t * 1.4) * 0.7;
+      },
+    };
+  },
+  shots: [
+    { pos: [-2, -5, 13], look: [0, -1, 0], glide: 0.1, drift: [0.1, 0.35, -0.3], lines: [
+      `Deep in the breast of the colossus, beneath ribs like vaulted halls, the gods found it: a chamber, and in the chamber, ${q('a heart that had not stopped')}.`,
+      `Rings of gold turned slowly about a burning core, in motions too patient to follow. Veins fed it. It hummed an old, low note. It had been making something, all this time.`,
+      `It was the engine by which gods are made. And dead Apsu held it out to his children like a final, unwitting gift.`,
+    ]},
+  ],
+},
+
+/* ---------- the birth of Marduk ---------- */
+{
+  pad: [73.4, 110, 146.8, 220],
+  build(st) {
+    st.add(makeChamber());
+    const eng = makeEngine(1.2); st.add(eng);
+    const marduk = makeMarduk(1.35);
+    marduk.position.set(0, -5.9, 2.8); marduk.rotation.y = Math.PI;
+    marduk.scale.multiplyScalar(0.01);
+    st.add(marduk);
+    return {
+      eng, marduk,
+      birth() {
+        sndShimmer(); sndBoom();
+        tween(4, p => {
+          marduk.scale.setScalar((1.35 / 0.9) * easeOut(p));
+          eng.userData.halo.intensity = 2 + Math.sin(p * Math.PI) * 6;
+        });
+      },
+      update: (dt, t) => {
+        eng.userData.rings.forEach((r, i) => { r.rotation.z += dt * (0.3 + i * 0.15); });
+        eng.userData.core.scale.setScalar(1 + Math.sin(t * 3) * 0.18);
+        if (marduk.userData.motes) marduk.userData.motes.children.forEach(m => {
+          m.userData.a += dt * 1.2;
+          m.position.set(Math.cos(m.userData.a) * m.userData.r, m.userData.y, Math.sin(m.userData.a) * m.userData.r);
+        });
+      },
+    };
+  },
+  shots: [
+    { pos: [0, -4.5, 12], look: [0, -3, 0], glide: 0.1, lines: [
+      `And in the engine's fire, in the heart of the dead god, Ea and his bride Damkina made a son.`,
+    ]},
+    { pos: [1.5, -4.8, 8], look: [0, -4.6, 2.8], glide: 5, on(api) { setTimeout(() => api.birth(), 1800); }, lines: [
+      `${q('Marduk.')} The rings sang as they turned. The core blazed white. And out of the light he stepped — already walking, already burning.`,
+      `Four were his eyes, four were his ears; when his lips moved, fire blazed forth. He was the tallest of the gods, and the proudest, and the storm-winds bent about him like hounds about a hunter.`,
+      `The old gods looked upon him, and felt the engine's hum change pitch — and did not know if what they felt was hope.`,
+    ]},
+  ],
+},
+
+/* ---------- the four winds; the darkness grows ---------- */
+{
+  pad: [58, 87, 116, 174.6],
+  build(st) {
+    const apsu = makeApsu();
+    apsu.userData.glows.mats.forEach(m => m.emissiveIntensity = 0.15);
+    apsu.userData.glows.lights.forEach(l => l.intensity = 0.3);
+    apsu.position.set(0, -4, 0); st.add(apsu);
+    const marduk = makeMarduk(1.5); marduk.position.set(11, 4.4, 3); marduk.rotation.y = 2.6; st.add(marduk);
+    const winds = [];
+    for (let w = 0; w < 4; w++) {
+      const a = (w / 4) * Math.PI * 2;
+      const pts = [];
+      for (let i = 0; i <= 6; i++) {
+        const r = 1 + i * 1.6, b = a + i * 0.9;
+        pts.push([11 + Math.cos(b) * r, 5.2 + i * 0.9, 3 + Math.sin(b) * r]);
+      }
+      const s = makeStream(pts, 60, 0x9fd8ff, 0.35);
+      st.add(s); winds.push(s);
+    }
+    const tia = makeTiamat(2.4); tia.position.set(90, -40, -240); st.add(tia);
+    return {
+      marduk,
+      update: (dt, t) => {
+        winds.forEach((w, i) => w.userData.update(t * (1 + i * 0.13)));
+        if (marduk.userData.motes) marduk.userData.motes.children.forEach(m => {
+          m.userData.a += dt * 1.4;
+          m.position.set(Math.cos(m.userData.a) * m.userData.r, m.userData.y, Math.sin(m.userData.a) * m.userData.r);
+        });
+      },
+    };
+  },
+  shots: [
+    { pos: [4, 8, 18], look: [11, 5, 3], glide: 0.1, drift: [0.2, 0.1, -0.2], lines: [
+      `Anu, his grandfather, gave the boy the four winds for a toy. And Marduk played.`,
+      `He set them spinning from the dead god's shoulder — whirlwinds and dust-storms and the long screaming gales — and his games shook the deep, and churned the darkness at the edge of the night.`,
+    ]},
+    { pos: [16, 12, 34], look: [80, -20, -230], glide: 5, lines: [
+      `And out at the rim of all things, where the stars go missing, something vast turned over in her grief, and could not sleep for the noise.`,
+      `Look long at the horizon of the night and you would see it: a shape of ${q('no stars at all')}, coiled, and slowly growing. The gods upon the body began to dream badly. Tiamat was coming awake.`,
+    ]},
+  ],
+},
+
+/* ---------- TABLET III : the eleven ---------- */
+{
+  tablet: ['TABLET III', 'The Mother of Monsters', 'in which Tiamat makes war'],
+  pad: [43.7, 65.4, 87.3],
+  build(st) {
+    const apsu = makeApsu();
+    apsu.userData.glows.mats.forEach(m => m.emissiveIntensity = 0.12);
+    apsu.userData.glows.lights.forEach(l => l.intensity = 0.25);
+    apsu.position.set(0, -4, 0); st.add(apsu);
+    /* monsters crawling up over the feet and shins — invaders on home ground */
+    const monsters = new THREE.Group();
+    for (let i = 0; i < 11; i++) {
+      const m = makeMonster(i % 4, 1.3 + (i % 3) * 0.3);
+      m.position.set(-31 + (i % 4) * 2.6, 2.4 + Math.floor(i / 4) * 0.4, -3.5 + (i % 5) * 1.6);
+      m.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+      monsters.add(m);
+    }
+    st.add(monsters);
+    /* Qingu, bearing the Tablet of Destinies */
+    const qingu = makeGod({ robe: 0x1a0f24, trim: 0x8a4ab8, h: 1.6 });
+    qingu.position.set(-27, 2.6, 0); qingu.rotation.y = Math.PI / 2;
+    const tab = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.46, 0.06), bas(0xb06ae0));
+    tab.position.set(0, 0.55, 0.2); qingu.add(tab);
+    st.add(qingu);
+    const vlight = new THREE.PointLight(0x7a3aa8, 1.1, 26); vlight.position.set(-27, 5, 2); st.add(vlight);
+    return { update: (dt, t) => {
+      monsters.children.forEach((m, i) => { m.position.x += dt * 0.05; m.position.y += Math.sin(t * 2 + i) * 0.0012; });
+    }};
+  },
+  shots: [
+    { pos: [-46, 8, 22], look: [-26, 2, 0], glide: 0.1, drift: [0.5, -0.1, -0.3], lines: [
+      `Then certain of the old gods, still grieving Apsu, went to Tiamat and poured poison in her ear: ${q('“When they slew your beloved, you did nothing. Now the boy and his winds give you no rest. Mother — make war.”')}`,
+      `And Tiamat, who had once said ${q('let us bear it in kindness')}, said it no more.`,
+    ]},
+    { pos: [-38, 5, 14], look: [-28, 3, -1], glide: 4, lines: [
+      `She spawned eleven monsters, sharp of tooth and merciless: the horned serpent and the mušḫuššu-dragon, the scorpion-man, the bull-man, the fish-man, the great lion-demon — flesh of her darkness, with venom for blood.`,
+      `And she raised up Qingu from among the gods to lead them, and fastened upon his breast the ${q('Tablet of Destinies')}, saying: “Your word shall be unalterable.”`,
+      `They came up over the feet of the dead colossus like a tide. The body of Apsu — the only home the gods had ever known — was now a battlefield.`,
+    ]},
+  ],
+},
+
+/* ---------- the bargain ---------- */
+{
+  pad: [49, 65.4, 98, 130.8],
+  build(st) {
+    st.add(makeChamber());
+    const eng = makeEngine(1.2); st.add(eng);
+    const assembly = new THREE.Group();
+    const robes = [0x24407a, 0x1d6a5e, 0x6e2a3a, 0x554066, 0x24407a, 0x3a5a2e, 0x6e2a3a];
+    robes.forEach((r, i) => {
+      const a = -1.1 + i * 0.37;
+      const p = makeGod({ robe: r, trim: GOLD, h: 1 });
+      p.position.set(Math.sin(a) * 6, -5.7, 3 + Math.cos(a) * 4);
+      p.rotation.y = Math.PI + a * 0.5;
+      assembly.add(p);
+    });
+    st.add(assembly);
+    const marduk = makeMarduk(1.5); marduk.position.set(0, -5.9, 1.6); marduk.rotation.y = Math.PI; st.add(marduk);
+    return {
+      marduk,
+      update: (dt, t) => {
+        eng.userData.rings.forEach((r, i) => { r.rotation.z += dt * (0.12 + i * 0.07); });
+        eng.userData.core.scale.setScalar(1 + Math.sin(t * 1.4) * 0.12);
+        if (marduk.userData.motes) marduk.userData.motes.children.forEach(m => {
+          m.userData.a += dt;
+          m.position.set(Math.cos(m.userData.a) * m.userData.r, m.userData.y, Math.sin(m.userData.a) * m.userData.r);
+        });
+      },
+    };
+  },
+  shots: [
+    { pos: [0, -4.6, 14], look: [0, -3.5, 0], glide: 0.1, lines: [
+      `The gods gathered at the engine, in the only light left to them. Ea had gone against her, and turned back. Anu had gone against her, and turned back. The bravest of them had looked upon Tiamat once, and could not speak of it.`,
+    ]},
+    { pos: [-3, -5, 9], look: [0, -4.8, 1.6], glide: 4, lines: [
+      `Then Marduk stood, and the storm-motes stilled about his shoulders, and he named his price:`,
+      `${q('“If I am to be your avenger — if I am to conquer Tiamat and save your lives — then convene the assembly, and proclaim my destiny supreme. Whatever I create shall not be altered. The word of my lips shall never be revoked. Not yours, father. Not anyone’s. Forever.”')}`,
+      `And the gods looked at one another in the engine-light, and understood the shape of the bargain: to be saved by him, they must be ${q('ruled')} by him. And the darkness was already at the knees of the world.`,
+      `They said yes.`,
+    ]},
+  ],
+},
+
+/* ---------- the crowning ---------- */
+{
+  pad: [55, 82.4, 110, 164.8, 220],
+  build(st) {
+    const apsu = makeApsu();
+    apsu.userData.glows.mats.forEach(m => m.emissiveIntensity = 0.12);
+    apsu.userData.glows.lights.forEach(l => l.intensity = 0.25);
+    apsu.position.set(0, -4, 0); st.add(apsu);
+    const crowd = new THREE.Group();
+    for (let i = 0; i < 9; i++) {
+      const p = makeGod({ robe: [0x24407a, 0x1d6a5e, 0x6e2a3a][i % 3], trim: GOLD, h: 0.9 });
+      p.position.set(6 + (i % 5) * 1.2, 4.35, 2.5 + Math.floor(i / 5) * 1.4);
+      p.rotation.y = -Math.PI / 2;
+      crowd.add(p);
+    }
+    st.add(crowd);
+    const marduk = makeMarduk(1.5); marduk.position.set(13.5, 4.4, 0); marduk.rotation.y = Math.PI / 2; st.add(marduk);
+    /* a testable constellation */
+    const constel = new THREE.Group();
+    [[0,0],[2,1.4],[4,0.8],[5.6,2.4],[3.2,3.4],[1.2,2.6]].forEach(p => {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(0.34, 8, 6), bas(0xeaf0ff));
+      s.position.set(p[0], p[1], 0); constel.add(s);
+    });
+    constel.position.set(2, 22, -60); st.add(constel);
+    return {
+      marduk, constel,
+      test() {
+        tween(1.4, p => constel.children.forEach(s => s.material.opacity = 1 - p) , () => {
+          constel.children.forEach(s => { s.material.transparent = true; s.material.opacity = 0; });
+          sndBoom();
+          setTimeout(() => {
+            sndShimmer();
+            tween(1.6, p => constel.children.forEach(s => s.material.opacity = p));
+          }, 1400);
+        });
+        constel.children.forEach(s => s.material.transparent = true);
+      },
+      grow() {
+        sndShimmer();
+        tween(6, p => { marduk.scale.setScalar((1.5 / 0.9) * (1 + easeIO(p) * 4)); });
+      },
+      update: (dt, t) => {
+        if (marduk.userData.motes) marduk.userData.motes.children.forEach(m => {
+          m.userData.a += dt * 1.3;
+          m.position.set(Math.cos(m.userData.a) * m.userData.r, m.userData.y, Math.sin(m.userData.a) * m.userData.r);
+        });
+      },
+    };
+  },
+  shots: [
+    { pos: [9, 7, 14], look: [12, 5, 0], glide: 0.1, on(api) { setTimeout(() => api.test(), 4000); }, lines: [
+      `They set a single constellation before him and said: “Lord, if your word is truly supreme — speak, and let it vanish. Speak again, and let it be whole.”`,
+      `Marduk spoke. The stars went out. The assembly stood in the dark of their own making, hearts hammering — and Marduk spoke again, and the stars returned to their places, burning as before.`,
+    ]},
+    { pos: [4, 9, 22], look: [13.5, 8, 0], glide: 4, on(api) { setTimeout(() => api.grow(), 2500); }, lines: [
+      `Then the gods rejoiced and did homage, crying: ${q('“Marduk is king!”')} They gave him the sceptre, the throne, and the ring; they girded him with the matchless weapons.`,
+      `And as they spoke his kingship, Marduk ${q('grew')}. The tiny god outgrew the gods, outgrew the hand of his great-grandfather, rose past the ribs and the crowned brow — until he alone, of all the living, stood at the scale of the enemy.`,
+    ]},
+  ],
+},
+
+/* ---------- TABLET IV : the duel ---------- */
+{
+  tablet: ['TABLET IV', 'The Battle', 'in which the sea opens her mouth'],
+  pad: [41.2, 55, 61.7, 82.4],
+  build(st) {
+    const tia = makeTiamat(2.0); tia.position.set(30, -45, -120); st.add(tia);
+    /* Marduk at battle scale, facing her */
+    const marduk = makeMarduk(26); marduk.position.set(-42, -38, -70); marduk.rotation.y = 1.2; st.add(marduk);
+    const mlight = new THREE.PointLight(0xffe2a8, 1.6, 160); mlight.position.set(-40, -16, -56); st.add(mlight);
+    /* the net of the four winds */
+    const winds = [];
+    for (let w = 0; w < 4; w++) {
+      const a = (w / 4) * Math.PI * 2 + 0.4;
+      const pts = [];
+      for (let i = 0; i <= 7; i++) {
+        const r = 3 + i * 5.5, b = a + i * 0.65;
+        pts.push([-42 + Math.cos(b) * r, -24 + i * 2.2 + Math.sin(b) * 3, -70 + Math.sin(b) * r]);
+      }
+      const s = makeStream(pts, 70, 0x9fd8ff, 0.9);
+      st.add(s); winds.push(s);
+    }
+    /* the evil wind — built but hidden until loosed */
+    const gale = makeStream([[-36, -22, -68], [-14, -14, -90], [6, 0, -105], [22, 16, -115], [26, 30, -119]], 130, 0xfff0c0, 1.1);
+    gale.visible = false; st.add(gale);
+    /* the arrow */
+    const arrow = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 16, 8), bas(0xffffff));
+    arrow.visible = false; st.add(arrow);
+    const flashLight = new THREE.PointLight(0xffffff, 0, 400); flashLight.position.set(26, 30, -118); st.add(flashLight);
+    let shards = null;
+    return {
+      tia, gale, winds,
+      openMouth() {
+        sndBoom();
+        tween(3, p => {
+          tia.userData.mouth.scale.setScalar(0.12 + p * 2.6);
+          tia.userData.mouthRim.scale.setScalar(0.12 + p * 2.6);
+        });
+      },
+      looseGale() { gale.visible = true; noiseBurst(2.2, 0.35, 600); },
+      shoot(st2) {
+        arrow.visible = true;
+        const from = new THREE.Vector3(-38, -22, -69), to = new THREE.Vector3(28, 32, -119);
+        arrow.position.copy(from);
+        arrow.lookAt(to); arrow.rotateX(Math.PI / 2);
+        tone(900, 0.5, 'sawtooth', 0.12, 2200);
+        tween(0.5, p => { arrow.position.lerpVectors(from, to, p); }, () => {
+          arrow.visible = false; gale.visible = false;
+          sndBoom(); setTimeout(sndBoom, 350);
+          tween(0.4, p => { flashLight.intensity = 14 * Math.sin(p * Math.PI); });
+          /* she shatters into shards of night */
+          tia.visible = false;
+          shards = new THREE.Group();
+          for (let i = 0; i < 40; i++) {
+            const sh = new THREE.Mesh(new THREE.TetrahedronGeometry(2 + Math.random() * 4), bas(0x0a0512));
+            sh.position.set(30 + (Math.random() - 0.5) * 30, -10 + Math.random() * 70, -120 + (Math.random() - 0.5) * 24);
+            sh.userData.v = new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 6);
+            sh.userData.r = (Math.random() - 0.5) * 2;
+            shards.add(sh);
+          }
+          st.add(shards);
+        });
+      },
+      update: (dt, t) => {
+        winds.forEach((w, i) => w.userData.update(t * (1 + i * 0.11)));
+        if (gale.visible) gale.userData.update(t * 2.2);
+        tia.userData.eyes.forEach(e => e.material.color.setHSL(0.78, 0.7, 0.5 + Math.sin(t * 2.2) * 0.2));
+        if (shards) shards.children.forEach(sh => {
+          sh.position.addScaledVector(sh.userData.v, dt);
+          sh.rotation.x += sh.userData.r * dt; sh.rotation.y += sh.userData.r * 0.7 * dt;
+        });
+        if (marduk.userData.motes) marduk.userData.motes.children.forEach(m => {
+          m.userData.a += dt * 2;
+          m.position.set(Math.cos(m.userData.a) * m.userData.r, m.userData.y, Math.sin(m.userData.a) * m.userData.r);
+        });
+      },
+    };
+  },
+  shots: [
+    { pos: [-60, -20, -10], look: [-10, -20, -100], glide: 0.1, drift: [0.8, 0.2, -0.8], lines: [
+      `He strung the bow and notched the arrow. He hung the net upon the four winds, his playmates of old. He filled his body with blazing flame, and mounted the storm, and rode out from the body of his fathers into the open night.`,
+      `And there, at the rim of everything, he ${q('saw her whole')} — and the gods who watched from the dead god's shoulder saw their king falter, for half the stars of heaven were gone behind her.`,
+    ]},
+    { pos: [-30, -10, -34], look: [20, 10, -118], glide: 5, on(api) { setTimeout(() => api.openMouth(), 3000); }, lines: [
+      `“Stand forth alone,” called Marduk, “you and I, single combat!” And Tiamat screamed her spells, and the deep convulsed —`,
+      `— and she opened her mouth to swallow him: a void within the void, wide enough to drink a god, wide enough to drink the ${q('idea')} of gods.`,
+    ]},
+    { pos: [-26, -6, -30], look: [24, 22, -118], glide: 3,
+      on(api) { setTimeout(() => api.looseGale(), 1200); }, lines: [
+      `Then Marduk loosed the evil wind into her open throat, and her mouth could not close, and her belly filled with the storm —`,
+    ]},
+    { pos: [-30, -4, -22], look: [26, 28, -119], glide: 2,
+      on(api) { setTimeout(() => api.shoot(), 1600); }, lines: [
+      `— and he let the arrow fly. It tore her belly, it cut through her inward parts, ${q('it split the heart')}.`,
+      `And the darkness that had been before all things came apart into drifting shards of night. Her host fled screaming; the eleven were taken in the net; and from the breast of Qingu, Marduk lifted the Tablet of Destinies, and sealed it to his own.`,
+    ]},
+  ],
+},
+
+/* ---------- TABLET V : the making ---------- */
+{
+  tablet: ['TABLET V', 'The Making of the World', 'in which the dead become the dwelling'],
+  pad: [65.4, 98, 130.8, 164.8, 196],
+  build(st) {
+    /* two halves of the night, parting to become sky and earth */
+    const skyHalf = new THREE.Mesh(new THREE.SphereGeometry(60, 32, 18, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0x0a0d22, side: THREE.DoubleSide }));
+    skyHalf.position.set(0, -10, -110); st.add(skyHalf);
+    const earthHalf = new THREE.Mesh(new THREE.SphereGeometry(60, 32, 18, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+      new THREE.MeshLambertMaterial({ color: 0x241710, side: THREE.DoubleSide }));
+    earthHalf.position.set(0, -10, -110); st.add(earthHalf);
+    /* new stars pinned inside the sky-half */
+    const newStars = makeStars(260, 30, 56, 1.6, 0xdfe6ff);
+    newStars.position.copy(skyHalf.position); st.add(newStars);
+    newStars.visible = false;
+    /* rivers from her eyes */
+    const r1 = makeStream([[-6, 12, -70], [-12, 2, -64], [-20, -6, -60], [-30, -12, -58]], 80, 0x8fd8e8, 0.7);
+    const r2 = makeStream([[6, 12, -70], [13, 2, -63], [22, -5, -59], [33, -11, -57]], 80, 0x8fd8e8, 0.7);
+    r1.visible = r2.visible = false; st.add(r1, r2);
+    const moon = new THREE.Mesh(new THREE.SphereGeometry(2.6, 16, 14), bas(0xe8ecf5));
+    moon.position.set(26, 34, -130); moon.visible = false; st.add(moon);
+    return {
+      split() {
+        sndBoom(); sndShimmer();
+        tween(7, p => {
+          const e = easeIO(p);
+          skyHalf.position.y = -10 + e * 38;
+          newStars.position.y = skyHalf.position.y;
+          earthHalf.position.y = -10 - e * 6;
+          earthHalf.scale.y = 1 - e * 0.55;
+        }, () => { newStars.visible = true; moon.visible = true; r1.visible = r2.visible = true; });
+      },
+      update: (dt, t) => {
+        if (r1.visible) { r1.userData.update(t); r2.userData.update(t); }
+      },
+    };
+  },
+  shots: [
+    { pos: [0, 4, 10], look: [0, 0, -110], glide: 0.1,
+      on(api) { setTimeout(() => api.split(), 3500); }, lines: [
+      `Then Marduk rested, and looked long upon the corpse of Tiamat, and conceived a work of art.`,
+      `He split her like a shellfish into two halves. The upper half he raised, and made of it the ${q('sky')} — and posted watchmen, that her waters should not escape. The lower half he laid down, and made of it the ${q('earth')}.`,
+    ]},
+    { pos: [-4, 8, -20], look: [4, 10, -110], glide: 6, lines: [
+      `From her two eyes he opened the Tigris and the Euphrates, that they might run forever. He heaped mountains upon her. He pinned the stars in their stations, fixed the year, and gave the moon the keeping of the night.`,
+      `Out of the mother of monsters he made ${q('a home')}. And the small gods came down off the body of Apsu at last, and walked beneath a sky, on ground, for the first time in the history of anything.`,
+    ]},
+  ],
+},
+
+/* ---------- mankind & the names ---------- */
+{
+  pad: [82.4, 110, 164.8, 196, 246.9],
+  build(st) {
+    /* the engine, re-set upon the new earth, under the new stars */
+    const groundM = new THREE.Mesh(new THREE.CylinderGeometry(90, 90, 1, 36), lam(0x241710));
+    groundM.position.y = -8.6; st.add(groundM);
+    st.add(makeStars(220, 60, 120, 1.5, 0xdfe6ff));
+    const eng = makeEngine(1.0); eng.position.set(0, -4.5, -6); st.add(eng);
+    /* Qingu's blood */
+    const drops = new THREE.Group();
+    for (let i = 0; i < 8; i++) {
+      const d = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 5), bas(0xc03a3a));
+      d.position.set((Math.random() - 0.5) * 0.6, 2 + i * 1.1, -6);
+      d.visible = false; drops.add(d);
+    }
+    st.add(drops);
+    /* the first humans — smaller even than the gods */
+    const humans = new THREE.Group();
+    for (let i = 0; i < 6; i++) {
+      const h = new THREE.Group();
+      const bodyH = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.26, 8), lam(0x8a6a4a));
+      bodyH.position.y = 0.13; h.add(bodyH);
+      const headH = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), lam(SKIN));
+      headH.position.y = 0.31; h.add(headH);
+      h.position.set(-0.4 + (i % 3) * 0.4, -8.1, -4.2 + Math.floor(i / 3) * 0.5);
+      h.scale.setScalar(0.01);
+      humans.add(h);
+    }
+    st.add(humans);
+    /* a ziggurat rising on the horizon */
+    const zig = new THREE.Group();
+    for (let i = 0; i < 5; i++) {
+      const tier = new THREE.Mesh(new THREE.BoxGeometry(26 - i * 4.6, 3.2, 26 - i * 4.6), lam(0x3a2a1c, 0x1a0f08, 0.4));
+      tier.position.y = i * 3.2; zig.add(tier);
+    }
+    const shrine = new THREE.Mesh(new THREE.BoxGeometry(5, 3.4, 5), lam(GOLD, 0x6a4a10, 0.5));
+    shrine.position.y = 17.4; zig.add(shrine);
+    zig.position.set(34, -8, -80); zig.scale.setScalar(0.001); st.add(zig);
+    /* the star of Marduk above it */
+    const star = new THREE.Group();
+    [[0, 1], [1, 0], [0.7, 0.7], [0.7, -0.7]].forEach(d => {
+      const ray = new THREE.Mesh(new THREE.BoxGeometry(0.5, 9, 0.5), bas(0xffe9a8));
+      ray.rotation.z = Math.atan2(d[0], d[1]); star.add(ray);
+    });
+    star.position.set(34, 22, -80); star.visible = false; st.add(star);
+    return {
+      eng, drops, humans,
+      bleed() {
+        drops.children.forEach((d, i) => {
+          setTimeout(() => {
+            d.visible = true;
+            tween(0.8, p => { d.position.y = (2 + i * 1.1) * (1 - p) + -4.2 * p; },
+              () => { d.visible = false; tone(180 + i * 30, 0.4, 'sine', 0.06, 90); });
+          }, i * 420);
+        });
+        setTimeout(() => {
+          sndShimmer();
+          humans.children.forEach((h, i) => setTimeout(() =>
+            tween(1.2, p => h.scale.setScalar(easeOut(p))), i * 260));
+        }, 3800);
+      },
+      raise() {
+        sndBoom(); sndShimmer();
+        tween(6, p => { zig.scale.setScalar(easeIO(p)); }, () => { star.visible = true; });
+      },
+      update: (dt, t) => {
+        eng.userData.rings.forEach((r, i) => { r.rotation.z += dt * (0.1 + i * 0.05); });
+        eng.userData.core.scale.setScalar(1 + Math.sin(t * 1.1) * 0.1);
+        star.rotation.z = Math.sin(t * 0.3) * 0.05;
+      },
+    };
+  },
+  shots: [
+    { pos: [0, -5.5, 4], look: [0, -5, -6], glide: 0.1, on(api) { setTimeout(() => api.bleed(), 5000); }, lines: [
+      `One labour remained. The gods were weary; who would dig the canals of heaven, and carry the baskets of the world?`,
+      `Qingu was brought bound before the assembly, and condemned: ${q('“It was he that made Tiamat rebel.”')} They severed his arteries over the engine of the dead god —`,
+      `— and from his blood, by Ea's cunning and Marduk's design, the engine made its final, strangest work: not gods, but something smaller. ${q('Mankind')} — kneaded from the blood of a traitor god, made to carry the burden, so the gods might rest.`,
+      `So know this, when your back aches under its basket: there is rebellion in your blood. It was put there on purpose.`,
+    ]},
+    { pos: [-2, -3, 0], look: [34, 4, -80], glide: 6, on(api) { setTimeout(() => api.raise(), 2500); }, lines: [
+      `Then the gods took up their tools one final time, of their own free will, and for a year they moulded bricks; and they raised ${q('Babylon')}, the gate of the gods, and the high temple Esagila, with its head as high as the deep is deep — the throne of Marduk at the centre of the made world.`,
+      `And they sat down at the banquet of heaven, and spoke, one by one, the ${q('fifty names')} of Marduk — king of the gods of heaven and earth, who slew the darkness and built our home from her body, whose word is unalterable, whose command no god revokes.`,
+    ]},
+  ],
+},
+];
+
+/* ===================================================================
+   SCENE ENGINE
+   =================================================================== */
+const panel = document.getElementById('panel');
+const panelText = document.getElementById('panelText');
+const fadeEl = document.getElementById('fade');
+const tabletEl = document.getElementById('tablet');
+
+let sceneIdx = 0, shotIdx = 0, lineIdx = 0;
+let stage = null, sceneAPI = null;
+let camFrom = { pos: new THREE.Vector3(0, 0, 30), look: new THREE.Vector3(0, 0, -50) };
+let camTo = { pos: new THREE.Vector3(0, 0, 30), look: new THREE.Vector3(0, 0, -50) };
+let camT = 1, camDur = 3, shotTime = 0, driftVec = new THREE.Vector3();
+let tabletShowing = false, started = false, lastAdvance = 0;
+
+function loadScene(i) {
+  if (stage) { scene.remove(stage); disposeGroup(stage); }
+  stage = new THREE.Group(); scene.add(stage);
+  const S = SCENES[i];
+  ambient.intensity = 1;
+  sceneAPI = S.build(stage) || {};
+  setPad(S.pad);
+  shotIdx = 0; lineIdx = 0;
+  applyShot(S.shots[0], true);
+  if (S.tablet) {
+    tabletShowing = true;
+    document.getElementById('tabletTitle').textContent = S.tablet[0];
+    document.getElementById('tabletName').textContent = S.tablet[1];
+    document.getElementById('tabletSub').textContent = S.tablet[2];
+    tabletEl.classList.add('show');
+    panel.classList.add('hidden');
+  } else {
+    showLine();
+  }
+}
+function applyShot(shot, instant) {
+  camFrom = { pos: camera.position.clone(), look: lookCur.clone() };
+  camTo = { pos: v3(shot.pos), look: v3(shot.look) };
+  driftVec = shot.drift ? v3(shot.drift) : new THREE.Vector3();
+  camDur = shot.glide || 3;
+  camT = instant ? 1 : 0;
+  if (instant) { camera.position.copy(camTo.pos); lookCur.copy(camTo.look); }
+  shotTime = 0;
+  if (shot.on) shot.on(sceneAPI);
+}
+function showLine() {
+  const S = SCENES[sceneIdx];
+  const text = S.shots[shotIdx].lines[lineIdx];
+  panelText.style.opacity = 0;
+  setTimeout(() => {
+    panelText.innerHTML = text;
+    panelText.style.opacity = 1;
+    panel.classList.remove('hidden');
+  }, 280);
+}
+function advance() {
+  const now = performance.now();
+  if (now - lastAdvance < 650) return;   // savour it
+  lastAdvance = now;
+  audio(); sndPage();
+  if (tabletShowing) {
+    tabletShowing = false;
+    tabletEl.classList.remove('show');
+    showLine();
+    return;
+  }
+  const S = SCENES[sceneIdx];
+  const shot = S.shots[shotIdx];
+  lineIdx++;
+  if (lineIdx < shot.lines.length) { showLine(); return; }
+  shotIdx++; lineIdx = 0;
+  if (shotIdx < S.shots.length) { applyShot(S.shots[shotIdx]); showLine(); return; }
+  /* scene complete — fade to the next */
+  panel.classList.add('hidden');
+  fadeEl.style.opacity = 1;
+  setTimeout(() => {
+    sceneIdx++;
+    if (sceneIdx >= SCENES.length) {
+      setPad(null);
+      document.getElementById('endScreen').classList.remove('gone');
+      return;
+    }
+    loadScene(sceneIdx);
+    fadeEl.style.opacity = 0;
+  }, 1400);
+}
+panel.addEventListener('click', advance);
+tabletEl.addEventListener('click', advance);
+window.addEventListener('keydown', e => {
+  if (!started) return;
+  if (e.code === 'Space' || e.code === 'Enter' || e.code === 'ArrowRight') advance();
+});
+
+/* ---------------- controls ---------------- */
+document.getElementById('muteBtn').addEventListener('click', () => {
+  audio();
+  muted = !muted;
+  if (master) master.gain.linearRampToValueAtTime(muted ? 0 : 0.55, AC.currentTime + 0.4);
+  document.getElementById('muteBtn').textContent = muted ? '∅' : '♪';
+});
+const fsBtn = document.getElementById('fsBtn');
+const fsRoot = document.documentElement;
+if (!(fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen)) fsBtn.style.display = 'none';
+fsBtn.addEventListener('click', () => {
+  const infs = document.fullscreenElement || document.webkitFullscreenElement;
+  if (infs) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  else (fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen).call(fsRoot);
+});
+['fullscreenchange', 'webkitfullscreenchange'].forEach(ev => document.addEventListener(ev, sizeIt));
+
+document.getElementById('beginBtn').addEventListener('click', () => {
+  audio();
+  started = true;
+  document.getElementById('titleScreen').classList.add('gone');
+  sceneIdx = 0;
+  loadScene(0);
+  setTimeout(() => { fadeEl.style.opacity = 0; }, 200);
+});
+document.getElementById('againBtn').addEventListener('click', () => {
+  audio();
+  document.getElementById('endScreen').classList.add('gone');
+  fadeEl.style.opacity = 1;
+  setTimeout(() => { sceneIdx = 0; loadScene(0); fadeEl.style.opacity = 0; }, 800);
+});
+
+/* ---------------- main loop ---------------- */
+const lookCur = new THREE.Vector3(0, 0, -50);
+const clock = new THREE.Clock();
+let elapsed = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+  shotTime += dt;
+
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const tw = tweens[i];
+    tw.t += dt;
+    const p = Math.min(tw.t / tw.dur, 1);
+    tw.fn(p);
+    if (p >= 1) { tweens.splice(i, 1); if (tw.done) tw.done(); }
+  }
+
+  /* camera: keyframe glide + perpetual slow drift + breathing sway */
+  if (camT < 1) camT = Math.min(camT + dt / camDur, 1);
+  const e = easeIO(camT);
+  const driftOff = driftVec.clone().multiplyScalar(shotTime * 0.22);
+  const sway = new THREE.Vector3(
+    Math.sin(elapsed * 0.21) * 0.5,
+    Math.sin(elapsed * 0.165) * 0.35, 0);
+  camera.position.lerpVectors(camFrom.pos, camTo.pos, e).add(driftOff).add(sway);
+  lookCur.lerpVectors(camFrom.look, camTo.look, e);
+  camera.lookAt(lookCur);
+
+  if (sceneAPI && sceneAPI.update) sceneAPI.update(dt, elapsed);
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
