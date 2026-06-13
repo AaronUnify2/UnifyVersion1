@@ -66,6 +66,10 @@
   }
   .screen button:hover, .screen button:active { background:#caa75a22; }
 
+  /* ---- colour wash (per-scene grade) ---- */
+  #wash { position:fixed; inset:0; pointer-events:none; z-index:2;
+    background-color:transparent; transition:background-color 3s; }
+
   /* ---- film grain & letterbox ---- */
   #grain { position:fixed; inset:-50%; width:200%; height:200%; pointer-events:none; z-index:3;
     opacity:.45; background-repeat:repeat; animation:grainShift .4s steps(3) infinite; }
@@ -88,6 +92,7 @@
 <canvas id="c"></canvas>
 <div id="vignette"></div>
 <div id="grain"></div>
+<div id="wash"></div>
 <div id="barT"></div><div id="barB"></div>
 <div id="fade"></div>
 
@@ -525,11 +530,24 @@ function makeTiamat(scale) {
     spike.rotation.z = -a; g.add(spike);
   }
   /* eyes of violet */
-  const eyes = [];
+  const eyes = [], eyeHalos = [];
   [-1.8, 1.8].forEach(z => {
     const e = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 6), bas(0xb06ae0));
     e.position.set(-10.5, 41.5, z); g.add(e); eyes.push(e);
-    const eh = glowSprite(0xc06af0, 3.4, 0.8); eh.position.copy(e.position); g.add(eh);
+    const eh = glowSprite(0xc06af0, 3.4, 0.8); eh.position.copy(e.position); g.add(eh); eyeHalos.push(eh);
+  });
+  /* she blinks — slowly, like something deciding */
+  let blinkT = 3 + Math.random() * 4;
+  stageTickers.push((dt) => {
+    blinkT -= dt;
+    if (blinkT <= 0) {
+      blinkT = 4 + Math.random() * 5;
+      tween(0.32, p => {
+        const k = 1 - Math.sin(p * Math.PI);
+        eyes.forEach(e => { e.scale.y = Math.max(k, 0.05); });
+        eyeHalos.forEach(h => { h.material.opacity = 0.8 * Math.max(k, 0.1); });
+      });
+    }
   });
   /* the mouth — a void that can open */
   const mouth = new THREE.Mesh(new THREE.CircleGeometry(2.6, 24), bas(0x000000));
@@ -579,10 +597,13 @@ function makeEngine(scale) {
   const dust = new THREE.Points(dgeo, new THREE.PointsMaterial({ color: 0xffd9a0, size: 0.14,
     transparent: true, opacity: 0.55, map: starTex, depthWrite: false, blending: THREE.AdditiveBlending }));
   g.add(dust);
+  let hb = 1.4;
   stageTickers.push((dt, t) => {
     shafts.rotation.y += dt * 0.05;
     shafts.children.forEach((sh, i) => { sh.material.opacity = 0.045 + Math.sin(t * 0.5 + i * 1.7) * 0.02; });
     dust.rotation.y += dt * 0.02;
+    hb += dt;
+    if (hb > 2.7) { hb = 0; tone(46, 0.4, 'sine', 0.16, 38); setTimeout(() => tone(42, 0.45, 'sine', 0.13, 34), 340); }
   });
   const rings = [];
   [1.6, 2.3, 3.1].forEach((r, i) => {
@@ -724,6 +745,7 @@ const SCENES = [
 {
   tablet: ['TABLET I', 'The Waters Before the World', 'in which nothing yet has a name'],
   pad: [55, 82.4, 110, 164.8],
+  grade: { bg: 0x060a18, amb: 0x222a52, key: 0xcfd6ff, wash: 'rgba(30,40,90,0.06)' },
   build(st) {
     /* Apsu as a standing colossus of light, far left; Tiamat darkness far right */
     const apsuLight = makeGod({ robe: 0xc98a3a, trim: 0xf2cf6e, h: 26 });
@@ -733,6 +755,29 @@ const SCENES = [
     const gl = new THREE.PointLight(EMBER, 2, 120); gl.position.set(-40, 4, -50); st.add(gl);
     const tia = makeTiamat(1.1); tia.position.set(52, -28, -80); tia.rotation.y = -0.5; st.add(tia);
     const sparks = makeSparks(26, 46); sparks.position.set(0, -2, -55); st.add(sparks);
+    /* once in a long while, a comet crosses the firstborn sky */
+    const comet = glowSprite(0xeaf2ff, 6, 0); st.add(comet);
+    const trail = [];
+    for (let i = 0; i < 9; i++) { const tr = glowSprite(0xbcd0ff, 3.6 - i * 0.3, 0); st.add(tr); trail.push(tr); }
+    let cT = 5;
+    stageTickers.push((dt) => {
+      cT += dt;
+      const dur = 12, gap = 16;
+      const ph = cT % (dur + gap);
+      if (ph < dur) {
+        const p = ph / dur;
+        comet.position.set(-150 + p * 300, 55 - p * 30, -240);
+        comet.material.opacity = Math.sin(p * Math.PI) * 0.9;
+        trail.forEach((tr, i) => {
+          const tp = Math.max(p - (i + 1) * 0.011, 0);
+          tr.position.set(-150 + tp * 300, 55 - tp * 30, -240);
+          tr.material.opacity = Math.sin(tp * Math.PI) * 0.45 * (1 - i / 9);
+        });
+      } else {
+        comet.material.opacity = 0;
+        trail.forEach(tr => { tr.material.opacity = 0; });
+      }
+    });
     return { update: (dt, t) => { sparks.userData.update(t); gl.intensity = 1.8 + Math.sin(t * 0.8) * 0.3; } };
   },
   shots: [
@@ -750,6 +795,7 @@ const SCENES = [
 /* ---------- the plot ---------- */
 {
   pad: [49, 73.4, 98],
+  grade: { bg: 0x070a14, amb: 0x2a2440, key: 0xd8c8a8, wash: 'rgba(120,80,30,0.05)' },
   build(st) {
     const apsu = makeApsu(); apsu.position.set(0, -4, -26); st.add(apsu);
     const sparks = makeSparks(18, 26, 0xffe9a8); sparks.position.set(8, 6, -22); st.add(sparks);
@@ -777,6 +823,7 @@ const SCENES = [
 /* ---------- the murder of Apsu ---------- */
 {
   pad: [46.2, 69.3, 92.5],
+  grade: { bg: 0x05060d, amb: 0x1c1830, key: 0x9aa4c8, wash: 'rgba(20,10,40,0.10)' },
   build(st) {
     const apsu = makeApsu(); apsu.position.set(0, -4, -26); st.add(apsu);
     const ea = makeGod({ robe: 0x1d6a5e, trim: GOLD, h: 1.1 });
@@ -824,6 +871,7 @@ const SCENES = [
 {
   tablet: ['TABLET II', 'The Body', 'in which the gods dwell upon their father'],
   pad: [61.7, 92.5, 123.5, 185],
+  grade: { bg: 0x04060e, amb: 0x1a2240, key: 0x8a96c0, wash: 'rgba(10,20,50,0.08)' },
   build(st) {
     const apsu = makeApsu();
     apsu.userData.glows.mats.forEach(m => m.emissiveIntensity = 0.18);
@@ -842,6 +890,22 @@ const SCENES = [
     });
     st.add(pilgrims);
     const lamps = new THREE.PointLight(EMBER, 0.9, 12); lamps.position.set(-6.5, -1, 8.6); st.add(lamps);
+    /* a small camp at the wrist — fire, smoke, rest before the long walk */
+    const fire = glowSprite(0xffa040, 1.6, 0.9); fire.position.set(-3.2, -1.5, 10.2); st.add(fire);
+    const fireL = new THREE.PointLight(0xff8a30, 1.1, 10); fireL.position.copy(fire.position); st.add(fireL);
+    const smoke = [];
+    for (let i = 0; i < 4; i++) {
+      const sm = glowSprite(0x8a8a96, 1.2, 0); sm.userData.ph = i * 0.27; st.add(sm); smoke.push(sm);
+    }
+    stageTickers.push((dt, t) => {
+      fire.material.opacity = 0.72 + Math.sin(t * 9) * 0.14 + Math.sin(t * 23) * 0.06;
+      fireL.intensity = 1.0 + Math.sin(t * 11) * 0.3;
+      smoke.forEach(sm => {
+        const u = (t * 0.22 + sm.userData.ph) % 1;
+        sm.position.set(-3.2 + Math.sin(u * 9) * 0.3, -1.5 + u * 3.4, 10.2);
+        sm.material.opacity = Math.sin(u * Math.PI) * 0.2;
+      });
+    });
     return {
       update: (dt, t) => {
         pilgrims.children.forEach((p, i) => {
@@ -856,7 +920,7 @@ const SCENES = [
     { pos: [-16, 4, 36], look: [0, -2, 0], drift: [0.6, -0.1, -0.4], glide: 0.1, lines: [
       `Upon the body of slain Apsu, Ea founded his dwelling, and named it ${q('apsû')}, the deep; and there the gods made their home — small as grains upon the breast of their dead father.`,
     ]},
-    { pos: [-9, -0.6, 13.5], look: [-3, -2.2, 7.5], glide: 4, drift: [0.25, 0, 0], lines: [
+    { pos: [-9, -0.6, 13.5], look: [-3, -2.2, 7.5], glide: 4, fov: 40, drift: [0.25, 0, 0], lines: [
       `His open hand was their plain. His fingers were their causeways. They crossed the palm in caravans, lanterns swinging, and the journey from wrist to fingertip took a day.`,
       `His ribs were their mountains. His closed eye was a lake of stillness that no one dared to cross. And ever the body drifted on, through the silence between the stars.`,
     ]},
@@ -866,6 +930,7 @@ const SCENES = [
 /* ---------- the engine ---------- */
 {
   pad: [65.4, 98, 130.8, 196],
+  grade: { bg: 0x070406, amb: 0x301a14, key: 0xd8a878, wash: 'rgba(140,70,20,0.08)' },
   build(st) {
     st.add(makeChamber());
     const eng = makeEngine(1.2); eng.position.set(0, 0, 0); st.add(eng);
@@ -887,7 +952,7 @@ const SCENES = [
     };
   },
   shots: [
-    { pos: [-2, -5, 13], look: [0, -1, 0], glide: 0.1, drift: [0.1, 0.35, -0.3], lines: [
+    { pos: [-2, -5, 13], look: [0, -1, 0], glide: 0.1, drift: [0.1, 0.35, -0.3], fov: 38, lines: [
       `Deep in the breast of the colossus, beneath ribs like vaulted halls, the gods found it: a chamber, and in the chamber, ${q('a heart that had not stopped')}.`,
       `Rings of gold turned slowly about a burning core, in motions too patient to follow. Veins fed it. It hummed an old, low note. It had been making something, all this time.`,
       `It was the engine by which gods are made. And dead Apsu held it out to his children like a final, unwitting gift.`,
@@ -898,6 +963,7 @@ const SCENES = [
 /* ---------- the birth of Marduk ---------- */
 {
   pad: [73.4, 110, 146.8, 220],
+  grade: { bg: 0x080507, amb: 0x36201a, key: 0xe8c098, wash: 'rgba(160,90,30,0.10)' },
   build(st) {
     st.add(makeChamber());
     const eng = makeEngine(1.2); st.add(eng);
@@ -925,10 +991,10 @@ const SCENES = [
     };
   },
   shots: [
-    { pos: [0, -4.5, 12], look: [0, -3, 0], glide: 0.1, lines: [
+    { pos: [0, -4.5, 12], look: [0, -3, 0], glide: 0.1, fov: 38, lines: [
       `And in the engine's fire, in the heart of the dead god, Ea and his bride Damkina made a son.`,
     ]},
-    { pos: [1.5, -4.8, 8], look: [0, -4.6, 2.8], glide: 5, on(api) { setTimeout(() => api.birth(), 1800); }, lines: [
+    { pos: [1.5, -4.8, 8], look: [0, -4.6, 2.8], glide: 5, fov: 36, on(api) { setTimeout(() => api.birth(), 1800); }, lines: [
       `${q('Marduk.')} The rings sang as they turned. The core blazed white. And out of the light he stepped — already walking, already burning.`,
       `Four were his eyes, four were his ears; when his lips moved, fire blazed forth. He was the tallest of the gods, and the proudest, and the storm-winds bent about him like hounds about a hunter.`,
       `The old gods looked upon him, and felt the engine's hum change pitch — and did not know if what they felt was hope.`,
@@ -939,6 +1005,7 @@ const SCENES = [
 /* ---------- the four winds; the darkness grows ---------- */
 {
   pad: [58, 87, 116, 174.6],
+  grade: { bg: 0x05070f, amb: 0x202848, key: 0xcfd6ff, wash: 'rgba(40,20,70,0.06)' },
   build(st) {
     const apsu = makeApsu();
     apsu.userData.glows.mats.forEach(m => m.emissiveIntensity = 0.15);
@@ -1005,6 +1072,7 @@ const SCENES = [
 {
   tablet: ['TABLET III', 'The Mother of Monsters', 'in which Tiamat makes war'],
   pad: [43.7, 65.4, 87.3],
+  grade: { bg: 0x05040c, amb: 0x241a36, key: 0x9a86c0, wash: 'rgba(60,20,90,0.10)' },
   build(st) {
     const apsu = makeApsu();
     apsu.userData.glows.mats.forEach(m => m.emissiveIntensity = 0.12);
@@ -1018,6 +1086,7 @@ const SCENES = [
       const m = makeMonster(i % 4, 1.3 + (i % 3) * 0.3);
       m.position.set(-31 + (i % 4) * 2.6, 2.4 + Math.floor(i / 4) * 0.4, -3.5 + (i % 5) * 1.6);
       m.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+      m.userData.baseR = m.rotation.y;
       monsters.add(m);
     }
     st.add(monsters);
@@ -1029,7 +1098,17 @@ const SCENES = [
     st.add(qingu);
     const vlight = new THREE.PointLight(0x7a3aa8, 1.1, 26); vlight.position.set(-27, 5, 2); st.add(vlight);
     return { update: (dt, t) => {
-      monsters.children.forEach((m, i) => { m.position.x += dt * 0.05; m.position.y += Math.sin(t * 2 + i) * 0.0012; });
+      monsters.children.forEach((m, i) => {
+        m.position.x += dt * 0.05;
+        m.position.y += Math.sin(t * 2 + i) * 0.0012;
+        /* they turn, slowly, to watch the watcher */
+        const want = Math.atan2(camera.position.x - m.position.x, camera.position.z - m.position.z);
+        let d = want - m.userData.baseR;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        d = Math.max(-0.55, Math.min(0.55, d));
+        m.rotation.y += ((m.userData.baseR + d) - m.rotation.y) * Math.min(dt * 0.8, 1);
+      });
     }};
   },
   shots: [
@@ -1048,6 +1127,7 @@ const SCENES = [
 /* ---------- the bargain ---------- */
 {
   pad: [49, 65.4, 98, 130.8],
+  grade: { bg: 0x060408, amb: 0x2c1c18, key: 0xd0a070, wash: 'rgba(120,60,20,0.08)' },
   build(st) {
     st.add(makeChamber());
     const eng = makeEngine(1.2); st.add(eng);
@@ -1075,10 +1155,10 @@ const SCENES = [
     };
   },
   shots: [
-    { pos: [0, -4.6, 14], look: [0, -3.5, 0], glide: 0.1, lines: [
+    { pos: [0, -4.6, 14], look: [0, -3.5, 0], glide: 0.1, fov: 40, lines: [
       `The gods gathered at the engine, in the only light left to them. Ea had gone against her, and turned back. Anu had gone against her, and turned back. The bravest of them had looked upon Tiamat once, and could not speak of it.`,
     ]},
-    { pos: [-3, -5, 9], look: [0, -4.8, 1.6], glide: 4, lines: [
+    { pos: [-3, -5, 9], look: [0, -4.8, 1.6], glide: 4, fov: 38, lines: [
       `Then Marduk stood, and the storm-motes stilled about his shoulders, and he named his price:`,
       `${q('“If I am to be your avenger — if I am to conquer Tiamat and save your lives — then convene the assembly, and proclaim my destiny supreme. Whatever I create shall not be altered. The word of my lips shall never be revoked. Not yours, father. Not anyone’s. Forever.”')}`,
       `And the gods looked at one another in the engine-light, and understood the shape of the bargain: to be saved by him, they must be ${q('ruled')} by him. And the darkness was already at the knees of the world.`,
@@ -1090,6 +1170,7 @@ const SCENES = [
 /* ---------- the crowning ---------- */
 {
   pad: [55, 82.4, 110, 164.8, 220],
+  grade: { bg: 0x06080f, amb: 0x262e52, key: 0xe8d8a8, wash: 'rgba(180,140,60,0.06)' },
   build(st) {
     const apsu = makeApsu();
     apsu.userData.glows.mats.forEach(m => m.emissiveIntensity = 0.12);
@@ -1129,6 +1210,20 @@ const SCENES = [
       },
       grow() {
         sndShimmer();
+        for (let i = 0; i < 3; i++) {
+          setTimeout(() => {
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.07, 8, 48),
+              new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.85,
+                blending: THREE.AdditiveBlending, depthWrite: false }));
+            ring.position.copy(marduk.position).add(new THREE.Vector3(0, 1.5, 0));
+            ring.rotation.x = Math.PI / 2;
+            st.add(ring);
+            tween(2.4, p => {
+              ring.scale.setScalar(1 + p * 16);
+              ring.material.opacity = 0.85 * (1 - p);
+            }, () => st.remove(ring));
+          }, i * 1100);
+        }
         tween(6, p => { marduk.scale.setScalar((1.5 / 0.9) * (1 + easeIO(p) * 4)); });
       },
       update: (dt, t) => {
@@ -1155,6 +1250,7 @@ const SCENES = [
 {
   tablet: ['TABLET IV', 'The Battle', 'in which the sea opens her mouth'],
   pad: [41.2, 55, 61.7, 82.4],
+  grade: { bg: 0x040309, amb: 0x1c1430, key: 0x8a7ab0, wash: 'rgba(50,10,80,0.12)' },
   build(st) {
     const tia = makeTiamat(2.0); tia.position.set(30, -45, -120); st.add(tia);
     /* Marduk at battle scale, facing her */
@@ -1212,6 +1308,7 @@ const SCENES = [
             sh.position.set(30 + (Math.random() - 0.5) * 30, -10 + Math.random() * 70, -120 + (Math.random() - 0.5) * 24);
             sh.userData.v = new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 6);
             sh.userData.r = (Math.random() - 0.5) * 2;
+            if (i % 3 === 0) { const glint = glowSprite(0x8a4ab8, 2.2, 0.45); sh.add(glint); }
             shards.add(sh);
           }
           st.add(shards);
@@ -1233,19 +1330,19 @@ const SCENES = [
     };
   },
   shots: [
-    { pos: [-60, -20, -10], look: [-10, -20, -100], glide: 0.1, drift: [0.8, 0.2, -0.8], lines: [
+    { pos: [-60, -20, -10], look: [-10, -20, -100], glide: 0.1, drift: [0.8, 0.2, -0.8], fov: 52, lines: [
       `He strung the bow and notched the arrow. He hung the net upon the four winds, his playmates of old. He filled his body with blazing flame, and mounted the storm, and rode out from the body of his fathers into the open night.`,
       `And there, at the rim of everything, he ${q('saw her whole')} — and the gods who watched from the dead god's shoulder saw their king falter, for half the stars of heaven were gone behind her.`,
     ]},
-    { pos: [-30, -10, -34], look: [20, 10, -118], glide: 5, on(api) { setTimeout(() => api.openMouth(), 3000); }, lines: [
+    { pos: [-30, -10, -34], look: [20, 10, -118], glide: 5, fov: 47, on(api) { setTimeout(() => api.openMouth(), 3000); }, lines: [
       `“Stand forth alone,” called Marduk, “you and I, single combat!” And Tiamat screamed her spells, and the deep convulsed —`,
       `— and she opened her mouth to swallow him: a void within the void, wide enough to drink a god, wide enough to drink the ${q('idea')} of gods.`,
     ]},
-    { pos: [-26, -6, -30], look: [24, 22, -118], glide: 3,
+    { pos: [-26, -6, -30], look: [24, 22, -118], glide: 3, fov: 44,
       on(api) { setTimeout(() => api.looseGale(), 1200); }, lines: [
       `Then Marduk loosed the evil wind into her open throat, and her mouth could not close, and her belly filled with the storm —`,
     ]},
-    { pos: [-30, -4, -22], look: [26, 28, -119], glide: 2,
+    { pos: [-30, -4, -22], look: [26, 28, -119], glide: 2, fov: 42,
       on(api) { setTimeout(() => api.shoot(), 1600); }, lines: [
       `— and he let the arrow fly. It tore her belly, it cut through her inward parts, ${q('it split the heart')}.`,
       `And the darkness that had been before all things came apart into drifting shards of night. Her host fled screaming; the eleven were taken in the net; and from the breast of Qingu, Marduk lifted the Tablet of Destinies, and sealed it to his own.`,
@@ -1257,6 +1354,7 @@ const SCENES = [
 {
   tablet: ['TABLET V', 'The Making of the World', 'in which the dead become the dwelling'],
   pad: [65.4, 98, 130.8, 164.8, 196],
+  grade: { bg: 0x070a16, amb: 0x28304e, key: 0xc8d4e8, wash: 'rgba(40,80,120,0.06)' },
   build(st) {
     /* two halves of the night, parting to become sky and earth */
     const skyHalf = new THREE.Mesh(new THREE.SphereGeometry(60, 32, 18, 0, Math.PI * 2, 0, Math.PI / 2),
@@ -1278,6 +1376,19 @@ const SCENES = [
     const moonH = glowSprite(0xe8ecf5, 10, 0.5); moonH.position.copy(moon.position); moonH.visible = false; st.add(moonH);
     return {
       split() {
+        /* first, a seam of light opens along her */
+        const crack = glowSprite(0xffe9a8, 1, 0);
+        crack.scale.set(130, 3, 1);
+        crack.position.set(0, -10, -108);
+        st.add(crack);
+        tone(120, 2.4, 'sine', 0.18, 480);
+        tween(2.2, p => {
+          crack.material.opacity = p * 0.95;
+          crack.scale.y = 3 + Math.sin(p * Math.PI) * 2;
+        }, () => {
+          tween(4, p => { crack.material.opacity = 0.95 * (1 - p); crack.scale.y = 3 + p * 18; },
+            () => st.remove(crack));
+        });
         sndBoom(); sndShimmer();
         tween(7, p => {
           const e = easeIO(p);
@@ -1293,7 +1404,7 @@ const SCENES = [
     };
   },
   shots: [
-    { pos: [0, 4, 10], look: [0, 0, -110], glide: 0.1,
+    { pos: [0, 4, 10], look: [0, 0, -110], glide: 0.1, fov: 50,
       on(api) { setTimeout(() => api.split(), 3500); }, lines: [
       `Then Marduk rested, and looked long upon the corpse of Tiamat, and conceived a work of art.`,
       `He split her like a shellfish into two halves. The upper half he raised, and made of it the ${q('sky')} — and posted watchmen, that her waters should not escape. The lower half he laid down, and made of it the ${q('earth')}.`,
@@ -1308,6 +1419,7 @@ const SCENES = [
 /* ---------- mankind & the names ---------- */
 {
   pad: [82.4, 110, 164.8, 196, 246.9],
+  grade: { bg: 0x0a0d1c, amb: 0x303a5a, key: 0xe8d0a8, wash: 'rgba(200,150,80,0.06)' },
   build(st) {
     /* the engine, re-set upon the new earth, under the new stars */
     const groundM = new THREE.Mesh(new THREE.CylinderGeometry(90, 90, 1, 36), lam(0x241710));
@@ -1380,13 +1492,13 @@ const SCENES = [
     };
   },
   shots: [
-    { pos: [0, -5.5, 4], look: [0, -5, -6], glide: 0.1, on(api) { setTimeout(() => api.bleed(), 5000); }, lines: [
+    { pos: [0, -5.5, 4], look: [0, -5, -6], glide: 0.1, fov: 38, on(api) { setTimeout(() => api.bleed(), 5000); }, lines: [
       `One labour remained. The gods were weary; who would dig the canals of heaven, and carry the baskets of the world?`,
       `Qingu was brought bound before the assembly, and condemned: ${q('“It was he that made Tiamat rebel.”')} They severed his arteries over the engine of the dead god —`,
       `— and from his blood, by Ea's cunning and Marduk's design, the engine made its final, strangest work: not gods, but something smaller. ${q('Mankind')} — kneaded from the blood of a traitor god, made to carry the burden, so the gods might rest.`,
       `So know this, when your back aches under its basket: there is rebellion in your blood. It was put there on purpose.`,
     ]},
-    { pos: [-2, -3, 0], look: [34, 4, -80], glide: 6, on(api) { setTimeout(() => api.raise(), 2500); }, lines: [
+    { pos: [-2, -3, 0], look: [34, 4, -80], glide: 6, fov: 46, on(api) { setTimeout(() => api.raise(), 2500); }, lines: [
       `Then the gods took up their tools one final time, of their own free will, and for a year they moulded bricks; and they raised ${q('Babylon')}, the gate of the gods, and the high temple Esagila, with its head as high as the deep is deep — the throne of Marduk at the centre of the made world.`,
       `And they sat down at the banquet of heaven, and spoke, one by one, the ${q('fifty names')} of Marduk — king of the gods of heaven and earth, who slew the darkness and built our home from her body, whose word is unalterable, whose command no god revokes.`,
     ]},
@@ -1397,6 +1509,21 @@ const SCENES = [
 /* ===================================================================
    SCENE ENGINE
    =================================================================== */
+const washEl = document.getElementById('wash');
+function applyGrade(gr) {
+  gr = gr || {};
+  const bgTo = new THREE.Color(gr.bg != null ? gr.bg : 0x05070f);
+  const ambTo = new THREE.Color(gr.amb != null ? gr.amb : 0x202848);
+  const keyTo = new THREE.Color(gr.key != null ? gr.key : 0xcfd6ff);
+  const bg0 = scene.background.clone(), a0 = ambient.color.clone(), k0 = keyLight.color.clone();
+  tween(2.8, p => {
+    scene.background.copy(bg0).lerp(bgTo, p);
+    ambient.color.copy(a0).lerp(ambTo, p);
+    keyLight.color.copy(k0).lerp(keyTo, p);
+  });
+  washEl.style.backgroundColor = gr.wash || 'rgba(0,0,0,0)';
+}
+
 const panel = document.getElementById('panel');
 const panelText = document.getElementById('panelText');
 const fadeEl = document.getElementById('fade');
@@ -1407,6 +1534,7 @@ let stage = null, sceneAPI = null;
 let camFrom = { pos: new THREE.Vector3(0, 0, 30), look: new THREE.Vector3(0, 0, -50) };
 let camTo = { pos: new THREE.Vector3(0, 0, 30), look: new THREE.Vector3(0, 0, -50) };
 let camT = 1, camDur = 3, shotTime = 0, driftVec = new THREE.Vector3();
+let fovFrom = 45, fovTo = 45;
 let tabletShowing = false, started = false, lastAdvance = 0;
 
 function loadScene(i) {
@@ -1417,6 +1545,7 @@ function loadScene(i) {
   ambient.intensity = 1.15;
   sceneAPI = S.build(stage) || {};
   setPad(S.pad);
+  applyGrade(S.grade);
   shotIdx = 0; lineIdx = 0;
   applyShot(S.shots[0], true);
   if (S.tablet) {
@@ -1435,8 +1564,13 @@ function applyShot(shot, instant) {
   camTo = { pos: v3(shot.pos), look: v3(shot.look) };
   driftVec = shot.drift ? v3(shot.drift) : new THREE.Vector3();
   camDur = shot.glide || 3;
+  fovFrom = camera.fov;
+  fovTo = shot.fov || 45;
   camT = instant ? 1 : 0;
-  if (instant) { camera.position.copy(camTo.pos); lookCur.copy(camTo.look); }
+  if (instant) {
+    camera.position.copy(camTo.pos); lookCur.copy(camTo.look);
+    camera.fov = fovTo; camera.updateProjectionMatrix();
+  }
   shotTime = 0;
   if (shot.on) shot.on(sceneAPI);
 }
@@ -1562,6 +1696,8 @@ function animate() {
   camera.position.lerpVectors(camFrom.pos, camTo.pos, e).add(driftOff).add(sway);
   lookCur.lerpVectors(camFrom.look, camTo.look, e);
   camera.lookAt(lookCur);
+  const nf = fovFrom + (fovTo - fovFrom) * e;
+  if (Math.abs(nf - camera.fov) > 0.01) { camera.fov = nf; camera.updateProjectionMatrix(); }
 
   if (sceneAPI && sceneAPI.update) sceneAPI.update(dt, elapsed);
   for (const f of stageTickers) f(dt, elapsed);
