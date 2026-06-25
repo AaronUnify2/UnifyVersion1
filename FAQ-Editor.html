@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAQ Content Editor</title>
+<style>
+/* ===== FAQ Editor — app shell (design tokens borrowed from the Process Mapper scaffold) ===== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --color-bg: #F5F7FA;
+  --color-surface: #FFFFFF;
+  --color-text: #1D1D1F;
+  --color-text-soft: #6E6E73;
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-strong: rgba(0, 0, 0, 0.16);
+  --color-accent: #0A66C2;
+  --color-accent-hover: #084A8E;
+  --color-danger: #C0392B;
+  --color-good: #2E9F5C;
+  --color-warn: #D97706;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --sidebar-width: 320px;
+}
+
+html, body { height: 100%; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+button { font-family: inherit; }
+
+/* ---------- Header ---------- */
+.app-header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.8rem 1.4rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.25rem;
+  flex-shrink: 0;
+  z-index: 900;
+}
+.app-brand { display: flex; flex-direction: column; min-width: 0; }
+.app-title { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; }
+.app-subtitle { font-size: 0.78rem; color: var(--color-text-soft); margin-top: 0.15rem; }
+.app-subtitle strong { color: var(--color-text); font-weight: 600; }
+
+.header-actions { display: flex; gap: 0.5rem; align-items: center; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+
+.btn {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--color-text);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--color-bg); border-color: var(--color-border-strong); }
+.btn.primary { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+.btn.primary:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+.btn.danger { color: var(--color-danger); }
+.btn.danger:hover { background: #fbeae8; border-color: #e7b9b3; }
+.btn.small { padding: 0.32rem 0.55rem; font-size: 0.76rem; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.save-pill {
+  font-size: 0.74rem;
+  color: var(--color-text-soft);
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.save-pill.dirty { color: var(--color-warn); border-color: #f0d09a; background: #fff8ec; }
+.save-pill.saved { color: var(--color-good); border-color: #b9e3c9; background: #f0faf4; }
+
+/* ---------- Main layout ---------- */
+.main-area { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  width: var(--sidebar-width);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: 0;
+}
+.sidebar-header {
+  padding: 0.8rem 1rem 0.65rem;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.sidebar-title { font-weight: 700; font-size: 0.95rem; }
+.sidebar-count { font-size: 0.74rem; color: var(--color-text-soft); margin-top: 0.1rem; }
+.sidebar-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.4rem 0.5rem 1rem; }
+.sidebar-footer {
+  padding: 0.6rem 0.7rem;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  background: var(--color-bg);
+}
+.sidebar-footer .row { display: flex; gap: 0.4rem; }
+.sidebar-footer .btn { flex: 1; text-align: center; }
+
+/* Tab (category) block in sidebar */
+.cat {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+  background: var(--color-surface);
+}
+.cat-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.55rem;
+  cursor: pointer;
+  background: var(--color-bg);
+  user-select: none;
+}
+.cat-head:hover { background: #eef1f5; }
+.cat-head.selected { background: #e7f0fb; }
+.cat-caret { font-size: 0.7rem; color: var(--color-text-soft); width: 0.9rem; text-align: center; transition: transform 0.15s; flex-shrink: 0; }
+.cat.collapsed .cat-caret { transform: rotate(-90deg); }
+.cat-name { font-weight: 700; font-size: 0.85rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-badge {
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.5px;
+  background: var(--color-accent); color: #fff; padding: 1px 5px; border-radius: 3px;
+}
+.cat-qcount { font-size: 0.7rem; color: var(--color-text-soft); flex-shrink: 0; }
+.cat-body { padding: 0.3rem; display: flex; flex-direction: column; gap: 0.2rem; }
+.cat.collapsed .cat-body { display: none; }
+.cat-add-row { display: flex; gap: 0.3rem; margin-top: 0.15rem; }
+.cat-add-row .btn { flex: 1; }
+
+/* Item row (question / group heading) */
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.45rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+.item-row:hover { background: var(--color-bg); }
+.item-row.selected { background: #e7f0fb; outline: 1px solid #bcd6f3; }
+.item-row .grip { color: var(--color-text-soft); font-size: 0.85rem; cursor: grab; flex-shrink: 0; }
+.item-row .item-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-row.group .item-label { font-weight: 700; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.5px; color: var(--color-accent); }
+.item-row.dragging { opacity: 0.4; }
+.item-row.drop-target { box-shadow: inset 0 2px 0 var(--color-accent); }
+
+.sidebar-empty { color: var(--color-text-soft); font-size: 0.82rem; text-align: center; padding: 2rem 1rem; line-height: 1.5; }
+
+/* ---------- Editor pane ---------- */
+.editor-container { flex: 1; min-width: 0; overflow-y: auto; background: var(--color-bg); }
+.editor-inner { max-width: 880px; margin: 0 auto; padding: 1.6rem 1.6rem 4rem; }
+
+.editor-empty {
+  height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; color: var(--color-text-soft); padding: 2rem;
+}
+.editor-empty .big { font-size: 1.1rem; font-weight: 600; color: var(--color-text); margin-bottom: 0.5rem; }
+
+.editor-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  padding: 1.4rem 1.5rem;
+  margin-bottom: 1.2rem;
+}
+.editor-kicker {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+  color: var(--color-accent); margin-bottom: 0.9rem;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.editor-kicker .in-tab { color: var(--color-text-soft); font-weight: 600; }
+
+.field { margin-bottom: 1.1rem; }
+.field:last-child { margin-bottom: 0; }
+.field > label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 0.35rem; }
+.field .hint { font-weight: 400; color: var(--color-text-soft); font-size: 0.76rem; margin-left: 0.4rem; }
+
+.field input[type="text"], .field textarea, .field select {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 7px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: var(--color-text);
+  background: #fff;
+}
+.field textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+.field input:focus, .field textarea:focus, .field select:focus,
+.rt-area:focus { outline: 2px solid var(--color-accent); outline-offset: 1px; border-color: var(--color-accent); }
+
+.field-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+.field-row > .field { flex: 1; min-width: 180px; }
+
+.checkbox-field { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+.checkbox-field input { width: 16px; height: 16px; }
+
+/* Rich text editor */
+.rt {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 7px;
+  overflow: hidden;
+  background: #fff;
+}
+.rt-toolbar {
+  display: flex; flex-wrap: wrap; gap: 2px;
+  padding: 0.35rem;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+.rt-toolbar button {
+  background: transparent; border: 1px solid transparent;
+  padding: 0.3rem 0.5rem; border-radius: 5px; cursor: pointer;
+  font-size: 0.8rem; font-weight: 600; color: var(--color-text);
+  min-width: 30px;
+}
+.rt-toolbar button:hover { background: #fff; border-color: var(--color-border); }
+.rt-toolbar .sep { width: 1px; background: var(--color-border); margin: 2px 3px; }
+.rt-toolbar .spacer { flex: 1; }
+.rt-toolbar .src-toggle.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+
+.rt-area {
+  padding: 0.7rem 0.85rem;
+  min-height: 120px;
+  max-height: 460px;
+  overflow-y: auto;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  outline: none;
+}
+.rt-area p { margin: 0 0 0.6rem; }
+.rt-area ul, .rt-area ol { margin: 0.4rem 0 0.6rem 1.4rem; }
+.rt-area a { color: var(--color-accent); }
+.rt-area .note { background: #f0f0f8; border-left: 3px solid #2d2d7a; padding: 6px 10px; margin: 8px 0; }
+.rt-area .warn { background: #fff8e6; border-left: 3px solid #e0a800; padding: 6px 10px; margin: 8px 0; }
+.rt-area .term { background: #eef4ee; border-left: 3px solid #3a7a3a; padding: 6px 10px; margin: 8px 0; }
+.rt-area table { border-collapse: collapse; margin: 8px 0; font-size: 0.85rem; }
+.rt-area th, .rt-area td { border: 1px solid #c7c7d6; padding: 5px 8px; }
+
+.rt-source {
+  display: none;
+  width: 100%;
+  border: none;
+  padding: 0.7rem 0.85rem;
+  min-height: 200px;
+  max-height: 460px;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  resize: vertical;
+  color: #1d1d1f;
+}
+.rt.show-source .rt-area { display: none; }
+.rt.show-source .rt-source { display: block; }
+
+/* Stepper editor */
+.stepper-rows { display: flex; flex-direction: column; gap: 0.5rem; }
+.stepper-row { display: flex; gap: 0.5rem; align-items: flex-start; }
+.stepper-row .lbl { width: 110px; flex-shrink: 0; }
+.stepper-row .txt { flex: 1; }
+.stepper-row .rm { flex-shrink: 0; }
+
+/* Preview block */
+.preview-wrap { margin-top: 0.6rem; border: 1px dashed var(--color-border-strong); border-radius: 8px; background: #fff; }
+.preview-label {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--color-text-soft); padding: 0.4rem 0.7rem; border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+.preview-body { padding: 0.3rem 0.8rem; }
+
+.editor-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.editor-actions .spacer { flex: 1; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 1.3rem; left: 50%; transform: translateX(-50%) translateY(140%);
+  background: #1d1d1f; color: #fff; padding: 0.7rem 1.2rem; border-radius: 8px;
+  font-size: 0.85rem; box-shadow: var(--shadow-md); z-index: 4000; transition: transform 0.25s ease; max-width: 90%;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+.toast.error { background: #7a1d16; }
+
+/* Modal (lightweight) */
+.modal { position: fixed; inset: 0; background: rgba(15,23,42,0.45); display: none; align-items: center; justify-content: center; z-index: 3000; backdrop-filter: blur(5px); }
+.modal.open { display: flex; }
+.modal-box { background: #fff; border-radius: 12px; padding: 1.6rem; width: 460px; max-width: 92%; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+.modal-box h3 { font-size: 1.05rem; margin-bottom: 0.4rem; }
+.modal-box p.sub { font-size: 0.84rem; color: var(--color-text-soft); margin-bottom: 1rem; line-height: 1.5; }
+.modal-box input[type="text"], .modal-box textarea {
+  width: 100%; padding: 0.6rem 0.7rem; border: 1px solid var(--color-border-strong);
+  border-radius: 7px; font-size: 0.9rem; font-family: inherit; margin-bottom: 0.5rem;
+}
+.modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1rem; }
+
+/* Hide file inputs */
+.hidden-file { display: none; }
+
+@media (max-width: 760px) {
+  .sidebar { position: absolute; z-index: 1000; height: 100%; box-shadow: var(--shadow-md); }
+  body.sidebar-hidden .sidebar { display: none; }
+}
+
+
+/* ===== Scoped FAQ preview styles (mirror of the live page) ===== */
+.faq-preview {
+  max-width: 100%;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 15px;
+  color: #111;
+  background: #fff;
+  padding: 28px 20px 60px;
+  max-width: 860px; }
+.faq-preview h1 {
+  font-size: 42px;
+  font-weight: 900;
+  margin-bottom: 16px;
+  letter-spacing: -1px; }
+.faq-preview .demo-notice {
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+  margin-bottom: 24px; }
+.faq-preview .tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 2px solid #ccc;
+  margin-bottom: 24px; }
+.faq-preview .tab-btn {
+  display: inline-block;
+  padding: 8px 18px 9px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  background: none;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #2d2d7a;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.12s; }
+.faq-preview .tab-btn:hover { text-decoration: underline; border-bottom-color: #aaa; }
+.faq-preview .tab-btn.active {
+  color: #111;
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom-color: #2d2d7a;
+  cursor: default; }
+.faq-preview .tab-btn.new-tab::after {
+  content: "NEW";
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: #2d2d7a;
+  color: #fff;
+  padding: 1px 5px;
+  margin-left: 6px;
+  border-radius: 2px;
+  vertical-align: 1px; }
+.faq-preview .tab-panel { display: none; }
+.faq-preview .tab-panel.active { display: block; }
+.faq-preview /* ── Intro block for the Building Rural tab ───────────────── */
+.tab-intro {
+  background: #f6f6fb;
+  border-left: 3px solid #2d2d7a;
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #222; }
+.faq-preview .tab-intro strong { color: #111; }
+.faq-preview .tab-intro p { margin-bottom: 8px; }
+.faq-preview .tab-intro p:last-child { margin-bottom: 0; }
+.faq-preview .faq-list { list-style: none; }
+.faq-preview .faq-item {
+  border: 1px solid #ccc;
+  margin-bottom: 6px; }
+.faq-preview .faq-q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  cursor: pointer;
+  background: #fff;
+  user-select: none; }
+.faq-preview .faq-q:hover { background: #f8f8f8; }
+.faq-preview .faq-item.open .faq-q { background: #f8f8f8; }
+.faq-preview .faq-q-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.45;
+  flex: 1; }
+.faq-preview .faq-chevron {
+  font-size: 18px;
+  color: #2d2d7a;
+  flex-shrink: 0;
+  transition: transform 0.22s;
+  line-height: 1; }
+.faq-preview .faq-item.open .faq-chevron { transform: rotate(180deg); }
+.faq-preview .faq-a {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.32s ease; }
+.faq-preview .faq-item.open .faq-a { max-height: 3600px; }
+.faq-preview .faq-a-inner {
+  padding: 4px 20px 20px;
+  font-size: 14px;
+  color: #333;
+  line-height: 1.7;
+  border-top: 1px solid #e8e8e8; }
+.faq-preview .faq-a-inner p { margin-bottom: 10px; }
+.faq-preview .faq-a-inner p:last-child { margin-bottom: 0; }
+.faq-preview .faq-a-inner ol, .faq-preview .faq-a-inner ul { margin: 8px 0 10px 22px; }
+.faq-preview .faq-a-inner li { margin-bottom: 5px; }
+.faq-preview .faq-a-inner a { color: #2d2d7a; }
+.faq-preview .faq-a-inner a:hover { text-decoration: underline; }
+.faq-preview .faq-a-inner .note {
+  background: #f0f0f8;
+  border-left: 3px solid #2d2d7a;
+  padding: 8px 12px;
+  font-size: 13.5px;
+  margin: 10px 0;
+  color: #333; }
+.faq-preview .faq-a-inner .warn {
+  background: #fff8e6;
+  border-left: 3px solid #e0a800;
+  padding: 8px 12px;
+  font-size: 13.5px;
+  margin: 10px 0;
+  color: #555; }
+.faq-preview .faq-a-inner .term {
+  background: #eef4ee;
+  border-left: 3px solid #3a7a3a;
+  padding: 8px 12px;
+  font-size: 13.5px;
+  margin: 10px 0;
+  color: #234; }
+.faq-preview .faq-a-inner .term strong { color: #111; }
+.faq-preview /* Setback comparison table used in the Building Rural tab */
+.setback-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0 14px;
+  font-size: 13.5px; }
+.faq-preview .setback-table th, .faq-preview .setback-table td {
+  border: 1px solid #c7c7d6;
+  padding: 8px 12px;
+  vertical-align: top;
+  text-align: left;
+  line-height: 1.5; }
+.faq-preview .setback-table thead th {
+  background: #f0f0f8;
+  color: #2d2d7a;
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase; }
+.faq-preview .setback-table tbody td:first-child {
+  background: #fafafc;
+  font-weight: 700;
+  color: #111;
+  width: 32%; }
+.faq-preview /* Facility / compound tables used in the Waste & Recycling tab */
+.facility-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0 14px;
+  font-size: 13.5px; }
+.faq-preview .facility-table th, .faq-preview .facility-table td {
+  border: 1px solid #c7c7d6;
+  padding: 7px 10px;
+  vertical-align: top;
+  text-align: left;
+  line-height: 1.45; }
+.faq-preview .facility-table thead th {
+  background: #f0f0f8;
+  color: #2d2d7a;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase; }
+.faq-preview .facility-table tbody td:first-child {
+  font-weight: 700;
+  color: #111;
+  background: #fafafc;
+  white-space: nowrap; }
+.faq-preview /* Simple horizontal stepper used in the Building Rural process overview */
+.stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 14px;
+  font-size: 12.5px; }
+.faq-preview .stepper .step {
+  flex: 1 1 0;
+  min-width: 120px;
+  background: #fff;
+  border: 1px solid #c7c7d6;
+  border-left: 3px solid #2d2d7a;
+  padding: 7px 10px;
+  line-height: 1.35;
+  color: #222; }
+.faq-preview .stepper .step b { display: block; font-size: 11px; color: #2d2d7a; letter-spacing: 0.4px; margin-bottom: 2px; }
+.faq-preview /* Sub-heading dividers used inside an FAQ list to group questions by stage */
+.faq-group-heading {
+  list-style: none;
+  margin: 22px 0 8px;
+  padding: 8px 0 6px;
+  border-top: 1px solid #ccc;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #2d2d7a; }
+.faq-preview .faq-list > .faq-group-heading:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none; }
+.faq-preview .panel-footer {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid #ddd;
+  font-size: 13px;
+  color: #666; }
+.faq-preview .panel-footer a { color: #2d2d7a; margin: 0 3px; }
+.faq-preview .last-reviewed {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #999;
+  font-style: italic; }
+
+</style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-brand">
+      <div class="app-title">FAQ Content Editor</div>
+      <div class="app-subtitle" id="appSubtitle">Edit your FAQ, then export an updated <strong>FAQ.json</strong> for GitHub.</div>
+    </div>
+    <div class="header-actions">
+      <span class="save-pill" id="savePill">Loading…</span>
+      <button class="btn" id="loadLiveBtn" title="Reload the published FAQ.json from your site">Load from site</button>
+      <button class="btn" id="importBtn" title="Open a FAQ.json file from your computer">Import file</button>
+      <button class="btn primary" id="exportBtn" title="Download an updated FAQ.json">⤓ Export FAQ.json</button>
+      <input type="file" id="importFile" class="hidden-file" accept="application/json,.json">
+    </div>
+  </header>
+
+  <div class="main-area">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div>
+          <div class="sidebar-title">Questions by tab</div>
+          <div class="sidebar-count" id="sidebarCount">—</div>
+        </div>
+        <button class="btn small" id="addTabBtn">+ Tab</button>
+      </div>
+      <div class="sidebar-body" id="sidebarBody"></div>
+      <div class="sidebar-footer">
+        <div class="row">
+          <button class="btn small" id="expandAllBtn">Expand all</button>
+          <button class="btn small" id="collapseAllBtn">Collapse all</button>
+        </div>
+        <button class="btn small danger" id="resetDraftBtn">Reset working draft</button>
+      </div>
+    </aside>
+
+    <div class="editor-container">
+      <div class="editor-inner" id="editorInner">
+        <div class="editor-empty" id="editorEmpty">
+          <div>
+            <div class="big">Nothing selected</div>
+            <div>Pick a question or tab from the left, or add a new one to start editing.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic prompt modal -->
+  <div class="modal" id="promptModal">
+    <div class="modal-box">
+      <h3 id="promptTitle">Title</h3>
+      <p class="sub" id="promptSub"></p>
+      <input type="text" id="promptInput" autocomplete="off">
+      <div class="modal-actions">
+        <button class="btn" id="promptCancel">Cancel</button>
+        <button class="btn primary" id="promptOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================================
+   FAQ Content Editor
+   - Loads / edits the FAQ.json structure used by the published FAQ page.
+   - Autosaves a working draft to localStorage.
+   - Exports an updated FAQ.json for committing to GitHub.
+   ============================================================================ */
+(function () {
+  'use strict';
+
+  // Where to load FAQ.json from when you click "Load from site".
+  // Relative path = loads the FAQ.json sitting next to this editor in your repo
+  // (same origin, so no cross-site/CORS issues). If you ever host the editor
+  // somewhere else, put the full URL here instead, e.g.:
+  //   'https://aaronunify2.github.io/UnifyVersion1/FAQ.json'
+  var LIVE_JSON_URL = 'FAQ.json';
+  var DRAFT_KEY = 'faqEditorDraft.v1';
+  var UI_KEY = 'faqEditorUi.v1';
+
+  // ---- State ---------------------------------------------------------------
+  var state = { tabs: [] };           // mirrors FAQ.json (plus internal _uid fields)
+  var ui = { selection: null, collapsed: {} }; // selection: {kind:'tab'|'item', tab, item?}
+  var saveTimer = null;
+  var loadedFrom = 'new';
+
+  // ---- Small helpers -------------------------------------------------------
+  function $(id) { return document.getElementById(id); }
+  function uid(prefix) { return (prefix || 'u') + '_' + Math.random().toString(36).slice(2, 9); }
+  function el(tag, cls, html) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
+  }
+  function slugify(s) {
+    return String(s || '').toLowerCase().trim()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'tab';
+  }
+  function stripTags(html) {
+    var d = document.createElement('div');
+    d.innerHTML = html || '';
+    return (d.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+  function htmlIsEmpty(html) {
+    if (!html) return true;
+    var t = String(html).replace(/&nbsp;/gi, ' ').replace(/<br\s*\/?>/gi, '')
+      .replace(/<p>\s*<\/p>/gi, '').replace(/<div>\s*<\/div>/gi, '');
+    return stripTags(t) === '' && !/<(img|table|hr|li|iframe)/i.test(html);
+  }
+  function escapeAttr(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
+  }
+
+  function toast(msg, isError) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isError ? ' error' : '');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { t.className = 'toast'; }, 2600);
+  }
+
+  // Promise-based prompt modal
+  function uiPrompt(opts) {
+    return new Promise(function (resolve) {
+      var m = $('promptModal');
+      $('promptTitle').textContent = opts.title || 'Enter a value';
+      $('promptSub').textContent = opts.sub || '';
+      $('promptSub').style.display = opts.sub ? 'block' : 'none';
+      var input = $('promptInput');
+      input.value = opts.value || '';
+      input.placeholder = opts.placeholder || '';
+      m.classList.add('open');
+      setTimeout(function () { input.focus(); input.select(); }, 30);
+      function done(val) {
+        m.classList.remove('open');
+        $('promptOk').onclick = null; $('promptCancel').onclick = null; input.onkeydown = null;
+        resolve(val);
+      }
+      $('promptOk').onclick = function () { done(input.value.trim() || null); };
+      $('promptCancel').onclick = function () { done(null); };
+      input.onkeydown = function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); done(input.value.trim() || null); }
+        if (e.key === 'Escape') { done(null); }
+      };
+    });
+  }
+
+  // ---- Persistence ---------------------------------------------------------
+  function markDirty() {
+    setPill('dirty');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveDraft, 350);
+  }
+  function saveDraft() {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(state));
+      localStorage.setItem(UI_KEY, JSON.stringify({ collapsed: ui.collapsed }));
+      setPill('saved');
+    } catch (e) {
+      setPill('error');
+      toast('Could not autosave to this browser: ' + e.message, true);
+    }
+  }
+  function setPill(kind) {
+    var p = $('savePill');
+    if (kind === 'dirty') { p.textContent = 'Unsaved…'; p.className = 'save-pill dirty'; }
+    else if (kind === 'saved') { p.textContent = 'Draft saved'; p.className = 'save-pill saved'; }
+    else if (kind === 'loading') { p.textContent = 'Loading…'; p.className = 'save-pill'; }
+    else if (kind === 'error') { p.textContent = 'Save error'; p.className = 'save-pill dirty'; }
+  }
+
+  // ---- Normalising loaded data --------------------------------------------
+  function normalise(data) {
+    var tabs = (data && Array.isArray(data.tabs)) ? data.tabs : [];
+    return {
+      tabs: tabs.map(function (t) {
+        var tab = {
+          _uid: uid('tab'),
+          id: t.id || slugify(t.label),
+          label: t.label || t.id || 'Untitled tab',
+          'new': !!t['new'],
+          intro: t.intro || '',
+          stepper: Array.isArray(t.stepper) ? t.stepper.map(function (s) {
+            return { label: s.label || '', text: s.text || '' };
+          }) : [],
+          footer: t.footer || '',
+          lastReviewed: t.lastReviewed || '',
+          items: (Array.isArray(t.items) ? t.items : []).map(function (it) {
+            if (it.type === 'group' || (it.title != null && it.q == null)) {
+              return { _uid: uid('it'), type: 'group', title: it.title || '' };
+            }
+            return { _uid: uid('it'), type: 'faq', q: it.q || '', a: it.a || '' };
+          })
+        };
+        return tab;
+      })
+    };
+  }
+
+  // ---- Export --------------------------------------------------------------
+  function buildExport() {
+    return {
+      tabs: state.tabs.map(function (t) {
+        var out = {};
+        out.id = t.id || slugify(t.label);
+        out.label = t.label || 'Untitled tab';
+        if (t['new']) out['new'] = true;
+        if (!htmlIsEmpty(t.intro)) out.intro = t.intro.trim();
+        var steps = (t.stepper || []).filter(function (s) { return (s.label || s.text).trim(); });
+        if (steps.length) out.stepper = steps.map(function (s) { return { label: s.label.trim(), text: s.text.trim() }; });
+        out.items = (t.items || []).map(function (it) {
+          if (it.type === 'group') return { type: 'group', title: (it.title || '').trim() };
+          return { type: 'faq', q: (it.q || '').trim(), a: (it.a || '').trim() };
+        });
+        if (!htmlIsEmpty(t.footer)) out.footer = t.footer.trim();
+        if ((t.lastReviewed || '').trim()) out.lastReviewed = t.lastReviewed.trim();
+        return out;
+      })
+    };
+  }
+
+  function exportJson() {
+    if (state.tabs.length === 0) { toast('Nothing to export yet.', true); return; }
+    var data = buildExport();
+    var text = JSON.stringify(data, null, 2);
+    var blob = new Blob([text], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'FAQ.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast('FAQ.json downloaded — commit it to your repo to publish.');
+  }
+
+  // ---- Selection helpers ---------------------------------------------------
+  function findTab(uidv) { return state.tabs.find(function (t) { return t._uid === uidv; }); }
+  function selectTab(tabUid) { ui.selection = { kind: 'tab', tab: tabUid }; renderSidebar(); renderEditor(); }
+  function selectItem(tabUid, itemUid) { ui.selection = { kind: 'item', tab: tabUid, item: itemUid }; renderSidebar(); renderEditor(); }
+  function clearSelectionIfGone() {
+    var s = ui.selection;
+    if (!s) return;
+    var t = findTab(s.tab);
+    if (!t) { ui.selection = null; return; }
+    if (s.kind === 'item' && !t.items.find(function (i) { return i._uid === s.item; })) ui.selection = null;
+  }
+
+  // ---- Sidebar -------------------------------------------------------------
+  function renderSidebar() {
+    var body = $('sidebarBody');
+    body.innerHTML = '';
+    var totalQ = 0;
+    state.tabs.forEach(function (t) {
+      totalQ += t.items.filter(function (i) { return i.type === 'faq'; }).length;
+    });
+    $('sidebarCount').textContent = state.tabs.length + ' tab' + (state.tabs.length === 1 ? '' : 's') +
+      ' · ' + totalQ + ' question' + (totalQ === 1 ? '' : 's');
+
+    if (state.tabs.length === 0) {
+      body.appendChild(el('div', 'sidebar-empty',
+        'No content loaded.<br><br>Use <strong>Load from site</strong> to pull your live FAQ, <strong>Import file</strong> to open a FAQ.json, or <strong>+ Tab</strong> to start fresh.'));
+      return;
+    }
+
+    state.tabs.forEach(function (tab) {
+      var collapsed = !!ui.collapsed[tab._uid];
+      var cat = el('div', 'cat' + (collapsed ? ' collapsed' : ''));
+
+      var head = el('div', 'cat-head');
+      if (ui.selection && ui.selection.kind === 'tab' && ui.selection.tab === tab._uid) head.classList.add('selected');
+      head.appendChild(el('span', 'cat-caret', '▾'));
+      var name = el('span', 'cat-name'); name.textContent = tab.label || '(untitled tab)';
+      head.appendChild(name);
+      if (tab['new']) head.appendChild(el('span', 'cat-badge', 'NEW'));
+      var qn = tab.items.filter(function (i) { return i.type === 'faq'; }).length;
+      head.appendChild(el('span', 'cat-qcount', qn + 'q'));
+      head.querySelector('.cat-caret').addEventListener('click', function (e) {
+        e.stopPropagation();
+        ui.collapsed[tab._uid] = !collapsed; saveDraft(); renderSidebar();
+      });
+      head.addEventListener('click', function () { selectTab(tab._uid); });
+      cat.appendChild(head);
+
+      var bodyEl = el('div', 'cat-body');
+      tab.items.forEach(function (item, idx) {
+        bodyEl.appendChild(buildItemRow(tab, item, idx));
+      });
+      var addRow = el('div', 'cat-add-row');
+      var addQ = el('button', 'btn small', '+ Question');
+      addQ.addEventListener('click', function (e) { e.stopPropagation(); addQuestion(tab); });
+      var addH = el('button', 'btn small', '+ Heading');
+      addH.addEventListener('click', function (e) { e.stopPropagation(); addHeading(tab); });
+      addRow.appendChild(addQ); addRow.appendChild(addH);
+      bodyEl.appendChild(addRow);
+      cat.appendChild(bodyEl);
+
+      body.appendChild(cat);
+    });
+  }
+
+  function buildItemRow(tab, item, idx) {
+    var row = el('div', 'item-row' + (item.type === 'group' ? ' group' : ''));
+    if (ui.selection && ui.selection.kind === 'item' && ui.selection.item === item._uid) row.classList.add('selected');
+    row.setAttribute('draggable', 'true');
+    row.dataset.idx = idx;
+    row.appendChild(el('span', 'grip', '⋮⋮'));
+    var label = el('span', 'item-label');
+    label.textContent = item.type === 'group'
+      ? (item.title || '(section heading)')
+      : (stripTags(item.q) || '(empty question)');
+    row.appendChild(label);
+    row.addEventListener('click', function () { selectItem(tab._uid, item._uid); });
+
+    // Drag to reorder within this tab
+    row.addEventListener('dragstart', function (e) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(idx));
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend', function () {
+      row.classList.remove('dragging');
+      Array.prototype.forEach.call(row.parentNode.children, function (c) { c.classList.remove('drop-target'); });
+    });
+    row.addEventListener('dragover', function (e) { e.preventDefault(); row.classList.add('drop-target'); });
+    row.addEventListener('dragleave', function () { row.classList.remove('drop-target'); });
+    row.addEventListener('drop', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var from = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      var to = idx;
+      if (isNaN(from) || from === to) return;
+      var moved = tab.items.splice(from, 1)[0];
+      tab.items.splice(to, 0, moved);
+      markDirty(); renderSidebar();
+    });
+    return row;
+  }
+
+  // ---- Structural operations ----------------------------------------------
+  function addQuestion(tab) {
+    var item = { _uid: uid('it'), type: 'faq', q: '', a: '' };
+    tab.items.push(item);
+    ui.collapsed[tab._uid] = false;
+    markDirty(); selectItem(tab._uid, item._uid);
+    setTimeout(function () { var f = document.querySelector('[data-focus="q"]'); if (f) f.focus(); }, 40);
+  }
+  function addHeading(tab) {
+    var item = { _uid: uid('it'), type: 'group', title: '' };
+    tab.items.push(item);
+    ui.collapsed[tab._uid] = false;
+    markDirty(); selectItem(tab._uid, item._uid);
+    setTimeout(function () { var f = document.querySelector('[data-focus="title"]'); if (f) f.focus(); }, 40);
+  }
+  function addTab() {
+    uiPrompt({ title: 'New tab', sub: 'This becomes a category tab on the FAQ page.', placeholder: 'e.g. Building Rural' })
+      .then(function (label) {
+        if (!label) return;
+        var tab = {
+          _uid: uid('tab'), id: slugify(label), label: label, 'new': false,
+          intro: '', stepper: [], footer: '', lastReviewed: '', items: []
+        };
+        state.tabs.push(tab);
+        markDirty(); selectTab(tab._uid);
+      });
+  }
+  function deleteTab(tab) {
+    if (!confirm('Delete the tab "' + (tab.label || 'untitled') + '" and all ' + tab.items.length + ' item(s) inside it?\n\nThis only changes your working draft until you export.')) return;
+    state.tabs = state.tabs.filter(function (t) { return t !== tab; });
+    if (ui.selection && ui.selection.tab === tab._uid) ui.selection = null;
+    markDirty(); renderSidebar(); renderEditor();
+  }
+  function deleteItem(tab, item) {
+    var what = item.type === 'group' ? 'section heading' : 'question';
+    if (!confirm('Delete this ' + what + '?')) return;
+    tab.items = tab.items.filter(function (i) { return i !== item; });
+    if (ui.selection && ui.selection.item === item._uid) ui.selection = { kind: 'tab', tab: tab._uid };
+    markDirty(); renderSidebar(); renderEditor();
+  }
+  function moveInArray(arr, item, dir) {
+    var i = arr.indexOf(item);
+    var j = i + dir;
+    if (i < 0 || j < 0 || j >= arr.length) return false;
+    arr.splice(i, 1); arr.splice(j, 0, item);
+    return true;
+  }
+
+  // ---- Rich text editor component -----------------------------------------
+  function makeRichEditor(initialHtml, previewWrapClass, onChange) {
+    var root = el('div', 'rt');
+
+    var toolbar = el('div', 'rt-toolbar');
+    function tbBtn(label, title, handler) {
+      var b = el('button', null, label);
+      b.type = 'button'; b.title = title;
+      b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      b.addEventListener('click', function (e) { e.preventDefault(); handler(); });
+      return b;
+    }
+    function sep() { return el('span', 'sep'); }
+
+    var area = el('div', 'rt-area');
+    area.contentEditable = 'true';
+    area.innerHTML = initialHtml || '';
+
+    var source = el('textarea', 'rt-source');
+    source.value = initialHtml || '';
+
+    function exec(cmd, val) { try { document.execCommand(cmd, false, val || null); } catch (e) {} area.focus(); }
+    function insertHtml(html) {
+      area.focus();
+      try { document.execCommand('insertHTML', false, html); }
+      catch (e) { area.innerHTML += html; }
+      sync();
+    }
+
+    toolbar.appendChild(tbBtn('<b>B</b>', 'Bold', function () { exec('bold'); sync(); }));
+    toolbar.appendChild(tbBtn('<i>I</i>', 'Italic', function () { exec('italic'); sync(); }));
+    toolbar.appendChild(sep());
+    toolbar.appendChild(tbBtn('¶', 'Paragraph', function () { exec('formatBlock', 'p'); sync(); }));
+    toolbar.appendChild(tbBtn('• List', 'Bullet list', function () { exec('insertUnorderedList'); sync(); }));
+    toolbar.appendChild(tbBtn('1. List', 'Numbered list', function () { exec('insertOrderedList'); sync(); }));
+    toolbar.appendChild(sep());
+    toolbar.appendChild(tbBtn('🔗', 'Insert link', function () {
+      var sel = window.getSelection();
+      var selectedText = sel ? sel.toString() : '';
+      uiPrompt({ title: 'Insert link', sub: 'Paste the web address (URL).', placeholder: 'https://…' }).then(function (url) {
+        if (!url) return;
+        if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) url = 'https://' + url;
+        if (selectedText) {
+          insertHtml('<a href="' + escapeAttr(url) + '" target="_blank">' + escapeAttr(selectedText) + '</a>');
+        } else {
+          uiPrompt({ title: 'Link text', placeholder: 'Text to show', value: url }).then(function (txt) {
+            insertHtml('<a href="' + escapeAttr(url) + '" target="_blank">' + escapeAttr(txt || url) + '</a>');
+          });
+        }
+      });
+    }));
+    toolbar.appendChild(sep());
+    toolbar.appendChild(tbBtn('Note', 'Insert a blue note box', function () { insertHtml('<div class="note">Note text…</div><p><br></p>'); }));
+    toolbar.appendChild(tbBtn('Warn', 'Insert an amber warning box', function () { insertHtml('<div class="warn">Warning text…</div><p><br></p>'); }));
+    toolbar.appendChild(tbBtn('Term', 'Insert a green definition box', function () { insertHtml('<div class="term"><strong>Term</strong> — definition…</div><p><br></p>'); }));
+    toolbar.appendChild(tbBtn('Table', 'Insert a starter table', function () {
+      insertHtml('<table class="facility-table"><thead><tr><th>Column 1</th><th>Column 2</th></tr></thead>' +
+        '<tbody><tr><td>Cell</td><td>Cell</td></tr><tr><td>Cell</td><td>Cell</td></tr></tbody></table><p><br></p>');
+    }));
+    toolbar.appendChild(tbBtn('⨯ Clear', 'Remove formatting', function () { exec('removeFormat'); sync(); }));
+
+    toolbar.appendChild(el('span', 'spacer'));
+    var srcToggle = el('button', 'src-toggle', '&lt;/&gt; HTML');
+    srcToggle.type = 'button'; srcToggle.title = 'Toggle raw HTML editing (for tables and advanced layout)';
+    srcToggle.addEventListener('click', function () {
+      var showing = root.classList.toggle('show-source');
+      srcToggle.classList.toggle('active', showing);
+      if (showing) { source.value = area.innerHTML; source.focus(); }
+      else { area.innerHTML = source.value; sync(); }
+    });
+    toolbar.appendChild(srcToggle);
+
+    var previewWrap = el('div', 'preview-wrap');
+    previewWrap.appendChild(el('div', 'preview-label', 'Live preview (how it looks on the page)'));
+    var previewBody = el('div', 'preview-body');
+    var preview = el('div', 'faq-preview');
+    var previewInner = el('div', previewWrapClass || 'faq-a-inner');
+    preview.appendChild(previewInner);
+    previewBody.appendChild(preview);
+    previewWrap.appendChild(previewBody);
+
+    function currentHtml() { return root.classList.contains('show-source') ? source.value : area.innerHTML; }
+    function updatePreview() { previewInner.innerHTML = currentHtml(); }
+    function sync() { updatePreview(); if (onChange) onChange(currentHtml()); }
+
+    area.addEventListener('input', sync);
+    area.addEventListener('blur', sync);
+    source.addEventListener('input', function () { updatePreview(); if (onChange) onChange(source.value); });
+
+    root.appendChild(toolbar);
+    root.appendChild(area);
+    root.appendChild(source);
+
+    updatePreview();
+    return { root: root, previewWrap: previewWrap, getHtml: currentHtml };
+  }
+
+  // ---- Editor pane ---------------------------------------------------------
+  function renderEditor() {
+    var inner = $('editorInner');
+    inner.innerHTML = '';
+    clearSelectionIfGone();
+    var s = ui.selection;
+    if (!s) {
+      inner.appendChild(emptyEditor());
+      return;
+    }
+    var tab = findTab(s.tab);
+    if (!tab) { ui.selection = null; inner.appendChild(emptyEditor()); return; }
+
+    if (s.kind === 'tab') { inner.appendChild(buildTabEditor(tab)); return; }
+    var item = tab.items.find(function (i) { return i._uid === s.item; });
+    if (!item) { selectTab(tab._uid); return; }
+    inner.appendChild(item.type === 'group' ? buildHeadingEditor(tab, item) : buildQuestionEditor(tab, item));
+  }
+
+  function emptyEditor() {
+    return el('div', 'editor-empty',
+      '<div><div class="big">Nothing selected</div>' +
+      '<div>Pick a question or tab on the left, or add a new one to start editing.</div></div>');
+  }
+
+  function fieldLabel(text, hint) {
+    var l = el('label', null, escapeAttr(text));
+    if (hint) l.appendChild(el('span', 'hint', escapeAttr(hint)));
+    return l;
+  }
+
+  function buildQuestionEditor(tab, item) {
+    var card = el('div', 'editor-card');
+    var kick = el('div', 'editor-kicker');
+    kick.innerHTML = 'Question <span class="in-tab">in ' + escapeAttr(tab.label) + '</span>';
+    card.appendChild(kick);
+
+    // Question text
+    var qf = el('div', 'field');
+    qf.appendChild(fieldLabel('Question', 'Shown as the clickable heading'));
+    var qInput = el('input'); qInput.type = 'text'; qInput.value = item.q || '';
+    qInput.setAttribute('data-focus', 'q');
+    qInput.addEventListener('input', function () {
+      item.q = qInput.value;
+      var row = document.querySelector('.item-row.selected .item-label');
+      if (row) row.textContent = stripTags(item.q) || '(empty question)';
+      markDirty();
+    });
+    qf.appendChild(qInput);
+    card.appendChild(qf);
+
+    // Answer rich editor
+    var af = el('div', 'field');
+    af.appendChild(fieldLabel('Answer', 'Use the toolbar; switch to HTML for tables / advanced edits'));
+    var rt = makeRichEditor(item.a || '', 'faq-a-inner', function (html) { item.a = html; markDirty(); });
+    af.appendChild(rt.root);
+    af.appendChild(rt.previewWrap);
+    card.appendChild(af);
+
+    card.appendChild(itemActionBar(tab, item));
+    var wrap = el('div'); wrap.appendChild(card);
+    return wrap;
+  }
+
+  function buildHeadingEditor(tab, item) {
+    var card = el('div', 'editor-card');
+    var kick = el('div', 'editor-kicker');
+    kick.innerHTML = 'Section heading <span class="in-tab">in ' + escapeAttr(tab.label) + '</span>';
+    card.appendChild(kick);
+
+    var f = el('div', 'field');
+    f.appendChild(fieldLabel('Heading text', 'A divider that groups the questions below it'));
+    var input = el('input'); input.type = 'text'; input.value = item.title || '';
+    input.setAttribute('data-focus', 'title');
+    input.addEventListener('input', function () {
+      item.title = input.value;
+      var row = document.querySelector('.item-row.selected .item-label');
+      if (row) row.textContent = item.title || '(section heading)';
+      markDirty();
+    });
+    f.appendChild(input);
+    card.appendChild(f);
+
+    card.appendChild(itemActionBar(tab, item));
+    var wrap = el('div'); wrap.appendChild(card);
+    return wrap;
+  }
+
+  function itemActionBar(tab, item) {
+    var bar = el('div', 'editor-actions');
+
+    // Move to another tab
+    if (state.tabs.length > 1) {
+      var moveWrap = el('div', 'field'); moveWrap.style.margin = '0'; moveWrap.style.minWidth = '200px';
+      var sel = el('select');
+      state.tabs.forEach(function (t) {
+        var o = el('option'); o.value = t._uid; o.textContent = t.label || '(untitled)';
+        if (t === tab) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.addEventListener('change', function () {
+        var dest = findTab(sel.value);
+        if (!dest || dest === tab) return;
+        tab.items = tab.items.filter(function (i) { return i !== item; });
+        dest.items.push(item);
+        ui.collapsed[dest._uid] = false;
+        markDirty(); selectItem(dest._uid, item._uid);
+      });
+      var lbl = el('span'); lbl.style.cssText = 'font-size:0.8rem;color:var(--color-text-soft);align-self:center;';
+      lbl.textContent = 'Move to tab:';
+      bar.appendChild(lbl);
+      moveWrap.appendChild(sel);
+      bar.appendChild(moveWrap);
+    }
+
+    bar.appendChild(el('span', 'spacer'));
+    var up = el('button', 'btn small', '↑ Up');
+    up.addEventListener('click', function () { if (moveInArray(tab.items, item, -1)) { markDirty(); renderSidebar(); } });
+    var down = el('button', 'btn small', '↓ Down');
+    down.addEventListener('click', function () { if (moveInArray(tab.items, item, 1)) { markDirty(); renderSidebar(); } });
+    var del = el('button', 'btn small danger', 'Delete');
+    del.addEventListener('click', function () { deleteItem(tab, item); });
+    bar.appendChild(up); bar.appendChild(down); bar.appendChild(del);
+    return bar;
+  }
+
+  function buildTabEditor(tab) {
+    var wrap = el('div');
+
+    var card = el('div', 'editor-card');
+    card.appendChild(el('div', 'editor-kicker', 'Tab settings'));
+
+    var row = el('div', 'field-row');
+
+    var lf = el('div', 'field');
+    lf.appendChild(fieldLabel('Tab label', 'Text shown on the tab button'));
+    var lInput = el('input'); lInput.type = 'text'; lInput.value = tab.label || '';
+    lInput.addEventListener('input', function () {
+      tab.label = lInput.value;
+      var n = document.querySelector('.cat-head.selected .cat-name');
+      if (n) n.textContent = tab.label || '(untitled tab)';
+      markDirty();
+    });
+    lf.appendChild(lInput);
+    row.appendChild(lf);
+
+    var idf = el('div', 'field');
+    idf.appendChild(fieldLabel('Tab id', 'Internal id (lowercase, no spaces)'));
+    var idInput = el('input'); idInput.type = 'text'; idInput.value = tab.id || '';
+    idInput.addEventListener('input', function () { tab.id = slugify(idInput.value); markDirty(); });
+    idInput.addEventListener('blur', function () { idInput.value = tab.id; });
+    idf.appendChild(idInput);
+    row.appendChild(idf);
+    card.appendChild(row);
+
+    var newF = el('div', 'field');
+    var cb = el('label', 'checkbox-field');
+    var cbInput = el('input'); cbInput.type = 'checkbox'; cbInput.checked = !!tab['new'];
+    cbInput.addEventListener('change', function () {
+      tab['new'] = cbInput.checked; markDirty(); renderSidebar();
+    });
+    cb.appendChild(cbInput);
+    cb.appendChild(document.createTextNode(' Show a "NEW" badge on this tab'));
+    newF.appendChild(cb);
+    card.appendChild(newF);
+
+    var rf = el('div', 'field');
+    rf.appendChild(fieldLabel('Last reviewed', 'e.g. April 2026 — appears in small print at the bottom'));
+    var rInput = el('input'); rInput.type = 'text'; rInput.value = tab.lastReviewed || '';
+    rInput.placeholder = 'April 2026';
+    rInput.addEventListener('input', function () { tab.lastReviewed = rInput.value; markDirty(); });
+    rf.appendChild(rInput);
+    card.appendChild(rf);
+    wrap.appendChild(card);
+
+    // Intro
+    var introCard = el('div', 'editor-card');
+    introCard.appendChild(el('div', 'editor-kicker', 'Intro box (optional)'));
+    var introHint = el('div', 'field');
+    introHint.appendChild(fieldLabel('Intro content', 'The highlighted box shown above the questions'));
+    var introRt = makeRichEditor(tab.intro || '', 'tab-intro', function (html) { tab.intro = html; markDirty(); });
+    introHint.appendChild(introRt.root);
+    introHint.appendChild(introRt.previewWrap);
+    introCard.appendChild(introHint);
+    wrap.appendChild(introCard);
+
+    // Stepper
+    var stepCard = el('div', 'editor-card');
+    stepCard.appendChild(el('div', 'editor-kicker', 'Step strip (optional)'));
+    stepCard.appendChild(buildStepperEditor(tab));
+    wrap.appendChild(stepCard);
+
+    // Footer
+    var footCard = el('div', 'editor-card');
+    footCard.appendChild(el('div', 'editor-kicker', 'Footer links (optional)'));
+    var footHint = el('div', 'field');
+    footHint.appendChild(fieldLabel('Footer content', 'The "Related:" line of links under the questions'));
+    var footRt = makeRichEditor(tab.footer || '', 'panel-footer', function (html) { tab.footer = html; markDirty(); });
+    footHint.appendChild(footRt.root);
+    footHint.appendChild(footRt.previewWrap);
+    footCard.appendChild(footHint);
+    wrap.appendChild(footCard);
+
+    // Tab actions
+    var actCard = el('div', 'editor-card');
+    var bar = el('div', 'editor-actions');
+    var add = el('button', 'btn', '+ Add question');
+    add.addEventListener('click', function () { addQuestion(tab); });
+    bar.appendChild(add);
+    bar.appendChild(el('span', 'spacer'));
+    var up = el('button', 'btn small', '↑ Move tab up');
+    up.addEventListener('click', function () { if (moveInArray(state.tabs, tab, -1)) { markDirty(); renderSidebar(); } });
+    var down = el('button', 'btn small', '↓ Move tab down');
+    down.addEventListener('click', function () { if (moveInArray(state.tabs, tab, 1)) { markDirty(); renderSidebar(); } });
+    var del = el('button', 'btn small danger', 'Delete tab');
+    del.addEventListener('click', function () { deleteTab(tab); });
+    bar.appendChild(up); bar.appendChild(down); bar.appendChild(del);
+    actCard.appendChild(bar);
+    wrap.appendChild(actCard);
+
+    return wrap;
+  }
+
+  function buildStepperEditor(tab) {
+    var container = el('div', 'field');
+    var rows = el('div', 'stepper-rows');
+
+    function redraw() {
+      rows.innerHTML = '';
+      tab.stepper.forEach(function (step, i) {
+        var r = el('div', 'stepper-row');
+        var lbl = el('input', 'lbl'); lbl.type = 'text'; lbl.placeholder = 'STEP 1'; lbl.value = step.label || '';
+        lbl.addEventListener('input', function () { step.label = lbl.value; markDirty(); });
+        var txt = el('input', 'txt'); txt.type = 'text'; txt.placeholder = 'Short description'; txt.value = step.text || '';
+        txt.addEventListener('input', function () { step.text = txt.value; markDirty(); });
+        var rm = el('button', 'btn small danger rm', '✕'); rm.title = 'Remove step';
+        rm.addEventListener('click', function () { tab.stepper.splice(i, 1); markDirty(); redraw(); });
+        r.appendChild(lbl); r.appendChild(txt); r.appendChild(rm);
+        rows.appendChild(r);
+      });
+      if (tab.stepper.length === 0) {
+        rows.appendChild(el('div', null, '<span style="font-size:0.82rem;color:var(--color-text-soft);">No steps. Add one to show the numbered strip at the top of the tab.</span>'));
+      }
+    }
+    redraw();
+    container.appendChild(rows);
+    var add = el('button', 'btn small', '+ Add step');
+    add.style.marginTop = '0.6rem';
+    add.addEventListener('click', function () {
+      tab.stepper.push({ label: 'STEP ' + (tab.stepper.length + 1), text: '' });
+      markDirty(); redraw();
+    });
+    container.appendChild(add);
+    return container;
+  }
+
+  // ---- Loading content -----------------------------------------------------
+  function loadData(data, sourceLabel) {
+    state = normalise(data);
+    ui.selection = null;
+    loadedFrom = sourceLabel || 'import';
+    // collapse nothing by default; keep collapsed map only for known tabs
+    var valid = {};
+    state.tabs.forEach(function (t) { if (ui.collapsed[t._uid]) valid[t._uid] = true; });
+    ui.collapsed = valid;
+    updateSubtitle();
+    saveDraft();
+    renderSidebar();
+    renderEditor();
+  }
+
+  function updateSubtitle() {
+    var sub = $('appSubtitle');
+    var n = state.tabs.length;
+    if (n === 0) { sub.innerHTML = 'Load your FAQ or add a tab to begin. Export produces <strong>FAQ.json</strong> for GitHub.'; return; }
+    sub.innerHTML = 'Editing ' + n + ' tab' + (n === 1 ? '' : 's') +
+      ' · source: <strong>' + escapeAttr(loadedFrom) + '</strong> · changes autosave in this browser until you export.';
+  }
+
+  function loadFromSite() {
+    if (state.tabs.length > 0 && !confirm('Replace your current working draft with the published FAQ.json from your site?\n\nAnything not yet exported will be lost.')) return;
+    setPill('loading');
+    toast('Loading your published FAQ…');
+    fetch(LIVE_JSON_URL, { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (data) { loadData(data, 'live site'); toast('Loaded published FAQ from your site.'); })
+      .catch(function (e) {
+        setPill('saved');
+        toast('Could not load from the site (' + e.message + '). Try Import file instead.', true);
+      });
+  }
+
+  function importFromFile(file) {
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var data = JSON.parse(e.target.result);
+        if (!data || !Array.isArray(data.tabs)) throw new Error('No "tabs" array found — is this a FAQ.json?');
+        if (state.tabs.length > 0 && !confirm('Replace your current working draft with "' + file.name + '"?')) return;
+        loadData(data, file.name);
+        toast('Imported ' + file.name + '.');
+      } catch (err) {
+        toast('Import failed: ' + err.message, true);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function resetDraft() {
+    if (!confirm('Discard your working draft and clear it from this browser?\n\nThis cannot be undone.')) return;
+    localStorage.removeItem(DRAFT_KEY);
+    state = { tabs: [] }; ui.selection = null; ui.collapsed = {};
+    updateSubtitle(); renderSidebar(); renderEditor();
+    toast('Working draft cleared.');
+    setPill('saved');
+  }
+
+  // ---- Wiring --------------------------------------------------------------
+  function init() {
+    $('exportBtn').addEventListener('click', exportJson);
+    $('loadLiveBtn').addEventListener('click', loadFromSite);
+    $('importBtn').addEventListener('click', function () { $('importFile').click(); });
+    $('importFile').addEventListener('change', function (e) {
+      var f = e.target.files[0]; if (f) importFromFile(f); e.target.value = '';
+    });
+    $('addTabBtn').addEventListener('click', addTab);
+    $('resetDraftBtn').addEventListener('click', resetDraft);
+    $('expandAllBtn').addEventListener('click', function () {
+      state.tabs.forEach(function (t) { delete ui.collapsed[t._uid]; }); saveDraft(); renderSidebar();
+    });
+    $('collapseAllBtn').addEventListener('click', function () {
+      state.tabs.forEach(function (t) { ui.collapsed[t._uid] = true; }); saveDraft(); renderSidebar();
+    });
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); exportJson(); }
+    });
+
+    // Restore UI prefs
+    try {
+      var savedUi = JSON.parse(localStorage.getItem(UI_KEY) || '{}');
+      if (savedUi.collapsed) ui.collapsed = savedUi.collapsed;
+    } catch (e) {}
+
+    // Restore draft if present; otherwise try the live site.
+    var draft = null;
+    try { draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch (e) {}
+    if (draft && Array.isArray(draft.tabs) && draft.tabs.length) {
+      state = draft;
+      // ensure uids exist (older drafts)
+      state.tabs.forEach(function (t) {
+        if (!t._uid) t._uid = uid('tab');
+        (t.items || []).forEach(function (i) { if (!i._uid) i._uid = uid('it'); });
+        if (!Array.isArray(t.stepper)) t.stepper = [];
+        if (!Array.isArray(t.items)) t.items = [];
+      });
+      loadedFrom = 'saved draft';
+      updateSubtitle(); setPill('saved'); renderSidebar(); renderEditor();
+    } else {
+      updateSubtitle(); renderSidebar(); renderEditor();
+      setPill('loading');
+      fetch(LIVE_JSON_URL, { cache: 'no-store' })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (data) { loadData(data, 'live site'); toast('Loaded your published FAQ to start from.'); })
+        .catch(function () {
+          setPill('saved');
+          toast('Tip: use "Load from site" or "Import file" to bring in your FAQ.', false);
+        });
+    }
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+
+</script>
+</body>
+</html>
