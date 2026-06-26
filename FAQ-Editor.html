@@ -392,7 +392,7 @@ a[data-var-href] { box-shadow: inset 0 -2px 0 #bcd6f3; }
 .sug-context { font-size: 0.76rem; color: var(--color-text-soft); margin: 0.3rem 0; font-style: italic; line-height: 1.4; }
 .sug-context mark { background: #fff2b8; padding: 0 2px; }
 .sug-fields { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.3rem; }
-.sug-fields input { padding: 0.4rem 0.5rem; border: 1px solid var(--color-border-strong); border-radius: 6px; font-size: 0.82rem; font-family: inherit; }
+.sug-fields input, .sug-fields select { padding: 0.4rem 0.5rem; border: 1px solid var(--color-border-strong); border-radius: 6px; font-size: 0.82rem; font-family: inherit; background: #fff; }
 .sug-fields .sf-q { flex: 1; min-width: 220px; }
 .sug-fields .sf-owner { width: 170px; }
 
@@ -776,8 +776,7 @@ a[data-var-href] { box-shadow: inset 0 -2px 0 #bcd6f3; }
         <div class="fm-row">
           <div class="fm-field">
             <label>Owning department</label>
-            <input type="text" id="vfOwner" list="ownerList" placeholder="e.g. Animal Management">
-            <datalist id="ownerList"></datalist>
+            <select id="vfOwner"></select>
           </div>
           <div class="fm-field">
             <label>Internal id <span class="hint">— auto</span></label>
@@ -1306,10 +1305,16 @@ a[data-var-href] { box-shadow: inset 0 -2px 0 #bcd6f3; }
   }
 
   // ---- variable picker / form / link modals --------------------------------
-  function refreshOwnerDatalist() {
-    var dl = $('ownerList'); dl.innerHTML = '';
-    knownOwners().forEach(function (o) { var op = el('option'); op.value = o; dl.appendChild(op); });
+  // Controlled list of owning departments used by the scanner and the variable form.
+  var DEPARTMENTS = ['Building', 'Planning', 'Local Laws', 'Water', 'Waste', 'Governance', 'Revenue', 'Regulatory'];
+  function fillDeptSelect(sel, current) {
+    sel.innerHTML = '';
+    var blank = el('option'); blank.value = ''; blank.textContent = '— Department —'; sel.appendChild(blank);
+    DEPARTMENTS.forEach(function (d) { var o = el('option'); o.value = d; o.textContent = d; sel.appendChild(o); });
+    if (current && DEPARTMENTS.indexOf(current) < 0) { var o = el('option'); o.value = current; o.textContent = current + ' (custom)'; sel.appendChild(o); }
+    sel.value = current || '';
   }
+  function deptSelect(current, cls) { var sel = el('select', cls || null); fillDeptSelect(sel, current); return sel; }
 
   function openVarPicker(opts) {
     var search = $('vpSearch'); search.value = '';
@@ -1336,8 +1341,7 @@ a[data-var-href] { box-shadow: inset 0 -2px 0 #bcd6f3; }
   }
 
   function openVarForm(existing, onSaved) {
-    refreshOwnerDatalist();
-    $('vfTitle').textContent = existing ? 'Edit variable' : 'New variable';
+    fillDeptSelect($('vfOwner'), existing ? existing.owner : '');
     $('vfQuestion').value = existing ? existing.question : '';
     $('vfValue').value = existing ? existing.value : '';
     $('vfType').value = existing ? (existing.type || 'text') : 'text';
@@ -1532,8 +1536,6 @@ a[data-var-href] { box-shadow: inset 0 -2px 0 #bcd6f3; }
     } else {
       $('scanConvertBtn').style.display = '';
     }
-    refreshOwnerDatalist();
-    var owners = knownOwners();
     suggestions.forEach(function (sug, i) {
       var r = el('div', 'sug-row');
       var pick = el('input', 'sug-pick'); pick.type = 'checkbox'; pick.checked = false; pick.dataset.i = i; r.appendChild(pick);
@@ -1546,7 +1548,7 @@ a[data-var-href] { box-shadow: inset 0 -2px 0 #bcd6f3; }
       if (sug.context) b.appendChild(el('div', 'sug-context', sug.context));
       var fields = el('div', 'sug-fields');
       var q = el('input', 'sf-q'); q.type = 'text'; q.value = defaultQuestionFor(sug.type, sug.value); q.placeholder = 'Internal question'; fields.appendChild(q);
-      var ow = el('input', 'sf-owner'); ow.type = 'text'; ow.setAttribute('list', 'ownerList'); ow.placeholder = 'Owning department'; fields.appendChild(ow);
+      var ow = deptSelect('', 'sf-owner'); fields.appendChild(ow);
       b.appendChild(fields);
       r.appendChild(b);
       sug._q = q; sug._owner = ow; sug._pick = pick;
