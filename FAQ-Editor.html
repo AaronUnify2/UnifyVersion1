@@ -421,6 +421,10 @@ a[data-var-href] { box-shadow: inset 0 -2px 0 #bcd6f3; }
 .pick-item .pi-q { font-size: 0.8rem; color: var(--color-text-soft); }
 .pick-empty { padding: 1rem; text-align: center; color: var(--color-text-soft); font-size: 0.84rem; }
 
+/* Question header inside the answer live-preview */
+.preview-q { padding: 0.1rem 0 0.45rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--color-border); }
+.preview-q:empty { display: none; }
+
 
 /* ===== Scoped FAQ preview styles (mirror of the live page) ===== */
 .faq-preview {
@@ -1175,8 +1179,15 @@ a[data-var-href] { box-shadow: inset 0 -2px 0 #bcd6f3; }
 
     var previewWrap = el('div', 'preview-wrap');
     previewWrap.appendChild(el('div', 'preview-label', 'Live preview (how it looks on the page)'));
-    var previewBody = el('div', 'preview-body'); var preview = el('div', 'faq-preview'); var previewInner = el('div', previewWrapClass || 'faq-a-inner');
+    var previewBody = el('div', 'preview-body'); var preview = el('div', 'faq-preview');
+    var previewHeader = el('div', 'preview-q'); preview.appendChild(previewHeader);
+    var previewInner = el('div', previewWrapClass || 'faq-a-inner');
     preview.appendChild(previewInner); previewBody.appendChild(preview); previewWrap.appendChild(previewBody);
+    function setPreviewHeader(html) {
+      if (html && stripTags(html)) { previewHeader.innerHTML = '<div class="faq-q-text">' + html + '</div>'; previewHeader.style.display = 'block'; }
+      else { previewHeader.innerHTML = ''; previewHeader.style.display = 'none'; }
+    }
+    setPreviewHeader('');
 
     function rawHtml() { return root.classList.contains('show-source') ? source.value : area.innerHTML; }
     function updatePreview() { previewInner.innerHTML = resolveHtml(rawHtml(), false); }
@@ -1187,7 +1198,7 @@ a[data-var-href] { box-shadow: inset 0 -2px 0 #bcd6f3; }
 
     root.appendChild(toolbar); root.appendChild(area); root.appendChild(source);
     updatePreview();
-    return { root: root, previewWrap: previewWrap };
+    return { root: root, previewWrap: previewWrap, setPreviewHeader: setPreviewHeader };
   }
   function currentSelectionText() { var s = window.getSelection(); return s ? s.toString() : ''; }
 
@@ -1211,10 +1222,11 @@ a[data-var-href] { box-shadow: inset 0 -2px 0 #bcd6f3; }
     card.appendChild(el('div', 'editor-kicker', 'Question <span class="in-tab">in ' + escapeAttr(tab.label) + '</span>'));
     var qf = el('div', 'field'); qf.appendChild(fieldLabel('Question', 'Shown as the clickable heading'));
     var qInput = el('input'); qInput.type = 'text'; qInput.value = item.q || ''; qInput.setAttribute('data-focus', 'q');
-    qInput.addEventListener('input', function () { item.q = qInput.value; var r = document.querySelector('.item-row.selected .item-label'); if (r) r.textContent = stripTags(item.q) || '(empty question)'; markDirty(); });
+    qInput.addEventListener('input', function () { item.q = qInput.value; var r = document.querySelector('.item-row.selected .item-label'); if (r) r.textContent = stripTags(item.q) || '(empty question)'; if (rt) rt.setPreviewHeader(item.q); markDirty(); });
     qf.appendChild(qInput); card.appendChild(qf);
     var af = el('div', 'field'); af.appendChild(fieldLabel('Answer', 'Use the toolbar; ＋Var inserts a reusable value'));
     var rt = makeRichEditor(item.a || '', 'faq-a-inner', function (html) { item.a = html; markDirty(); });
+    rt.setPreviewHeader(item.q || '');
     af.appendChild(rt.root); af.appendChild(rt.previewWrap); card.appendChild(af);
     card.appendChild(itemActionBar(tab, item));
     var w = el('div'); w.appendChild(card); return w;
