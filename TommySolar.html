@@ -507,17 +507,8 @@ ladder.rotation.x = -0.38;
 ladder.position.set(0.6, 0, 3.05);
 scene.add(ladder);
 
-/* candle on a stool, for the dark nights */
-const candleG = new THREE.Group();
-const stool = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 0.5, 10), lam(0x8a5a33));
-stool.position.y = 0.25; candleG.add(stool);
-const wax = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.35, 8), lam(0xf4ead2));
-wax.position.y = 0.68; candleG.add(wax);
-const flame = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffb340 }));
-flame.position.y = 0.94; candleG.add(flame);
-candleG.userData.flame = flame;
-candleG.position.set(HOUSE_X - 1.6, 0, 2.6);
-candleG.visible = false; scene.add(candleG);
+/* candlelight glows dimly through the windows on blackout nights */
+const C_CAN_A = new THREE.Color(0x53301a), C_CAN_B = new THREE.Color(0xc9853a);
 
 /* ---------- people ---------- */
 function makeHead(g, skin, y, eyeColor, eyeSize) {
@@ -558,11 +549,6 @@ function makeDad() {
   makeHead(g, 0xf2c9a0, 1.84);
   const hair = new THREE.Mesh(new THREE.SphereGeometry(0.36, 14, 12), lam(0x5d3f26));
   hair.scale.set(1, 0.62, 1); hair.position.set(0, 2.0, -0.04); g.add(hair);
-  /* a proper yellow hard hat for roof work! */
-  const hat = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 10, 0, Math.PI*2, 0, Math.PI/2), lam(0xf2c516));
-  hat.position.set(0, 1.98, 0); g.add(hat);
-  const brimH = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.05, 14), lam(0xf2c516));
-  brimH.position.set(0, 1.99, 0.02); g.add(brimH);
   g.add(blobShadow(0.52));
   return g;
 }
@@ -681,8 +667,8 @@ function makeTractor() {
   dTorso.scale.set(1, 1.2, 0.8); dTorso.position.y = 0.3; driver.add(dTorso);
   const dHead = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 12), lam(0xf2c9a0));
   dHead.position.y = 0.95; driver.add(dHead);
-  const dHat = new THREE.Mesh(new THREE.SphereGeometry(0.27, 12, 8, 0, Math.PI*2, 0, Math.PI/2), lam(0xf2c516));
-  dHat.position.set(0, 1.02, 0); driver.add(dHat);
+  const dHair = new THREE.Mesh(new THREE.SphereGeometry(0.27, 12, 10), lam(0x5d3f26));
+  dHair.scale.set(1, 0.6, 1); dHair.position.set(0, 1.07, -0.03); driver.add(dHair);
   driver.position.set(-0.85, 1.55, 0);
   g.add(driver); g.userData.driver = driver;
   return g;
@@ -709,22 +695,37 @@ for (let i = 0; i < 3; i++) {
 }
 function setStack(n) { stackMeshes.forEach((m, i) => m.visible = i < n); }
 rig.rotation.y = Math.PI;   // nose pointing left, ready to drive in from the right
-rig.visible = false; rig.position.set(26, 0, 4.9);
+rig.visible = false; rig.position.set(26, 0, 5.6);
 let engineOn = false, engineT = 0, wheelSpin = 0;
 function rigDriveIn(cb) {
-  rig.visible = true; rig.position.set(26, 0, 4.9);
+  rig.visible = true; rig.position.set(26, 0, 5.6);
   engineOn = true; wheelSpin = 7; sndRev();
   const x0 = 26;
-  tween(2.6, p => { rig.position.x = x0 - 18.2 * easeOut(p); }, () => {
+  tween(2.6, p => { rig.position.x = x0 - 23 * easeOut(p); }, () => {
     wheelSpin = 0;
     setTimeout(() => { engineOn = false; cb && cb(); }, 500);
   });
 }
-function rigDriveOff() {
-  engineOn = true; wheelSpin = 7; sndRev();
-  const x0 = rig.position.x;
-  tween(2.6, p => { rig.position.x = x0 + (27 - x0) * easeIn(p); }, () => {
-    wheelSpin = 0; engineOn = false; rig.visible = false;
+/* Dad fetches Fergie from the shed and drives her in himself */
+function dadDrivesIn(cb) {
+  const off = new THREE.Vector3(15, 0, 5.4);
+  faceToward(dad, off);
+  walkTo(dad, off, 4.4, () => {
+    dad.visible = false;
+    tractor.userData.driver.visible = true;
+    rigDriveIn(() => {
+      /* Dad hops down */
+      tractor.userData.driver.visible = false;
+      dad.visible = true;
+      dad.position.set(rig.position.x - 1.0, 0, rig.position.z + 1.1);
+      sndBoing(1);
+      const home = new THREE.Vector3(-4.8, 0, 4.4);
+      faceToward(dad, home);
+      walkTo(dad, home, 3.2, () => {
+        faceToward(dad, new THREE.Vector3(HOUSE_X, 0, 1.5));
+        cb && cb();
+      });
+    });
   });
 }
 
@@ -736,10 +737,10 @@ const teddy = makeTeddy(); scene.add(teddy); teddy.visible = false;
 const hens = [];
 for (let i = 0; i < 3; i++) { const h = makeHen(); h.visible = false; scene.add(h); hens.push(h); }
 const duck = makeDuck(); duck.visible = false; scene.add(duck);
-const HEN_SPOTS = [[5.6, 4.2], [6.6, 5.4], [4.8, 5.8]];
+const HEN_SPOTS = [[-6.8, 4.3], [-5.9, 5.5], [-7.9, 5.2]];
 function hensOut() {
   hens.forEach((h, i) => { h.visible = true; h.position.set(HEN_SPOTS[i][0], 0, HEN_SPOTS[i][1]); h.rotation.y = Math.random()*6; });
-  duck.visible = true; duck.position.set(7.4, 0, 4.6); duck.rotation.y = -1.2;
+  duck.visible = true; duck.position.set(-9.2, 0, 4.4); duck.rotation.y = 1.2;
 }
 function hensRoost() { hens.forEach(h => h.visible = false); duck.visible = false; }
 
@@ -1026,7 +1027,7 @@ let charge = 0;
 let dayNum = 1;
 let phaseEmoji = '☀️';
 let phaseRun = null;            // the day/night timelapse machine
-let candleOn = false, theEnd = false, storyOn = false;
+let candleOn = false, theEnd = false, storyOn = false, tommyMet = false;
 let windowsLit = false;
 
 function setWindows(mode) {   // 'day' | 'lit' | 'dark'
@@ -1050,7 +1051,7 @@ function runDay(gain, opts) {
   phaseEmoji = '☀️';
   sunBall.visible = true; moon.visible = false;
   setWindows('day');
-  candleG.visible = false; candleOn = false;
+  candleOn = false;
   phaseRun = {
     kind: 'day', t: 0, dur: opts.dur || 9,
     gain, fullFired: false, onFull: opts.onFull,
@@ -1063,6 +1064,9 @@ function runNight(opts) {
   hideBtn(); clearTapTarget();
   phaseEmoji = '🌙';
   hensRoost();
+  /* everyone heads inside for the evening — and Fergie goes back to the shed */
+  mum.visible = false; dad.visible = false; tommy.visible = false;
+  rig.visible = false; engineOn = false; wheelSpin = 0;
   setWindows('lit');
   phaseRun = {
     kind: 'night', t: 0, dur: opts.dur || 11,
@@ -1079,9 +1083,7 @@ function doBlackout() {
   shakeT = 0.15;
 }
 function lightCandle() {
-  candleG.visible = true; candleOn = true;
-  houseLight.intensity = 0.35;
-  houseLight.color.setHex(0xffa040);
+  candleOn = true;   // the windows now flicker with soft candlelight
   sndClick();
 }
 function stepPhase(dt) {
@@ -1159,15 +1161,22 @@ function sunrise(cb) {
     starMat.opacity = startStars * (1 - p);
   }, () => {
     setWindows('day');
-    candleG.visible = false; candleOn = false;
+    candleOn = false;
     hensOut(); cluckChorus(4);
+    /* everyone comes back outside for the new day */
+    dad.visible = true; dad.position.set(-4.8, 0, 4.4);
+    faceToward(dad, new THREE.Vector3(HOUSE_X, 0, 1.5));
+    if (tommyMet) {
+      tommy.visible = true; tommy.position.set(0.2, 0, 6.8);
+      faceToward(tommy, new THREE.Vector3(HOUSE_X, 0, 1.5));
+    }
     if (cb) cb();
   });
 }
 
 /* ---------- reset ---------- */
 function resetStory() {
-  dayNum = 1; CAP = 4; charge = 0; theEnd = false; storyOn = false;
+  dayNum = 1; CAP = 4; charge = 0; theEnd = false; storyOn = false; tommyMet = false;
   phaseRun = null; phaseEmoji = '☀️';
   clearPanels(); clearTapTarget(); hidePull(); hideTray();
   drag = null; ghost.style.display = 'none';
@@ -1176,13 +1185,14 @@ function resetStory() {
     c.visible = false; c.position.set(18, 0, 4); c.rotation.set(0, 0, 0); c.userData.party = false;
   });
   hensRoost();
-  rig.visible = false; rig.position.set(26, 0, 4.9);
+  rig.visible = false; rig.position.set(26, 0, 5.6);
+  tractor.userData.driver.visible = true;
   engineOn = false; wheelSpin = 0; setStack(3);
   scene.attach(battSmall); scene.attach(battBig);   // they may have hitched a ride on the rig
   battSmall.visible = true; battSmall.position.set(PAD.x, 0.22, PAD.z); battSmall.rotation.set(0,0,0);
   battBig.visible = false; battBig.position.set(PAD.x, 0.22, PAD.z); battBig.rotation.set(0,0,0);
   activeBatt = battSmall;
-  setWindows('day'); candleG.visible = false; candleOn = false;
+  setWindows('day'); candleOn = false;
   sunBall.visible = true; sunBall.position.set(16, 12, -28);
   moon.visible = false; starMat.opacity = 0;
   setSky(C_DAY, C_DAY, 0, 0.95, 0.85);
@@ -1202,7 +1212,7 @@ function startStory() {
   say([
     { who: '📖', text: 'Our farm is way out bush — past the last power pole in the whole wide district.' },
     { who: '📖', text: 'So we make ALL our own electricity… from the sunshine!' },
-    { who: '👨‍🌾', text: '“Today,” said Dad, putting on his yellow hard hat, “I am putting solar panels on our roof!”', snd: sndClick },
+    { who: '👨‍🌾', text: '“Today,” said Dad, “I am putting solar panels on our roof!”', snd: sndClick },
   ], () => {
     hideNarr();
     badge.style.display = 'block';
@@ -1270,9 +1280,7 @@ function day1() {
   });
 }
 function night1() {
-  mum.visible = true; mum.position.set(HOUSE_X - 1.1, 0, 3.0); faceToward(mum, new THREE.Vector3(0, 0, 10));
-  tommy.visible = true; tommy.position.set(HOUSE_X + 1.0, 0, 3.4); faceToward(tommy, new THREE.Vector3(0, 0, 10));
-  showNarr('💡', 'On came the lights, warm and cosy! Mum cooked dinner, and Tommy splashed in his bath…');
+  showNarr('💡', 'On came the lights, warm and cosy! Mum cooked dinner, and Tommy splashed in his warm shower…');
   runNight({
     onBlackout: () => {
       showNarr('👦', '“Oh NO!” cried Tommy, in the pitch-black dark. “The power has run out!”');
@@ -1296,10 +1304,11 @@ function morning2() {
     ], () => {
       hideNarr();
       setStack(3);
-      rigDriveIn(() => {
+      dadDrivesIn(() => {
+        tommyMet = true;
         tommy.visible = true;
-        const spot = new THREE.Vector3(3.2, 0, 5.6);
-        tommy.position.set(12, 0, 6.2);
+        const spot = new THREE.Vector3(0.2, 0, 6.8);
+        tommy.position.set(12, 0, 7.2);
         faceToward(tommy, spot);
         walkTo(tommy, spot, 2.6, () => {
           faceToward(tommy, new THREE.Vector3(HOUSE_X, 0, 1.5));
@@ -1309,7 +1318,6 @@ function morning2() {
           trayLabel.textContent = 'Drag a panel to the roof! 👆';
           showTray(3, () => {
             camHome = Object.assign({}, CAM_YARD);
-            rigDriveOff();
             sndQuack();
             say([
               { who: '👦', text: '“I helped! I helped!” said Tommy proudly — and even the little duck quacked hooray.' },
@@ -1324,7 +1332,6 @@ function morning2() {
   });
 }
 function day2() {
-  mum.visible = false;
   showNarr('☀️', 'Up came the sun — and now FIVE shiny panels drank in the sunshine, gulp gulp gulp…');
   runDay(5, {
     onFull: () => showNarr('🔋', 'FULL! The battery was full right up to the very top — hip hip hooray!'),
@@ -1339,9 +1346,7 @@ function day2() {
   });
 }
 function night2() {
-  mum.visible = true; mum.position.set(HOUSE_X - 1.1, 0, 3.0); faceToward(mum, new THREE.Vector3(0, 0, 10));
-  tommy.position.set(HOUSE_X + 1.0, 0, 3.4); faceToward(tommy, new THREE.Vector3(0, 0, 10));
-  showNarr('💡', 'The lights glowed all through dinner… and bath time… and story time…');
+  showNarr('💡', 'The lights glowed all through dinner… and shower time… and story time…');
   runNight({
     events: [
       { t: 0.55, who: '📖', text: 'Everyone snuggled into bed while the battery hummed quietly on…' },
@@ -1370,7 +1375,7 @@ function morning3() {
       rig.add(battBig);
       battBig.position.set(-3.1, 0.74, 0);
       battBig.rotation.y = Math.PI / 2;
-      rigDriveIn(() => {
+      dadDrivesIn(() => {
         showNarr('📖', 'It was far too heavy to lift! Dad and Tommy pushed with all their might…');
         showPull('Slide to PUSH the BIG battery! ➜', swapBatteries);
       });
@@ -1412,7 +1417,6 @@ function swapBatteries() {
       trayLabel.textContent = 'Drag a panel to the roof! 👆';
       showTray(3, () => {
         camHome = Object.assign({}, CAM_YARD);
-        rigDriveOff();
         say([
           { who: '📖', text: 'And now the whole roof glittered with EIGHT shiny panels — a proper solar farm of our very own!' },
         ], () => {
@@ -1424,7 +1428,6 @@ function swapBatteries() {
   });
 }
 function day3() {
-  mum.visible = false;
   showNarr('☀️', 'Up sailed the sun — and eight thirsty panels drank and drank and DRANK…');
   runDay(8, {
     dur: 10,
@@ -1440,20 +1443,20 @@ function day3() {
   });
 }
 function night3() {
-  mum.visible = true; mum.position.set(HOUSE_X - 1.1, 0, 3.0); faceToward(mum, new THREE.Vector3(0, 0, 10));
-  tommy.position.set(HOUSE_X + 1.0, 0, 3.4); faceToward(tommy, new THREE.Vector3(0, 0, 10));
   showNarr('💡', 'On came the lights, bright and warm!');
   runNight({
     dur: 13,
     events: [
       { t: 0.22, who: '📖', text: 'The lights stayed on for dinner…' },
-      { t: 0.42, who: '📖', text: '…and for Tommy’s bubbly bath…' },
+      { t: 0.42, who: '📖', text: '…and for Tommy’s warm and steamy shower…' },
       { t: 0.6,  who: '📖', text: '…and for a long bedtime story…' },
       { t: 0.8,  who: '📖', text: '…and even while everyone slept, the big battery still had plenty of power. All night long!', snd: sndDing },
     ],
     done: () => {
       sunrise(() => {
         sndDing();
+        mum.visible = true; mum.position.set(-6.4, 0, 4.8);
+        faceToward(mum, new THREE.Vector3(0, 0, 10));
         dad.userData.party = true; dad.userData.pi = 0;
         mum.userData.party = true; mum.userData.pi = 1;
         tommy.userData.party = true; tommy.userData.pi = 2;
@@ -1600,9 +1603,11 @@ function animate() {
   if (teddy.visible && teddy.userData.tail) teddy.userData.tail.position.x = Math.sin(bobT * 9) * 0.06;
   hens.forEach((h, i) => { if (h.visible) h.rotation.x = Math.max(Math.sin(bobT * 2.2 + i * 2.4), 0) * 0.35; });
   if (candleOn) {
-    const fl = candleG.userData.flame;
-    fl.scale.setScalar(0.85 + Math.sin(bobT * 18) * 0.18 + Math.random() * 0.1);
-    houseLight.intensity = 0.3 + Math.sin(bobT * 15) * 0.06;
+    const k = 0.5 + Math.sin(bobT * 13) * 0.28 + Math.random() * 0.12;
+    tmpC.copy(C_CAN_A).lerp(C_CAN_B, Math.min(Math.max(k, 0), 1));
+    winMats.forEach(m => m.color.copy(tmpC));
+    houseLight.color.setHex(0xffa040);
+    houseLight.intensity = 0.22 + k * 0.12;
   }
   /* a gentle hum-glow on the inverter light when the house is powered at night */
   if (windowsLit) invLed.scale.setScalar(1 + Math.sin(bobT * 4) * 0.15);
