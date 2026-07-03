@@ -620,6 +620,17 @@ for (let i = 0; i < 4; i++) {
   scene.add(c);
   cows.push({ g: c, state: 'off', target: null, eatT: 0, wanderT: 0 });
 }
+/* rotational grazing: four lanes, two rows of grass each, worked as a tidy mob */
+const LANE_Z = [4.6, 2.2, -0.2, -2.6];
+let laneLists = [[], [], [], []];
+function buildLanes() {
+  laneLists = [[], [], [], []];
+  tufts.forEach(t => {
+    let bi = 0, bd = 1e9;
+    LANE_Z.forEach((z, i) => { const d = Math.abs(t.z - z); if (d < bd) { bd = d; bi = i; } });
+    laneLists[bi].push(t);
+  });
+}
 
 /* ---------- animation plumbing ---------- */
 const tweens = [];
@@ -976,12 +987,12 @@ function cowsArrive() {
     c.g.scale.setScalar(0.9);
   });
   /* Teddy hears it coming and gives chase, barking his head off */
-  const chase = new THREE.Vector3(9.5, 0, 7.6);
+  const chase = new THREE.Vector3(11.5, 0, 8.2);
   faceToward(teddy, chase);
   walkTo(teddy, chase, 4.2, () => { sndBark(); faceToward(teddy, truck.position); });
   setTimeout(sndBark, 900);
   const x0 = 30;
-  tween(3.2, p => { truck.position.x = x0 - (x0 - 5.8) * easeOut(p); }, () => {
+  tween(3.2, p => { truck.position.x = x0 - (x0 - 2.6) * easeOut(p); }, () => {
     truckEngine = false;
     sndHorn();
     setTimeout(() => {
@@ -1011,8 +1022,8 @@ function unloadCow(i) {
   scene.attach(c.g);
   c.g.scale.setScalar(1);
   const rampEnd = rampWorldEnd(); rampEnd.y = 0;
-  const spotList = [[-1.5, 2.2], [1.5, 0.8], [-4.0, -0.5], [3.2, -1.6]];
-  const grazeSpot = new THREE.Vector3(spotList[i][0], 0, spotList[i][1]);
+  /* each cow walks to her own lane and lines up, side by side */
+  const grazeSpot = new THREE.Vector3(8.4, 0, LANE_Z[i]);
   faceToward(c.g, rampEnd);
   const startP = c.g.position.clone();
   tween(1.0, p => {
@@ -1021,7 +1032,10 @@ function unloadCow(i) {
   }, () => {
     c.g.position.y = 0;
     faceToward(c.g, grazeSpot);
-    walkTo(c.g, grazeSpot, 1.4, () => { c.state = 'idle'; }, { hopH: 0.05 });
+    walkTo(c.g, grazeSpot, 1.4, () => {
+      c.state = 'lineup';
+      faceToward(c.g, new THREE.Vector3(-9, 0, LANE_Z[i]));   // all facing down the paddock, ready
+    }, { hopH: 0.05 });
     setTimeout(() => unloadCow(i + 1), 650);
   });
 }
@@ -1041,8 +1055,11 @@ function truckLeaves() {
 }
 function grazing() {
   say([
-    { who: '🐄', text: 'Daisy, Buttercup, Clover and little Patch mobbed up together and got straight to work. Munch, munch, MUNCH!', snd: sndMoo },
+    { who: '🐄', text: 'Daisy, Buttercup, Clover and little Patch lined up side by side — a proper little mob — and got straight to work. Munch, munch, MUNCH!', snd: sndMoo },
   ], () => {
+    /* the mob moves off together, eating in one tidy line */
+    buildLanes();
+    cows.forEach(c => { if (c.state === 'lineup') c.state = 'idle'; });
     /* the chooks and the duck fall in behind */
     followersOn = true;
     hens.forEach((h, i) => {
@@ -1056,7 +1073,7 @@ function grazing() {
     cluckChorus(5); sndQuack();
     say([
       { who: '🐔', text: 'And along behind came the chooks and the duck, gobbling up all the seeds and beetles the cows left behind. Not a scrap was wasted!', snd: () => cluckChorus(4) },
-      { who: '👨‍🌾', text: 'Dad leaned on the fence and watched them go. “Best mowers I ever bought,” he smiled.', snd: sndMoo },
+      { who: '👨‍🌾', text: 'Dad leaned on the fence and watched them go. “Best mowers I ever bought,” he smiled. “Eating in a tidy line, and moving on all together — that’s just the way a paddock likes it.”', snd: sndMoo },
     ], bigFinish);
   });
 }
@@ -1087,33 +1104,42 @@ function bigFinish() {
   });
 }
 
-/* ---------- cow brains (very small ones) ---------- */
+/* ---------- cow brains (very small, but very orderly) ---------- */
 function stepCows(dt) {
+  /* the mob line: nobody gets too far ahead of the rearmost grazer */
+  let rearX = -1e9;
   cows.forEach(c => {
+    if (c.state === 'idle' || c.state === 'walk' || c.state === 'eat' || c.state === 'wait') {
+      rearX = Math.max(rearX, c.g.position.x);
+    }
+  });
+  cows.forEach((c, ci) => {
     if (c.state === 'idle') {
-      /* find something tasty nearby */
-      let best = null, bd = 1e9;
-      tufts.forEach(t => {
-        if (!t.tall) return;
-        const d = (t.x - c.g.position.x) ** 2 + (t.z - c.g.position.z) ** 2;
-        if (d < bd) { bd = d; best = t; }
-      });
-      if (best) {
-        c.target = best;
-        c.state = 'walk';
-        faceToward(c.g, new THREE.Vector3(best.x, 0, best.z));
-      } else {
-        c.state = 'rest';
+      /* am I ahead of the mob? then wait politely, chewing */
+      if (c.g.position.x < rearX - 2.6) {
+        c.state = 'wait'; c.eatT = 0.7 + Math.random() * 0.5;
+        return;
       }
+      /* next grass in MY lane, always the rightmost — nice tidy stripes */
+      let best = null;
+      laneLists[ci].forEach(t => { if (t.tall && (!best || t.x > best.x)) best = t; });
+      if (!best) { c.state = 'rest'; return; }
+      c.target = best;
+      c.state = 'walk';
+      faceToward(c.g, new THREE.Vector3(best.x, 0, best.z));
+    } else if (c.state === 'wait') {
+      c.g.userData.head.rotation.x = 0.3 + Math.sin(bobT * 5 + ci) * 0.08;   // chewing her cud
+      c.eatT -= dt;
+      if (c.eatT <= 0) { c.g.userData.head.rotation.x = 0; c.state = 'idle'; }
     } else if (c.state === 'walk') {
       const t = c.target;
       if (!t || !t.tall) { c.state = 'idle'; return; }
       const dx = t.x - c.g.position.x, dz = t.z - c.g.position.z;
       const dist = Math.hypot(dx, dz);
       if (dist < 0.55) {
-        c.state = 'eat'; c.eatT = 1.1 + Math.random() * 0.6;
+        c.state = 'eat'; c.eatT = 1.0 + Math.random() * 0.5;
       } else {
-        const sp = 0.85 * dt;
+        const sp = 0.95 * dt;
         c.g.position.x += dx / dist * sp;
         c.g.position.z += dz / dist * sp;
       }
@@ -1130,7 +1156,7 @@ function stepCows(dt) {
         c.state = 'idle';
       }
     } else if (c.state === 'rest') {
-      /* paddock's all eaten — happy swaying and the odd moo */
+      /* her lane's all eaten — happy swaying and the odd moo */
       c.wanderT += dt;
       if (c.wanderT > 6) { c.wanderT = 0; if (Math.random() < 0.5) sndMoo(); }
     }
