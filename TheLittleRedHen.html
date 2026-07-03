@@ -1,0 +1,1492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>The Little Red Hen — A Storybook Game</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; overflow:hidden; touch-action:none; background:#b8e0f2;
+    font-family:"Comic Sans MS","Chalkboard SE","Marker Felt","Trebuchet MS",sans-serif; }
+  #c { position:fixed; inset:0; display:block; }
+
+  /* ---- narration card ---- */
+  #narration {
+    position:fixed; top:max(12px, env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    width:min(92vw,560px); background:#FFF8E4; border:3px solid #7a5230; border-radius:18px;
+    padding:12px 16px; font-family:Georgia,'Times New Roman',serif; font-style:italic;
+    font-size:clamp(16px,4.4vw,21px); color:#46310f; line-height:1.35; text-align:center;
+    box-shadow:0 4px 0 #00000022; opacity:0; transition:opacity .4s; pointer-events:none; z-index:5;
+  }
+  #narration .who { font-style:normal; font-size:1.25em; margin-right:6px; }
+
+  /* ---- badge ---- */
+  #badge {
+    position:fixed; left:10px; bottom:max(14px, env(safe-area-inset-bottom)); z-index:5;
+    background:#ffffffd9; border:3px solid #7a5230; border-radius:14px; padding:6px 12px;
+    font-weight:bold; color:#5d3f15; font-size:clamp(14px,4vw,18px); display:none; letter-spacing:1px;
+  }
+
+  /* ---- fullscreen toggle ---- */
+  #fsBtn {
+    position:fixed; right:10px; bottom:max(14px, env(safe-area-inset-bottom)); z-index:7;
+    width:48px; height:48px; border:3px solid #7a5230; border-radius:14px;
+    background:#ffffffd9; color:#5d3f15; font-size:22px; line-height:1; cursor:pointer;
+    font-family:inherit; box-shadow:0 3px 0 #00000022;
+  }
+  #fsBtn:active { transform:translateY(2px); box-shadow:none; }
+
+  /* ---- big action button ---- */
+  #btn {
+    position:fixed; bottom:max(18px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    min-width:min(70vw,330px); padding:16px 26px; border:none; border-radius:999px;
+    background:linear-gradient(#ffa14f,#ec7016); color:#fff;
+    font-family:inherit; font-size:clamp(18px,5.2vw,24px); font-weight:bold; letter-spacing:.3px;
+    box-shadow:0 6px 0 #a8470a, 0 10px 18px #0003; cursor:pointer; z-index:11;
+    transition:transform .08s, box-shadow .08s, opacity .3s; text-shadow:0 2px 0 #0002;
+  }
+  #btn:active { transform:translateX(-50%) translateY(4px); box-shadow:0 2px 0 #a8470a, 0 5px 10px #0003; }
+  #btn.hidden { opacity:0; pointer-events:none; }
+  #btn.blue { background:linear-gradient(#6fc3ef,#2f7fc4); box-shadow:0 6px 0 #1f5a8e, 0 10px 18px #0003; }
+  #btn.blue:active { box-shadow:0 2px 0 #1f5a8e, 0 5px 10px #0003; }
+  #btn.gold { background:linear-gradient(#ffd25a,#e8a613); box-shadow:0 6px 0 #a8720a, 0 10px 18px #0003; color:#5d3f15; text-shadow:none; }
+  #btn.gold:active { box-shadow:0 2px 0 #a8720a, 0 5px 10px #0003; }
+  #btn.green { background:linear-gradient(#8fd06a,#4a9a3e); box-shadow:0 6px 0 #2f6b28, 0 10px 18px #0003; }
+  #btn.green:active { box-shadow:0 2px 0 #2f6b28, 0 5px 10px #0003; }
+
+  /* ---- tap-the-world hint ---- */
+  #tapHint { position:fixed; left:0; top:0; width:120px; height:120px; margin:-60px 0 0 -60px;
+    pointer-events:none; z-index:6; display:none; }
+  #tapHint .ring { position:absolute; inset:10px; border:5px solid #ffd54f; border-radius:50%;
+    box-shadow:0 0 14px #ffd54fcc, inset 0 0 10px #ffd54f88; animation:pulseRing 1.1s ease-out infinite; }
+  #tapHint .finger { position:absolute; left:50%; top:74%; font-size:40px;
+    animation:bobFinger 0.9s ease-in-out infinite; text-shadow:0 2px 6px #0004; }
+  @keyframes pulseRing { 0%{transform:scale(.7);opacity:1} 100%{transform:scale(1.3);opacity:0} }
+  @keyframes bobFinger { 0%,100%{transform:translate(-50%,0)} 50%{transform:translate(-50%,-12px)} }
+
+  /* ---- slider ---- */
+  #pull { position:fixed; bottom:max(18px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    width:min(86vw,440px); z-index:11; transition:opacity .3s; }
+  #pull.hidden { opacity:0; pointer-events:none; }
+  #pullLabel { text-align:center; color:#fff; font-weight:bold; font-size:clamp(17px,4.8vw,22px);
+    text-shadow:0 2px 0 #0007, 0 0 12px #0005; margin-bottom:8px; }
+  #pullTrack { position:relative; height:66px; background:#00000038; border:3px solid #ffffffd0;
+    border-radius:999px; touch-action:none; overflow:visible; }
+  #pullChevrons { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    gap:20px; color:#ffffffb0; font-size:30px; font-weight:bold; pointer-events:none; }
+  #pullFill { position:absolute; left:0; top:0; bottom:0; width:0; border-radius:999px;
+    background:linear-gradient(90deg,#8fd06a99,#4a9a3eaa); pointer-events:none; }
+  #pullHandle { position:absolute; top:50%; left:3px; width:76px; height:76px; margin-top:-38px;
+    background:radial-gradient(circle at 35% 30%, #d99a4a, #8a5a26 70%); border:4px solid #5d3a15;
+    border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:36px;
+    box-shadow:0 4px 10px #0006; pointer-events:none; }
+
+  /* ---- seed tray (drag & drop) ---- */
+  #tray { position:fixed; bottom:max(16px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    z-index:12; background:#ffffffd9; border:3px solid #7a5230; border-radius:18px;
+    padding:8px 14px 12px; display:none; box-shadow:0 4px 0 #00000022; }
+  #trayLabel { text-align:center; font-weight:bold; color:#5d3f15;
+    font-size:clamp(14px,4vw,17px); margin-bottom:8px; }
+  #trayChips { display:flex; gap:16px; justify-content:center; }
+  .chip, #dragGhost {
+    width:min(15vw,56px); height:min(15vw,56px); border-radius:50%; border:3px solid #8a5f26;
+    background:radial-gradient(circle at 35% 30%, #f2d391, #c99a4f 65%, #a87830);
+    box-shadow:0 4px 0 #8a5f2666, inset 0 2px 4px #ffffff55; cursor:grab; touch-action:none;
+    position:relative;
+  }
+  .chip::after, #dragGhost::after { content:'🌾'; position:absolute; inset:0; display:flex;
+    align-items:center; justify-content:center; font-size:24px; }
+  .chip { animation:chipBob 1.4s ease-in-out infinite; }
+  .chip:nth-child(2) { animation-delay:.2s; } .chip:nth-child(3) { animation-delay:.4s; }
+  @keyframes chipBob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+  @media (prefers-reduced-motion: reduce) { .chip { animation:none; } }
+  .chip.taken { visibility:hidden; }
+  #dragGhost { position:fixed; z-index:30; pointer-events:none; display:none;
+    transform:translate(-50%,-65%) scale(1.15); }
+  #dragGhost.returning { transition:left .32s ease, top .32s ease; }
+
+  /* ---- furrow rings while dragging ---- */
+  .slotRing { position:fixed; width:78px; height:78px; margin:-39px 0 0 -39px; pointer-events:none;
+    border:5px dashed #ffd54f; border-radius:50%; box-shadow:0 0 12px #ffd54fbb; z-index:6;
+    animation:slotPulse 1s ease-in-out infinite; }
+  .slotRing.near { border-color:#8fd06a; border-style:solid; box-shadow:0 0 18px #8fd06add; }
+  @keyframes slotPulse { 0%,100%{opacity:.55} 50%{opacity:1} }
+  @media (prefers-reduced-motion: reduce) { .slotRing { animation:none; } }
+
+  /* ---- title & end screens ---- */
+  .screen {
+    position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; padding:5vw; transition:opacity .7s;
+    background:linear-gradient(#cdeaf7 0%, #f6e7b6 50%, #b9d77f 100%);
+  }
+  .screen.gone { opacity:0; pointer-events:none; }
+  .screen .cast { font-size:clamp(26px,7.5vw,46px); letter-spacing:3px; }
+  .screen h1 {
+    font-family:Georgia,serif; color:#b35a10; font-size:clamp(30px,8.6vw,52px);
+    line-height:1.12; margin:14px 0 6px; text-shadow:0 3px 0 #ffffff88;
+  }
+  .screen p { color:#6b5230; font-size:clamp(15px,4.4vw,19px); margin-bottom:26px; font-family:Georgia,serif; font-style:italic; }
+  .screen button {
+    padding:16px 34px; border:none; border-radius:999px; font-family:inherit; font-weight:bold;
+    font-size:clamp(19px,5.4vw,24px); color:#fff; cursor:pointer;
+    background:linear-gradient(#ffa14f,#ec7016); box-shadow:0 6px 0 #a8470a, 0 10px 18px #0003;
+  }
+  .screen button:active { transform:translateY(4px); box-shadow:0 2px 0 #a8470a; }
+  #endScreen { background:linear-gradient(#f6d7a0 0%, #f2b56a 55%, #b9d77f 100%); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="narration"><span class="who"></span><span class="txt"></span></div>
+<div id="badge"></div>
+<button id="fsBtn" title="Fullscreen">⛶</button>
+<button id="btn" class="hidden"></button>
+
+<div id="pull" class="hidden">
+  <div id="pullLabel">Slide! ➜</div>
+  <div id="pullTrack">
+    <div id="pullFill"></div>
+    <div id="pullChevrons">›&nbsp;›&nbsp;›</div>
+    <div id="pullHandle">🚜</div>
+  </div>
+</div>
+<div id="tapHint"><div class="ring"></div><div class="finger">👆</div></div>
+
+<div id="tray">
+  <div id="trayLabel">Drag a seed into a furrow! 👆</div>
+  <div id="trayChips"></div>
+</div>
+<div id="dragGhost"></div>
+
+<div id="titleScreen" class="screen">
+  <div class="cast">🐔🌾👦🐱🐱🦆🚜🍞</div>
+  <h1>The Little Red Hen</h1>
+  <p>The old, old tale — retold on our very own farm</p>
+  <button id="beginBtn">📖 Begin the story</button>
+</div>
+
+<div id="endScreen" class="screen gone">
+  <div class="cast">🍞 🐔 👦</div>
+  <h1>The End</h1>
+  <p>…and the warm bread went to those who helped —<br>the Little Red Hen, and Tommy, the best little<br>helper on the whole farm. (And everyone else<br>promised to help next time!)</p>
+  <button id="againBtn">↺ Read it again</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =========================================================
+   THE LITTLE RED HEN — retold on our very own farm
+   Starring: Henny the little red hen, Tommy the best little
+   helper, Ringo & Rose the lazy cats, the runner duck,
+   sleepy Teddy, and Fergie the grey-and-gold tractor.
+   ========================================================= */
+
+/* ---------- tiny sound kit ---------- */
+let AC = null;
+function audio() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(freq, dur, type, vol, slideTo) {
+  const ac = audio(); if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type || 'sine'; o.frequency.setValueAtTime(freq, ac.currentTime);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, ac.currentTime + dur);
+  g.gain.setValueAtTime(vol || 0.18, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur + 0.001);
+  o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + dur + 0.05);
+}
+function noise(dur, vol, freq) {
+  const ac = audio(); if (!ac) return;
+  const len = Math.floor(ac.sampleRate * dur);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq || 700; f.Q.value = 0.6;
+  const g = ac.createGain(); g.gain.value = vol || 0.25;
+  src.connect(f).connect(g).connect(ac.destination); src.start();
+}
+const sndThud   = () => tone(150, 0.18, 'sine', 0.3, 60);
+const sndClick  = () => tone(1200, 0.07, 'square', 0.1);
+const sndDing   = () => { tone(660,0.3,'triangle',0.12); setTimeout(()=>tone(880,0.4,'triangle',0.12),140); };
+const sndBoing  = (n) => tone(180 + n*60, 0.3, 'sine', 0.22, 460 + n*120);
+const sndBark   = () => { tone(260, 0.09, 'square', 0.2, 170); setTimeout(()=>tone(260,0.09,'square',0.2,170),160); };
+const sndQuack  = () => { tone(330, 0.16, 'sawtooth', 0.18, 200); setTimeout(()=>tone(310,0.16,'sawtooth',0.16,190),220); };
+const sndPutt   = () => tone(58 + Math.random()*10, 0.09, 'square', 0.13);
+const sndRev    = () => { tone(55, 0.9, 'sawtooth', 0.2, 140); noise(0.8, 0.18, 160); };
+const sndGiggle = () => { tone(700,0.1,'sine',0.14,900); setTimeout(()=>tone(800,0.1,'sine',0.14,1000),130); setTimeout(()=>tone(900,0.12,'sine',0.14,1150),260); };
+const sndMeow   = () => tone(700, 0.5, 'sine', 0.13, 320);
+const sndMeow2  = () => tone(620, 0.45, 'sine', 0.12, 280);
+const sndCluck  = () => tone(560 + Math.random()*200, 0.08, 'square', 0.12, 320);
+const sndWater  = () => { noise(0.35, 0.14, 2200); tone(900, 0.2, 'sine', 0.05, 1400); };
+const sndGrind  = () => { noise(0.4, 0.2, 420); tone(140, 0.35, 'sawtooth', 0.08, 100); };
+const sndPop    = () => tone(320, 0.12, 'sine', 0.2, 640);
+const sndSnore  = () => tone(120, 0.6, 'sine', 0.08, 90);
+const sndSniff  = () => { noise(0.12, 0.1, 1600); setTimeout(()=>noise(0.12,0.1,1600),220); };
+function cluckChorus(n) {
+  for (let k = 0; k < (n || 6); k++) {
+    setTimeout(() => tone(520 + Math.random()*300, 0.07, 'square', 0.11, 300), k * 130 + Math.random()*60);
+  }
+}
+function sndOvenDing() { tone(880, 0.5, 'triangle', 0.15); setTimeout(()=>tone(1100,0.7,'triangle',0.13),220); }
+
+/* ---------- three.js scene ---------- */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xb8e0f2);
+scene.fog = new THREE.Fog(0xb8e0f2, 42, 115);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 300);
+/* pull the camera back just far enough that the whole yard fits the screen */
+let camExtra = 0;
+function sizeIt() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+  const need = 10.5 / (Math.tan(25 * Math.PI / 180) * camera.aspect);
+  camExtra = Math.min(Math.max(need + 3.6 - 12.6, 0), 24);
+}
+window.addEventListener('resize', sizeIt); sizeIt();
+
+const hemi = new THREE.HemisphereLight(0xfff7df, 0x8aa362, 0.95); scene.add(hemi);
+const sunL = new THREE.DirectionalLight(0xfff2cf, 0.85); sunL.position.set(5, 12, 8); scene.add(sunL);
+
+function lam(color) { return new THREE.MeshLambertMaterial({ color }); }
+
+/* ---------- paddock ---------- */
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(180, 100), lam(0xa9c96a));
+ground.rotation.x = -Math.PI / 2; scene.add(ground);
+
+function gum(x, z, s) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 2.4, 8), lam(0xcfc4ae));
+  trunk.position.y = 1.2; g.add(trunk);
+  [[0,3.0,0],[-0.7,2.5,0.2],[0.7,2.6,-0.2]].forEach(p => {
+    const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.85, 12, 10), lam(0x6e8f5e));
+    leaf.position.set(p[0], p[1], p[2]); g.add(leaf);
+  });
+  g.position.set(x, 0, z); g.scale.setScalar(s || 1); scene.add(g);
+  return g;
+}
+[[-19,-11,1.3],[-15,-15,1.0],[17,-10,1.3],[22,-13,1.1],[8,-16,0.9],[13,-14,1.0]].forEach(t => gum(t[0], t[1], t[2]));
+const shadeTree = gum(-9.5, -2.5, 1.5);   // the cats' favourite napping tree
+
+/* fence along the back */
+for (let i = 0; i < 13; i++) {
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 1.1, 6), lam(0x9a6a3a));
+  post.position.set(-16 + i * 3.2, 0.55, -18); scene.add(post);
+}
+const railTop = new THREE.Mesh(new THREE.BoxGeometry(42, 0.12, 0.12), lam(0x9a6a3a));
+railTop.position.set(2, 0.95, -18); scene.add(railTop);
+const railBot = railTop.clone(); railBot.position.y = 0.55; scene.add(railBot);
+
+/* the shed */
+const shed = new THREE.Group();
+const shedBody = new THREE.Mesh(new THREE.BoxGeometry(4.5, 2.4, 3.4), lam(0x9aa0a6)); shedBody.position.y = 1.2; shed.add(shedBody);
+const shedRoof = new THREE.Mesh(new THREE.BoxGeometry(4.9, 0.18, 3.8), lam(0x6e747c)); shedRoof.position.y = 2.5; shedRoof.rotation.z = 0.08; shed.add(shedRoof);
+shed.position.set(11.5, 0, -9); scene.add(shed);
+
+/* the farmhouse (day-time version, windows and all) */
+const HOUSE_X = -3.4;
+const house = new THREE.Group(); scene.add(house);
+const body = new THREE.Mesh(new THREE.BoxGeometry(6.0, 2.9, 4.0), lam(0xe8e2d2));
+body.position.set(HOUSE_X, 1.45, -4.4); house.add(body);
+const roofSlab = new THREE.Mesh(new THREE.BoxGeometry(6.8, 0.18, 4.8), lam(0x8a3d33));
+roofSlab.rotation.x = 0.26; roofSlab.position.set(HOUSE_X, 3.55, -4.4); house.add(roofSlab);
+function houseWindow(x, y, z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.85, 0.07), new THREE.MeshBasicMaterial({ color: 0xbfe6ff }));
+  m.position.set(x, y, z); house.add(m);
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.0, 0.05), lam(0x8a6a44));
+  frame.position.set(x, y, z - 0.02); house.add(frame);
+}
+houseWindow(HOUSE_X - 1.8, 1.7, -2.35);
+houseWindow(HOUSE_X + 1.8, 1.7, -2.35);
+const door = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.9, 0.09), lam(0x6f4a26));
+door.position.set(HOUSE_X, 0.95, -2.35); house.add(door);
+
+/* clouds */
+const clouds = [];
+const cloudMat = lam(0xffffff);
+for (let i = 0; i < 6; i++) {
+  const c = new THREE.Group();
+  for (let j = 0; j < 3; j++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(1.1 + Math.random(), 12, 10), cloudMat);
+    p.position.set(j * 1.4 - 1.4, Math.random()*0.4, 0); c.add(p);
+  }
+  c.position.set(-28 + i * 12, 12 + Math.random()*4, -24 - Math.random()*6);
+  scene.add(c); clouds.push(c);
+}
+const sunBall = new THREE.Mesh(new THREE.SphereGeometry(2.2, 16, 14),
+  new THREE.MeshBasicMaterial({ color: 0xffe27a }));
+sunBall.position.set(14, 12, -28); scene.add(sunBall);
+
+/* flowers */
+const flowerCols = [0xff8fb1, 0xffd54f, 0xffffff, 0xb39ddb];
+for (let i = 0; i < 16; i++) {
+  const f = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), lam(flowerCols[i % 4]));
+  f.position.set(-14 + Math.random()*10, 0.12, 1.5 + Math.random()*6);
+  scene.add(f);
+}
+
+function blobShadow(r) {
+  const m = new THREE.Mesh(new THREE.CircleGeometry(r, 20),
+    new THREE.MeshBasicMaterial({ color: 0x4a5e23, transparent: true, opacity: 0.26 }));
+  m.rotation.x = -Math.PI / 2; m.position.y = 0.02; return m;
+}
+
+/* ---------- the wheat patch ---------- */
+const patch = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.16, 2.6), lam(0x8a6136));
+patch.position.set(2.2, 0.08, 2.4); scene.add(patch);
+/* three furrows */
+[-2.4, 0, 2.4].forEach(dx => {
+  const fur = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.06, 0.5), lam(0x6f4a26));
+  fur.position.set(2.2 + dx, 0.17, 2.4); scene.add(fur);
+});
+const FURROWS = [
+  { x: -0.2, z: 2.4, seed: null, wheat: null, watered: false },
+  { x:  2.2, z: 2.4, seed: null, wheat: null, watered: false },
+  { x:  4.6, z: 2.4, seed: null, wheat: null, watered: false },
+];
+function furrowWorld(i) { return new THREE.Vector3(FURROWS[i].x, 0.35, FURROWS[i].z); }
+
+function makeSeedMound(x, z) {
+  const g = new THREE.Group();
+  const mound = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), lam(0x7a5230));
+  mound.scale.y = 0.5; mound.position.y = 0.14; g.add(mound);
+  const seed = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), lam(0xe8c37a));
+  seed.scale.y = 1.4; seed.position.y = 0.3; g.add(seed);
+  g.userData.seed = seed;
+  g.position.set(x, 0.1, z);
+  scene.add(g); return g;
+}
+function makeWheat(x, z) {
+  const g = new THREE.Group();
+  for (let i = 0; i < 5; i++) {
+    const stalk = new THREE.Group();
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 1.5, 6), lam(0x9ab04f));
+    stem.position.y = 0.75; stalk.add(stem);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), lam(0xd9b24f));
+    head.scale.set(0.8, 1.8, 0.8); head.position.y = 1.6; stalk.add(head);
+    stalk.position.set((Math.random()-0.5)*0.7, 0, (Math.random()-0.5)*0.4);
+    stalk.rotation.z = (Math.random()-0.5)*0.16;
+    g.add(stalk);
+  }
+  g.userData.stems = g.children.map(s => s.children[0].material);
+  g.userData.heads = g.children.map(s => s.children[1].material);
+  g.position.set(x, 0.12, z);
+  g.scale.set(1, 0.01, 1);
+  scene.add(g); return g;
+}
+function makeSheaf() {
+  const g = new THREE.Group();
+  for (let i = 0; i < 3; i++) {
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.9, 6), lam(0xe0b455));
+    b.position.set((i-1)*0.13, 0.45, 0); b.rotation.z = (i-1)*0.18; g.add(b);
+  }
+  const tie = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.1, 8), lam(0x8a5f26));
+  tie.position.y = 0.42; g.add(tie);
+  return g;
+}
+
+/* ---------- the mill, the oven, the table ---------- */
+/* a little hand mill on a stump, near the shed */
+const mill = new THREE.Group();
+const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.8, 10), lam(0x8a5a33));
+stump.position.y = 0.4; mill.add(stump);
+const millBody = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, 0.55, 12), lam(0xb9bdc2));
+millBody.position.y = 1.1; mill.add(millBody);
+const millTop = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.14, 12), lam(0x8f959c));
+millTop.position.y = 1.42; mill.add(millTop);
+const crank = new THREE.Group();
+const crankArm = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.07, 0.07), lam(0x5d3a15));
+crankArm.position.x = 0.27; crank.add(crankArm);
+const crankKnob = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), lam(0xc4453a));
+crankKnob.position.set(0.55, 0.12, 0); crank.add(crankKnob);
+crank.position.y = 1.5; mill.add(crank);
+const flourBowl = new THREE.Group();
+const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.22, 0.24, 12), lam(0xc98a3f));
+bowl.position.y = 0.12; flourBowl.add(bowl);
+const flour = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 8), lam(0xfdf6e3));
+flour.scale.y = 0.4; flour.position.y = 0.24; flour.visible = false; flourBowl.add(flour);
+flourBowl.position.set(0.75, 0, 0.35); mill.add(flourBowl);
+mill.position.set(8.6, 0, 0.4); mill.rotation.y = -0.5; scene.add(mill);
+function millCrankWorld() { const v = new THREE.Vector3(0.55, 1.6, 0); return crank.localToWorld(v.clone()).add(new THREE.Vector3(0,0,0)); }
+
+/* a little brick oven beside the house */
+const oven = new THREE.Group();
+const ovenBase = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.9, 1.5), lam(0x9c5a40));
+ovenBase.position.y = 0.45; oven.add(ovenBase);
+const ovenDome = new THREE.Mesh(new THREE.SphereGeometry(0.85, 14, 10, 0, Math.PI*2, 0, Math.PI/2), lam(0xb06a4a));
+ovenDome.position.y = 0.9; oven.add(ovenDome);
+const mouthMat = new THREE.MeshBasicMaterial({ color: 0x2a1a12 });
+const mouth = new THREE.Mesh(new THREE.CircleGeometry(0.4, 14, Math.PI, Math.PI), mouthMat);
+mouth.position.set(0, 0.95, 0.78); oven.add(mouth);
+const chimneyO = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 0.7, 8), lam(0x7a4632));
+chimneyO.position.set(0, 1.8, -0.2); oven.add(chimneyO);
+oven.position.set(-7.2, 0, 1.6); oven.rotation.y = 0.45; scene.add(oven);
+function ovenMouthWorld() { return oven.localToWorld(new THREE.Vector3(0, 1.0, 0.9)); }
+
+/* a wooden table for the dough and the bread */
+const table = new THREE.Group();
+const tableTop = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.12, 1.0), lam(0xc9a25e));
+tableTop.position.y = 0.9; table.add(tableTop);
+[[-0.7,0.35],[0.7,0.35],[-0.7,-0.35],[0.7,-0.35]].forEach(p => {
+  const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.9, 8), lam(0x8a5a33));
+  leg.position.set(p[0], 0.45, p[1]); table.add(leg);
+});
+table.position.set(-4.6, 0, 2.4); scene.add(table);
+/* the dough and, later, the loaf */
+const dough = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 10), lam(0xf4ead2));
+dough.scale.set(1.2, 0.75, 1); dough.position.set(-4.6, 1.15, 2.4);
+dough.visible = false; scene.add(dough);
+const loaf = new THREE.Group();
+const loafBody = new THREE.Mesh(new THREE.SphereGeometry(0.36, 14, 10), lam(0xc9863a));
+loafBody.scale.set(1.5, 0.8, 1); loaf.add(loafBody);
+[-0.18, 0, 0.18].forEach(x => {
+  const slash = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.5), lam(0xf2d391));
+  slash.position.set(x, 0.28, 0); slash.rotation.y = 0.2; loaf.add(slash);
+});
+loaf.position.set(-4.6, 1.18, 2.4); loaf.visible = false; scene.add(loaf);
+
+/* ---------- people & animals ---------- */
+function makeHead(g, skin, y, eyeColor, eyeSize) {
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 18, 14), lam(skin));
+  head.position.y = y; g.add(head);
+  [-0.12, 0.12].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(eyeSize || 0.045, 8, 6), lam(eyeColor || 0x222222));
+    e.position.set(x, y + 0.05, 0.29); g.add(e);
+  });
+  return head;
+}
+function makeMum() {
+  const g = new THREE.Group();
+  [[-0.15],[0.15]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.55, 8), lam(0x4e6c95));
+    leg.position.set(p[0], 0.28, 0); g.add(leg);
+  });
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 14), lam(0x4ba38f));
+  torso.scale.set(1, 1.25, 0.8); torso.position.y = 0.92; g.add(torso);
+  makeHead(g, 0xf2c9a0, 1.74);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.37, 14, 12), lam(0x6b4a2f));
+  hair.scale.set(1, 0.78, 1); hair.position.set(0, 1.88, -0.05); g.add(hair);
+  const pony1 = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), lam(0x6b4a2f));
+  pony1.position.set(0, 1.62, -0.34); g.add(pony1);
+  g.add(blobShadow(0.5));
+  return g;
+}
+function makeDad() {
+  const g = new THREE.Group();
+  [[-0.16],[0.16]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.58, 8), lam(0x44597a));
+    leg.position.set(p[0], 0.29, 0); g.add(leg);
+  });
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.46, 16, 14), lam(0xc4453a));
+  torso.scale.set(1, 1.25, 0.85); torso.position.y = 0.98; g.add(torso);
+  makeHead(g, 0xf2c9a0, 1.84);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.36, 14, 12), lam(0x5d3f26));
+  hair.scale.set(1, 0.62, 1); hair.position.set(0, 2.0, -0.04); g.add(hair);
+  g.add(blobShadow(0.52));
+  return g;
+}
+function makeTommy() {
+  const g = new THREE.Group();
+  [[-0.12],[0.12]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.3, 8), lam(0x3a4a66));
+    leg.position.set(p[0], 0.15, 0); g.add(leg);
+  });
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 14), lam(0x3f6fb5));
+  torso.scale.set(1, 1.1, 0.85); torso.position.y = 0.6; g.add(torso);
+  makeHead(g, 0xf6d9b8, 1.28, 0x4a90d9, 0.055);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.36, 14, 12), lam(0xf2d98a));
+  hair.scale.set(1, 0.66, 1); hair.position.set(0, 1.44, -0.03); g.add(hair);
+  const fringe = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), lam(0xf2d98a));
+  fringe.scale.set(1, 0.4, 0.7); fringe.position.set(0, 1.42, 0.16); g.add(fringe);
+  g.add(blobShadow(0.4));
+  g.scale.setScalar(0.8);
+  return g;
+}
+function makeTeddy() {
+  const g = new THREE.Group();
+  const brown = lam(0x9c6b3d), curl = lam(0x8a5a33);
+  const bodyT = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 12), brown);
+  bodyT.scale.set(1, 0.95, 1.3); bodyT.position.y = 0.48; g.add(bodyT);
+  [[-0.25,0.7,0.1],[0.25,0.7,0.1],[0,0.78,-0.15],[-0.2,0.62,-0.35],[0.2,0.62,-0.35]].forEach(p => {
+    const c = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), curl);
+    c.position.set(p[0], p[1], p[2]); g.add(c);
+  });
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), brown);
+  head.position.set(0, 0.95, 0.42); g.add(head);
+  const topknot = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), curl);
+  topknot.position.set(0, 1.18, 0.36); g.add(topknot);
+  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), curl);
+  snout.scale.z = 1.3; snout.position.set(0, 0.86, 0.66); g.add(snout);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), lam(0x222222));
+  nose.position.set(0, 0.88, 0.8); g.add(nose);
+  [-0.1, 0.1].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), lam(0x222222));
+    e.position.set(x, 1.0, 0.64); g.add(e);
+  });
+  [-0.24, 0.24].forEach(x => {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), curl);
+    ear.scale.set(0.55, 1.2, 0.55); ear.position.set(x, 0.88, 0.34); g.add(ear);
+  });
+  [[-0.15,0.3],[0.15,0.3],[-0.15,-0.3],[0.15,-0.3]].forEach(p => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.3, 8), curl);
+    leg.position.set(p[0], 0.15, p[1]); g.add(leg);
+  });
+  const tail = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), curl);
+  tail.position.set(0, 0.7, -0.6); g.add(tail);
+  g.userData.tail = tail;
+  g.add(blobShadow(0.42));
+  return g;
+}
+function makeHen(star) {
+  const g = new THREE.Group();
+  const red = lam(0xb5562a), darkR = lam(0x8e3f1d);
+  const bodyH = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), red);
+  bodyH.scale.set(0.95, 0.95, 1.25); bodyH.position.y = 0.24; g.add(bodyH);
+  const tailF = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.28, 8), darkR);
+  tailF.rotation.x = -1.0; tailF.position.set(0, 0.4, -0.24); g.add(tailF);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), red);
+  head.position.set(0, 0.46, 0.18); g.add(head);
+  const comb = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.09, 0.1), lam(0xe23b3b));
+  comb.position.set(0, 0.57, 0.16); g.add(comb);
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.1, 6), lam(0xf2a93a));
+  beak.rotation.x = Math.PI / 2; beak.position.set(0, 0.45, 0.29); g.add(beak);
+  [-0.045, 0.045].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 5), lam(0x222222));
+    e.position.set(x, 0.49, 0.26); g.add(e);
+  });
+  if (star) {
+    /* Henny's little kerchief */
+    const scarf = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.18, 8), lam(0xe8e2d2));
+    scarf.position.set(0, 0.36, 0.14); scarf.rotation.x = 0.5; g.add(scarf);
+    g.scale.setScalar(1.45);
+  }
+  g.add(blobShadow(0.18));
+  return g;
+}
+function makeDuck() {
+  const g = new THREE.Group();
+  const white = lam(0xf6f4ec);
+  const bodyD = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), white);
+  bodyD.scale.set(0.9, 1.9, 0.95); bodyD.position.y = 0.42; g.add(bodyD);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), white);
+  head.position.set(0, 0.86, 0.06); g.add(head);
+  const bill = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 8), lam(0xf2a93a));
+  bill.rotation.x = Math.PI / 2; bill.position.set(0, 0.84, 0.21); g.add(bill);
+  g.add(blobShadow(0.18));
+  return g;
+}
+function makeCat(color) {
+  const g = new THREE.Group();
+  const fur = lam(color);
+  const bodyC = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 10), fur);
+  bodyC.scale.set(0.9, 0.8, 1.4); bodyC.position.y = 0.3; g.add(bodyC);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), fur);
+  head.position.set(0, 0.62, 0.32); g.add(head);
+  [-0.1, 0.1].forEach(x => {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.14, 6), fur);
+    ear.position.set(x, 0.8, 0.28); g.add(ear);
+  });
+  [-0.07, 0.07].forEach(x => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.028, 6, 5), lam(0x2f6b28));
+    e.position.set(x, 0.66, 0.49); g.add(e);
+  });
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 5), lam(0xd9738a));
+  nose.position.set(0, 0.6, 0.51); g.add(nose);
+  const tail = new THREE.Group();
+  for (let i = 0; i < 4; i++) {
+    const seg = new THREE.Mesh(new THREE.SphereGeometry(0.06 - i*0.008, 8, 6), fur);
+    seg.position.set(0, i * 0.11, i * 0.03); tail.add(seg);
+  }
+  tail.position.set(0, 0.4, -0.42); tail.rotation.x = -0.5;
+  g.add(tail); g.userData.tail = tail;
+  g.add(blobShadow(0.32));
+  return g;
+}
+
+const henny = makeHen(true); scene.add(henny); henny.visible = false;
+const tommy = makeTommy(); scene.add(tommy); tommy.visible = false;
+const mum = makeMum();     scene.add(mum);   mum.visible = false;
+const dad = makeDad();     scene.add(dad);   dad.visible = false;
+const teddy = makeTeddy(); scene.add(teddy); teddy.visible = false;
+const ringo = makeCat(0x8a8f98); scene.add(ringo); ringo.visible = false;
+const rose  = makeCat(0xd9986a); scene.add(rose);  rose.visible = false;
+const duck = makeDuck(); scene.add(duck); duck.visible = false;
+const hens = [];
+for (let i = 0; i < 2; i++) { const h = makeHen(false); h.visible = false; scene.add(h); hens.push(h); }
+
+/* home spots */
+const SPOT = {
+  henny: new THREE.Vector3(6.2, 0, 4.2),
+  tommy: new THREE.Vector3(-1.6, 0, 5.2),
+  ringo: new THREE.Vector3(-9.0, 0, 0.2),
+  rose:  new THREE.Vector3(-10.2, 0, 1.2),
+  duck:  new THREE.Vector3(-6.4, 0, 4.6),
+  teddy: new THREE.Vector3(-1.2, 0, -1.4),
+};
+function castOut() {
+  henny.visible = true; henny.position.copy(SPOT.henny);
+  ringo.visible = true; ringo.position.copy(SPOT.ringo); ringo.rotation.y = 1.1;
+  rose.visible = true;  rose.position.copy(SPOT.rose);  rose.rotation.y = 0.7;
+  duck.visible = true;  duck.position.copy(SPOT.duck);  duck.rotation.y = 1.4;
+  teddy.visible = true; teddy.position.copy(SPOT.teddy); teddy.rotation.y = 2.6;
+  hens.forEach((h, i) => { h.visible = true; h.position.set(9.5 + i*1.3, 0, 4.6 + i*0.8); h.rotation.y = Math.random()*6; });
+}
+
+/* ---------- Fergie & trailer ---------- */
+function makeTractor() {
+  const g = new THREE.Group();
+  const grey = lam(0x9aa0a6), gold = lam(0xc8a23a), darkT = lam(0x2c2c32);
+  const engine = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.6, 0.8), gold);
+  engine.position.set(0.5, 0.75, 0); g.add(engine);
+  const bonnet = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 0.7), grey);
+  bonnet.position.set(0.5, 1.3, 0); g.add(bonnet);
+  const noseT = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.85, 0.72), grey);
+  noseT.position.set(1.45, 1.05, 0); g.add(noseT);
+  const seatBack = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.55), grey);
+  seatBack.position.set(-0.95, 1.25, 0); g.add(seatBack);
+  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8), darkT);
+  pipe.position.set(0.7, 1.95, 0.18); g.add(pipe);
+  g.userData.exhaust = new THREE.Vector3(0.7, 2.4, 0.18);
+  g.userData.wheels = [];
+  function wheel(r, w, x, z) {
+    const holder = new THREE.Group();
+    const tyre = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 18), darkT);
+    tyre.rotation.x = Math.PI / 2; holder.add(tyre);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.5, r * 0.5, w + 0.02, 12), gold);
+    hub.rotation.x = Math.PI / 2; holder.add(hub);
+    holder.position.set(x, r, z);
+    g.add(holder); g.userData.wheels.push(holder);
+  }
+  wheel(0.85, 0.3, -0.7, 0.75); wheel(0.85, 0.3, -0.7, -0.75);
+  wheel(0.42, 0.2, 1.2, 0.55);  wheel(0.42, 0.2, 1.2, -0.55);
+  const driver = new THREE.Group();
+  const dTorso = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 12), lam(0xc4453a));
+  dTorso.scale.set(1, 1.2, 0.8); dTorso.position.y = 0.3; driver.add(dTorso);
+  const dHead = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 12), lam(0xf2c9a0));
+  dHead.position.y = 0.95; driver.add(dHead);
+  const dHair = new THREE.Mesh(new THREE.SphereGeometry(0.27, 12, 10), lam(0x5d3f26));
+  dHair.scale.set(1, 0.6, 1); dHair.position.set(0, 1.07, -0.03); driver.add(dHair);
+  driver.position.set(-0.85, 1.55, 0);
+  g.add(driver); g.userData.driver = driver;
+  return g;
+}
+const rig = new THREE.Group(); scene.add(rig);
+const tractor = makeTractor(); rig.add(tractor);
+const trailer = new THREE.Group();
+const bedT = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.22, 1.7), lam(0x8a5a33));
+bedT.position.y = 0.62; trailer.add(bedT);
+const hitchT = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.1, 0.12), lam(0x5d3a1c));
+hitchT.position.set(1.7, 0.55, 0); trailer.add(hitchT);
+[[-0.6, 0.95], [-0.6, -0.95]].forEach(p => {
+  const tyre = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.22, 16), lam(0x2c2c32));
+  tyre.rotation.x = Math.PI / 2; tyre.position.set(p[0], 0.42, p[1]); trailer.add(tyre);
+});
+trailer.position.set(-3.1, 0, 0); rig.add(trailer);
+const sheaves = [];
+for (let i = 0; i < 3; i++) {
+  const s = makeSheaf();
+  s.position.set(-3.1 + (i-1)*0.45, 0.72, 0); s.visible = false;
+  rig.add(s); sheaves.push(s);
+}
+rig.rotation.y = Math.PI;
+rig.visible = false; rig.position.set(26, 0, 2.4);
+let engineOn = false, engineT = 0, wheelSpin = 0;
+
+/* ---------- animation plumbing ---------- */
+const tweens = [];
+function tween(dur, fn, done) { tweens.push({ t: 0, dur, fn, done }); }
+const easeOut = p => 1 - Math.pow(1 - p, 3);
+const easeIn  = p => p * p * p;
+
+const walkers = [];
+function walkTo(obj, target, speed, done, opts) {
+  opts = opts || {};
+  walkers.push({ obj, target: target.clone(), speed, done, t: 0,
+    hop: opts.hop !== false, hopH: opts.hopH || 0.12 });
+}
+function faceToward(obj, target) {
+  obj.rotation.y = Math.atan2(target.x - obj.position.x, target.z - obj.position.z);
+}
+
+let puffs = [], confetti = [];
+function sparkle(at, color) {
+  for (let i = 0; i < 7; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5),
+      new THREE.MeshBasicMaterial({ color: color || 0xffe066, transparent: true, opacity: 1 }));
+    p.position.copy(at);
+    p.userData.v = new THREE.Vector3((Math.random()-0.5)*3, 2 + Math.random()*2, (Math.random()-0.5)*3);
+    p.userData.life = 0.7;
+    scene.add(p); puffs.push(p);
+  }
+}
+function droplets(at) {
+  for (let i = 0; i < 8; i++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5),
+      new THREE.MeshBasicMaterial({ color: 0x6fc3ef, transparent: true, opacity: 0.9 }));
+    p.position.copy(at).add(new THREE.Vector3((Math.random()-0.5)*0.4, 0.6, (Math.random()-0.5)*0.3));
+    p.userData.v = new THREE.Vector3((Math.random()-0.5)*1.2, -1 - Math.random(), (Math.random()-0.5)*1.2);
+    p.userData.life = 0.6;
+    scene.add(p); puffs.push(p);
+  }
+}
+function smokePuff(at, col) {
+  const p = new THREE.Mesh(new THREE.SphereGeometry(0.13 + Math.random()*0.1, 8, 6),
+    new THREE.MeshBasicMaterial({ color: col || 0xcccccc, transparent: true, opacity: 0.7 }));
+  p.position.copy(at);
+  p.userData.v = new THREE.Vector3((Math.random()-0.5)*0.4, 1.2 + Math.random()*0.6, (Math.random()-0.5)*0.4);
+  p.userData.life = 1.3;
+  scene.add(p); puffs.push(p);
+}
+function dropConfetti() {
+  const cols = [0xff6b8a, 0xffd54f, 0x7ed46a, 0x6fc3ef, 0xf07f1f];
+  for (let i = 0; i < 70; i++) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.18),
+      new THREE.MeshBasicMaterial({ color: cols[i % 5], side: THREE.DoubleSide }));
+    p.position.set(-8 + Math.random()*16, 7 + Math.random()*6, -1 + Math.random()*6);
+    p.userData.v = 1 + Math.random()*1.2;
+    p.userData.r = (Math.random()-0.5) * 4;
+    scene.add(p); confetti.push(p);
+  }
+}
+
+/* ---------- UI helpers ---------- */
+const narrEl = document.getElementById('narration');
+const narrWho = narrEl.querySelector('.who');
+const narrTxt = narrEl.querySelector('.txt');
+const btn = document.getElementById('btn');
+const badge = document.getElementById('badge');
+
+function showNarr(who, text) {
+  narrWho.textContent = who || '📖';
+  narrTxt.textContent = ' ' + text;
+  narrEl.style.opacity = 1;
+}
+function hideNarr() { narrEl.style.opacity = 0; }
+
+let btnAction = null, lastBtnTap = 0;
+function setBtn(label, action, color) {
+  btn.textContent = label;
+  btn.className = color ? color : '';
+  btnAction = action;
+}
+function hideBtn() { btn.classList.add('hidden'); btnAction = null; }
+btn.addEventListener('click', () => {
+  audio();
+  const now = performance.now();
+  if (now - lastBtnTap < 500) return;
+  lastBtnTap = now;
+  if (btnAction) { const a = btnAction; btnAction = null; a(); }
+});
+
+function say(lines, cb, btnLabel) {
+  let i = 0;
+  function step() {
+    const L = lines[i];
+    showNarr(L.who, L.text);
+    if (L.snd) L.snd();
+    i++;
+    if (i < lines.length) setBtn(btnLabel || 'Next ▸', step, 'blue');
+    else setBtn(btnLabel || 'Next ▸', () => { cb && cb(); }, 'blue');
+  }
+  step();
+}
+
+/* the famous refrain, reused at every step */
+function refusals(task, cb) {
+  say([
+    { who: '🐔', text: '“Who will help me ' + task + '?” asked the Little Red Hen.', snd: sndCluck },
+    { who: '🐱', text: '“Not I,” yawned Ringo, stretching in the shade.', snd: sndMeow },
+    { who: '🐱', text: '“Not I,” purred Rose, curling up her tail.', snd: sndMeow2 },
+    { who: '🦆', text: '“Not I,” quacked the duck, and waddled off to the dam.', snd: sndQuack },
+    { who: '👦', text: '“I WILL!” shouted Tommy. “I’ll help you!”', snd: sndGiggle },
+  ], cb);
+}
+function catStretch(cat) {
+  tween(0.8, p => { cat.scale.y = 1 + Math.sin(p * Math.PI) * 0.18; cat.rotation.z = Math.sin(p * Math.PI) * 0.08; },
+    () => { cat.scale.y = 1; cat.rotation.z = 0; });
+}
+
+/* ---------- tap-the-world targets ---------- */
+const tapHint = document.getElementById('tapHint');
+let tapTarget = null;
+function setTapTarget(getPos, action) { hideBtn(); tapTarget = { getPos, action }; tapHint.style.display = 'block'; }
+function clearTapTarget() { tapTarget = null; tapHint.style.display = 'none'; }
+function projectToScreen(pos) {
+  const v = pos.clone().project(camera);
+  return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight, behind: v.z > 1 };
+}
+canvas.addEventListener('pointerdown', e => {
+  audio();
+  if (!tapTarget) return;
+  const s = projectToScreen(tapTarget.getPos());
+  const r = Math.max(85, window.innerWidth * 0.13);
+  if (Math.hypot(e.clientX - s.x, e.clientY - s.y) < r) {
+    const a = tapTarget.action; clearTapTarget(); a();
+  }
+});
+
+/* ---------- the slider ---------- */
+const pullEl = document.getElementById('pull');
+const pullLabel = document.getElementById('pullLabel');
+const pullTrack = document.getElementById('pullTrack');
+const pullFill = document.getElementById('pullFill');
+const pullHandle = document.getElementById('pullHandle');
+let pullActive = false, pullProgress = 0, dragging = false, pullZone = 0, pullDone = null, pullOnMove = null;
+
+function layoutHandle() {
+  const w = pullTrack.clientWidth - 82;
+  pullHandle.style.left = (3 + pullProgress * w) + 'px';
+  pullFill.style.width = Math.round(pullProgress * 100) + '%';
+}
+function showPull(label, emoji, cb, onMove) {
+  hideBtn();
+  pullLabel.textContent = label || 'Slide! ➜';
+  pullHandle.textContent = emoji || '✊';
+  pullProgress = 0; pullZone = 0; pullActive = true; pullDone = cb; pullOnMove = onMove || null;
+  pullEl.classList.remove('hidden');
+  layoutHandle();
+}
+function hidePull() { pullActive = false; dragging = false; pullEl.classList.add('hidden'); }
+
+function trackProgress(e) {
+  const rect = pullTrack.getBoundingClientRect();
+  return (e.clientX - rect.left - 41) / (rect.width - 82);
+}
+pullTrack.addEventListener('pointerdown', e => {
+  audio();
+  if (!pullActive) return;
+  const rect = pullTrack.getBoundingClientRect();
+  const handleX = rect.left + 41 + pullProgress * (rect.width - 82);
+  if (Math.abs(e.clientX - handleX) > 90) return;
+  dragging = true;
+  pullTrack.setPointerCapture(e.pointerId);
+});
+pullTrack.addEventListener('pointermove', e => {
+  if (!dragging || !pullActive) return;
+  pullProgress = Math.min(Math.max(trackProgress(e), 0), 1);
+  layoutHandle();
+  if (pullOnMove) pullOnMove(pullProgress);
+  const zone = Math.floor(pullProgress * 4);
+  if (zone > pullZone) { pullZone = zone; sndPutt(); }
+  if (pullProgress >= 0.97) finishDrag();
+});
+['pointerup', 'pointercancel'].forEach(ev => pullTrack.addEventListener(ev, () => {
+  if (!dragging) return;
+  dragging = false;
+  if (pullActive && pullProgress > 0.04 && pullProgress < 0.97) slipBack();
+}));
+function slipBack() {
+  tone(420, 0.35, 'sine', 0.14, 130);
+  const from = pullProgress;
+  tween(0.35, p => { pullProgress = from * (1 - easeOut(p)); layoutHandle(); if (pullOnMove) pullOnMove(pullProgress); },
+    () => { pullProgress = 0; pullZone = 0; layoutHandle(); });
+}
+function finishDrag() {
+  dragging = false; pullActive = false;
+  pullProgress = 0; pullZone = 0; layoutHandle();
+  hidePull();
+  if (pullDone) { const d = pullDone; pullDone = null; d(); }
+}
+
+/* ---------- drag & drop seeds ---------- */
+const trayEl = document.getElementById('tray');
+const trayChips = document.getElementById('trayChips');
+const trayLabel = document.getElementById('trayLabel');
+const ghost = document.getElementById('dragGhost');
+let drag = null, trayDone = null, hintRings = [];
+
+function emptyFurrows() {
+  const out = [];
+  FURROWS.forEach((s, i) => { if (!s.seed) out.push(i); });
+  return out;
+}
+function showTray(count, cb) {
+  hideBtn(); trayDone = cb;
+  badge.style.display = 'none';
+  trayChips.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const c = document.createElement('div');
+    c.className = 'chip';
+    c.addEventListener('pointerdown', e => startDrag(e, c));
+    trayChips.appendChild(c);
+  }
+  trayEl.style.display = 'block';
+}
+function hideTray() {
+  trayEl.style.display = 'none';
+  badge.style.display = 'block';
+}
+function startDrag(e, chip) {
+  audio();
+  if (drag || chip.classList.contains('taken')) return;
+  e.preventDefault();
+  chip.classList.add('taken');
+  drag = { chip, x: e.clientX, y: e.clientY, id: e.pointerId };
+  ghost.classList.remove('returning');
+  ghost.style.display = 'block';
+  ghost.style.left = e.clientX + 'px';
+  ghost.style.top = e.clientY + 'px';
+  sndClick();
+  emptyFurrows().forEach(i => {
+    const r = document.createElement('div');
+    r.className = 'slotRing'; r.dataset.slot = i;
+    document.body.appendChild(r); hintRings.push(r);
+  });
+  window.addEventListener('pointermove', dragMove);
+  window.addEventListener('pointerup', dragEnd);
+  window.addEventListener('pointercancel', dragEnd);
+}
+function dragMove(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  drag.x = e.clientX; drag.y = e.clientY;
+  ghost.style.left = e.clientX + 'px';
+  ghost.style.top = e.clientY + 'px';
+}
+function dragEnd(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  window.removeEventListener('pointermove', dragMove);
+  window.removeEventListener('pointerup', dragEnd);
+  window.removeEventListener('pointercancel', dragEnd);
+  const d = drag; drag = null;
+  hintRings.forEach(r => r.remove()); hintRings = [];
+  const empties = emptyFurrows();
+  let best = -1, bd = 1e9;
+  empties.forEach(i => {
+    const s = projectToScreen(furrowWorld(i));
+    const dist = Math.hypot(d.x - s.x, d.y - s.y);
+    if (dist < bd) { bd = dist; best = i; }
+  });
+  /* kind rules for little hands: near a furrow, or anywhere above the tray */
+  const trayTop = trayEl.getBoundingClientRect().top;
+  if (best >= 0 && (bd < Math.max(150, window.innerWidth * 0.18) || d.y < trayTop - 30)) {
+    ghost.style.display = 'none';
+    FURROWS[best].seed = makeSeedMound(FURROWS[best].x, FURROWS[best].z);
+    sndPop(); sparkle(furrowWorld(best), 0xe8c37a);
+    if (henny.visible) {
+      const spot = furrowWorld(best); spot.y = 0; spot.x -= 0.7;
+      faceToward(henny, spot);
+      walkTo(henny, spot, 3.2, () => { sndCluck(); tween(0.4, p => henny.rotation.x = 0.5 * Math.sin(p * Math.PI), () => henny.rotation.x = 0); });
+    }
+    const left = trayChips.querySelectorAll('.chip:not(.taken)').length;
+    if (left === 0) {
+      hideTray();
+      sndGiggle();
+      if (trayDone) { const cb = trayDone; trayDone = null; setTimeout(cb, 600); }
+    } else {
+      trayLabel.textContent = left === 1 ? 'One more seed! 👆' : 'Drag another seed! 👆';
+    }
+  } else {
+    const rect = d.chip.getBoundingClientRect();
+    ghost.classList.add('returning');
+    ghost.style.left = (rect.left + rect.width/2) + 'px';
+    ghost.style.top = (rect.top + rect.height/2) + 'px';
+    tone(420, 0.3, 'sine', 0.12, 160);
+    setTimeout(() => {
+      ghost.style.display = 'none';
+      ghost.classList.remove('returning');
+      d.chip.classList.remove('taken');
+    }, 330);
+  }
+}
+
+/* ---------- camera ---------- */
+let camHome = { x: 0.6, y: 4.6, z: 12.6, lookX: 0.3, lookY: 2.0 };
+let shakeT = 0, bobT = 0;
+const CAM_YARD  = { x: 0.6, y: 4.6, z: 12.6, lookX: 0.3, lookY: 2.0 };
+const CAM_PATCH = { x: 1.6, y: 4.2, z: 12.0, lookX: 1.6, lookY: 1.4 };
+const CAM_MILL  = { x: 3.4, y: 4.0, z: 12.2, lookX: 4.4, lookY: 1.4 };
+const CAM_OVEN  = { x: -2.4, y: 4.2, z: 12.2, lookX: -4.4, lookY: 1.4 };
+
+/* ---------- story state ---------- */
+let stage = 0, storyOn = false, ovenHot = false;
+const STAGES = ['🌾', '🌱', '💧', '🌾', '🚜', '🥣', '🍞'];
+function updateBadge() {
+  badge.textContent = '🐔 ' + ['find', 'plant', 'water', 'grow', 'harvest', 'grind', 'bake'][Math.min(stage, 6)] + ' · ' + STAGES[Math.min(stage, 6)];
+}
+
+/* ---------- reset ---------- */
+function resetStory() {
+  stage = 0; storyOn = false; ovenHot = false;
+  clearTapTarget(); hidePull(); hideTray(); hideNarr();
+  drag = null; ghost.style.display = 'none';
+  hintRings.forEach(r => r.remove()); hintRings = [];
+  [henny, tommy, mum, dad, teddy, ringo, rose, duck].forEach(c => {
+    c.visible = false; c.position.set(20, 0, 4); c.rotation.set(0, 0, 0);
+    c.userData.party = false;
+  });
+  hens.forEach(h => h.visible = false);
+  FURROWS.forEach(s => {
+    if (s.seed) { scene.remove(s.seed); s.seed = null; }
+    if (s.wheat) { scene.remove(s.wheat); s.wheat = null; }
+    s.watered = false;
+  });
+  sheaves.forEach(s => s.visible = false);
+  rig.visible = false; rig.position.set(26, 0, 2.4);
+  tractor.userData.driver.visible = true;
+  engineOn = false; wheelSpin = 0;
+  flour.visible = false; dough.visible = false; loaf.visible = false;
+  loaf.position.set(-4.6, 1.18, 2.4); loaf.scale.setScalar(1);
+  mouthMat.color.setHex(0x2a1a12);
+  crank.rotation.z = 0;
+  confetti.forEach(c => scene.remove(c)); confetti = [];
+  camHome = Object.assign({}, CAM_YARD);
+  badge.style.display = 'none';
+}
+
+/* ================= THE STORY ================= */
+function startStory() {
+  resetStory();
+  storyOn = true;
+  castOut();
+  badge.style.display = 'block';
+  say([
+    { who: '📖', text: 'Once upon a time, on our very own farm, there lived a Little Red Hen.' },
+    { who: '🐔', text: 'Her name was Henny, and she wore a little white kerchief, and she was always, always busy.', snd: sndCluck },
+    { who: '📖', text: 'One sunny morning, scritch-scratching by the shed, Henny found something golden in the dirt…' },
+  ], () => {
+    hideNarr();
+    const spot = new THREE.Vector3(8.6, 0, 3.2);
+    faceToward(henny, spot);
+    walkTo(henny, spot, 2.6, () => {
+      showNarr('📖', 'Tap the sparkly spot to see what Henny found! 👆');
+      setTapTarget(() => new THREE.Vector3(9.4, 0.3, 3.4), foundWheat);
+    });
+  }, '▸ Turn the page');
+}
+function foundWheat() {
+  sparkle(new THREE.Vector3(9.4, 0.4, 3.4), 0xe8c37a);
+  sndDing(); sndCluck();
+  tween(0.5, p => henny.rotation.x = 0.5 * Math.sin(p * Math.PI), () => henny.rotation.x = 0);
+  say([
+    { who: '🐔', text: '“Wheat seeds!” clucked Henny. “Three fat golden grains of wheat! I shall plant them, and grow them, and bake them into BREAD.”' },
+  ], () => {
+    stage = 1;
+    tommy.visible = true; tommy.position.set(-12, 0, 5.6);
+    refusals('plant the wheat', () => {
+      hideNarr();
+      /* the duck really does waddle off to the dam */
+      const dam = new THREE.Vector3(-13.5, 0, 6.4);
+      faceToward(duck, dam);
+      walkTo(duck, dam, 2.2, () => duck.rotation.y = 2.4, { hopH: 0.06 });
+      const spot = new THREE.Vector3(-1.6, 0, 4.6);
+      faceToward(tommy, spot);
+      catStretch(ringo);
+      walkTo(tommy, spot, 3.0, () => {
+        faceToward(tommy, new THREE.Vector3(2.2, 0, 2.4));
+        camHome = Object.assign({}, CAM_PATCH);
+        showNarr('📖', 'Drag each golden seed into a furrow! 👆');
+        trayLabel.textContent = 'Drag a seed into a furrow! 👆';
+        showTray(3, planted);
+      });
+    });
+  });
+}
+function planted() {
+  stage = 2;
+  camHome = Object.assign({}, CAM_YARD);
+  say([
+    { who: '📖', text: 'So Henny and Tommy planted the wheat, and tucked each seed snug into the warm brown soil.' },
+    { who: '🐔', text: '“Now,” said Henny, “our seeds are thirsty. Who will help me water them?”', snd: sndCluck },
+    { who: '👦', text: '“I WILL!” said Tommy — quick as a wink, before the cats could even say “Not I.”', snd: sndGiggle },
+  ], () => {
+    hideNarr();
+    camHome = Object.assign({}, CAM_PATCH);
+    waterNext(0);
+  });
+}
+function waterNext(i) {
+  if (i >= 3) {
+    stage = 3;
+    say([
+      { who: '📖', text: 'Drip, drip, drip went the watering can, and down in the dark the little seeds began to stir…' },
+    ], () => {
+      hideNarr();
+      setBtn('☀️ Grow, wheat, grow!', growMontage, 'gold');
+    });
+    return;
+  }
+  showNarr('💧', 'Tap each seed to give it a drink! 👆');
+  setTapTarget(() => furrowWorld(i), () => {
+    sndWater();
+    droplets(furrowWorld(i));
+    FURROWS[i].watered = true;
+    const spot = furrowWorld(i); spot.y = 0; spot.x += 0.75;
+    faceToward(tommy, spot);
+    walkTo(tommy, spot, 3.4, null);
+    setTimeout(() => waterNext(i + 1), 700);
+  });
+}
+function growMontage() {
+  hideBtn();
+  showNarr('📖', 'The sun shone, and the rain fell, and day after day the wheat grew taller… and taller… and TALLER!');
+  /* seeds away, wheat up */
+  FURROWS.forEach((s, i) => {
+    if (s.seed) { scene.remove(s.seed); s.seed = null; }
+    s.wheat = makeWheat(s.x, s.z);
+  });
+  const sunFrom = sunBall.position.clone();
+  tween(5.5, p => {
+    sunBall.position.x = sunFrom.x - 26 * p;
+    sunBall.position.y = 6 + Math.sin(Math.PI * (0.3 + p*0.5)) * 8;
+    FURROWS.forEach((s, i) => {
+      const q = Math.min(Math.max(p * 1.4 - i * 0.15, 0), 1);
+      s.wheat.scale.y = 0.01 + easeOut(q) * 0.99;
+      /* green when young, gold when ripe */
+      const g = Math.min(Math.max((p - 0.6) / 0.35, 0), 1);
+      s.wheat.userData.stems.forEach(m => m.color.setHex(g > 0.5 ? 0xd9b24f : 0x9ab04f));
+      s.wheat.userData.heads.forEach(m => m.color.setHex(g > 0.5 ? 0xe8c565 : 0xc9b24f));
+    });
+    if (Math.random() < 0.1) sparkle(furrowWorld(Math.floor(Math.random()*3)).setY(1.4), 0xfff3a0);
+  }, () => {
+    sunBall.position.copy(sunFrom);
+    stage = 4;
+    say([
+      { who: '📖', text: 'At last the wheat stood tall and golden, nodding in the warm north wind.' },
+    ], () => {
+      refusals('harvest the wheat', () => {
+        hideNarr();
+        catStretch(rose);
+        say([
+          { who: '👦', text: '“And I know just who else will help,” grinned Tommy. “FERGIE!”', snd: sndRev },
+        ], () => {
+          hideNarr();
+          tractor.userData.driver.visible = false;   // Tommy's driving (pretend!) with Henny up top
+          rig.visible = true; rig.position.set(26, 0, 2.4);
+          /* Tommy and Henny hop aboard, story-book style */
+          tommy.visible = false;
+          henny.visible = false;
+          showNarr('🚜', 'Slide to drive Fergie through the wheat! ➜');
+          showPull('Slide to drive Fergie! ➜', '🚜', harvested, p => {
+            rig.position.x = 26 - 28.5 * p;
+            wheelSpin = 6;
+            if (Math.random() < 0.25) sndPutt();
+            FURROWS.forEach((s, i) => {
+              if (s.wheat && rig.position.x < s.x + 1.2) {
+                scene.remove(s.wheat); s.wheat = null;
+                sheaves[i].visible = true;
+                sndPop(); sparkle(furrowWorld(i).setY(0.8), 0xe0b455);
+              }
+            });
+          });
+        });
+      });
+    });
+  });
+}
+function harvested() {
+  wheelSpin = 0;
+  rig.position.x = -2;
+  stage = 5;
+  /* Tommy and Henny hop down again */
+  tommy.visible = true; tommy.position.set(-4.4, 0, 3.4);
+  henny.visible = true; henny.position.set(-3.4, 0, 4.2);
+  sndBoing(1);
+  say([
+    { who: '📖', text: 'Chug-chug-chug went Fergie, and snip-snip-snip went the wheat, and soon three fat sheaves sat on the trailer.' },
+    { who: '🐔', text: '“Now, who will help me grind the wheat into flour?” asked the Little Red Hen.', snd: sndCluck },
+    { who: '🐱', text: '“Not I,” mumbled Ringo and Rose together, pretending to be fast asleep.', snd: sndMeow },
+    { who: '👦', text: '“I WILL!” said Tommy.', snd: sndGiggle },
+  ], () => {
+    hideNarr();
+    const spotT = new THREE.Vector3(7.0, 0, 2.8);
+    const spotH = new THREE.Vector3(8.0, 0, 3.6);
+    faceToward(tommy, spotT); faceToward(henny, spotH);
+    walkTo(henny, spotH, 2.8, null);
+    walkTo(tommy, spotT, 3.0, () => {
+      camHome = Object.assign({}, CAM_MILL);
+      grindNext(0);
+    });
+  });
+}
+function grindNext(i) {
+  if (i >= 3) {
+    flour.visible = true;
+    flour.scale.set(1, 0.4, 1);
+    sndDing();
+    sparkle(mill.localToWorld(new THREE.Vector3(0.75, 0.5, 0.35)), 0xfdf6e3);
+    stage = 6;
+    say([
+      { who: '📖', text: 'Round and round went the little mill, and out came a bowl of soft white flour — enough for one beautiful loaf.' },
+      { who: '🐔', text: '“And now,” said Henny, “who will help me bake the bread?”', snd: sndCluck },
+      { who: '🦆', text: '“Not I,” called the duck, from all the way down at the dam.', snd: sndQuack },
+      { who: '👦', text: '“I WILL!” said Tommy. “Baking is the BEST bit!”', snd: sndGiggle },
+    ], () => {
+      hideNarr();
+      goBake();
+    });
+    return;
+  }
+  showNarr('🥣', 'Tap the red handle to turn the mill! 👆 (' + (3 - i) + ' more turns)');
+  setTapTarget(() => crank.localToWorld(new THREE.Vector3(0.55, 0.05, 0)), () => {
+    sndGrind();
+    const from = crank.rotation.z;
+    tween(0.6, p => { crank.rotation.z = from - easeOut(p) * Math.PI * 2; });
+    smokePuff(mill.localToWorld(new THREE.Vector3(0.75, 0.6, 0.35)), 0xfdf6e3);
+    tween(0.4, p => { tommy.position.y = Math.sin(p * Math.PI) * 0.2; }, () => tommy.position.y = 0);
+    setTimeout(() => grindNext(i + 1), 750);
+  });
+}
+function goBake() {
+  camHome = Object.assign({}, CAM_OVEN);
+  const spotT = new THREE.Vector3(-3.4, 0, 3.4);
+  const spotH = new THREE.Vector3(-4.2, 0, 4.2);
+  faceToward(tommy, spotT); faceToward(henny, spotH);
+  walkTo(henny, spotH, 2.8, null);
+  walkTo(tommy, spotT, 3.0, () => {
+    dough.visible = true;
+    dough.scale.set(0.2, 0.15, 0.2);
+    tween(0.6, p => { const s = 0.2 + 0.8 * easeOut(p); dough.scale.set(s * 1.2, s * 0.75, s); });
+    sndPop();
+    say([
+      { who: '📖', text: 'They mixed the flour with water and a pinch of salt, and squished and squashed and kneaded it into a fine fat lump of dough.' },
+    ], () => {
+      hideNarr();
+      mouthMat.color.setHex(0xf07f1f);   // the oven fire is lit
+      ovenHot = true;
+      showNarr('🍞', 'Slide the dough into the oven! ➜');
+      showPull('Slide the dough into the oven! ➜', '🍞', baking, p => {
+        const from = new THREE.Vector3(-4.6, 1.15, 2.4);
+        const to = ovenMouthWorld();
+        dough.position.lerpVectors(from, to, easeIn(p));
+        const s = 1 - 0.5 * p;
+        dough.scale.set(s * 1.2, s * 0.75, s);
+      });
+    });
+  });
+}
+function baking() {
+  dough.visible = false;
+  sndThud();
+  showNarr('📖', 'In went the dough, and the whole farm waited. The oven crackled… and the yummiest smell crept out across the yard…');
+  let bakeT = 0;
+  const iv = setInterval(() => {
+    bakeT++;
+    smokePuff(oven.localToWorld(new THREE.Vector3(0, 2.2, -0.2)), 0xcccccc);
+    tone(500 + bakeT * 60, 0.06, 'sine', 0.06);
+    if (bakeT === 4) { sndSniff(); teddy.visible && (teddy.rotation.y += 0.6); }
+    if (bakeT >= 7) {
+      clearInterval(iv);
+      breadOut();
+    }
+  }, 700);
+}
+function breadOut() {
+  sndOvenDing();
+  mouthMat.color.setHex(0x2a1a12);
+  ovenHot = false;
+  loaf.visible = true;
+  const from = ovenMouthWorld();
+  const to = new THREE.Vector3(-4.6, 1.18, 2.4);
+  loaf.position.copy(from); loaf.scale.setScalar(0.4);
+  tween(0.9, p => {
+    loaf.position.lerpVectors(from, to, easeOut(p));
+    loaf.position.y = from.y + (to.y - from.y) * p + Math.sin(p * Math.PI) * 0.8;
+    loaf.scale.setScalar(0.4 + 0.6 * easeOut(p));
+  }, () => {
+    sparkle(loaf.position, 0xffe066);
+    /* steam! */
+    let n = 0;
+    const sv = setInterval(() => {
+      smokePuff(loaf.position.clone().add(new THREE.Vector3(0, 0.3, 0)), 0xffffff);
+      if (++n >= 5) clearInterval(sv);
+    }, 350);
+    say([
+      { who: '🍞', text: 'DING! Out came the bread — golden and crusty and warm, the most beautiful loaf you ever did see.', snd: sndDing },
+    ], whoWillEat);
+  });
+}
+function whoWillEat() {
+  camHome = Object.assign({}, CAM_YARD);
+  /* suddenly EVERYONE is very helpful indeed */
+  const spots = [
+    [ringo, new THREE.Vector3(-6.0, 0, 3.2)],
+    [rose,  new THREE.Vector3(-6.6, 0, 4.4)],
+    [duck,  new THREE.Vector3(-5.6, 0, 5.2)],
+    [teddy, new THREE.Vector3(-3.0, 0, 5.0)],
+  ];
+  sndBark();
+  spots.forEach(([c, spot]) => { faceToward(c, spot); walkTo(c, spot, 3.4, null); });
+  say([
+    { who: '🐔', text: '“And now,” said the Little Red Hen, “who will help me EAT the bread?”', snd: sndCluck },
+    { who: '🐱', text: '“I will!” cried Ringo, suddenly wide awake.', snd: sndMeow },
+    { who: '🐱', text: '“I will!” cried Rose, running fastest of all.', snd: sndMeow2 },
+    { who: '🦆', text: '“I will! I will!” quacked the duck, waddling up from the dam at top speed.', snd: sndQuack },
+    { who: '🐶', text: '“Woof!” said Teddy, who had slept through the whole entire thing.', snd: sndBark },
+    { who: '🐔', text: '“Oh no, no, no,” said Henny, shaking her little kerchief. “You would not plant, or water, or harvest, or grind, or bake…”' },
+    { who: '🐔', text: '“…so the warm bread is for those who HELPED. For me — and for Tommy!”', snd: sndCluck },
+  ], feast);
+}
+function feast() {
+  hideNarr();
+  /* the loaf hops to centre stage, everyone gathers */
+  const to = new THREE.Vector3(-4.6, 1.18, 2.4);
+  sndPop();
+  say([
+    { who: '📖', text: 'So Henny and Tommy sat down together and ate the warm bread with butter and honey — and oh, it was GOOD.', snd: sndGiggle },
+    { who: '📖', text: 'The cats and the duck hung their heads. “We’re sorry, Henny,” they said. “Next time, we promise we’ll help.”' },
+    { who: '🐔', text: '“Then next time,” smiled the Little Red Hen, “there will be warm bread for everyone.” And she shared out a little crust each, because that is how we do things on our farm.', snd: sndCluck },
+  ], () => {
+    hideNarr();
+    [tommy, henny, ringo, rose, duck, teddy].forEach((c, i) => { c.userData.party = true; c.userData.pi = i; });
+    dropConfetti(); sndDing(); cluckChorus(7);
+    setTimeout(() => {
+      document.getElementById('endScreen').classList.remove('gone');
+    }, 2600);
+  }, '▸');
+}
+
+/* ---------- fullscreen toggle ---------- */
+const fsBtn = document.getElementById('fsBtn');
+const fsRoot = document.documentElement;
+const fsSupported = !!(fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen);
+if (!fsSupported) fsBtn.style.display = 'none';
+function inFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+fsBtn.addEventListener('click', () => {
+  audio(); sndClick();
+  if (inFullscreen()) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else {
+    (fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen).call(fsRoot);
+  }
+});
+['fullscreenchange', 'webkitfullscreenchange'].forEach(ev =>
+  document.addEventListener(ev, () => {
+    fsBtn.title = inFullscreen() ? 'Exit fullscreen' : 'Fullscreen';
+    sizeIt();
+  })
+);
+
+/* ---------- title / restart ---------- */
+document.getElementById('beginBtn').addEventListener('click', () => {
+  audio(); sndDing();
+  document.getElementById('titleScreen').classList.add('gone');
+  startStory();
+});
+document.getElementById('againBtn').addEventListener('click', () => {
+  audio(); sndClick();
+  document.getElementById('endScreen').classList.add('gone');
+  startStory();
+});
+
+/* ---------- main loop ---------- */
+const clock = new THREE.Clock();
+let snoreT = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  bobT += dt;
+
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const tw = tweens[i];
+    tw.t += dt;
+    const p = Math.min(tw.t / tw.dur, 1);
+    tw.fn(p);
+    if (p >= 1) { tweens.splice(i, 1); if (tw.done) tw.done(); }
+  }
+  for (let i = walkers.length - 1; i >= 0; i--) {
+    const w = walkers[i];
+    const dx = w.target.x - w.obj.position.x;
+    const dz = w.target.z - w.obj.position.z;
+    const dist = Math.hypot(dx, dz);
+    const step = w.speed * dt;
+    w.t += dt;
+    if (dist <= step) {
+      w.obj.position.set(w.target.x, 0, w.target.z);
+      walkers.splice(i, 1); if (w.done) w.done();
+    } else {
+      w.obj.position.x += dx / dist * step;
+      w.obj.position.z += dz / dist * step;
+      if (w.hop) w.obj.position.y = Math.abs(Math.sin(w.t * 10)) * w.hopH;
+    }
+  }
+
+  if (storyOn && badge.style.display !== 'none') updateBadge();
+
+  if (tapTarget) {
+    const s = projectToScreen(tapTarget.getPos());
+    if (!s.behind) { tapHint.style.left = s.x + 'px'; tapHint.style.top = s.y + 'px'; }
+  }
+  if (hintRings.length) {
+    let nearest = -1, nd = 1e9;
+    hintRings.forEach(r => {
+      const s = projectToScreen(furrowWorld(+r.dataset.slot));
+      r.style.left = s.x + 'px'; r.style.top = s.y + 'px';
+      if (drag) {
+        const d = Math.hypot(drag.x - s.x, drag.y - s.y);
+        if (d < nd) { nd = d; nearest = +r.dataset.slot; }
+      }
+    });
+    hintRings.forEach(r => r.classList.toggle('near', +r.dataset.slot === nearest && nd < 180));
+  }
+
+  if (engineOn) {
+    engineT += dt;
+    if (engineT > 0.16) {
+      engineT = 0; sndPutt();
+      if (Math.random() < 0.5) smokePuff(tractor.userData.exhaust.clone().applyMatrix4(tractor.matrixWorld), 0x8a8f98);
+    }
+  }
+  if (wheelSpin) tractor.userData.wheels.forEach(w => { w.rotation.z -= wheelSpin * dt; });
+
+  const target = new THREE.Vector3(
+    camHome.x + Math.sin(bobT * 0.25) * 0.3,
+    camHome.y + camExtra * 0.18,
+    camHome.z + camExtra);
+  camera.position.lerp(target, 0.05);
+  let look = new THREE.Vector3(camHome.lookX, camHome.lookY, 0);
+  if (shakeT > 0) { shakeT -= dt; look.x += (Math.random()-0.5) * 0.3; look.y += (Math.random()-0.5) * 0.3; }
+  camera.lookAt(look);
+
+  /* idles */
+  [henny, tommy, mum, dad, teddy, ringo, rose, duck].forEach(c => {
+    if (!c.visible) return;
+    if (walkers.find(w => w.obj === c)) return;
+    if (c.userData.party) {
+      c.position.y = Math.abs(Math.sin(bobT * 5 + c.userData.pi * 1.1)) * (c === tommy ? 0.3 : 0.18);
+    }
+  });
+  if (henny.visible && !henny.userData.party && !walkers.find(w => w.obj === henny)) {
+    henny.rotation.x = Math.max(Math.sin(bobT * 2.0), 0) * 0.3;   // busy pecking, as always
+  }
+  hens.forEach((h, i) => { if (h.visible) h.rotation.x = Math.max(Math.sin(bobT * 2.2 + i * 2.4), 0) * 0.35; });
+  if (teddy.visible && teddy.userData.tail) teddy.userData.tail.position.x = Math.sin(bobT * 9) * 0.06;
+  [ringo, rose].forEach((cat, i) => {
+    if (cat.visible && cat.userData.tail) cat.userData.tail.rotation.z = Math.sin(bobT * 1.6 + i) * 0.3;
+  });
+  /* sleepy Teddy snores until the bread comes out */
+  if (teddy.visible && stage < 6 && !teddy.userData.party) {
+    snoreT += dt;
+    if (snoreT > 3.4) { snoreT = 0; if (Math.random() < 0.6) sndSnore(); }
+  }
+  if (ovenHot && Math.random() < dt * 2.2) {
+    smokePuff(oven.localToWorld(new THREE.Vector3(0, 2.2, -0.2)), 0xbababa);
+  }
+
+  for (let i = puffs.length - 1; i >= 0; i--) {
+    const p = puffs[i];
+    p.position.addScaledVector(p.userData.v, dt);
+    p.userData.life -= dt;
+    p.material.opacity = Math.max(p.userData.life, 0);
+    if (p.userData.life <= 0 || p.position.y < 0) { scene.remove(p); puffs.splice(i, 1); }
+  }
+  for (let i = confetti.length - 1; i >= 0; i--) {
+    const c = confetti[i];
+    c.position.y -= c.userData.v * dt;
+    c.rotation.x += c.userData.r * dt; c.rotation.y += c.userData.r * 0.7 * dt;
+    if (c.position.y < 0.05) c.position.y = 7 + Math.random()*4;
+  }
+  clouds.forEach((c, i) => { c.position.x += dt * (0.14 + i * 0.03); if (c.position.x > 60) c.position.x = -40; });
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
