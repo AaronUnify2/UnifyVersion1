@@ -114,6 +114,21 @@
   @keyframes slotPulse { 0%,100%{opacity:.55} 50%{opacity:1} }
   @media (prefers-reduced-motion: reduce) { .slotRing { animation:none; } }
 
+  /* ---- name pop (hooray, Tommy!) ---- */
+  #namePop { position:fixed; left:0; top:0; transform:translate(-50%,-100%); z-index:7;
+    background:#fff8e4; border:3px solid #7a5230; border-radius:999px; padding:8px 18px;
+    font-weight:bold; color:#5d3f15; font-size:clamp(18px,5vw,24px); pointer-events:none;
+    opacity:0; white-space:nowrap; box-shadow:0 4px 0 #00000022; }
+  #namePop.show { animation:namePop 1.4s ease-out forwards; }
+  @keyframes namePop {
+    0% { opacity:0; transform:translate(-50%,-80%) scale(.5); }
+    18% { opacity:1; transform:translate(-50%,-115%) scale(1.12); }
+    30% { transform:translate(-50%,-110%) scale(1); }
+    75% { opacity:1; }
+    100% { opacity:0; transform:translate(-50%,-150%) scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce) { #namePop.show { animation:none; opacity:1; } }
+
   /* ---- title & end screens ---- */
   .screen {
     position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center;
@@ -155,6 +170,7 @@
   </div>
 </div>
 <div id="tapHint"><div class="ring"></div><div class="finger">👆</div></div>
+<div id="namePop"></div>
 
 <div id="tray">
   <div id="trayLabel">Drag a panel up to the roof! 👆</div>
@@ -228,6 +244,7 @@ const sndDown   = () => tone(340, 0.9, 'sawtooth', 0.18, 65);   // the power run
 const sndHammer = () => { noise(0.09, 0.28, 1400); tone(340, 0.08, 'square', 0.14, 250); };
 const sndTick   = (p) => tone(480 + p*640, 0.06, 'sine', 0.07);
 const sndCrick  = () => { tone(4400, 0.035, 'square', 0.028); setTimeout(()=>tone(4600,0.035,'square',0.025),70); };
+const sndTwinkle = () => { tone(1180,0.25,'triangle',0.09); setTimeout(()=>tone(1560,0.3,'triangle',0.08),120); };
 function sndRooster() {
   tone(560, 0.14, 'square', 0.13, 760);
   setTimeout(() => tone(760, 0.12, 'square', 0.13, 940), 170);
@@ -785,10 +802,10 @@ function smokePuff(at, dark) {
   scene.add(p); puffs.push(p);
 }
 function dropConfetti() {
-  const cols = [0xff6b8a, 0xffd54f, 0x7ed46a, 0x6fc3ef, 0xf07f1f];
-  for (let i = 0; i < 70; i++) {
+  const cols = [0xff6b8a, 0xffd54f, 0x7ed46a, 0x6fc3ef, 0xf07f1f, 0xd98ff0];
+  for (let i = 0; i < 110; i++) {
     const p = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.18),
-      new THREE.MeshBasicMaterial({ color: cols[i % 5], side: THREE.DoubleSide }));
+      new THREE.MeshBasicMaterial({ color: cols[i % cols.length], side: THREE.DoubleSide }));
     p.position.set(-8 + Math.random()*16, 7 + Math.random()*6, -1 + Math.random()*6);
     p.userData.v = 1 + Math.random()*1.2;
     p.userData.r = (Math.random()-0.5) * 4;
@@ -838,24 +855,43 @@ function say(lines, cb, btnLabel) {
   step();
 }
 
-/* ---------- tap-the-world targets ---------- */
+/* ---------- tap-the-world targets (several at once, sticky pats allowed) ---------- */
 const tapHint = document.getElementById('tapHint');
-let tapTarget = null;
-function setTapTarget(getPos, action) { hideBtn(); tapTarget = { getPos, action }; tapHint.style.display = 'block'; }
-function clearTapTarget() { tapTarget = null; tapHint.style.display = 'none'; }
+const namePopEl = document.getElementById('namePop');
+let tapTargets = [];   // [{ getPos: () => Vector3, action, sticky }]
+let hintIdx = 0, hintCycleT = 0;
+function setTapTargets(arr) { hideBtn(); tapTargets = arr; hintIdx = 0; hintCycleT = 0; tapHint.style.display = arr.length ? 'block' : 'none'; }
+function setTapTarget(getPos, action) { setTapTargets([{ getPos, action }]); }
+function clearTapTarget() { tapTargets = []; tapHint.style.display = 'none'; }
 function projectToScreen(pos) {
   const v = pos.clone().project(camera);
   return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight, behind: v.z > 1 };
 }
 canvas.addEventListener('pointerdown', e => {
   audio();
-  if (!tapTarget) return;
-  const s = projectToScreen(tapTarget.getPos());
+  if (!tapTargets.length) return;
   const r = Math.max(85, window.innerWidth * 0.13);
-  if (Math.hypot(e.clientX - s.x, e.clientY - s.y) < r) {
-    const a = tapTarget.action; clearTapTarget(); a();
+  for (const t of tapTargets) {
+    const s = projectToScreen(t.getPos());
+    if (!s.behind && Math.hypot(e.clientX - s.x, e.clientY - s.y) < r) {
+      if (t.sticky) { t.action(); }              // pat away, as often as you like!
+      else { const a = t.action; clearTapTarget(); a(); }
+      return;
+    }
   }
 });
+
+/* ---------- name pop (hooray, Tommy!) ---------- */
+function namePop(text, worldPos) {
+  const s = projectToScreen(worldPos);
+  if (s.behind) return;
+  namePopEl.style.left = s.x + 'px';
+  namePopEl.style.top = s.y + 'px';
+  namePopEl.textContent = text;
+  namePopEl.classList.remove('show');
+  void namePopEl.offsetWidth;   // restart the animation
+  namePopEl.classList.add('show');
+}
 
 /* ---------- the push slider ---------- */
 const pullEl = document.getElementById('pull');
@@ -863,21 +899,21 @@ const pullLabel = document.getElementById('pullLabel');
 const pullTrack = document.getElementById('pullTrack');
 const pullFill = document.getElementById('pullFill');
 const pullHandle = document.getElementById('pullHandle');
-let pullActive = false, pullProgress = 0, dragging = false, pullZone = 0, pullDone = null;
+let pullActive = false, pullProgress = 0, dragging = false, pullZone = 0, pullDone = null, pullSlideFn = null;
 
 function layoutHandle() {
   const w = pullTrack.clientWidth - 82;
   pullHandle.style.left = (3 + pullProgress * w) + 'px';
   pullFill.style.width = Math.round(pullProgress * 100) + '%';
 }
-function showPull(label, cb) {
+function showPull(label, cb, onSlide) {
   hideBtn();
   pullLabel.textContent = label || 'Slide to PUSH! ➜';
-  pullProgress = 0; pullZone = 0; pullActive = true; pullDone = cb;
+  pullProgress = 0; pullZone = 0; pullActive = true; pullDone = cb; pullSlideFn = onSlide || null;
   pullEl.classList.remove('hidden');
   layoutHandle();
 }
-function hidePull() { pullActive = false; dragging = false; pullEl.classList.add('hidden'); }
+function hidePull() { pullActive = false; dragging = false; pullSlideFn = null; pullEl.classList.add('hidden'); }
 
 function trackProgress(e) {
   const rect = pullTrack.getBoundingClientRect();
@@ -896,6 +932,7 @@ pullTrack.addEventListener('pointermove', e => {
   if (!dragging || !pullActive) return;
   pullProgress = Math.min(Math.max(trackProgress(e), 0), 1);
   layoutHandle();
+  if (pullSlideFn) pullSlideFn(pullProgress);
   const zone = Math.floor(pullProgress * 4);
   if (zone > pullZone) { pullZone = zone; sndStrain(); }
   if (pullProgress >= 0.97) finishDrag();
@@ -908,8 +945,10 @@ pullTrack.addEventListener('pointermove', e => {
 function slipBack() {
   tone(420, 0.35, 'sine', 0.14, 130);
   const from = pullProgress;
-  tween(0.35, p => { pullProgress = from * (1 - easeOut(p)); layoutHandle(); },
-    () => { pullProgress = 0; pullZone = 0; layoutHandle(); });
+  tween(0.35, p => {
+    pullProgress = from * (1 - easeOut(p)); layoutHandle();
+    if (pullSlideFn) pullSlideFn(pullProgress);
+  }, () => { pullProgress = 0; pullZone = 0; layoutHandle(); if (pullSlideFn) pullSlideFn(0); });
 }
 function finishDrag() {
   dragging = false; pullActive = false;
@@ -1184,6 +1223,7 @@ function resetStory() {
   dayNum = 1; CAP = 4; charge = 0; theEnd = false; storyOn = false; tommyMet = false;
   phaseRun = null; phaseEmoji = '☀️';
   clearPanels(); clearTapTarget(); hidePull(); hideTray();
+  namePopEl.classList.remove('show');
   drag = null; ghost.style.display = 'none';
   hintRings.forEach(r => r.remove()); hintRings = [];
   [mum, dad, tommy, teddy].forEach(c => {
@@ -1290,12 +1330,25 @@ function night1() {
     onBlackout: () => {
       showNarr('👦', '“Oh NO!” cried Tommy, in the pitch-black dark. “The power has run out!”');
       setTimeout(() => {
-        lightCandle();
-        showNarr('📖', 'Mum lit a candle, and everyone went to bed early — even Teddy.');
-      }, 2600);
+        showNarr('🕯️', 'Quick — tap the window to help Mum light a candle! 👆');
+        setTapTargets([{
+          getPos: () => new THREE.Vector3(HOUSE_X - 2.0, 1.75, 1.52),
+          action: candleLit
+        }]);
+      }, 2000);
     },
-    done: () => setBtn('🌅 Next morning ▸', morning2, 'blue')
+    done: () => {
+      if (!candleOn) { clearTapTarget(); lightCandle(); }   // she lit it herself, in the end
+      setBtn('🌅 Next morning ▸', morning2, 'blue');
+    }
   });
+}
+function candleLit() {
+  lightCandle();
+  sndTwinkle();
+  sparkle(new THREE.Vector3(HOUSE_X - 2.0, 1.9, 1.7), 0xffb347);
+  namePop('🕯️ There we go!', new THREE.Vector3(HOUSE_X - 2.0, 2.3, 1.6));
+  showNarr('📖', 'Mum lit a candle, and everyone went to bed early — even Teddy.');
 }
 
 /* ================= DAY TWO — more panels! ================= */
@@ -1382,7 +1435,11 @@ function morning3() {
       battBig.rotation.y = Math.PI / 2;
       dadDrivesIn(() => {
         showNarr('📖', 'It was far too heavy to lift! Dad and Tommy pushed with all their might…');
-        showPull('Slide to PUSH the BIG battery! ➜', swapBatteries);
+        showPull('Slide to PUSH the BIG battery! ➜', swapBatteries, p => {
+          /* the big fella inches along the trailer as you push — and slides back if you slip! */
+          battBig.position.x = -3.1 + 1.1 * easeOut(p);
+          battBig.position.y = 0.74 + Math.abs(Math.sin(p * 9)) * 0.045;
+        });
       });
     });
   });
@@ -1480,9 +1537,51 @@ function night3() {
 function showTheEnd() {
   hideBtn(); hideNarr();
   theEnd = true; dropConfetti(); sndDing();
-  setTimeout(() => {
+  setTimeout(patTheFamily, 1800);
+}
+/* ---------- tap everyone hooray! ---------- */
+function patTheFamily() {
+  showNarr('💚', 'Tap everyone to say hip hip hooray! 👆');
+  const pats = [
+    { obj: tommy, label: '👦 Tommy!',  y: 1.4, snd: sndGiggle },
+    { obj: dad,   label: '👨‍🌾 Dad!',   y: 1.8, snd: () => sndBoing(2) },
+    { obj: mum,   label: '👩‍🌾 Mum!',   y: 1.7, snd: sndDing },
+    { obj: teddy, label: '🐶 Teddy!',  y: 0.9, snd: sndBark },
+    { obj: duck,  label: '🦆 Quack!',  y: 0.8, snd: sndQuack },
+  ];
+  const targets = pats.map(p => ({
+    sticky: true,
+    getPos: () => p.obj.position.clone().setY(p.y),
+    action: () => {
+      p.snd(); sndTwinkle();
+      namePop(p.label, p.obj.position.clone().setY(p.y + 0.8));
+      sparkle(p.obj.position.clone().setY(p.y), 0xffe066);
+    }
+  }));
+  hens.forEach(h => targets.push({
+    sticky: true,
+    getPos: () => h.position.clone().setY(0.6),
+    action: () => {
+      cluckChorus(3); sndTwinkle();
+      namePop('🐔 Cluck cluck!', h.position.clone().setY(1.2));
+      sparkle(h.position.clone().setY(0.6), 0xffc2d6);
+    }
+  }));
+  targets.push({
+    sticky: true,
+    getPos: () => activeBatt.position.clone().setY(1.4),
+    action: () => {
+      sndDing();
+      namePop('🔋 Full of sunshine!', activeBatt.position.clone().setY(2.7));
+      sparkle(activeBatt.position.clone().setY(1.6), 0x8fd06a);
+      sparkle(activeBatt.position.clone().setY(2.1), 0xfff3a0);
+    }
+  });
+  setTapTargets(targets);
+  setBtn('⭐ The End ▸', () => {
+    clearTapTarget(); hideNarr();
     document.getElementById('endScreen').classList.remove('gone');
-  }, 2400);
+  }, 'gold');
 }
 
 /* ---------- fullscreen toggle ---------- */
@@ -1560,9 +1659,11 @@ function animate() {
   activeBatt.userData.fill.material.color.setHex(frac < 0.28 ? 0xe8512f : frac < 0.6 ? 0xffd54f : 0x59c94f);
   if (storyOn && badge.style.display !== 'none') updateBadge();
 
-  /* keep the tap hint pinned to its target */
-  if (tapTarget) {
-    const s = projectToScreen(tapTarget.getPos());
+  /* keep the tap hint pinned to its target (cycling if there are several) */
+  if (tapTargets.length) {
+    hintCycleT += dt;
+    if (hintCycleT > 1.5) { hintCycleT = 0; hintIdx = (hintIdx + 1) % tapTargets.length; }
+    const s = projectToScreen(tapTargets[hintIdx % tapTargets.length].getPos());
     if (!s.behind) { tapHint.style.left = s.x + 'px'; tapHint.style.top = s.y + 'px'; }
   }
   /* keep the roof slot rings pinned while dragging */
