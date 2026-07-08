@@ -92,6 +92,25 @@ body {
     text-shadow: 0 1px 2px rgba(51,65,92,0.25);
 }
 
+.mute-btn {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    z-index: 2;
+    background: var(--paper);
+    border: 3px solid #fff;
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    font-size: 1.3em;
+    cursor: pointer;
+    box-shadow: 0 4px 10px var(--shadow);
+    transition: transform 0.15s ease, opacity 0.2s ease;
+}
+.mute-btn:active { transform: scale(0.9); }
+body.muted .mute-btn { opacity: 0.65; }
+body.muted .speak-btn { opacity: 0.35; }
+
 /* ---------- Panels ---------- */
 .panel {
     background: var(--paper);
@@ -128,6 +147,7 @@ body {
 
 /* ---------- Mode grid ---------- */
 .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.mode-grid .mode-card:nth-child(5) { grid-column: 1 / -1; min-height: 110px; }
 .mode-card {
     background: linear-gradient(180deg, #fff6d9, #ffe9a8);
     padding: 18px 12px;
@@ -394,6 +414,93 @@ body {
 .finish-stars { font-size: 1.6em; letter-spacing: 4px; }
 .finish-actions { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
 
+/* ---------- Note Detective (piano) ---------- */
+.lyric-line { font-size: 1.35em; font-weight: bold; }
+.note-tiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+.note-tile {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    box-shadow: 0 3px 6px var(--shadow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.05em;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+    transition: transform 0.15s ease;
+}
+.note-tile.playing { transform: scale(1.25); box-shadow: 0 0 0 4px rgba(255,201,60,0.6), 0 3px 6px var(--shadow); }
+.note-tile.mystery {
+    background: #fff;
+    color: var(--berry);
+    border: 3px dashed var(--berry);
+    text-shadow: none;
+    animation: blink-blank 1.4s ease infinite;
+}
+.note-tile.mystery.guessed { border-style: solid; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.25); animation: none; }
+.note-tile.mystery.won { border: 3px solid var(--grass); animation: bounce-win 0.5s ease; }
+.note-tile.flash-gap { animation: gap-flash 0.45s ease; }
+.note-tile.shake-tile { animation: shake 0.4s ease; }
+@keyframes gap-flash {
+    0%, 100% { transform: scale(1); background: #fff; }
+    50% { transform: scale(1.35); background: #ffe1e1; }
+}
+
+.play-line-btn {
+    background: linear-gradient(180deg, var(--sun), var(--sun-deep));
+    padding: 10px 20px;
+    font-size: 1.05em;
+    color: #5c3d00;
+}
+.play-line-btn:disabled { opacity: 0.5; cursor: default; }
+
+.piano-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.p-key {
+    flex: 1;
+    min-width: 0;
+    height: 118px;
+    border: 4px solid #fff;
+    border-radius: 10px 10px 16px 16px;
+    box-shadow: 0 5px 0 rgba(51,65,92,0.2), 0 8px 14px var(--shadow);
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: bold;
+    font-size: 1.4em;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 10px;
+    transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease;
+    outline: none;
+}
+.p-key:active, .p-key.pressed {
+    transform: translateY(4px);
+    box-shadow: 0 1px 0 rgba(51,65,92,0.2), 0 3px 6px var(--shadow);
+    filter: brightness(1.15);
+}
+.p-key:focus-visible { outline: 4px solid var(--ink); outline-offset: 2px; }
+.p-key.chosen { box-shadow: 0 0 0 4px var(--ink), 0 5px 0 rgba(51,65,92,0.2); }
+
+@media (max-width: 420px) {
+    .note-tile { width: 36px; height: 36px; font-size: 0.9em; }
+    .p-key { height: 100px; font-size: 1.15em; gap: 6px; }
+    .piano-row { gap: 6px; }
+}
+
 @media (max-width: 420px) {
     .header h1 { font-size: 1.8em; }
     .prompt-emoji { font-size: 3.4em; }
@@ -417,6 +524,7 @@ body {
 </div>
 
 <div class="container">
+    <button class="mute-btn" id="muteBtn" aria-label="Sound on or off">🔊</button>
     <div class="header">
         <h1>⭐ Reading Stars ⭐</h1>
         <div class="sub" id="headerSub">What shall we practise today?</div>
@@ -855,7 +963,62 @@ const DECKS = {
             { word: 'Microphone', emoji: '🎤' },
             { word: 'Notes',      emoji: '🎵' }
         ]
+    },
+
+    /* ---- Songs (Note Detective) ----
+       keys: which piano keys this song shows (low → high).
+       Each card is one line: { lyric, notes } */
+    'song-twinkle': {
+        name: 'Twinkle Twinkle', emoji: '⭐', group: 'Songs', type: 'piano',
+        keys: ['C', 'D', 'E', 'F', 'G', 'A'],
+        cards: [
+            { lyric: 'Twinkle, twinkle, little star',  notes: ['C','C','G','G','A','A','G'] },
+            { lyric: 'How I wonder what you are',      notes: ['F','F','E','E','D','D','C'] },
+            { lyric: 'Up above the world so high',     notes: ['G','G','F','F','E','E','D'] },
+            { lyric: 'Like a diamond in the sky',      notes: ['G','G','F','F','E','E','D'] }
+        ]
+    },
+    'song-mary': {
+        name: 'Mary Had a Little Lamb', emoji: '🐑', group: 'Songs', type: 'piano',
+        keys: ['C', 'D', 'E', 'G'],
+        cards: [
+            { lyric: 'Mary had a little lamb',        notes: ['E','D','C','D','E','E','E'] },
+            { lyric: 'Little lamb, little lamb',      notes: ['D','D','D','E','G','G'] },
+            { lyric: 'Mary had a little lamb',        notes: ['E','D','C','D','E','E','E'] },
+            { lyric: 'Its fleece was white as snow',  notes: ['E','D','D','E','D','C'] }
+        ]
+    },
+    'song-row': {
+        name: 'Row Your Boat', emoji: '🚣', group: 'Songs', type: 'piano',
+        keys: ['C', 'D', 'E', 'F', 'G', 'C5'],
+        cards: [
+            { lyric: 'Row, row, row your boat',                    notes: ['C','C','C','D','E'] },
+            { lyric: 'Gently down the stream',                     notes: ['E','D','E','F','G'] },
+            { lyric: 'Merrily, merrily, merrily, merrily',         notes: ['C5','C5','C5','G','G','G','E','E','E','C','C','C'] },
+            { lyric: 'Life is but a dream',                        notes: ['G','F','E','D','C'] }
+        ]
+    },
+    'song-baabaa': {
+        name: 'Baa Baa Black Sheep', emoji: '🐏', group: 'Songs', type: 'piano',
+        keys: ['C', 'D', 'E', 'F', 'G', 'A'],
+        cards: [
+            { lyric: 'Baa, baa, black sheep',              notes: ['C','C','G','G'] },
+            { lyric: 'Have you any wool?',                 notes: ['A','A','A','A','G'] },
+            { lyric: 'Yes sir, yes sir, three bags full',  notes: ['F','F','E','E','D','D','C'] }
+        ]
     }
+};
+
+/* Boomwhacker note colours + pitches */
+const NOTE_DEFS = {
+    'C':  { freq: 261.63, color: '#ef4444', label: 'C' },
+    'D':  { freq: 293.66, color: '#f97316', label: 'D' },
+    'E':  { freq: 329.63, color: '#eab308', label: 'E' },
+    'F':  { freq: 349.23, color: '#84cc16', label: 'F' },
+    'G':  { freq: 392.00, color: '#14b8a6', label: 'G' },
+    'A':  { freq: 440.00, color: '#8b5cf6', label: 'A' },
+    'B':  { freq: 493.88, color: '#ec4899', label: 'B' },
+    'C5': { freq: 523.25, color: '#ef4444', label: 'C↑' }
 };
 
 /* =====================================================
@@ -890,6 +1053,13 @@ const MODES = {
         desc: 'Find the missing word',
         sub: 'Which word finishes the sentence?',
         deckFilter: d => d.type === 'word' && d.cards.some(c => c.sentence)
+    },
+    'piano': {
+        name: 'Note Detective',
+        emoji: '🎹',
+        desc: 'Find the missing note',
+        sub: 'Listen and find the missing note!',
+        deckFilter: d => d.type === 'piano'
     }
 };
 
@@ -939,6 +1109,8 @@ function setHeader(text) { $('headerSub').textContent = text; }
    AUDIO + SPEECH
    ===================================================== */
 
+let soundOn = true;
+
 let audioCtx = null;
 function getAudio() {
     if (!audioCtx) {
@@ -949,6 +1121,7 @@ function getAudio() {
 }
 
 function playTone(freq, start, dur, type = 'triangle', vol = 0.25) {
+    if (!soundOn) return;
     const ctx = getAudio();
     if (!ctx) return;
     const osc = ctx.createOscillator();
@@ -973,7 +1146,17 @@ function playWrong() {
     playTone(196, 0, 0.25, 'sine', 0.18); // gentle low G3
 }
 
+$('muteBtn').addEventListener('click', () => {
+    soundOn = !soundOn;
+    $('muteBtn').textContent = soundOn ? '🔊' : '🔇';
+    document.body.classList.toggle('muted', !soundOn);
+    if (!soundOn && 'speechSynthesis' in window) {
+        try { window.speechSynthesis.cancel(); } catch (e) { /* no-op */ }
+    }
+});
+
 function speak(text) {
+    if (!soundOn) return;
     if (!('speechSynthesis' in window)) return;
     try {
         window.speechSynthesis.cancel();
@@ -1187,10 +1370,11 @@ function showQuestion() {
     const card = entry.card;
 
     let q;
-    if (currentMode === 'match')        q = buildMatchQuestion(card);
-    else if (currentMode === 'letter')  q = buildLetterQuestion(card);
-    else if (currentMode === 'numbers') q = buildNumberQuestion(card, entry.deckId);
-    else                                q = buildSentenceQuestion(card);
+    if (currentMode === 'match')         q = buildMatchQuestion(card);
+    else if (currentMode === 'letter')   q = buildLetterQuestion(card);
+    else if (currentMode === 'numbers')  q = buildNumberQuestion(card, entry.deckId);
+    else if (currentMode === 'piano')    { renderPianoQuestion(card, entry.deckId); return; }
+    else                                 q = buildSentenceQuestion(card);
 
     renderQuestion(q);
 }
@@ -1348,6 +1532,164 @@ function buildSentenceQuestion(card) {
             speak(card.sentence.replace('___', card.word));
         }
     };
+}
+
+/* ---------- Note Detective (piano) ---------- */
+
+const NOTE_SLOT_MS = 480;   // time per note slot
+const NOTE_LEN = 0.4;       // seconds each note rings
+
+let pianoPlaying = false;
+
+function playPianoNote(noteName) {
+    const def = NOTE_DEFS[noteName];
+    if (!def) return;
+    playTone(def.freq, 0, NOTE_LEN, 'triangle', 0.3);
+    playTone(def.freq * 2, 0, NOTE_LEN * 0.6, 'sine', 0.08); // soft sparkle an octave up
+}
+
+function tileHTML(noteName) {
+    const def = NOTE_DEFS[noteName];
+    return '<span class="note-tile" style="background:' + def.color + '">' + def.label + '</span>';
+}
+
+function renderPianoQuestion(card, deckId) {
+    const deck = DECKS[deckId];
+    const notes = card.notes;
+    const hiddenIdx = 1 + Math.floor(Math.random() * (notes.length - 1));
+    const answer = notes[hiddenIdx];
+    let guess = null;
+
+    // Prompt: lyric + tile row + play button
+    const tiles = notes.map((n, i) =>
+        i === hiddenIdx
+            ? '<span class="note-tile mystery" id="mysteryTile">?</span>'
+            : tileHTML(n)
+    ).join('');
+
+    const promptCard = $('promptCard');
+    promptCard.innerHTML =
+        '<div class="lyric-line">' + deck.emoji + ' ' + card.lyric + '</div>' +
+        '<div class="note-tiles" id="tileRow">' + tiles + '</div>' +
+        '<button class="sticker play-line-btn" id="playLineBtn">▶ Play the line</button>' +
+        '<div class="prompt-question">' + MODES.piano.sub + '</div>' +
+        '<button class="speak-btn" id="speakBtn" aria-label="Hear the words">🔊</button>';
+
+    $('speakBtn').addEventListener('click', e => {
+        e.stopPropagation();
+        speak(card.lyric);
+    });
+
+    // Answers area: the piano + confirm
+    const area = $('answerArea');
+    area.className = 'answers';
+    area.innerHTML =
+        '<div class="piano-row" id="pianoRow"></div>' +
+        '<button class="sticker big-btn green" id="confirmNote" disabled>That\'s my note! ✅</button>';
+
+    const pianoRow = $('pianoRow');
+    deck.keys.forEach(noteName => {
+        const def = NOTE_DEFS[noteName];
+        const key = document.createElement('button');
+        key.className = 'p-key';
+        key.style.background = 'linear-gradient(180deg, ' + def.color + ', ' + def.color + 'cc)';
+        key.textContent = def.label;
+        key.dataset.note = noteName;
+        key.addEventListener('click', () => {
+            if (pianoPlaying || inputLocked) return;
+            getAudio();
+            playPianoNote(noteName);
+            key.classList.add('pressed');
+            setTimeout(() => key.classList.remove('pressed'), 130);
+            // Set as current guess
+            guess = noteName;
+            pianoRow.querySelectorAll('.p-key').forEach(k => k.classList.remove('chosen'));
+            key.classList.add('chosen');
+            const tile = $('mysteryTile');
+            tile.classList.add('guessed');
+            tile.classList.remove('shake-tile');
+            tile.style.background = def.color;
+            tile.style.borderColor = '#fff';
+            tile.textContent = def.label;
+            $('confirmNote').disabled = false;
+        });
+        pianoRow.appendChild(key);
+    });
+
+    const tileEls = () => $('tileRow').querySelectorAll('.note-tile');
+
+    /* Play the line. fillNote: note name to sound at the gap, or null for a silent flash. */
+    function playLine(fillNote, done) {
+        if (pianoPlaying) return;
+        pianoPlaying = true;
+        getAudio();
+        $('playLineBtn').disabled = true;
+        const els = tileEls();
+        notes.forEach((n, i) => {
+            setTimeout(() => {
+                els.forEach(el => el.classList.remove('playing'));
+                if (i === hiddenIdx) {
+                    if (fillNote) {
+                        playPianoNote(fillNote);
+                        els[i].classList.add('playing');
+                    } else {
+                        els[i].classList.add('flash-gap');
+                        setTimeout(() => els[i].classList.remove('flash-gap'), 460);
+                    }
+                } else {
+                    playPianoNote(n);
+                    els[i].classList.add('playing');
+                }
+            }, i * NOTE_SLOT_MS);
+        });
+        setTimeout(() => {
+            tileEls().forEach(el => el.classList.remove('playing'));
+            pianoPlaying = false;
+            const btn = $('playLineBtn');
+            if (btn) btn.disabled = false;
+            if (done) done();
+        }, notes.length * NOTE_SLOT_MS + 200);
+    }
+
+    $('playLineBtn').addEventListener('click', () => playLine(null));
+
+    $('confirmNote').addEventListener('click', () => {
+        if (!guess || pianoPlaying || inputLocked) return;
+        inputLocked = true;
+        $('confirmNote').disabled = true;
+        // Hear the line with his note in place — right or wrong, he hears it in context
+        playLine(guess, () => {
+            const tile = $('mysteryTile');
+            if (guess === answer) {
+                tile.classList.add('won');
+                playCorrect();
+                confettiFrom(tile);
+                if (firstTry) stars++;
+                updateProgress();
+                setTimeout(() => {
+                    qIndex++;
+                    showQuestion();
+                }, 1500);
+            } else {
+                playWrong();
+                firstTry = false;
+                tile.classList.add('shake-tile');
+                // Reset back to a mystery so he can try again
+                setTimeout(() => {
+                    tile.classList.remove('guessed', 'shake-tile');
+                    tile.style.background = '';
+                    tile.style.borderColor = '';
+                    tile.textContent = '?';
+                    pianoRow.querySelectorAll('.p-key').forEach(k => k.classList.remove('chosen'));
+                    guess = null;
+                    inputLocked = false;
+                }, 700);
+            }
+        });
+    });
+
+    // Auto-play the line once so he hears the puzzle straight away
+    setTimeout(() => playLine(null), 600);
 }
 
 /* ---------- Rendering & answering ---------- */
