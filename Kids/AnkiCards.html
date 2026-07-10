@@ -1275,6 +1275,10 @@ function getAudio() {
         const AC = window.AudioContext || window.webkitAudioContext;
         if (AC) audioCtx = new AC();
     }
+    // Mobile browsers suspend contexts created outside a tap — wake it up
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+    }
     return audioCtx;
 }
 
@@ -1521,6 +1525,7 @@ $('goHome').addEventListener('click', () => {
 });
 
 function startSession() {
+    getAudio(); // unlock/resume audio while we're inside a real tap
     let cards = selectedPool();
     if (currentMode === 'sentence') {
         cards = cards.filter(e => e.card.sentence);
@@ -2128,8 +2133,10 @@ function renderPianoQuestion(card, deckId) {
         });
     });
 
-    // Auto-play the line once so he hears the puzzle straight away
-    setTimeout(() => playLine(null), 600);
+    // Auto-play the line once so he hears the puzzle straight away.
+    // If the browser still refuses un-tapped audio, his first key tap
+    // or the ▶ button (both real gestures) will unlock it.
+    setTimeout(() => { getAudio(); playLine(null); }, 600);
 }
 
 /* ---------- Rendering & answering ---------- */
