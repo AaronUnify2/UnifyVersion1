@@ -1,0 +1,2770 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>The Prince and The Lantern</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:#0a0810;overflow:hidden;font-family:'Lora',serif;}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%,#161018,#0a0810 80%);}
+
+  /* stage holds the canvas */
+  #stage{position:relative;width:100%;max-width:760px;display:flex;flex-direction:column;align-items:center;padding:0 12px;}
+  canvas{width:100%;height:auto;display:block;border-radius:10px;box-shadow:0 10px 50px rgba(0,0,0,0.7);background:#08060a;}
+
+  /* story text below the illustration */
+  #textwrap{width:100%;max-width:680px;padding:20px 22px 8px;min-height:120px;display:flex;align-items:flex-start;justify-content:center;}
+  #text{font-size:clamp(16px,4.4vw,21px);line-height:1.6;color:#e8dcc8;text-align:center;font-weight:400;text-shadow:0 1px 8px rgba(0,0,0,0.5);transition:opacity .35s ease;}
+
+  /* title & end screens */
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px;background:radial-gradient(ellipse at 50% 45%,#1a1220,#0a0810 85%);transition:opacity .5s ease;z-index:5;}
+  .screen h1{font-family:'Special Elite',monospace;color:#f0d9a8;font-size:clamp(30px,8vw,52px);line-height:1.15;letter-spacing:1px;text-shadow:0 2px 20px rgba(255,180,90,0.25);margin-bottom:18px;}
+  .screen .sub{color:#b89a78;font-size:clamp(14px,4vw,18px);font-style:italic;margin-bottom:40px;letter-spacing:.5px;}
+  .screen .tap{color:#8a7358;font-size:13px;letter-spacing:2px;text-transform:uppercase;opacity:.8;animation:pulse 2.4s ease-in-out infinite;}
+  .screen .lanterntitle{font-size:44px;margin-bottom:26px;filter:drop-shadow(0 0 22px rgba(255,180,90,.6));}
+  @keyframes pulse{0%,100%{opacity:.4}50%{opacity:.9}}
+  .screen.hidden{opacity:0;pointer-events:none;}
+
+  /* nav zones (invisible tap areas) */
+  .navzone{position:fixed;top:0;bottom:0;width:32%;z-index:8;}
+  #prev{left:0;} #next{right:0;}
+
+  /* on-screen arrows (subtle) */
+  .arrow{position:fixed;top:50%;transform:translateY(-50%);z-index:9;color:rgba(240,217,168,.35);font-size:34px;font-family:'Special Elite',monospace;user-select:none;transition:color .2s;pointer-events:none;}
+  #prevArrow{left:14px;} #nextArrow{right:14px;}
+
+  /* progress dots */
+  #progress{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:9;}
+  .dot{width:6px;height:6px;border-radius:50%;background:rgba(232,220,200,.22);transition:background .3s,transform .3s;}
+  .dot.on{background:#f0c070;transform:scale(1.35);}
+
+  /* page counter */
+  #counter{position:fixed;top:12px;right:54px;z-index:9;color:rgba(232,220,200,.4);font-size:12px;letter-spacing:1px;font-family:'Special Elite',monospace;}
+  #homelink{position:fixed;top:12px;left:16px;z-index:10;color:rgba(232,220,200,.4);font-size:12px;letter-spacing:1px;font-family:'Special Elite',monospace;text-decoration:none;}
+  #homelink:hover{color:#f0c070;}
+  #fsBtn{position:fixed;top:10px;right:16px;z-index:11;width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(20,14,24,.5);border:1px solid rgba(232,220,200,.18);border-radius:7px;color:rgba(232,220,200,.55);cursor:pointer;transition:color .2s,border-color .2s,background .2s;padding:0;}
+  #fsBtn:hover{color:#f0c070;border-color:rgba(240,192,112,.5);background:rgba(30,20,10,.6);}
+  #fsBtn svg{width:16px;height:16px;display:block;}
+  /* when fullscreen, nudge the counter left so it doesn't collide with the button */
+  :fullscreen #counter{right:54px;}
+  :-webkit-full-screen #counter{right:54px;}
+</style></head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="c" width="720" height="480"></canvas>
+    <div id="textwrap"><p id="text"></p></div>
+  </div>
+
+  <!-- Title screen -->
+  <div class="screen" id="titleScreen">
+    <div class="lanterntitle">&#128367;</div>
+    <h1>The Prince<br>&amp; The Lantern</h1>
+    <div class="sub">a tale for the brave and the curious</div>
+    <div class="tap">tap to begin</div>
+  </div>
+
+  <!-- End screen -->
+  <div class="screen hidden" id="endScreen">
+    <h1>The End</h1>
+    <div class="sub">well then &mdash; let's go and look</div>
+    <div class="tap">tap to read again</div>
+  </div>
+</div>
+
+<a id="homelink" href="#">&#8592; home</a>
+<div id="counter"></div>
+<button id="fsBtn" aria-label="Toggle fullscreen" title="Fullscreen">
+  <svg id="fsIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>
+  </svg>
+</button>
+<div class="navzone" id="prev"></div>
+<div class="navzone" id="next"></div>
+<div class="arrow" id="prevArrow">&#10094;</div>
+<div class="arrow" id="nextArrow">&#10095;</div>
+<div id="progress"></div>
+
+<script>
+
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');const W=cv.width,H=cv.height;
+const grain=(()=>{const g=document.createElement('canvas');g.width=W;g.height=H;const gx=g.getContext('2d');const id=gx.createImageData(W,H);for(let i=0;i<id.data.length;i+=4){const v=200+Math.random()*55;id.data[i]=id.data[i+1]=id.data[i+2]=v;id.data[i+3]=Math.random()*13;}gx.putImageData(id,0,0);return g;})();
+const fog=[];for(let i=0;i<30;i++)fog.push({x:Math.random()*W,y:H*0.4+Math.random()*H*0.55,r:90+Math.random()*150,sp:0.08+Math.random()*0.2,ph:Math.random()*7});
+function flickVal(t){return 0.5+Math.sin(t*0.008)*0.25+Math.sin(t*0.021)*0.15+(Math.random()-0.5)*0.1;}
+function nightBase(top,mid,bot){const b=ctx.createLinearGradient(0,0,0,H);b.addColorStop(0,top);b.addColorStop(0.6,mid);b.addColorStop(1,bot);ctx.fillStyle=b;ctx.fillRect(0,0,W,H);}
+function warmGlow(x,y,rad,a,t){const f=flickVal(t);let g=ctx.createRadialGradient(x,y,3,x,y,rad*(0.9+f*0.15));g.addColorStop(0,'rgba(255,200,125,'+(a*(0.85+f*0.2))+')');g.addColorStop(0.4,'rgba(240,150,70,'+(a*0.4)+')');g.addColorStop(1,'rgba(240,150,70,0)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+function lanternObj(LX,LY,f){let core=ctx.createRadialGradient(LX,LY,0,LX,LY,15);core.addColorStop(0,'#fff4d6');core.addColorStop(0.4,'#ffcf7a');core.addColorStop(1,'rgba(255,150,60,0)');ctx.fillStyle=core;ctx.beginPath();ctx.arc(LX,LY,15*(0.85+f*0.3),0,7);ctx.fill();ctx.strokeStyle='rgba(20,14,8,0.95)';ctx.lineWidth=1.6;ctx.strokeRect(LX-6,LY-8,12,16);ctx.beginPath();ctx.moveTo(LX,LY-8);ctx.lineTo(LX,LY-14);ctx.stroke();let fl=ctx.createRadialGradient(LX,LY,0,LX,LY,5);fl.addColorStop(0,'#fffefb');fl.addColorStop(1,'rgba(255,200,110,0)');ctx.fillStyle=fl;ctx.beginPath();ctx.arc(LX,LY,5,0,7);ctx.fill();}
+function drawFog(t,spd){spd=spd===undefined?1:spd;fog.forEach(p=>{const x=(p.x+t*p.sp*spd)%(W+320)-160;const a=0.04+0.05*Math.sin(t*0.004*spd+p.ph);let fg=ctx.createRadialGradient(x,p.y,0,x,p.y,p.r);fg.addColorStop(0,'rgba(150,160,175,'+a+')');fg.addColorStop(1,'rgba(150,160,175,0)');ctx.fillStyle=fg;ctx.beginPath();ctx.arc(x,p.y,p.r,0,7);ctx.fill();});}
+function vignette(strength){let vg=ctx.createRadialGradient(W/2,H/2,H*0.32,W/2,H/2,H*0.95);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,'+strength+')');ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);}
+function paper(){ctx.globalAlpha=0.5;ctx.drawImage(grain,0,0);ctx.globalAlpha=1;}
+
+// ===== PAGE 1 — THE BOTTLE =====
+// A fisherman's small boat on dark cold water at dusk. A corked bottle bobs on the
+// waves, faintly catching an eerie glow — the only point of interest in a wide cold sea.
+function page1(t,variant){variant=variant||0;
+  const f=flickVal(t);
+  // WARM DUSK — later in the day, the sun low and dimming (eases into page 2's dark)
+  const sky=ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#241a2e');sky.addColorStop(0.35,'#4e2e30');sky.addColorStop(0.62,'#8a5236');sky.addColorStop(1,'#b0713e');
+  ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+  // the setting sun very low on the horizon, dimmer and deeper now
+  const sunX=W*0.5, sunY=H*0.56;
+  let sunHalo=ctx.createRadialGradient(sunX,sunY,8,sunX,sunY,W*0.55);
+  sunHalo.addColorStop(0,'rgba(255,205,135,0.4)');sunHalo.addColorStop(0.4,'rgba(240,160,90,0.16)');sunHalo.addColorStop(1,'rgba(220,140,80,0)');
+  ctx.fillStyle=sunHalo;ctx.fillRect(0,0,W,H*0.72);
+  let disc=ctx.createRadialGradient(sunX,sunY,2,sunX,sunY,32);
+  disc.addColorStop(0,'rgba(255,232,180,0.75)');disc.addColorStop(0.7,'rgba(250,190,120,0.35)');disc.addColorStop(1,'rgba(250,190,120,0)');
+  ctx.fillStyle=disc;ctx.beginPath();ctx.arc(sunX,sunY,32,0,7);ctx.fill();
+  // sea — deeper dusk tones
+  const seaY=H*0.58;
+  const sea=ctx.createLinearGradient(0,seaY,0,H);sea.addColorStop(0,'#5e3826');sea.addColorStop(1,'#2a1810');
+  ctx.fillStyle=sea;ctx.fillRect(0,seaY,W,H);
+  // the sun's dimmer reflection on the water
+  let refl=ctx.createLinearGradient(sunX,seaY,sunX,H);refl.addColorStop(0,'rgba(255,200,130,0.3)');refl.addColorStop(1,'rgba(250,180,110,0)');
+  ctx.fillStyle=refl;ctx.beginPath();ctx.moveTo(sunX-12,seaY);ctx.lineTo(sunX+12,seaY);ctx.lineTo(sunX+46,H);ctx.lineTo(sunX-46,H);ctx.closePath();ctx.fill();
+  // rolling wave lines, dusk-lit
+  ctx.strokeStyle='rgba(255,190,130,0.11)';ctx.lineWidth=1;
+  for(let i=0;i<7;i++){const y=seaY+8+i*((H-seaY)/7);ctx.beginPath();for(let x=0;x<=W;x+=12){const yy=y+Math.sin((x*0.03)+(t*0.004)+i)*2.2;x===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);}ctx.stroke();}
+
+  // boat silhouette (right of center), simple skiff with a standing fisherman
+  const bx=W*0.60,by=seaY+14+Math.sin(t*0.002)*2;
+  ctx.save();ctx.translate(bx,by);
+  // hull
+  ctx.fillStyle='#2a1810';ctx.beginPath();ctx.moveTo(-58,0);ctx.quadraticCurveTo(0,26,58,0);ctx.quadraticCurveTo(30,10,-30,10);ctx.quadraticCurveTo(-48,8,-58,0);ctx.closePath();ctx.fill();
+  // warm sunset rim on hull
+  ctx.strokeStyle='rgba(255,190,110,0.4)';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(-58,0);ctx.quadraticCurveTo(0,26,58,0);ctx.stroke();
+  // fisherman SEATED in the skiff, FLIPPED to face LEFT toward the bottle (rod points at it)
+  ctx.save();ctx.scale(-1,1); // mirror horizontally — now everything left-facing
+  ctx.fillStyle='#2a1810';
+  // seated torso
+  ctx.beginPath();ctx.moveTo(-7,2);ctx.quadraticCurveTo(-11,-20,-4,-30);ctx.quadraticCurveTo(2,-36,8,-30);ctx.quadraticCurveTo(13,-20,9,2);ctx.quadraticCurveTo(0,5,-7,2);ctx.closePath();ctx.fill();
+  // head
+  ctx.beginPath();ctx.arc(2,-36,6,0,7);ctx.fill();
+  // warm sunset rim
+  ctx.strokeStyle='rgba(255,190,110,0.45)';ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(8,0);ctx.quadraticCurveTo(12,-20,6,-29);ctx.stroke();
+  // rod — long and upright, rising toward the sky (points out over the bottle side)
+  ctx.strokeStyle='#241008';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(4,-18);ctx.lineTo(44,-70);ctx.stroke();
+  ctx.restore(); // end mirror
+  // legs drawn OUTSIDE the mirror so they bend the natural way — toward the bow he faces (left)
+  ctx.strokeStyle='#2a1810';ctx.lineCap='round';ctx.lineWidth=6;
+  ctx.beginPath();ctx.moveTo(-2,2);ctx.quadraticCurveTo(-14,4,-20,2);ctx.stroke();     // thigh/shin forward to the bow
+  ctx.beginPath();ctx.moveTo(2,2);ctx.quadraticCurveTo(-10,7,-18,5);ctx.stroke();      // second leg
+  ctx.restore(); // end boat translate
+
+  // THE BOTTLE — bobbing on the water left of the boat. a faint COLD wrong glow against
+  // the warm sunset (the one wrong note in a warm world — the trouble that's coming)
+  const btx=W*0.30, bty=seaY+22+Math.sin(t*0.003+1)*3;
+  let bg=ctx.createRadialGradient(btx,bty,0,btx,bty,44);
+  bg.addColorStop(0,'rgba(150,175,160,'+(0.16+f*0.06)+')');bg.addColorStop(1,'rgba(150,175,160,0)');
+  ctx.fillStyle=bg;ctx.beginPath();ctx.arc(btx,bty,44,0,7);ctx.fill();
+  // bottle body
+  ctx.save();ctx.translate(btx,bty);ctx.rotate(-0.35+Math.sin(t*0.003)*0.05);
+  ctx.fillStyle='#243026';
+  ctx.beginPath();ctx.moveTo(-4,10);ctx.lineTo(4,10);ctx.lineTo(4,-6);ctx.lineTo(2,-12);ctx.lineTo(2,-18);ctx.lineTo(-2,-18);ctx.lineTo(-2,-12);ctx.lineTo(-4,-6);ctx.closePath();ctx.fill();
+  // glass sheen
+  ctx.strokeStyle='rgba(180,200,185,0.5)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-3,8);ctx.lineTo(-3,-6);ctx.stroke();
+  // cork
+  ctx.fillStyle='#3a2c1a';ctx.fillRect(-2,-22,4,5);
+  ctx.restore();
+
+  // the fishing LINE from the rod tip down toward the bottle (he's about to hook it)
+  const rodTipX = bx - 44, rodTipY = by - 70;   // mirrored rod tip in world space
+  ctx.strokeStyle='rgba(255,225,165,0.3)';ctx.lineWidth=0.9;
+  ctx.beginPath();ctx.moveTo(rodTipX, rodTipY);
+  ctx.quadraticCurveTo(rodTipX-24, by-24, btx+4, bty-10);  // arcs down to just above the bottle
+  ctx.stroke();
+
+  // soft warm vignette (no fog yet — the world is still whole and warm)
+  let vg=ctx.createRadialGradient(W/2,H*0.5,H*0.42,W/2,H*0.5,H*0.95);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(30,14,0,0.34)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  paper();
+}
+
+// ===== PAGE 2 — THE FOG AND THE PHANTOM =====
+// SYMBOLISM: the phantom is unnecessary, contagious doubt — a relic of the time before
+// life flourished, an entity of decay that wills life into non-existence by conjuring
+// obstacles that were never real. He is the SOURCE of the fog that will drown the land.
+// He looms, ancient and mighty, over a tiny boat. Cuttlefish form: broad hooded mantle,
+// cold hollow eyes, a curtain of tendrils — two reaching for the boat, the rest drifting.
+function page2(t,variant){variant=variant||0;
+  const f=flickVal(t);
+
+  // ============ VARIANT 1 — INSIDE THE CASTLE ============
+  // the phantom reaches the king's ear. The King is engulfed by cold fog on the right;
+  // the Queen shelters the young prince in the warm light of her lantern on the left.
+  // (reuses page 5's castle interior so the two hall scenes rhyme.)
+  if(variant===1){
+    nightBase('#161520','#111019','#0a0910');
+    const groundY=H*0.80;
+    // chamber floor + soft arch behind (same as page 5's hall)
+    ctx.fillStyle='#0e0c16';ctx.fillRect(0,groundY,W,H-groundY);
+    ctx.strokeStyle='rgba(120,100,70,0.12)';ctx.lineWidth=10;
+    ctx.beginPath();ctx.moveTo(W*0.22,groundY);ctx.lineTo(W*0.22,H*0.34);ctx.quadraticCurveTo(W*0.5,H*0.18,W*0.78,H*0.34);ctx.lineTo(W*0.78,groundY);ctx.stroke();
+    // faint pillars either side of the hall
+    ctx.fillStyle='#0c0a14';ctx.fillRect(W*0.08,H*0.26,14,groundY-H*0.26);ctx.fillRect(W*0.90,H*0.26,14,groundY-H*0.26);
+
+    // ---- cold fog engulfing the RIGHT side (the king's side) ----
+    let coldSide=ctx.createLinearGradient(W*0.55,0,W,0);
+    coldSide.addColorStop(0,'rgba(90,104,130,0)');coldSide.addColorStop(0.5,'rgba(80,94,120,0.16)');coldSide.addColorStop(1,'rgba(70,84,110,0.30)');
+    ctx.fillStyle=coldSide;ctx.fillRect(W*0.5,0,W*0.5,H);
+    for(let i=0;i<5;i++){const x=W*0.66+Math.sin(t*0.003+i)*20+i*20;const y=H*0.4+i*40;let fg=ctx.createRadialGradient(x,y,0,x,y,90);fg.addColorStop(0,'rgba(110,124,150,0.10)');fg.addColorStop(1,'rgba(110,124,150,0)');ctx.fillStyle=fg;ctx.beginPath();ctx.arc(x,y,90,0,7);ctx.fill();}
+
+    // ---- THE KING on the right, being engulfed (dimmed, cold, slumping) ----
+    (function drawKingTaken(cx,cy,s){
+      ctx.save();ctx.translate(cx,cy);ctx.scale(s,s);
+      const robe=ctx.createLinearGradient(0,-46,0,50);robe.addColorStop(0,'#3a3450');robe.addColorStop(0.55,'#26243c');robe.addColorStop(1,'#161426');
+      const cold='rgba(140,158,190,'+(0.3+f*0.12)+')';
+      // blocky robe (king), slightly slumping as the fog takes him
+      ctx.save();ctx.rotate(0.06);
+      ctx.beginPath();ctx.moveTo(-20,50);ctx.lineTo(-19,-16);ctx.quadraticCurveTo(-22,-26,-24,-28);ctx.lineTo(-12,-32);ctx.lineTo(12,-32);ctx.lineTo(24,-28);ctx.quadraticCurveTo(22,-26,19,-16);ctx.lineTo(20,50);ctx.closePath();ctx.fillStyle=robe;ctx.fill();
+      ctx.strokeStyle='rgba(40,26,50,0.6)';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(0,-28);ctx.lineTo(0,50);ctx.stroke();
+      // cold rim (the fog's light, not warm)
+      ctx.strokeStyle=cold;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(20,48);ctx.lineTo(19,-16);ctx.quadraticCurveTo(22,-26,24,-28);ctx.stroke();
+      // slumped head
+      ctx.fillStyle='#1e1c30';ctx.fillRect(-5,-42,10,10);
+      ctx.beginPath();ctx.arc(1,-48,8,0,7);ctx.fill();
+      ctx.strokeStyle=cold;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(3,-48,8,-1.1,1.1);ctx.stroke();
+      // heavy banded crown, dimmed
+      ctx.fillStyle='rgba(150,150,170,0.35)';ctx.fillRect(-9,-62,18,5);
+      ctx.strokeStyle='rgba(160,168,195,0.45)';ctx.lineWidth=2;ctx.strokeRect(-9,-62,18,5);
+      ctx.fillStyle='rgba(150,158,185,0.4)';ctx.fillRect(-9,-66,4,4);ctx.fillRect(-2,-67,4,5);ctx.fillRect(5,-66,4,4);
+      ctx.restore();
+      ctx.restore();
+    })(W*0.70, groundY, 1.3);
+
+    // ---- THE PHANTOM at the king's ear (small, leaning in, whispering) ----
+    (function phantomWhisper(cx,cy,s){
+      ctx.save();ctx.translate(cx,cy);ctx.scale(s,s);
+      const sway=Math.sin(t*0.0025)*4;
+      let cg=ctx.createRadialGradient(0,0,3,0,0,80);cg.addColorStop(0,'rgba(120,142,178,0.16)');cg.addColorStop(1,'rgba(120,142,178,0)');
+      ctx.fillStyle=cg;ctx.fillRect(-100,-90,200,200);
+      // tendrils curling toward the king's ear (down-left)
+      ctx.strokeStyle='rgba(120,140,175,0.4)';ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(-10,20);ctx.quadraticCurveTo(-40+sway,44,-64,60);ctx.stroke();
+      ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-8,30);ctx.quadraticCurveTo(-34-sway,52,-56,66);ctx.stroke();
+      // small mantle
+      const mantle=ctx.createLinearGradient(0,-44,0,40);mantle.addColorStop(0,'#48546b');mantle.addColorStop(0.5,'#2c3547');mantle.addColorStop(1,'#1a2130');
+      ctx.fillStyle=mantle;
+      ctx.beginPath();ctx.moveTo(-28,34);ctx.quadraticCurveTo(-40,-4,-24,-30);ctx.quadraticCurveTo(-12,-48,0,-49);ctx.quadraticCurveTo(12,-48,24,-30);ctx.quadraticCurveTo(40,-4,28,34);ctx.quadraticCurveTo(0,44,-28,34);ctx.closePath();ctx.fill();
+      // contour stripes
+      ctx.strokeStyle='rgba(150,170,205,0.12)';ctx.lineWidth=1.1;
+      for(let k=-1;k<=1;k++){ctx.beginPath();ctx.moveTo(k*12,-38);ctx.quadraticCurveTo(k*16,-4,k*12,30);ctx.stroke();}
+      // cold eyes
+      ctx.fillStyle='rgba(190,208,240,'+(0.5+f*0.25)+')';
+      ctx.save();ctx.translate(-10,-16);ctx.rotate(-0.15);ctx.beginPath();ctx.ellipse(0,0,2.6,5,0,0,7);ctx.fill();ctx.restore();
+      ctx.save();ctx.translate(10,-16);ctx.rotate(0.15);ctx.beginPath();ctx.ellipse(0,0,2.6,5,0,0,7);ctx.fill();ctx.restore();
+      ctx.restore();
+    })(W*0.82, H*0.36, 0.7);
+
+    // ---- THE QUEEN + PRINCE on the left, sheltered in her lantern's warm light ----
+    const QLX=W*0.30, QLY=groundY-46;   // her lantern position
+    // warm protective pool around the two of them, pushing the cold back
+    warmGlow(QLX, QLY, 210, 0.5+f*0.12, t);
+    warmGlow(QLX, QLY, 110, 0.4+f*0.12, t);
+    // QUEEN (holding the lantern up, sheltering)
+    (function drawQueenShelter(cx,cy,s){
+      ctx.save();ctx.translate(cx,cy);ctx.scale(s,s);
+      const cool=ctx.createLinearGradient(0,-52,0,58);cool.addColorStop(0,'#26304a');cool.addColorStop(0.55,'#1a2036');cool.addColorStop(1,'#0d1020');
+      const warm='rgba(255,185,100,'+(0.6+f*0.28)+')';
+      // gown
+      ctx.beginPath();ctx.moveTo(-8,-22);ctx.quadraticCurveTo(-11,-6,-6,2);ctx.quadraticCurveTo(-9,4,-26,52);ctx.quadraticCurveTo(-12,58,2,58);ctx.quadraticCurveTo(16,58,26,50);ctx.quadraticCurveTo(10,4,7,2);ctx.quadraticCurveTo(11,-6,8,-22);ctx.quadraticCurveTo(0,-27,-8,-22);ctx.closePath();ctx.fillStyle=cool;ctx.fill();
+      // warm rim (lantern side, left)
+      ctx.strokeStyle=warm;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-7,0);ctx.quadraticCurveTo(-11,-6,-8,-21);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(-26,50);ctx.quadraticCurveTo(-11,6,-7,0);ctx.stroke();
+      // neck + head
+      ctx.strokeStyle=warm;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-8,-24);ctx.quadraticCurveTo(0,-30,8,-24);ctx.stroke();
+      ctx.fillStyle='#1a2036';ctx.beginPath();ctx.moveTo(-3,-23);ctx.lineTo(3,-23);ctx.lineTo(2.2,-32);ctx.lineTo(-2.2,-32);ctx.closePath();ctx.fill();
+      // left arm raised holding the lantern out (sheltering light)
+      ctx.strokeStyle=cool;ctx.lineWidth=4.5;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-5,-16);ctx.quadraticCurveTo(-16,-20,-24,-24);ctx.stroke();
+      ctx.strokeStyle=warm;ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(-6,-17);ctx.quadraticCurveTo(-17,-21,-24,-25);ctx.stroke();
+      // head + crown
+      ctx.beginPath();ctx.ellipse(0,-35,7,8.5,0,0,7);ctx.fillStyle='#181426';ctx.fill();
+      ctx.strokeStyle=warm;ctx.lineWidth=1.7;ctx.beginPath();ctx.arc(-1.4,-35,7.6,2,4.2);ctx.stroke();
+      ctx.strokeStyle='rgba(255,215,130,'+(0.55+f*0.35)+')';ctx.lineWidth=1.8;
+      ctx.beginPath();ctx.moveTo(-6,-42);ctx.lineTo(-5,-48);ctx.lineTo(-2.5,-43);ctx.lineTo(0,-50);ctx.lineTo(2.5,-43);ctx.lineTo(5,-48);ctx.lineTo(6,-42);ctx.stroke();
+      ctx.fillStyle='rgba(255,235,170,'+(0.6+f*0.3)+')';ctx.beginPath();ctx.arc(0,-50,1.2,0,7);ctx.fill();
+      ctx.restore();
+    })(QLX+30, groundY, 1.5);
+    // the lantern she holds
+    lanternObj(QLX, QLY, f);
+    // young PRINCE tucked beside her, small, warm-lit, looking up
+    (function drawChildPrince(cx,cy,s){
+      ctx.save();ctx.translate(cx,cy);ctx.scale(s,s);
+      const cool=ctx.createLinearGradient(0,-30,0,20);cool.addColorStop(0,'#213a52');cool.addColorStop(1,'#0a1017');
+      const warm='rgba(255,185,100,'+(0.6+f*0.28)+')';
+      // little body
+      ctx.beginPath();ctx.moveTo(-7,18);ctx.quadraticCurveTo(-9,-6,-4,-15);ctx.quadraticCurveTo(0,-20,4,-15);ctx.quadraticCurveTo(9,-6,7,18);ctx.quadraticCurveTo(0,22,-7,18);ctx.closePath();ctx.fillStyle=cool;ctx.fill();
+      // legs
+      ctx.strokeStyle=cool;ctx.lineCap='round';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-3,16);ctx.lineTo(-5,30);ctx.stroke();ctx.beginPath();ctx.moveTo(3,16);ctx.lineTo(5,30);ctx.stroke();
+      // head looking up toward the lantern (left)
+      ctx.beginPath();ctx.arc(0,-20,5.5,0,7);ctx.fillStyle='#101a24';ctx.fill();
+      ctx.strokeStyle=warm;ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(-1.5,-20,5.5,2,4.2);ctx.stroke();
+      // tiny circlet
+      ctx.strokeStyle='rgba(255,215,130,'+(0.6+f*0.3)+')';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(-4,-25);ctx.quadraticCurveTo(0,-28,4,-25);ctx.stroke();
+      ctx.restore();
+    })(QLX+62, groundY+6, 1.0);
+
+    drawFog(t,0.2);
+    vignette(0.7);
+    paper();
+    return; // castle scene done — skip the sea scene
+  }
+
+  // ============ VARIANT 0 — the sea, fog beginning ============
+  // VARIANT 0 = the fog is just BEGINNING — hold page 1's warm dusk, let cold seep in.
+  const warmHold = 1;
+  if(warmHold){
+    // page-1 warm dusk sky underneath, so we ease out of the previous page
+    const sky=ctx.createLinearGradient(0,0,0,H);
+    sky.addColorStop(0,'#241a2e');sky.addColorStop(0.35,'#4e2e30');sky.addColorStop(0.62,'#8a5236');sky.addColorStop(1,'#b0713e');
+    ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+    // then the cold night base washed over it at partial strength (the fog draining warmth)
+    ctx.save();ctx.globalAlpha=0.55;nightBase('#0f1218','#0c0e14','#07080c');ctx.restore();
+  } else {
+    nightBase('#0f1218','#0c0e14','#07080c');
+  }
+  // sickly pallor billowing from the phantom (he is the source)
+  const ex=W*0.40, ey=H*0.40;
+  let sick=ctx.createRadialGradient(ex,ey,10,ex,ey,W*0.8);
+  sick.addColorStop(0,'rgba(150,165,150,0.17)');sick.addColorStop(0.5,'rgba(125,138,150,0.07)');sick.addColorStop(1,'rgba(125,138,150,0)');
+  ctx.fillStyle=sick;ctx.fillRect(0,0,W,H);
+
+  // sea (warmer tint on the transition page)
+  const seaY=H*0.64;
+  const sea=ctx.createLinearGradient(0,seaY,0,H);
+  if(warmHold){sea.addColorStop(0,'#3a2a20');sea.addColorStop(1,'#12100e');}
+  else{sea.addColorStop(0,'#0a1018');sea.addColorStop(1,'#05070c');}
+  ctx.fillStyle=sea;ctx.fillRect(0,seaY,W,H);
+  ctx.strokeStyle='rgba(120,135,150,0.10)';ctx.lineWidth=1;
+  for(let i=0;i<6;i++){const y=seaY+10+i*((H-seaY)/6);ctx.beginPath();for(let x=0;x<=W;x+=12){const yy=y+Math.sin((x*0.03)+(t*0.004)+i)*2;x===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);}ctx.stroke();}
+
+  // tiny boat pushed to the far right, dwarfed
+  const bx=W*0.82,by=seaY+12+Math.sin(t*0.02)*2;
+  ctx.save();ctx.translate(bx,by);ctx.scale(0.7,0.7);
+  ctx.fillStyle='#090c12';ctx.beginPath();ctx.moveTo(-48,0);ctx.quadraticCurveTo(0,22,48,0);ctx.quadraticCurveTo(26,9,-26,9);ctx.quadraticCurveTo(-40,7,-48,0);ctx.closePath();ctx.fill();
+  // fisherman recoiling, tiny
+  ctx.fillStyle='#0b0e15';ctx.beginPath();ctx.moveTo(4,-2);ctx.quadraticCurveTo(-2,-24,4,-32);ctx.quadraticCurveTo(9,-38,14,-31);ctx.quadraticCurveTo(18,-22,16,-2);ctx.quadraticCurveTo(8,2,4,-2);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.arc(8,-36,5,0,7);ctx.fillStyle='#0d111a';ctx.fill();
+  ctx.strokeStyle='rgba(120,140,175,0.3)';ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(15,-4);ctx.quadraticCurveTo(18,-22,12,-30);ctx.stroke();
+  ctx.restore();
+
+  // ground-fog pouring across the whole surface (spreading toward the boat)
+  for(let i=0;i<9;i++){
+    const px=ex + (i-2)*54 + Math.sin(t*0.006+i*1.1)*30;
+    const py=seaY - 6 + Math.sin(t*0.01+i)*5;
+    const r=44+i*5+Math.sin(t*0.008+i)*6;
+    let fg=ctx.createRadialGradient(px,py,0,px,py,r);
+    fg.addColorStop(0,'rgba(178,188,192,'+(0.13+f*0.05)+')');fg.addColorStop(1,'rgba(178,188,192,0)');
+    ctx.fillStyle=fg;ctx.beginPath();ctx.arc(px,py,r,0,7);ctx.fill();
+  }
+  // the fallen bottle at the source, tipped, still bleeding fog
+  ctx.save();ctx.translate(ex-40,seaY-2);ctx.rotate(1.2);
+  ctx.fillStyle='#1a2a2a';ctx.fillRect(-3,-8,6,16);ctx.fillStyle='#3a2c1a';ctx.fillRect(-2,-13,4,5);ctx.restore();
+
+  // ================= THE PHANTOM — looming cuttlefish =================
+  const cx=ex, cy=H*0.30, s=1.0;   // drawn in absolute px, big
+  const sway=Math.sin(t*0.0025)*6;
+  const breathe=Math.sin(t*0.004)*0.04;
+
+  // massive cold self-glow (his might, the fog's origin)
+  let cg=ctx.createRadialGradient(cx,cy+30,10,cx,cy+30,230);
+  cg.addColorStop(0,'rgba(120,142,178,0.20)');cg.addColorStop(0.5,'rgba(110,130,165,0.08)');cg.addColorStop(1,'rgba(110,130,165,0)');
+  ctx.fillStyle=cg;ctx.fillRect(0,0,W,H);
+
+  ctx.save();ctx.translate(cx,cy);
+
+  // ---- curtain of tendrils (draw BEHIND the mantle) ----
+  // two reaching toward the boat (right), the rest drifting down
+  const bodyGrad=ctx.createLinearGradient(0,-70,0,180);
+  bodyGrad.addColorStop(0,'#404b60');bodyGrad.addColorStop(0.5,'#28303f');bodyGrad.addColorStop(1,'rgba(18,24,34,0)');
+  ctx.fillStyle=bodyGrad;
+  ctx.strokeStyle='rgba(150,168,200,0.28)';
+
+  // drifting tendrils (5), fanning from the base of the mantle
+  for(let i=-2;i<=2;i++){
+    const baseX=i*16;
+    const tip=90+Math.abs(i)*14;
+    const drift=Math.sin(t*0.003+i*0.9)*14;
+    ctx.lineWidth=7-Math.abs(i)*0.8;
+    ctx.beginPath();
+    ctx.moveTo(baseX,70);
+    ctx.quadraticCurveTo(baseX+drift, 70+tip*0.5, baseX+drift*1.6, 70+tip);
+    ctx.strokeStyle=bodyGrad;
+    ctx.stroke();
+  }
+  // two REACHING tendrils toward the boat (upper-right), predatory
+  ctx.lineWidth=6;
+  ctx.strokeStyle='rgba(120,140,175,0.5)';
+  const reach=Math.sin(t*0.004)*10;
+  ctx.beginPath();
+  ctx.moveTo(28,44);
+  ctx.quadraticCurveTo(120+reach,20, 210+reach, 70);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(24,66);
+  ctx.quadraticCurveTo(130-reach,70, 220+reach*0.5, 96);
+  ctx.stroke();
+  // little curling tips on the reaching arms
+  ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(210+reach,70);ctx.quadraticCurveTo(220+reach,64,214+reach,58);ctx.stroke();
+
+  // ---- broad hooded MANTLE (the bulky cuttlefish upper body) ----
+  ctx.save();
+  ctx.scale(1+breathe,1-breathe);
+  const mantle=ctx.createLinearGradient(0,-78,0,80);
+  mantle.addColorStop(0,'#48546b');mantle.addColorStop(0.5,'#2c3547');mantle.addColorStop(1,'#1a2130');
+  ctx.fillStyle=mantle;
+  ctx.beginPath();
+  // widest at the shoulders, doming to a rounded hooded crown, tapering to the tendril base
+  ctx.moveTo(-52,60);
+  ctx.quadraticCurveTo(-70,-6,-44,-52);      // left flank up
+  ctx.quadraticCurveTo(-26,-84,0,-86);       // left dome to crown
+  ctx.quadraticCurveTo(26,-84,44,-52);       // crown to right dome
+  ctx.quadraticCurveTo(70,-6,52,60);         // right flank down
+  ctx.quadraticCurveTo(0,78,-52,60);         // base (tendrils emerge below)
+  ctx.closePath();
+  ctx.fill();
+  // two side-fins of the mantle (cuttlefish frill), swaying
+  ctx.fillStyle='rgba(60,72,92,0.55)';
+  ctx.beginPath();ctx.moveTo(-50,10);ctx.quadraticCurveTo(-78+sway,24,-58,54);ctx.quadraticCurveTo(-52,30,-50,10);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(50,10);ctx.quadraticCurveTo(78-sway,24,58,54);ctx.quadraticCurveTo(52,30,50,10);ctx.closePath();ctx.fill();
+
+  // subtle mantle contour lines (give it volume, cuttlefish stripes)
+  ctx.strokeStyle='rgba(150,170,205,0.12)';ctx.lineWidth=1.4;
+  for(let k=-2;k<=2;k++){ctx.beginPath();ctx.moveTo(k*14,-70);ctx.quadraticCurveTo(k*20,-10,k*14,54);ctx.stroke();}
+
+  // cold rim light along the crown (never warm)
+  ctx.strokeStyle='rgba(155,180,220,0.4)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(-42,-50);ctx.quadraticCurveTo(0,-84,44,-50);ctx.stroke();
+
+  // ---- cold hollow eyes set into the front of the mantle ----
+  const eyeGlow=0.5+f*0.25;
+  // W-shaped cuttlefish eye feel: two long cold slits
+  ctx.fillStyle='rgba(190,208,240,'+eyeGlow+')';
+  ctx.save();ctx.translate(-18,-30);ctx.rotate(-0.18);ctx.beginPath();ctx.ellipse(0,0,4,8,0,0,7);ctx.fill();ctx.restore();
+  ctx.save();ctx.translate(18,-30);ctx.rotate(0.18);ctx.beginPath();ctx.ellipse(0,0,4,8,0,0,7);ctx.fill();ctx.restore();
+  // darker pupil-slit inside each
+  ctx.fillStyle='rgba(20,28,44,0.9)';
+  ctx.save();ctx.translate(-18,-30);ctx.rotate(-0.18);ctx.beginPath();ctx.ellipse(0,1,1.6,5,0,0,7);ctx.fill();ctx.restore();
+  ctx.save();ctx.translate(18,-30);ctx.rotate(0.18);ctx.beginPath();ctx.ellipse(0,1,1.6,5,0,0,7);ctx.fill();ctx.restore();
+  // faint cold brow ridge over the eyes
+  ctx.strokeStyle='rgba(150,175,215,0.3)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(-30,-42);ctx.quadraticCurveTo(0,-34,30,-42);ctx.stroke();
+
+  ctx.restore(); // end breathe scale
+  ctx.restore(); // end translate
+
+  drawFog(t);
+  vignette(0.72);
+  paper();
+}
+
+// ===== PAGE 3 — THE KINGDOM GOES BLIND =====
+// SYMBOLISM: the fog takes the warmth, the light, and crucially the CONNECTION between
+// people. Held after-state: the town is already drowned in grey. Figures stand close
+// together but sealed in their own small pockets of dark, blind to one another. The
+// golden threads of community that once ran between them are severed, guttering out.
+// Together, and utterly alone.
+function page3(t,variant){variant=variant||0;
+  const f=flickVal(t);
+  // cold dead sky — but on the FIRST 'going blind' page (variant 0), warmth still lingers,
+  // draining (matches the page-2 transition). Variant 1 is fully cold (matches the castle).
+  nightBase('#141922','#10141d','#0a0d13');
+  if(variant===0){
+    // a fading warm dusk wash, low on the horizon — the last of the warmth going out
+    let warmFade=ctx.createLinearGradient(0,H*0.4,0,H);
+    warmFade.addColorStop(0,'rgba(120,70,50,0)');warmFade.addColorStop(0.55,'rgba(150,88,54,0.22)');warmFade.addColorStop(1,'rgba(170,100,58,0.32)');
+    ctx.fillStyle=warmFade;ctx.fillRect(0,0,W,H);
+    // a soft warm horizon glow, dimming
+    let hglow=ctx.createRadialGradient(W*0.5,H*0.66,10,W*0.5,H*0.66,W*0.55);
+    hglow.addColorStop(0,'rgba(230,150,90,0.20)');hglow.addColorStop(0.5,'rgba(210,130,80,0.08)');hglow.addColorStop(1,'rgba(210,130,80,0)');
+    ctx.fillStyle=hglow;ctx.fillRect(0,0,W,H);
+  }
+  // a dull moon struggling through the fog, upper-right — cold, distant, filtered
+  const moonX=W*0.72, moonY=H*0.22;
+  // broad cold halo bleeding through the murk
+  let halo=ctx.createRadialGradient(moonX,moonY,6,moonX,moonY,W*0.5);
+  halo.addColorStop(0,'rgba(175,188,205,0.22)');halo.addColorStop(0.4,'rgba(150,165,185,0.10)');halo.addColorStop(1,'rgba(150,165,185,0)');
+  ctx.fillStyle=halo;ctx.fillRect(0,0,W,H);
+  // the moon disc itself, veiled — soft, not sharp
+  let disc=ctx.createRadialGradient(moonX,moonY,2,moonX,moonY,34);
+  disc.addColorStop(0,'rgba(205,215,230,0.60)');disc.addColorStop(0.6,'rgba(180,195,215,0.28)');disc.addColorStop(1,'rgba(180,195,215,0)');
+  ctx.fillStyle=disc;ctx.beginPath();ctx.arc(moonX,moonY,34,0,7);ctx.fill();
+  // a couple of fog bands drifting across the moon's face (struggling through)
+  ctx.save();ctx.globalAlpha=0.5;
+  for(let i=0;i<3;i++){const by=moonY-16+i*14+Math.sin(t*0.004+i)*3;let b=ctx.createLinearGradient(moonX-40,by,moonX+40,by);b.addColorStop(0,'rgba(20,26,34,0)');b.addColorStop(0.5,'rgba(20,26,34,0.5)');b.addColorStop(1,'rgba(20,26,34,0)');ctx.fillStyle=b;ctx.fillRect(moonX-44,by-3,88,5);}
+  ctx.restore();
+  // heavy grey fog haze sitting over everything (a touch lighter now)
+  let haze=ctx.createLinearGradient(0,0,0,H);
+  haze.addColorStop(0,'rgba(150,162,178,0.16)');haze.addColorStop(0.5,'rgba(138,150,166,0.10)');haze.addColorStop(1,'rgba(128,140,154,0.05)');
+  ctx.fillStyle=haze;ctx.fillRect(0,0,W,H);
+
+  // ---- the sky-high bridges & town, drained to cold silhouettes ----
+  const groundY=H*0.72;
+  // LEFT sky-bridge — SAME design as page 13 (two pylons, arch, deck), but cold & drained
+  ctx.fillStyle='#0c1017';
+  const lp1=W*0.08, lp2=W*0.24, pylTop=H*0.40, deckY=H*0.42;
+  ctx.fillRect(lp1,pylTop,20,groundY-pylTop);          // left pylon
+  ctx.fillRect(lp2,pylTop,20,groundY-pylTop);          // right pylon
+  // bold supporting arch between the two pylons
+  ctx.strokeStyle='#0c1017';ctx.lineWidth=9;
+  ctx.beginPath();ctx.moveTo(lp1+10,deckY);ctx.quadraticCurveTo((lp1+lp2)/2+10,deckY-46,lp2+10,deckY);ctx.stroke();
+  // the deck running across the top of the pylons
+  ctx.fillStyle='#0c1017';ctx.fillRect(lp1-14,pylTop-10,(lp2-lp1)+48,12);
+  ctx.strokeStyle='rgba(150,172,205,0.14)';ctx.lineWidth=1.6;   // cold moon rim, not warm
+  ctx.beginPath();ctx.moveTo(lp1-14,pylTop-10);ctx.lineTo(lp2+34,pylTop-10);ctx.stroke();
+  // little deck railing posts
+  ctx.strokeStyle='#0a0d14';ctx.lineWidth=2;
+  for(let i=0;i<=6;i++){const rx=lp1-8+i*((lp2-lp1+40)/6);ctx.beginPath();ctx.moveTo(rx,pylTop-10);ctx.lineTo(rx,pylTop-17);ctx.stroke();}
+  // clustered rooftops (town) mid-ground
+  ctx.fillStyle='#0b0e15';
+  for(let i=0;i<9;i++){const x=W*0.32+i*38;const rh=30+((i*37)%46);ctx.beginPath();ctx.moveTo(x,groundY);ctx.lineTo(x,groundY-rh);ctx.lineTo(x+15,groundY-rh-14);ctx.lineTo(x+30,groundY-rh);ctx.lineTo(x+30,groundY);ctx.closePath();ctx.fill();}
+  // a second sky-bridge span on the right (matches page 13's right bridge, cold)
+  ctx.strokeStyle='#0a0d14';ctx.lineWidth=7;
+  ctx.beginPath();ctx.moveTo(W*0.64,groundY-70);ctx.quadraticCurveTo(W*0.80,groundY-104,W*0.96,groundY-64);ctx.stroke();
+  ctx.fillStyle='#0a0d14';ctx.fillRect(W*0.70,groundY-96,10,96);ctx.fillRect(W*0.86,groundY-92,10,92);
+  ctx.fillRect(W*0.685,groundY-104,W*0.19,8);   // right bridge deck
+  // ground
+  const gnd=ctx.createLinearGradient(0,groundY,0,H);gnd.addColorStop(0,'#0a0d13');gnd.addColorStop(1,'#06080d');
+  ctx.fillStyle=gnd;ctx.fillRect(0,groundY,W,H);
+
+  // ---- the DEAD windows of the town: a few faint cold squares, most black ----
+  ctx.fillStyle='rgba(120,135,155,0.10)';
+  for(let i=0;i<14;i++){const x=W*0.30+((i*53)%320);const y=groundY-20-((i*29)%60);ctx.fillRect(x,y,4,5);}
+
+  // ================= THE TOWNSPEOPLE — sealed in isolation =================
+  // a row of figures standing close, each in a tiny cold pocket, blind to the next.
+  const folk=[
+    {x:W*0.30,scale:1.0},
+    {x:W*0.40,scale:1.08},
+    {x:W*0.50,scale:0.96},
+    {x:W*0.60,scale:1.04},
+    {x:W*0.69,scale:0.92}
+  ];
+  const fy=groundY+6;
+
+  // the SEVERED threads of connection — faint warm light between people, guttering out.
+  // draw broken: a short warm stub leaving each figure, then nothing across the gap.
+  for(let i=0;i<folk.length-1;i++){
+    const a=folk[i], b=folk[i+1];
+    const midY=fy-40;
+    const gutter=0.06+0.05*Math.sin(t*0.01+i); // last flicker of a dying bond
+    // stub from A reaching right
+    let ga=ctx.createLinearGradient(a.x+10,midY,a.x+34,midY);
+    ga.addColorStop(0,'rgba(255,180,95,'+gutter+')');ga.addColorStop(1,'rgba(255,180,95,0)');
+    ctx.strokeStyle=ga;ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(a.x+10,midY);ctx.lineTo(a.x+34,midY-2);ctx.stroke();
+    // stub from B reaching left — but they never meet (the gap is grey)
+    let gb=ctx.createLinearGradient(b.x-10,midY,b.x-34,midY);
+    gb.addColorStop(0,'rgba(255,180,95,'+gutter+')');gb.addColorStop(1,'rgba(255,180,95,0)');
+    ctx.strokeStyle=gb;ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(b.x-10,midY);ctx.lineTo(b.x-34,midY-2);ctx.stroke();
+    // cold fog wedge filling the gap between them (the severance)
+    let sever=ctx.createRadialGradient((a.x+b.x)/2,midY,2,(a.x+b.x)/2,midY,30);
+    sever.addColorStop(0,'rgba(150,160,175,0.10)');sever.addColorStop(1,'rgba(150,160,175,0)');
+    ctx.fillStyle=sever;ctx.beginPath();ctx.arc((a.x+b.x)/2,midY,30,0,7);ctx.fill();
+  }
+
+  // each figure: cold, dim, in its own little pocket of faint self-light that reaches no one
+  folk.forEach((p,i)=>{
+    ctx.save();ctx.translate(p.x,fy);ctx.scale(p.scale,p.scale);
+    // tiny isolated cold pocket around them
+    let pk=ctx.createRadialGradient(0,-20,2,0,-20,42);
+    pk.addColorStop(0,'rgba(120,135,158,0.10)');pk.addColorStop(1,'rgba(120,135,158,0)');
+    ctx.fillStyle=pk;ctx.beginPath();ctx.arc(0,-20,42,0,7);ctx.fill();
+    // cloaked body, drained grey-blue
+    const bodyc=ctx.createLinearGradient(0,-40,0,4);bodyc.addColorStop(0,'#1c2230');bodyc.addColorStop(1,'#0c1017');
+    ctx.fillStyle=bodyc;
+    ctx.beginPath();ctx.moveTo(-9,2);ctx.quadraticCurveTo(-12,-22,-5,-32);ctx.quadraticCurveTo(0,-37,5,-32);ctx.quadraticCurveTo(12,-22,9,2);ctx.quadraticCurveTo(0,6,-9,2);ctx.closePath();ctx.fill();
+    // head, bowed slightly (turned inward, not toward neighbours)
+    ctx.beginPath();ctx.arc(0,-38,6,0,7);ctx.fillStyle='#131824';ctx.fill();
+    // cold moon rim — the only light that touches them, from the moon side (right)
+    ctx.strokeStyle='rgba(150,172,205,0.42)';ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(8,0);ctx.quadraticCurveTo(11,-22,5,-31);ctx.stroke();
+    // faint moonlit crown of the head
+    ctx.strokeStyle='rgba(150,172,205,0.3)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(0,-38,6,-1.4,0.4);ctx.stroke();
+    ctx.restore();
+  });
+
+  // low ground-fog drifting between the figures' feet, sealing them off
+  for(let i=0;i<8;i++){
+    const x=W*0.26+i*58+Math.sin(t*0.004+i)*10;
+    const y=fy+6+Math.sin(t*0.008+i)*3;
+    let fg=ctx.createRadialGradient(x,y,0,x,y,52);
+    fg.addColorStop(0,'rgba(160,170,185,'+(0.10+f*0.03)+')');fg.addColorStop(1,'rgba(160,170,185,0)');
+    ctx.fillStyle=fg;ctx.beginPath();ctx.arc(x,y,52,0,7);ctx.fill();
+  }
+
+  drawFog(t,0.2);
+  vignette(0.74);
+  paper();
+}
+
+// ===== PAGE 4 — THE COLD LANTERN =====
+// SYMBOLISM: hope is smothered, not extinguished. A smolder still lives inside the great
+// lantern, throwing a tiny warm light — enough to draw the people, who gather around it
+// in shadow, still hoping. Above them the phantom hovers in the cold moonlight, presiding
+// over the square, keeping its lie alive. The ember of hope, guarded by doubt.
+function page4(t,variant){variant=variant||0;
+  const f=flickVal(t);
+
+  // ============ VARIANT 2 — THE DARK FOREST OF THE GOBLIN TALES ============
+  // "the tales they told of those goblins... even the bravest knights refused the road."
+  // show the dark woods themselves, with yellow eyes blinking in them (reuses page 6's forest).
+  if(variant===2){
+    nightBase('#0d1116','#0a0d12','#07090d');
+    const groundY=H*0.80;
+    const treeLine=H*0.52;
+    // deep back layer — dense receding wall of small trees
+    ctx.fillStyle='#0a0d12';
+    for(let i=0;i<20;i++){const x=i*38-20;const h=44+((i*47)%40);const w=18+((i*13)%14);
+      ctx.beginPath();ctx.moveTo(x,treeLine);ctx.lineTo(x+w*0.5,treeLine-h);ctx.lineTo(x+w,treeLine);ctx.closePath();ctx.fill();}
+    // mid layer — taller trees
+    ctx.fillStyle='#080b10';
+    for(let i=0;i<13;i++){const x=i*58-30;const h=90+((i*61)%80);const w=26+((i*23)%18);
+      ctx.beginPath();ctx.moveTo(x,treeLine+16);ctx.lineTo(x+w*0.5,treeLine-h);ctx.lineTo(x+w,treeLine+16);ctx.closePath();ctx.fill();
+      ctx.fillRect(x+w*0.5-3,treeLine-h*0.3,6,h*0.3+16);}
+    // near framing trees at the edges (like a mouth of woods)
+    ctx.fillStyle='#060809';
+    const frameTrees=[[-30,360,80],[30,320,58],[W-80,360,84],[W-30,320,60]];
+    frameTrees.forEach(([x,h,w])=>{ctx.beginPath();ctx.moveTo(x,groundY);ctx.lineTo(x+w*0.5,groundY-h);ctx.lineTo(x+w,groundY);ctx.closePath();ctx.fill();
+      ctx.fillRect(x+w*0.5-5,groundY-h*0.4,10,h*0.4);});
+    // ground
+    const gnd=ctx.createLinearGradient(0,treeLine,0,H);gnd.addColorStop(0,'#080b10');gnd.addColorStop(0.4,'#090c11');gnd.addColorStop(1,'#05070b');
+    ctx.fillStyle=gnd;ctx.fillRect(0,treeLine,W,H);
+    // faint mist along the treeline
+    for(let i=0;i<6;i++){const x=i*130+Math.sin(t*0.004+i)*14;const y=treeLine+10+Math.sin(t*0.006+i)*4;
+      let m=ctx.createRadialGradient(x,y,0,x,y,90);m.addColorStop(0,'rgba(150,160,175,0.07)');m.addColorStop(1,'rgba(150,160,175,0)');
+      ctx.fillStyle=m;ctx.beginPath();ctx.arc(x,y,90,0,7);ctx.fill();}
+    // MANY yellow goblin eyes blinking deep in the treeline (the fearsome tales)
+    const eyePairs=[
+      {x:W*0.18,y:treeLine-6,blink:0.0},{x:W*0.30,y:treeLine+8,blink:2.1},
+      {x:W*0.44,y:treeLine-12,blink:4.3},{x:W*0.56,y:treeLine+4,blink:1.2},
+      {x:W*0.68,y:treeLine-4,blink:3.0},{x:W*0.80,y:treeLine-10,blink:5.1},
+      {x:W*0.24,y:treeLine+18,blink:1.8},{x:W*0.62,y:treeLine+16,blink:2.6},
+      {x:W*0.38,y:treeLine+2,blink:0.9},{x:W*0.74,y:treeLine+10,blink:3.7}
+    ];
+    eyePairs.forEach(e=>{
+      const open=(Math.sin(t*0.003+e.blink)>-0.9)?1:0.2;  // slow, occasional blink (90% slower)
+      const gl=(0.5+f*0.2)*open;
+      ctx.fillStyle='rgba(225,195,80,'+gl+')';
+      ctx.beginPath();ctx.arc(e.x-2.4,e.y,1.2,0,7);ctx.fill();
+      ctx.beginPath();ctx.arc(e.x+2.4,e.y,1.2,0,7);ctx.fill();
+      let eg2=ctx.createRadialGradient(e.x,e.y,0,e.x,e.y,7);eg2.addColorStop(0,'rgba(225,195,80,'+(gl*0.2)+')');eg2.addColorStop(1,'rgba(225,195,80,0)');
+      ctx.fillStyle=eg2;ctx.beginPath();ctx.arc(e.x,e.y,7,0,7);ctx.fill();
+    });
+    drawFog(t,0.2);
+    vignette(0.76);
+    paper();
+    return;
+  }
+
+  nightBase('#12161f','#0e121b','#090c12');
+  // dull moon again, upper area, cold and veiled (phantom hovers in its light)
+  const moonX=W*0.50, moonY=H*0.18;
+  let halo=ctx.createRadialGradient(moonX,moonY,6,moonX,moonY,W*0.55);
+  halo.addColorStop(0,'rgba(172,185,205,0.20)');halo.addColorStop(0.4,'rgba(148,162,185,0.09)');halo.addColorStop(1,'rgba(148,162,185,0)');
+  ctx.fillStyle=halo;ctx.fillRect(0,0,W,H);
+  let disc=ctx.createRadialGradient(moonX,moonY,2,moonX,moonY,30);
+  disc.addColorStop(0,'rgba(205,215,230,0.5)');disc.addColorStop(0.6,'rgba(180,195,215,0.24)');disc.addColorStop(1,'rgba(180,195,215,0)');
+  ctx.fillStyle=disc;ctx.beginPath();ctx.arc(moonX,moonY,30,0,7);ctx.fill();
+
+  // square: cold stone ground, surrounding rooftops in shadow
+  const groundY=H*0.74;
+  ctx.fillStyle='#0a0d14';
+  for(let i=0;i<11;i++){const x=i*70-20;const rh=40+((i*41)%56);ctx.beginPath();ctx.moveTo(x,groundY);ctx.lineTo(x,groundY-rh);ctx.lineTo(x+18,groundY-rh-14);ctx.lineTo(x+36,groundY-rh);ctx.lineTo(x+36,groundY);ctx.closePath();ctx.fill();}
+  const gnd=ctx.createLinearGradient(0,groundY,0,H);gnd.addColorStop(0,'#0b0e15');gnd.addColorStop(1,'#070a10');
+  ctx.fillStyle=gnd;ctx.fillRect(0,groundY,W,H);
+  // faint cold cobblestone hints
+  ctx.strokeStyle='rgba(120,135,158,0.06)';ctx.lineWidth=1;
+  for(let i=0;i<5;i++){const y=groundY+10+i*14;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // ================= THE GREAT LANTERN (centre) with a dying smolder =================
+  const lx=W*0.5, lbaseY=groundY+8;
+  // its faint warm pool on the ground — small, struggling, but WARM (the only warmth)
+  warmGlow(lx, lbaseY-70, 150, 0.32+f*0.10, t);
+
+  // tall stone/iron post
+  ctx.fillStyle='#0c0f16';ctx.fillRect(lx-5,lbaseY-150,10,150);
+  ctx.strokeStyle='rgba(150,172,205,0.18)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(lx-5,lbaseY-150);ctx.lineTo(lx-5,lbaseY);ctx.stroke();
+  // the great lantern housing at the top — a large iron-framed glass box
+  const lyTop=lbaseY-210, lh=64, lw=48;
+  ctx.fillStyle='#0e1219';
+  ctx.beginPath();
+  ctx.moveTo(lx-lw/2,lyTop+lh);ctx.lineTo(lx-lw/2,lyTop+8);ctx.lineTo(lx,lyTop-12);ctx.lineTo(lx+lw/2,lyTop+8);ctx.lineTo(lx+lw/2,lyTop+lh);ctx.closePath();
+  ctx.fill();
+  // the smolder inside — a small warm ember, not a full flame
+  const emberY=lyTop+lh-20;
+  let ember=ctx.createRadialGradient(lx,emberY,0,lx,emberY,26);
+  ember.addColorStop(0,'rgba(255,190,110,'+(0.75+f*0.2)+')');
+  ember.addColorStop(0.4,'rgba(240,140,60,'+(0.35+f*0.1)+')');
+  ember.addColorStop(1,'rgba(220,110,40,0)');
+  ctx.fillStyle=ember;ctx.beginPath();ctx.arc(lx,emberY,26,0,7);ctx.fill();
+  // tiny ember core
+  let core=ctx.createRadialGradient(lx,emberY,0,lx,emberY,7);
+  core.addColorStop(0,'rgba(255,225,160,'+(0.85+f*0.15)+')');core.addColorStop(1,'rgba(255,180,90,0)');
+  ctx.fillStyle=core;ctx.beginPath();ctx.arc(lx,emberY,7*(0.8+f*0.3),0,7);ctx.fill();
+  // iron frame over the glass (mullions), warm-lit on inner edge
+  ctx.strokeStyle='rgba(30,22,14,0.95)';ctx.lineWidth=2.4;
+  ctx.beginPath();ctx.moveTo(lx-lw/2,lyTop+8);ctx.lineTo(lx-lw/2,lyTop+lh);ctx.moveTo(lx+lw/2,lyTop+8);ctx.lineTo(lx+lw/2,lyTop+lh);
+  ctx.moveTo(lx,lyTop-12);ctx.lineTo(lx,lyTop+lh);ctx.stroke();
+  ctx.strokeStyle='rgba(255,180,100,'+(0.3+f*0.15)+')';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(lx-lw/2+2,lyTop+lh);ctx.lineTo(lx-lw/2+2,lyTop+10);ctx.stroke();
+  // little roof cap
+  ctx.fillStyle='#0a0d13';ctx.beginPath();ctx.moveTo(lx-lw/2-4,lyTop+8);ctx.lineTo(lx,lyTop-16);ctx.lineTo(lx+lw/2+4,lyTop+8);ctx.closePath();ctx.fill();
+  // a few embers drifting up from the smolder
+  for(let i=0;i<6;i++){const ex=lx+Math.sin(t*0.02+i*2)*10;const ey=emberY-((t*0.03+i*22)%70);const al=Math.max(0,1-((t*0.03+i*22)%70)/70);ctx.fillStyle='rgba(255,185,105,'+al*0.6+')';ctx.fillRect(ex,ey,1.5,1.5);}
+
+  // ================= THE PEOPLE gathered around the ember in shadow =================
+  // ringed around the base, drawn as shadowed cloaked figures, warm-rimmed on lantern side
+  const ring=[
+    {x:lx-96,s:0.9,face:1},{x:lx-58,s:1.02,face:1},{x:lx-24,s:0.95,face:1},
+    {x:lx+30,s:1.0,face:-1},{x:lx+66,s:1.05,face:-1},{x:lx+104,s:0.9,face:-1}
+  ];
+  const py=lbaseY+2;
+  ring.forEach(p=>{
+    ctx.save();ctx.translate(p.x,py);ctx.scale(p.s,p.s);
+    const bodyc=ctx.createLinearGradient(0,-42,0,4);bodyc.addColorStop(0,'#161b26');bodyc.addColorStop(1,'#090c12');
+    ctx.fillStyle=bodyc;
+    ctx.beginPath();ctx.moveTo(-10,4);ctx.quadraticCurveTo(-13,-24,-6,-34);ctx.quadraticCurveTo(0,-40,6,-34);ctx.quadraticCurveTo(13,-24,10,4);ctx.quadraticCurveTo(0,8,-10,4);ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.arc(0,-40,6,0,7);ctx.fillStyle='#10141d';ctx.fill();
+    // warm rim on the side facing the lantern (they lean toward the ember)
+    const rimX=p.face; // +1 means lantern is to their right
+    ctx.strokeStyle='rgba(255,175,95,'+(0.4+f*0.18)+')';ctx.lineWidth=1.5;
+    if(rimX>0){ctx.beginPath();ctx.moveTo(9,2);ctx.quadraticCurveTo(12,-24,5,-33);ctx.stroke();ctx.beginPath();ctx.arc(1.5,-40,6,-1,1.1);ctx.stroke();}
+    else{ctx.beginPath();ctx.moveTo(-9,2);ctx.quadraticCurveTo(-12,-24,-5,-33);ctx.stroke();ctx.beginPath();ctx.arc(-1.5,-40,6,2,4.2);ctx.stroke();}
+    ctx.restore();
+  });
+
+  // ================= THE PHANTOM hovering above in the moonlight =================
+  // v0: distant/dim (just the dark lantern). v1: forward & active (hissing the lie).
+  // v2: recedes as the goblin tales take over (yellow eyes appear at the edges).
+  const phScale = variant===1 ? 0.78 : (variant===2 ? 0.5 : 0.58);
+  const phY     = variant===1 ? H*0.34 : (variant===2 ? H*0.24 : H*0.28);
+  const phAlpha = variant===1 ? 1.0 : (variant===2 ? 0.55 : 0.7);
+  const phx=W*0.5, phy=phY, ps=phScale;
+  const sway=Math.sin(t*0.0025)*5;
+  ctx.save();ctx.globalAlpha=phAlpha;ctx.translate(phx,phy);ctx.scale(ps,ps);
+  // cold self-glow
+  let cg=ctx.createRadialGradient(0,10,6,0,10,180);cg.addColorStop(0,'rgba(120,142,178,'+(0.14*phAlpha)+')');cg.addColorStop(1,'rgba(120,142,178,0)');
+  ctx.fillStyle=cg;ctx.fillRect(-200,-160,400,360);
+  // trailing tendrils reaching DOWN toward the square — longer/more active when hissing (v1)
+  ctx.strokeStyle='rgba(120,140,175,'+(variant===1?0.5:0.34)+')';
+  const tendrilReach = variant===1 ? 1.35 : 1;
+  for(let i=-2;i<=2;i++){const drift=Math.sin(t*0.003+i)*(variant===1?20:12);ctx.lineWidth=6-Math.abs(i);ctx.beginPath();ctx.moveTo(i*15,64);ctx.quadraticCurveTo(i*18+drift,150*tendrilReach,i*12+drift,230*tendrilReach);ctx.stroke();}
+  // mantle (locked cuttlefish form)
+  ctx.save();const breathe=Math.sin(t*0.004)*0.04;ctx.scale(1+breathe,1-breathe);
+  const mantle=ctx.createLinearGradient(0,-78,0,72);mantle.addColorStop(0,'#48546b');mantle.addColorStop(0.5,'#2c3547');mantle.addColorStop(1,'#1a2130');
+  ctx.fillStyle=mantle;
+  ctx.beginPath();ctx.moveTo(-50,58);ctx.quadraticCurveTo(-68,-6,-42,-50);ctx.quadraticCurveTo(-24,-82,0,-84);ctx.quadraticCurveTo(24,-82,42,-50);ctx.quadraticCurveTo(68,-6,50,58);ctx.quadraticCurveTo(0,74,-50,58);ctx.closePath();ctx.fill();
+  // side fins
+  ctx.fillStyle='rgba(60,72,92,0.5)';
+  ctx.beginPath();ctx.moveTo(-48,8);ctx.quadraticCurveTo(-74+sway,22,-56,50);ctx.quadraticCurveTo(-50,28,-48,8);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(48,8);ctx.quadraticCurveTo(74-sway,22,56,50);ctx.quadraticCurveTo(50,28,48,8);ctx.closePath();ctx.fill();
+  // contour stripes
+  ctx.strokeStyle='rgba(150,170,205,0.12)';ctx.lineWidth=1.3;
+  for(let k=-2;k<=2;k++){ctx.beginPath();ctx.moveTo(k*13,-68);ctx.quadraticCurveTo(k*19,-8,k*13,52);ctx.stroke();}
+  // cold rim along crown
+  ctx.strokeStyle='rgba(155,180,220,0.4)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-40,-48);ctx.quadraticCurveTo(0,-82,42,-48);ctx.stroke();
+  // cold hollow eyes (looking down at the square)
+  const eg=0.5+f*0.25;
+  ctx.fillStyle='rgba(190,208,240,'+eg+')';
+  ctx.save();ctx.translate(-17,-26);ctx.rotate(-0.15);ctx.beginPath();ctx.ellipse(0,0,4,8,0,0,7);ctx.fill();ctx.restore();
+  ctx.save();ctx.translate(17,-26);ctx.rotate(0.15);ctx.beginPath();ctx.ellipse(0,0,4,8,0,0,7);ctx.fill();ctx.restore();
+  ctx.fillStyle='rgba(20,28,44,0.9)';
+  ctx.save();ctx.translate(-17,-26);ctx.rotate(-0.15);ctx.beginPath();ctx.ellipse(0,1.5,1.6,5,0,0,7);ctx.fill();ctx.restore();
+  ctx.save();ctx.translate(17,-26);ctx.rotate(0.15);ctx.beginPath();ctx.ellipse(0,1.5,1.6,5,0,0,7);ctx.fill();ctx.restore();
+  ctx.strokeStyle='rgba(150,175,215,0.3)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-28,-38);ctx.quadraticCurveTo(0,-30,28,-38);ctx.stroke();
+  ctx.restore();
+  ctx.restore();
+
+  drawFog(t,0.2);
+  vignette(0.72);
+  paper();
+}
+
+// ===== PAGE 5 — THE PRINCE'S LITTLE FLAME =====
+// SYMBOLISM: something pure can be passed, even in dark times. The moment of inheritance —
+// the Queen (mother) places the small lantern's flame into the young prince's hands. Their
+// shared warmth pushes the grey back around them. She lit it before the fog came; by
+// passing it, she gives him a light the doubt can never touch. This quiet act saves a kingdom.
+function page5(t,variant){variant=variant||0;
+  const f=flickVal(t);
+  // a touch warmer than the fogged pages — this is "before the fog", a tender pocket
+  nightBase('#161520','#12111b','#0b0a12');
+
+  // faint cold world still at the edges (fog waiting beyond their warmth)
+  let edge=ctx.createLinearGradient(0,0,0,H);edge.addColorStop(0,'rgba(120,132,150,0.10)');edge.addColorStop(1,'rgba(110,122,140,0.04)');
+  ctx.fillStyle=edge;ctx.fillRect(0,0,W,H);
+
+  const groundY=H*0.80;
+  // suggestion of a chamber/threshold behind them, warm-touched
+  ctx.fillStyle='#0e0c16';
+  ctx.fillRect(0,groundY,W,H-groundY);
+  // a soft arch behind, like a doorway they stand within
+  ctx.strokeStyle='rgba(120,100,70,0.12)';ctx.lineWidth=10;
+  ctx.beginPath();ctx.moveTo(W*0.30,groundY);ctx.lineTo(W*0.30,H*0.34);ctx.quadraticCurveTo(W*0.5,H*0.20,W*0.70,H*0.34);ctx.lineTo(W*0.70,groundY);ctx.stroke();
+
+  // ================= THE SHARED FLAME between them (heart of the image) =================
+  // the small lantern sits between mother and son, being passed hand to hand.
+  const LX=W*0.5, LY=groundY-30;
+  // their shared warm pocket, pushing the grey back — generous, tender
+  warmGlow(LX, LY, 240, 0.5+f*0.12, t);
+  warmGlow(LX, LY, 120, 0.4+f*0.12, t);
+
+  // ---- QUEEN (mother) on the LEFT, leaning in, offering the flame ----
+  // locked queen design, angled to face right toward the prince, arms lowered to pass it
+  (function drawQueenPassing(cx,cy,s){
+    ctx.save();ctx.translate(cx,cy);ctx.scale(s,s);
+    const cool=ctx.createLinearGradient(0,-52,0,58);cool.addColorStop(0,'#26304a');cool.addColorStop(0.55,'#1a2036');cool.addColorStop(1,'#0d1020');
+    const warm='rgba(255,185,100,'+(0.6+f*0.28)+')';
+    // gown (flared), body turned slightly toward the prince (right)
+    ctx.beginPath();
+    ctx.moveTo(-8,-22);ctx.quadraticCurveTo(-11,-6,-6,2);
+    ctx.quadraticCurveTo(-9,4,-26,52);ctx.quadraticCurveTo(-12,58,2,58);
+    ctx.quadraticCurveTo(16,58,26,50);ctx.quadraticCurveTo(10,4,7,2);
+    ctx.quadraticCurveTo(11,-6,8,-22);ctx.quadraticCurveTo(0,-27,-8,-22);ctx.closePath();
+    ctx.fillStyle=cool;ctx.fill();
+    // warm rim on the right (flame side)
+    ctx.strokeStyle=warm;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(7,0);ctx.quadraticCurveTo(11,-6,8,-21);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(26,50);ctx.quadraticCurveTo(11,6,7,0);ctx.stroke();
+    // shoulders + short neck (locked fix) + head
+    ctx.strokeStyle=warm;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-8,-24);ctx.quadraticCurveTo(0,-30,8,-24);ctx.stroke();
+    ctx.fillStyle='#1a2036';ctx.beginPath();ctx.moveTo(-3,-23);ctx.lineTo(3,-23);ctx.lineTo(2.2,-32);ctx.lineTo(-2.2,-32);ctx.closePath();ctx.fill();
+    // BOTH arms reaching down-right to offer the lantern
+    ctx.strokeStyle=cool;ctx.lineWidth=4.5;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(5,-16);ctx.quadraticCurveTo(16,-8,24,4);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(6,-17);ctx.quadraticCurveTo(17,-9,24,3);ctx.stroke();
+    // head, tilted gently down toward the child (tender), seated firmly on the neck
+    ctx.save();ctx.rotate(0.08);
+    ctx.beginPath();ctx.ellipse(0,-35,7,8.5,0,0,7);ctx.fillStyle='#181426';ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.7;ctx.beginPath();ctx.arc(1.4,-35,7.6,-1,1.2);ctx.stroke();
+    ctx.restore();
+    // tall crown (lowered to match head, locked)
+    ctx.strokeStyle='rgba(255,215,130,'+(0.55+f*0.35)+')';ctx.lineWidth=1.8;
+    ctx.beginPath();ctx.moveTo(-6,-42);ctx.lineTo(-5,-48);ctx.lineTo(-2.5,-43);ctx.lineTo(0,-50);ctx.lineTo(2.5,-43);ctx.lineTo(5,-48);ctx.lineTo(6,-42);ctx.stroke();
+    ctx.fillStyle='rgba(255,235,170,'+(0.6+f*0.3)+')';ctx.beginPath();ctx.arc(0,-50,1.2,0,7);ctx.fill();
+    ctx.restore();
+  })(LX-72, groundY, 1.5);
+
+  // ---- PRINCE (young, smaller) on the RIGHT, reaching up to receive ----
+  // locked prince design but scaled down (a boy), hands lifting toward the offered flame
+  (function drawPrinceReceiving(cx,cy,s){
+    ctx.save();ctx.translate(cx,cy);ctx.scale(s,s);
+    const cool=ctx.createLinearGradient(0,-52,0,52);cool.addColorStop(0,'#274565');cool.addColorStop(0.5,'#173049');cool.addColorStop(1,'#0c1420');
+    const warm='rgba(255,185,100,'+(0.6+f*0.28)+')';
+    const coolRim='rgba(120,160,205,0.35)';
+    // legs
+    ctx.strokeStyle=cool;ctx.lineCap='round';ctx.lineWidth=7;
+    ctx.beginPath();ctx.moveTo(-5,26);ctx.lineTo(-9,50);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(5,26);ctx.lineTo(10,50);ctx.stroke();
+    ctx.lineWidth=6;ctx.strokeStyle='#0c1420';
+    ctx.beginPath();ctx.moveTo(-9,50);ctx.lineTo(-15,51);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(10,50);ctx.lineTo(16,51);ctx.stroke();
+    // hips
+    ctx.fillStyle=cool;ctx.beginPath();ctx.moveTo(-8,8);ctx.lineTo(8,8);ctx.lineTo(9,26);ctx.quadraticCurveTo(0,30,-9,26);ctx.closePath();ctx.fill();
+    // tunic (broad shoulders to narrow waist) — turned toward mother (left)
+    ctx.beginPath();ctx.moveTo(-15,-24);ctx.lineTo(-8,11);ctx.quadraticCurveTo(0,15,8,11);ctx.lineTo(15,-24);ctx.quadraticCurveTo(0,-30,-15,-24);ctx.closePath();
+    ctx.fillStyle=cool;ctx.fill();
+    // short cape trailing right
+    ctx.beginPath();ctx.moveTo(14,-23);ctx.quadraticCurveTo(30,-6,20,24);ctx.quadraticCurveTo(14,-2,9,-18);ctx.closePath();ctx.fillStyle='#0e1c2960';ctx.fill();
+    ctx.strokeStyle=coolRim;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(14,-23);ctx.quadraticCurveTo(30,-6,20,24);ctx.stroke();
+    // warm rim on the LEFT now (flame is to his left)
+    ctx.strokeStyle=warm;ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-15,-23);ctx.lineTo(-8,9);ctx.stroke();
+    // belt
+    ctx.strokeStyle='rgba(200,160,90,'+(0.5+f*0.25)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-8,10);ctx.quadraticCurveTo(0,14,8,10);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(-14,-24);ctx.quadraticCurveTo(0,-30,15,-24);ctx.stroke();
+    // BOTH arms reaching up-left to receive the lantern
+    ctx.strokeStyle=cool;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(-12,-18);ctx.quadraticCurveTo(-22,-14,-28,-4);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-13,-19);ctx.quadraticCurveTo(-23,-15,-28,-5);ctx.stroke();
+    // neck + head, tilted up toward mother (left), chin lifted — seated firmly on neck
+    ctx.fillStyle='#101a24';ctx.fillRect(-3.5,-32,7,9);
+    ctx.save();ctx.rotate(-0.08);
+    ctx.beginPath();ctx.moveTo(-7,-35);ctx.quadraticCurveTo(-8,-45,0,-46);ctx.quadraticCurveTo(8,-45,7,-35);ctx.quadraticCurveTo(6,-28,0,-28);ctx.quadraticCurveTo(-6,-28,-7,-35);ctx.closePath();ctx.fillStyle='#111a22';ctx.fill();
+    // warm-lit face on left (flame side)
+    ctx.strokeStyle=warm;ctx.lineWidth=1.9;ctx.beginPath();ctx.moveTo(-6,-37);ctx.quadraticCurveTo(-7,-28,-1,-28);ctx.stroke();
+    ctx.restore();
+    // circlet
+    ctx.strokeStyle='rgba(255,215,130,'+(0.6+f*0.35)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-7,-43);ctx.quadraticCurveTo(0,-47,7,-43);ctx.stroke();
+    ctx.fillStyle='rgba(255,235,170,'+(0.75+f*0.3)+')';ctx.beginPath();ctx.arc(0,-46,1.4,0,7);ctx.fill();
+    ctx.restore();
+  })(LX+66, groundY, 1.12);
+
+  // ---- the small lantern itself, held between their reaching hands ----
+  lanternObj(LX, LY, f);
+  // a few embers rising from the shared flame
+  for(let i=0;i<7;i++){const ex=LX+Math.sin(t*0.02+i*2)*9;const ey=LY-((t*0.03+i*20)%64);const al=Math.max(0,1-((t*0.03+i*20)%64)/64);ctx.fillStyle='rgba(255,195,110,'+al*0.65+')';ctx.fillRect(ex,ey,1.6,1.6);}
+
+  // gentle fog only at the far edges (kept back by their warmth)
+  for(let i=0;i<4;i++){const x=(i<2? i*90 : W-(i-1)*90);const y=H*0.5+Math.sin(t*0.005+i)*20;let fg=ctx.createRadialGradient(x,y,0,x,y,120);fg.addColorStop(0,'rgba(150,160,175,0.06)');fg.addColorStop(1,'rgba(150,160,175,0)');ctx.fillStyle=fg;ctx.beginPath();ctx.arc(x,y,120,0,7);ctx.fill();}
+
+  vignette(0.68);
+  paper();
+}
+
+// ===== PAGE 6 — INTO THE FOREST =====
+// SYMBOLISM: the first refusal of doubt. The phantom makes action conditional — a
+// legendary sword, seven years, or death — the trick that keeps you from ever beginning.
+// The prince rejects the premise. He doesn't fight the fear; he looks at the small true
+// thing he already carries and chooses to GO AND SEE. Empty-handed is the point: he crosses
+// the threshold with nothing but the inherited flame and the willingness to look.
+function page6(t,variant){variant=variant||0;
+  const f=flickVal(t);
+  nightBase('#0d1116','#0a0d12','#07090d');
+
+  // ---- the dark forest ahead: pushed back, with clear ground before it ----
+  const groundY=H*0.80;
+  const treeLine=H*0.56;   // the forest edge sits well behind the prince
+  // deep back layer — a dense receding wall of small trees (faintest, coldest)
+  ctx.fillStyle='#0a0d12';
+  for(let i=0;i<20;i++){const x=i*38-20;const h=44+((i*47)%40);const w=18+((i*13)%14);
+    ctx.beginPath();ctx.moveTo(x,treeLine);ctx.lineTo(x+w*0.5,treeLine-h);ctx.lineTo(x+w,treeLine);ctx.closePath();ctx.fill();}
+  // mid layer — taller trees just in front of the back wall
+  ctx.fillStyle='#080b10';
+  for(let i=0;i<13;i++){const x=i*58-30;const h=80+((i*61)%70);const w=26+((i*23)%18);
+    ctx.beginPath();ctx.moveTo(x,treeLine+16);ctx.lineTo(x+w*0.5,treeLine-h);ctx.lineTo(x+w,treeLine+16);ctx.closePath();ctx.fill();
+    ctx.fillRect(x+w*0.5-3,treeLine-h*0.3,6,h*0.3+16);}
+  // near FRAMING trees — only at the extreme left & right edges, tall, like curtains
+  ctx.fillStyle='#060809';
+  const frameTrees=[[-30,340,70],[24,300,50],[W-70,340,74],[W-24,300,52]];
+  frameTrees.forEach(([x,h,w])=>{ctx.beginPath();ctx.moveTo(x,groundY);ctx.lineTo(x+w*0.5,groundY-h);ctx.lineTo(x+w,groundY);ctx.closePath();ctx.fill();
+    ctx.fillRect(x+w*0.5-5,groundY-h*0.4,10,h*0.4);});
+  // ground — a clear stretch of open earth between the prince and the treeline
+  const gnd=ctx.createLinearGradient(0,treeLine,0,H);gnd.addColorStop(0,'#080b10');gnd.addColorStop(0.4,'#090c11');gnd.addColorStop(1,'#05070b');
+  ctx.fillStyle=gnd;ctx.fillRect(0,treeLine,W,H);
+  // faint mist along the treeline (separates the forest from the foreground)
+  for(let i=0;i<6;i++){const x=i*130+Math.sin(t*0.004+i)*14;const y=treeLine+10+Math.sin(t*0.006+i)*4;
+    let m=ctx.createRadialGradient(x,y,0,x,y,90);m.addColorStop(0,'rgba(150,160,175,0.07)');m.addColorStop(1,'rgba(150,160,175,0)');
+    ctx.fillStyle=m;ctx.beginPath();ctx.arc(x,y,90,0,7);ctx.fill();}
+
+  // ---- yellow goblin eyes blinking in the distant treeline (the feared unknown) ----
+  const eyePairs=[
+    {x:W*0.22,y:treeLine-6,blink:0.0},
+    {x:W*0.36,y:treeLine+8,blink:2.1},
+    {x:W*0.52,y:treeLine-14,blink:4.3},
+    {x:W*0.64,y:treeLine+4,blink:1.2},
+    {x:W*0.46,y:treeLine-2,blink:3.0},
+    {x:W*0.74,y:treeLine-10,blink:5.1},
+    {x:W*0.30,y:treeLine+16,blink:1.8}
+  ];
+  eyePairs.forEach(e=>{
+    const open=(Math.sin(t*0.003+e.blink)>-0.85)?1:0.15; // occasional blink
+    const gl=(0.5+f*0.2)*open;
+    ctx.fillStyle='rgba(225,195,80,'+gl+')';
+    ctx.beginPath();ctx.arc(e.x-2.4,e.y,1.2,0,7);ctx.fill();
+    ctx.beginPath();ctx.arc(e.x+2.4,e.y,1.2,0,7);ctx.fill();
+    // faint glow around each pair
+    let eg=ctx.createRadialGradient(e.x,e.y,0,e.x,e.y,7);eg.addColorStop(0,'rgba(225,195,80,'+(gl*0.22)+')');eg.addColorStop(1,'rgba(225,195,80,0)');
+    ctx.fillStyle=eg;ctx.beginPath();ctx.arc(e.x,e.y,7,0,7);ctx.fill();
+  });
+
+  // ================= THE PHANTOM looming behind/above, whispering =================
+  // v0: full & looming (the threat). v1: faded & receding (the prince rejects it, walks on).
+  const phAlpha = variant===1 ? 0.35 : 1.0;
+  const phScale = variant===1 ? 0.5 : 0.66;
+  const phx=W*0.24, phy=variant===1?H*0.24:H*0.30, ps=phScale;
+  const sway=Math.sin(t*0.0025)*5;
+  ctx.save();ctx.globalAlpha=phAlpha;ctx.translate(phx,phy);ctx.scale(ps,ps);
+  let cg=ctx.createRadialGradient(0,10,6,0,10,170);cg.addColorStop(0,'rgba(120,142,178,0.13)');cg.addColorStop(1,'rgba(120,142,178,0)');
+  ctx.fillStyle=cg;ctx.fillRect(-200,-160,400,360);
+  // tendrils curling toward the prince (down-right, toward his ear) — the whisper
+  ctx.strokeStyle='rgba(120,140,175,0.4)';
+  const reach=Math.sin(t*0.004)*8;
+  ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(30,50);ctx.quadraticCurveTo(120+reach,90,180+reach,150);ctx.stroke();
+  ctx.lineWidth=3.5;ctx.beginPath();ctx.moveTo(26,68);ctx.quadraticCurveTo(110-reach,120,168+reach,168);ctx.stroke();
+  ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(180+reach,150);ctx.quadraticCurveTo(190+reach,142,183+reach,136);ctx.stroke();
+  // other tendrils drift down
+  ctx.strokeStyle='rgba(120,140,175,0.3)';
+  for(let i=-2;i<=0;i++){const drift=Math.sin(t*0.003+i)*10;ctx.lineWidth=5-Math.abs(i);ctx.beginPath();ctx.moveTo(i*15,64);ctx.quadraticCurveTo(i*18+drift,140,i*12+drift,210);ctx.stroke();}
+  // mantle (locked cuttlefish)
+  ctx.save();const breathe=Math.sin(t*0.004)*0.04;ctx.scale(1+breathe,1-breathe);
+  const mantle=ctx.createLinearGradient(0,-78,0,72);mantle.addColorStop(0,'#48546b');mantle.addColorStop(0.5,'#2c3547');mantle.addColorStop(1,'#1a2130');
+  ctx.fillStyle=mantle;
+  ctx.beginPath();ctx.moveTo(-50,58);ctx.quadraticCurveTo(-68,-6,-42,-50);ctx.quadraticCurveTo(-24,-82,0,-84);ctx.quadraticCurveTo(24,-82,42,-50);ctx.quadraticCurveTo(68,-6,50,58);ctx.quadraticCurveTo(0,74,-50,58);ctx.closePath();ctx.fill();
+  ctx.fillStyle='rgba(60,72,92,0.5)';
+  ctx.beginPath();ctx.moveTo(-48,8);ctx.quadraticCurveTo(-74+sway,22,-56,50);ctx.quadraticCurveTo(-50,28,-48,8);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(48,8);ctx.quadraticCurveTo(74-sway,22,56,50);ctx.quadraticCurveTo(50,28,48,8);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(150,170,205,0.12)';ctx.lineWidth=1.3;
+  for(let k=-2;k<=2;k++){ctx.beginPath();ctx.moveTo(k*13,-68);ctx.quadraticCurveTo(k*19,-8,k*13,52);ctx.stroke();}
+  ctx.strokeStyle='rgba(155,180,220,0.4)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-40,-48);ctx.quadraticCurveTo(0,-82,42,-48);ctx.stroke();
+  // eyes looking down-right toward the prince
+  const eg=0.5+f*0.25;
+  ctx.fillStyle='rgba(190,208,240,'+eg+')';
+  ctx.save();ctx.translate(-15,-26);ctx.rotate(-0.05);ctx.beginPath();ctx.ellipse(0,0,4,8,0,0,7);ctx.fill();ctx.restore();
+  ctx.save();ctx.translate(19,-26);ctx.rotate(0.28);ctx.beginPath();ctx.ellipse(0,0,4,8,0,0,7);ctx.fill();ctx.restore();
+  ctx.fillStyle='rgba(20,28,44,0.9)';
+  ctx.save();ctx.translate(-15,-26);ctx.rotate(-0.05);ctx.beginPath();ctx.ellipse(0,2,1.6,5,0,0,7);ctx.fill();ctx.restore();
+  ctx.save();ctx.translate(19,-26);ctx.rotate(0.28);ctx.beginPath();ctx.ellipse(0,2,1.6,5,0,0,7);ctx.fill();ctx.restore();
+  ctx.restore();
+  ctx.restore();
+
+  // ================= THE PRINCE at the threshold / walking in, empty-handed =================
+  // v0: at the threshold (about to go). v1: stepped forward into the woods, smaller/deeper.
+  const px=variant===1?W*0.52:W*0.44, py=variant===1?groundY-8:groundY+4, s=variant===1?1.15:1.35;
+  const LX=px+24*s, LY=py-18*s; // lantern in his right hand, out front
+  // his little warm pool — modest, personal, moving into the dark
+  warmGlow(LX, LY, 150, 0.4+f*0.12, t);
+
+  (function drawPrinceStriding(cx,cy,sc){
+    ctx.save();ctx.translate(cx,cy);ctx.scale(sc,sc);
+    const cool=ctx.createLinearGradient(0,-52,0,52);cool.addColorStop(0,'#213a52');cool.addColorStop(0.5,'#132536');cool.addColorStop(1,'#0a1017');
+    const warm='rgba(255,180,95,'+(0.55+f*0.3)+')';const coolRim='rgba(120,160,205,0.4)';
+    // legs mid-stride (walking forward, into frame)
+    ctx.strokeStyle=cool;ctx.lineCap='round';ctx.lineWidth=7;
+    ctx.beginPath();ctx.moveTo(-6,26);ctx.lineTo(-13,50);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(6,26);ctx.lineTo(12,48);ctx.stroke();
+    ctx.lineWidth=6;ctx.strokeStyle='#0a1017';
+    ctx.beginPath();ctx.moveTo(-13,50);ctx.lineTo(-19,51);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(12,48);ctx.lineTo(19,49);ctx.stroke();
+    // hips
+    ctx.fillStyle=cool;ctx.beginPath();ctx.moveTo(-8,8);ctx.lineTo(8,8);ctx.lineTo(9,26);ctx.quadraticCurveTo(0,30,-9,26);ctx.closePath();ctx.fill();
+    // tunic
+    ctx.beginPath();ctx.moveTo(-15,-24);ctx.lineTo(-8,11);ctx.quadraticCurveTo(0,15,8,11);ctx.lineTo(15,-24);ctx.quadraticCurveTo(0,-30,-15,-24);ctx.closePath();ctx.fillStyle=cool;ctx.fill();
+    // short cape trailing back-left (movement forward)
+    ctx.beginPath();ctx.moveTo(-14,-23);ctx.quadraticCurveTo(-32,-4,-22,28);ctx.quadraticCurveTo(-15,-2,-9,-18);ctx.closePath();ctx.fillStyle='#0e1c2960';ctx.fill();
+    ctx.strokeStyle=coolRim;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(-14,-23);ctx.quadraticCurveTo(-32,-4,-22,28);ctx.stroke();
+    // warm rim on right (lantern side)
+    ctx.strokeStyle=warm;ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(15,-23);ctx.lineTo(8,10);ctx.stroke();
+    // belt
+    ctx.strokeStyle='rgba(200,160,90,'+(0.5+f*0.25)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-8,10);ctx.quadraticCurveTo(0,14,8,10);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(-14,-24);ctx.quadraticCurveTo(0,-30,15,-24);ctx.stroke();
+    // right arm extended forward with lantern (empty of any weapon — just the flame)
+    ctx.strokeStyle=cool;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(13,-20);ctx.quadraticCurveTo(24,-16,30,-6);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(14,-21);ctx.quadraticCurveTo(25,-17,30,-7);ctx.stroke();
+    // left hand open and empty at his side (emphasising empty-handed)
+    ctx.strokeStyle=cool;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-13,-18);ctx.lineTo(-17,4);ctx.stroke();
+    // neck + head, chin up, facing forward into the dark
+    ctx.fillStyle='#101820';ctx.fillRect(-3.5,-33,7,9);
+    ctx.beginPath();ctx.moveTo(-7,-36);ctx.quadraticCurveTo(-8,-46,0,-47);ctx.quadraticCurveTo(8,-46,7,-36);ctx.quadraticCurveTo(6,-29,0,-29);ctx.quadraticCurveTo(-6,-29,-7,-36);ctx.closePath();ctx.fillStyle='#111a22';ctx.fill();
+    // warm-lit jaw (facing his flame/the dark ahead)
+    ctx.strokeStyle=warm;ctx.lineWidth=1.9;ctx.beginPath();ctx.moveTo(6,-38);ctx.quadraticCurveTo(7,-29,1,-29);ctx.stroke();
+    ctx.strokeStyle=coolRim;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-6.5,-38);ctx.quadraticCurveTo(-7,-44,0,-46);ctx.stroke();
+    // circlet
+    ctx.strokeStyle='rgba(255,215,130,'+(0.6+f*0.35)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-7,-44);ctx.quadraticCurveTo(0,-48,7,-44);ctx.stroke();
+    ctx.fillStyle='rgba(255,235,170,'+(0.75+f*0.3)+')';ctx.beginPath();ctx.arc(0,-47,1.4,0,7);ctx.fill();
+    ctx.restore();
+  })(px, py, s);
+
+  // the little lantern out front in his hand
+  lanternObj(LX, LY, f);
+  for(let i=0;i<6;i++){const ex=LX+Math.sin(t*0.02+i*2)*8;const ey=LY-((t*0.03+i*20)%56);const al=Math.max(0,1-((t*0.03+i*20)%56)/56);ctx.fillStyle='rgba(255,190,105,'+al*0.6+')';ctx.fillRect(ex,ey,1.5,1.5);}
+
+  drawFog(t,0.2);
+  vignette(0.74);
+  paper();
+}
+
+// ===== PAGE 7 — THE FOREST PATH, THE HUGE SHAPE, THE SOUP (v0–v2) + THE GOBLINS' FIRE (v3) =====
+// SYMBOLISM: fear at its maximum is faceless — just eyes in the dark (v0). Then fear takes
+// a shape, huge and blocking the way — the worst moment (v1). And the shape resolves into
+// kindness: the first warm light on this whole cold path radiates from an offered bowl of
+// soup (v2). The feared unknown was dinner. Then the fire, the community — and the sagging
+// homes: warmth and inherited helplessness side by side (v3).
+function page7(t,variant){variant=variant||0;
+  const f=flickVal(t);
+
+  // ---------------- variants 0/1/2 : THE PATH (one held composition, three beats) ----------------
+  if(variant<3){
+    nightBase('#100e12','#0c0b10','#08070b');
+    const vpx=W*0.5, vpy=H*0.46; // where the path disappears into the trees
+
+    // faint cold moon-haze at the end of the path (what the huge shape silhouettes against)
+    let haze=ctx.createRadialGradient(vpx,vpy,0,vpx,vpy,180);
+    haze.addColorStop(0,'rgba(150,175,210,0.10)');haze.addColorStop(1,'rgba(150,175,210,0)');
+    ctx.fillStyle=haze;ctx.beginPath();ctx.arc(vpx,vpy,180,0,7);ctx.fill();
+
+    // forest floor
+    const gnd=ctx.createLinearGradient(0,vpy,0,H);gnd.addColorStop(0,'#0a0808');gnd.addColorStop(1,'#050404');
+    ctx.fillStyle=gnd;ctx.fillRect(0,vpy,W,H-vpy);
+
+    // the pathway, receding to the haze
+    ctx.fillStyle='#161009';
+    ctx.beginPath();ctx.moveTo(W*0.30,H);ctx.lineTo(vpx-16,vpy+6);ctx.lineTo(vpx+16,vpy+6);ctx.lineTo(W*0.70,H);ctx.closePath();ctx.fill();
+
+    // ---- dark trees walling the path on either side (far/small first, near/huge last) ----
+    function pathTree(txx,baseY,s2,shade){
+      ctx.fillStyle=shade;
+      ctx.fillRect(txx-4*s2, baseY-90*s2, 8*s2, 90*s2); // trunk
+      for(let k=0;k<3;k++){ // stacked canopy
+        const cw=40*s2-k*9*s2, cy=baseY-80*s2-k*45*s2;
+        ctx.beginPath();ctx.moveTo(txx-cw,cy);ctx.lineTo(txx,cy-70*s2);ctx.lineTo(txx+cw,cy);ctx.closePath();ctx.fill();
+      }
+    }
+    pathTree(W*0.425,H*0.545,0.30,'#0c1016'); pathTree(W*0.575,H*0.545,0.30,'#0c1016');
+    pathTree(W*0.37, H*0.63, 0.52,'#0a0e15'); pathTree(W*0.63, H*0.63, 0.52,'#0a0e15');
+    pathTree(W*0.30, H*0.76, 0.85,'#080b12'); pathTree(W*0.70, H*0.76, 0.85,'#080b12');
+    pathTree(W*0.19, H*0.92, 1.40,'#060810'); pathTree(W*0.81, H*0.92, 1.40,'#060810');
+    pathTree(W*0.07, H*1.02, 2.20,'#04060a'); pathTree(W*0.93, H*1.02, 2.20,'#04060a');
+
+    // ---- yellow eyes blinking in the dark, either side of the path (slow, established pace) ----
+    const eyes=[
+      [W*0.13,H*0.66,1.6,0.0],[W*0.24,H*0.58,1.3,2.1],[W*0.34,H*0.52,1.0,4.2],[W*0.08,H*0.49,1.2,1.3],
+      [W*0.88,H*0.64,1.6,3.1],[W*0.77,H*0.56,1.3,5.0],[W*0.67,H*0.51,1.0,0.7],[W*0.93,H*0.47,1.2,2.6]
+    ];
+    for(const e of eyes){
+      const blink=Math.max(0,Math.sin(t*0.003+e[3]));    // eyes close briefly, mostly open
+      const a=(0.55+f*0.2)*Math.min(1,blink*3);
+      const r=1.5*e[2], gap=4.6*e[2];
+      let eg=ctx.createRadialGradient(e[0],e[1],0,e[0],e[1],7*e[2]);
+      eg.addColorStop(0,'rgba(240,200,90,'+(0.25*Math.min(1,blink*3))+')');eg.addColorStop(1,'rgba(240,200,90,0)');
+      ctx.fillStyle=eg;ctx.beginPath();ctx.arc(e[0],e[1],7*e[2],0,7);ctx.fill();
+      ctx.fillStyle='rgba(240,200,90,'+a+')';
+      ctx.beginPath();ctx.arc(e[0]-gap/2,e[1],r,0,7);ctx.fill();
+      ctx.beginPath();ctx.arc(e[0]+gap/2,e[1],r,0,7);ctx.fill();
+    }
+
+    // ---- v1/v2: THE HUGE SHAPE — a giant goblin, shrouded in shadow, blocking the path ----
+    if(variant>=1){
+      const ggx=vpx+10, ggy=H*0.471, gs=2.3;
+      // shadow pool at its feet so it stands ON the path
+      ctx.fillStyle='rgba(0,0,0,0.4)';ctx.beginPath();ctx.ellipse(ggx,ggy+46*gs,50,9,0,0,7);ctx.fill();
+      ctx.save();ctx.translate(ggx,ggy);ctx.scale(gs,gs);
+      const shroud=ctx.createLinearGradient(0,-40,0,48);shroud.addColorStop(0,'#0c1009');shroud.addColorStop(1,'#050704');
+      // the same locked goblin silhouette, giant — mantle body
+      ctx.beginPath();ctx.moveTo(-17,42);ctx.quadraticCurveTo(-24,2,-10,-20);ctx.quadraticCurveTo(0,-30,10,-20);ctx.quadraticCurveTo(24,2,17,42);ctx.quadraticCurveTo(0,48,-17,42);ctx.closePath();ctx.fillStyle=shroud;ctx.fill();
+      // cold moon rim down both shoulders (a silhouette against the haze — no warm light yet)
+      ctx.strokeStyle='rgba(150,175,210,0.22)';ctx.lineWidth=1.6;
+      ctx.beginPath();ctx.moveTo(-16,40);ctx.quadraticCurveTo(-22,2,-9,-19);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(16,40);ctx.quadraticCurveTo(22,2,9,-19);ctx.stroke();
+      // hood point
+      ctx.fillStyle='#0a0d08';ctx.beginPath();ctx.moveTo(-10,-18);ctx.quadraticCurveTo(-4,-40,4,-24);ctx.quadraticCurveTo(0,-22,-10,-18);ctx.closePath();ctx.fill();
+      // head lost in the hood's shadow
+      ctx.beginPath();ctx.arc(0,-16,8,0,7);ctx.fillStyle='#0e0b06';ctx.fill();
+      // big haloed yellow eyes
+      let egg=ctx.createRadialGradient(0,-17,0,0,-17,9);egg.addColorStop(0,'rgba(240,200,90,0.35)');egg.addColorStop(1,'rgba(240,200,90,0)');
+      ctx.fillStyle=egg;ctx.beginPath();ctx.arc(0,-17,9,0,7);ctx.fill();
+      ctx.fillStyle='rgba(240,200,90,'+(0.85+f*0.15)+')';
+      ctx.beginPath();ctx.arc(-3,-17,1.5,0,7);ctx.fill();ctx.beginPath();ctx.arc(3,-17,1.5,0,7);ctx.fill();
+      if(variant===2){
+        // both great arms extended down toward the prince, offering
+        ctx.strokeStyle='#0c1009';ctx.lineWidth=5;ctx.lineCap='round';
+        ctx.beginPath();ctx.moveTo(-9,-4);ctx.quadraticCurveTo(-12,10,-10,22);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(9,-4);ctx.quadraticCurveTo(4,12,-4,24);ctx.stroke();
+        // soup-light catches the arms, the mantle hem, the underside of the hood
+        ctx.strokeStyle='rgba(255,180,95,'+(0.4+f*0.2)+')';ctx.lineWidth=1.8;
+        ctx.beginPath();ctx.moveTo(-9,-3);ctx.quadraticCurveTo(-12,10,-10,21);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(9,-3);ctx.quadraticCurveTo(4,12,-4,23);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(-14,36);ctx.quadraticCurveTo(0,42,14,36);ctx.stroke();
+        ctx.strokeStyle='rgba(255,180,95,0.3)';ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(0,-14,8,0.5,2.6);ctx.stroke();
+      }
+      ctx.restore();
+
+      // ---- v2: the bowl of soup, warm light radiating from it ----
+      if(variant===2){
+        const bx=vpx-8, by=H*0.583;
+        // the first warm radiance on this whole dark path
+        warmGlow(bx,by-4,160,0.55+f*0.12,t);
+        let core=ctx.createRadialGradient(bx,by-3,0,bx,by-3,26);
+        core.addColorStop(0,'rgba(255,230,170,'+(0.55+f*0.15)+')');core.addColorStop(1,'rgba(255,190,110,0)');
+        ctx.fillStyle=core;ctx.beginPath();ctx.arc(bx,by-3,26,0,7);ctx.fill();
+        // great hands cradling it
+        ctx.fillStyle='#0c1009';ctx.beginPath();ctx.arc(bx-12,by+1,4.5,0,7);ctx.fill();ctx.beginPath();ctx.arc(bx+12,by+1,4.5,0,7);ctx.fill();
+        // the bowl
+        ctx.fillStyle='#2a1e14';ctx.beginPath();ctx.ellipse(bx,by-2,12,5,0,0,7);ctx.fill();
+        ctx.beginPath();ctx.arc(bx,by-2,12,0,Math.PI);ctx.fill();
+        // glowing soup
+        ctx.fillStyle='rgba(255,200,120,'+(0.75+f*0.2)+')';ctx.beginPath();ctx.ellipse(bx,by-3,9.5,3.5,0,0,7);ctx.fill();
+        // slow steam
+        ctx.strokeStyle='rgba(240,220,190,'+(0.22+f*0.1)+')';ctx.lineWidth=1.2;
+        for(let i=0;i<3;i++){ctx.beginPath();ctx.moveTo(bx-5+i*5,by-7);ctx.quadraticCurveTo(bx-8+i*5+Math.sin(t*0.004+i*2)*5,by-24,bx-4+i*5,by-40);ctx.stroke();}
+        // warm spill onto the path between them
+        let spill=ctx.createRadialGradient(bx,by+40,0,bx,by+40,90);
+        spill.addColorStop(0,'rgba(255,180,95,0.10)');spill.addColorStop(1,'rgba(255,180,95,0)');
+        ctx.fillStyle=spill;ctx.beginPath();ctx.ellipse(bx,by+50,90,46,0,0,7);ctx.fill();
+      }
+    }
+
+    // ---- THE PRINCE from behind, small on the path, lantern LOW at hand height ----
+    const px=W*0.44, py=H*0.80, ps=1.25;
+    const LX=px+31*ps*0.8, LY=py-22*ps; // hanging from his right hand
+    // his lantern's warm pool on the path around him
+    warmGlow(px+10, py-14, 120, 0.34+f*0.1, t);
+    let pool=ctx.createRadialGradient(px+8,py+2,0,px+8,py+2,70);
+    pool.addColorStop(0,'rgba(255,180,95,0.16)');pool.addColorStop(1,'rgba(255,180,95,0)');
+    ctx.fillStyle=pool;ctx.beginPath();ctx.ellipse(px+8,py+2,70,20,0,0,7);ctx.fill();
+    // grounding shadow at his feet
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.beginPath();ctx.ellipse(px,py+2,20,4.5,0,0,7);ctx.fill();
+
+    (function drawPrinceBack(cx,cy,sc,striding){
+      ctx.save();ctx.translate(cx,cy);ctx.scale(sc,sc);
+      const cool=ctx.createLinearGradient(0,-66,0,0);cool.addColorStop(0,'#22394f');cool.addColorStop(1,'#0b141c');
+      const warm='rgba(255,180,95,'+(0.5+f*0.25)+')';
+      const coolRim='rgba(120,160,205,0.3)';
+      // lower legs beneath the cape hem — mid-stride only while he's walking (v0)
+      ctx.strokeStyle='#0d161f';ctx.lineCap='round';ctx.lineWidth=6.5;
+      if(striding){
+        ctx.beginPath();ctx.moveTo(-6,-22);ctx.lineTo(-8,0);ctx.stroke();   // planted leg
+        ctx.beginPath();ctx.moveTo(6,-22);ctx.lineTo(9,-5);ctx.stroke();    // stepping leg, heel lifted
+      }else{
+        ctx.beginPath();ctx.moveTo(-6,-22);ctx.lineTo(-7,0);ctx.stroke();   // stopped, facing the shape
+        ctx.beginPath();ctx.moveTo(6,-22);ctx.lineTo(7,0);ctx.stroke();
+      }
+      // the cape, square-on from behind, falling from his shoulders
+      ctx.beginPath();ctx.moveTo(-14,-56);ctx.quadraticCurveTo(-22,-34,-19,-8);
+      ctx.quadraticCurveTo(0,-2,19,-8);ctx.quadraticCurveTo(22,-34,14,-56);
+      ctx.quadraticCurveTo(0,-62,-14,-56);ctx.closePath();ctx.fillStyle=cool;ctx.fill();
+      // rims: cool moonlight down his left edge, his own lantern warm down his right
+      ctx.strokeStyle=coolRim;ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(-14,-55);ctx.quadraticCurveTo(-22,-34,-19,-8);ctx.stroke();
+      ctx.strokeStyle=warm;ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(14,-55);ctx.quadraticCurveTo(22,-34,19,-8);ctx.stroke();
+      // shoulders above the cape line
+      ctx.fillStyle='#16283a';ctx.beginPath();ctx.moveTo(-13,-56);ctx.lineTo(13,-56);ctx.lineTo(9,-64);ctx.lineTo(-9,-64);ctx.closePath();ctx.fill();
+      // right arm out and down, lantern hand LOW
+      ctx.strokeStyle='#16283a';ctx.lineWidth=5.5;ctx.beginPath();ctx.moveTo(12,-58);ctx.quadraticCurveTo(22,-44,25,-24);ctx.stroke();
+      ctx.strokeStyle=warm;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(13,-57);ctx.quadraticCurveTo(23,-44,25.5,-25);ctx.stroke();
+      // neck + the back of his head
+      ctx.fillStyle='#0f1822';ctx.fillRect(-3,-70,6,7);
+      ctx.beginPath();ctx.arc(0,-76,9,0,7);ctx.fillStyle='#101a24';ctx.fill();
+      ctx.strokeStyle=warm;ctx.lineWidth=1.8;ctx.beginPath();ctx.arc(0,-76,8.6,-0.5,0.9);ctx.stroke();
+      ctx.strokeStyle=coolRim;ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(0,-76,8.6,Math.PI-0.9,Math.PI+0.5);ctx.stroke();
+      // circlet — the gold band wrapping round, seen from behind
+      ctx.strokeStyle='rgba(255,215,130,'+(0.55+f*0.3)+')';ctx.lineWidth=2.2;
+      ctx.beginPath();ctx.moveTo(-8,-79);ctx.quadraticCurveTo(0,-75.5,8,-79);ctx.stroke();
+      ctx.restore();
+    })(px,py,ps,variant===0);
+    lanternObj(LX,LY,f);
+
+    drawFog(t,0.2);
+    vignette(0.74);
+    paper();
+    return;
+  }
+
+  // ---------------- variant 3 : THE GOBLINS' FIRE & SAGGING HOMES (locked scene) ----------------
+  nightBase('#100e12','#0c0b10','#08070b');
+
+  // ---- the decayed forest houses behind, warm-rimmed by firelight, visibly sagging ----
+  const groundY=H*0.82;
+  // dark forest wall far back
+  ctx.fillStyle='#080b0e';
+  for(let i=0;i<14;i++){const x=i*54-20;const h=70+((i*57)%60);const w=22+((i*17)%14);ctx.beginPath();ctx.moveTo(x,H*0.5);ctx.lineTo(x+w*0.5,H*0.5-h);ctx.lineTo(x+w,H*0.5);ctx.closePath();ctx.fill();}
+
+  // three sagging little houses (generations of disrepair): leaning walls, drooping roofs, patches
+  function house(hx,hy,scale,lean){
+    ctx.save();ctx.translate(hx,hy);ctx.scale(scale,scale);ctx.transform(1,0,lean,1,0,0); // shear = lean
+    // wall
+    ctx.fillStyle='#1a140e';
+    ctx.beginPath();ctx.moveTo(-22,0);ctx.lineTo(-20,-34);ctx.lineTo(22,-32);ctx.lineTo(22,0);ctx.closePath();ctx.fill();
+    // drooping, sagging roof (sway in the middle)
+    ctx.fillStyle='#241a10';
+    ctx.beginPath();ctx.moveTo(-30,-30);ctx.quadraticCurveTo(-4,-52,4,-44);ctx.quadraticCurveTo(18,-52,32,-28);ctx.quadraticCurveTo(0,-40,-30,-30);ctx.closePath();ctx.fill();
+    // a couple of gaps/patches in the roof (leaking)
+    ctx.fillStyle='#0a0806';
+    ctx.beginPath();ctx.moveTo(-8,-40);ctx.lineTo(-2,-42);ctx.lineTo(-4,-36);ctx.closePath();ctx.fill();
+    ctx.fillRect(10,-38,4,4);
+    // dark doorway, slightly askew
+    ctx.fillStyle='#080605';ctx.beginPath();ctx.moveTo(-8,0);ctx.lineTo(-7,-18);ctx.lineTo(4,-17);ctx.lineTo(5,0);ctx.closePath();ctx.fill();
+    // a leaning support plank propping a wall (patched-up, makeshift)
+    ctx.strokeStyle='#2a1e12';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(22,0);ctx.lineTo(30,-20);ctx.stroke();
+    // warm firelight rim on the fire-facing side (brighter on v3 — the decay beat)
+    ctx.strokeStyle='rgba(240,150,70,'+(variant===3?0.55:0.28)+')';ctx.lineWidth=variant===3?2:1.6;
+    ctx.beginPath();ctx.moveTo(-22,0);ctx.lineTo(-20,-33);ctx.stroke();
+    if(variant===3){
+      // trace the drooping roofline + prop plank so the disrepair clearly reads
+      ctx.strokeStyle='rgba(240,160,80,0.4)';ctx.lineWidth=1.4;
+      ctx.beginPath();ctx.moveTo(-30,-30);ctx.quadraticCurveTo(-4,-52,4,-44);ctx.quadraticCurveTo(18,-52,32,-28);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(22,0);ctx.lineTo(30,-20);ctx.stroke();
+    }
+    ctx.restore();
+  }
+  house(W*0.16,groundY-6,1.15,0.10);   // leaning right
+  house(W*0.83,groundY-4,1.05,-0.12);  // leaning left
+  house(W*0.30,groundY-30,0.7,0.06);   // smaller, further back
+
+  // ground
+  const gnd=ctx.createLinearGradient(0,groundY,0,H);gnd.addColorStop(0,'#0b0906');gnd.addColorStop(1,'#060504');
+  ctx.fillStyle=gnd;ctx.fillRect(0,groundY,W,H);
+
+  // ================= THE CAMPFIRE — the heart, real communal warmth =================
+  // v0: dim & distant (the fearful approach — just eyes in the gloom). v1/v2: full warmth.
+  const warmMul = variant===0 ? 0.4 : 1.0;
+  const fx=W*0.5, fy=groundY+6;
+  // big warm pool over the whole gathering
+  warmGlow(fx, fy-30, 300*(variant===0?0.7:1), (0.5+f*0.12)*warmMul, t);
+  warmGlow(fx, fy-10, 150*(variant===0?0.7:1), (0.5+f*0.14)*warmMul, t);
+  // logs
+  ctx.strokeStyle='#241812';ctx.lineWidth=5;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(fx-16,fy+2);ctx.lineTo(fx+14,fy-4);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(fx-12,fy-4);ctx.lineTo(fx+16,fy+2);ctx.stroke();
+  // flames (layered, flickering)
+  for(let i=0;i<3;i++){const ff=0.5+Math.sin(t*0.008+i)*0.35;const fw=14-i*3;const fh=(30-i*6)*(0.85+ff*0.35);const off=Math.sin(t*0.008+i*2)*3;
+    let fl=ctx.createLinearGradient(fx,fy-4,fx,fy-4-fh);
+    fl.addColorStop(0,i===0?'#ffd27a':'#ffb347');fl.addColorStop(0.6,'rgba(240,120,40,0.8)');fl.addColorStop(1,'rgba(240,90,30,0)');
+    ctx.fillStyle=fl;ctx.beginPath();ctx.moveTo(fx-fw+off,fy-4);ctx.quadraticCurveTo(fx-fw*0.4+off,fy-4-fh*0.6,fx+off,fy-4-fh);ctx.quadraticCurveTo(fx+fw*0.4+off,fy-4-fh*0.6,fx+fw+off,fy-4);ctx.closePath();ctx.fill();}
+  // bright core + embers
+  let fc=ctx.createRadialGradient(fx,fy-8,0,fx,fy-8,16);fc.addColorStop(0,'rgba(255,240,190,'+(0.9+f*0.1)+')');fc.addColorStop(1,'rgba(255,180,90,0)');
+  ctx.fillStyle=fc;ctx.beginPath();ctx.arc(fx,fy-8,16,0,7);ctx.fill();
+  for(let i=0;i<10;i++){const ex=fx+Math.sin(t*0.02+i*1.7)*16;const ey=fy-8-((t*0.05+i*16)%90);const al=Math.max(0,1-((t*0.05+i*16)%90)/90);ctx.fillStyle='rgba(255,190,110,'+al*0.7+')';ctx.fillRect(ex,ey,1.6,1.6);}
+
+  // ---- locked goblin drawing (squat, hooded, glowing eyes), warm-rimmed ----
+  function goblin(gx,gy,scale,faceDir,warmth){
+    ctx.save();ctx.translate(gx,gy);ctx.scale(scale*faceDir,scale);
+    const warm='rgba(255,170,80,'+(0.5*warmth+f*0.2)+')';
+    const body=ctx.createLinearGradient(-20,-30,20,40);body.addColorStop(0,'#2a3a1c');body.addColorStop(1,'#0d1008');
+    ctx.beginPath();ctx.moveTo(-17,42);ctx.quadraticCurveTo(-24,2,-10,-20);ctx.quadraticCurveTo(0,-30,10,-20);ctx.quadraticCurveTo(24,2,17,42);ctx.quadraticCurveTo(0,48,-17,42);ctx.closePath();ctx.fillStyle=body;ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(16,40);ctx.quadraticCurveTo(22,2,9,-19);ctx.stroke();
+    // hood point
+    ctx.fillStyle='#1c2612';ctx.beginPath();ctx.moveTo(-10,-18);ctx.quadraticCurveTo(-4,-40,4,-24);ctx.quadraticCurveTo(0,-22,-10,-18);ctx.closePath();ctx.fill();
+    // head + eyes
+    ctx.beginPath();ctx.arc(0,-16,8,0,7);ctx.fillStyle='#22190e';ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(2.5,-16,8,-1.1,1.1);ctx.stroke();
+    ctx.fillStyle='rgba(240,200,90,'+((variant===0?0.9:0.7)+f*0.3)+')';ctx.beginPath();ctx.arc(-2,-17,(variant===0?1.4:1.1),0,7);ctx.fill();ctx.beginPath();ctx.arc(3,-17,(variant===0?1.4:1.1),0,7);ctx.fill();
+    if(variant===0){let egg=ctx.createRadialGradient(0.5,-17,0,0.5,-17,7);egg.addColorStop(0,'rgba(240,200,90,0.3)');egg.addColorStop(1,'rgba(240,200,90,0)');ctx.fillStyle=egg;ctx.beginPath();ctx.arc(0.5,-17,7,0,7);ctx.fill();}
+    ctx.restore();
+  }
+  // a warm circle of goblins around the fire (facing inward)
+  goblin(fx-90,groundY+4,0.85,1,1);
+  goblin(fx-52,groundY+10,0.95,1,1);
+  goblin(fx+60,groundY+8,0.9,-1,1);
+  goblin(fx+96,groundY+2,0.82,-1,1);
+  // one standing further back, off to the side (behind the fire, not in it)
+  goblin(fx-120,groundY-16,0.6,1,0.7);
+
+  // ---- the goblin nearest the prince (right side) — the bowl has been given; now just company ----
+  const ogx=fx+70, ogy=groundY+10;
+  goblin(ogx,ogy,1.0,-1,1);
+
+  // ================= THE PRINCE arriving at the right edge, receiving =================
+  if(variant!==0){ // prince only appears once we've reached the warmth (v1 & v2)
+  const px=W*0.72, py=groundY+6, s=1.2;
+  const LX=px+18*s, LY=py+4*s; // his lantern in his free RIGHT hand, away from the fire
+  (function drawPrinceArriving(cx,cy,sc){
+    ctx.save();ctx.translate(cx,cy);ctx.scale(sc,sc);
+    const cool=ctx.createLinearGradient(0,-52,0,52);cool.addColorStop(0,'#28455f');cool.addColorStop(0.5,'#183043');cool.addColorStop(1,'#0b141c');
+    const warm='rgba(255,180,95,'+(0.6+f*0.3)+')'; // strongly fire-lit now
+    const coolRim='rgba(120,160,205,0.3)';
+    // legs
+    ctx.strokeStyle=cool;ctx.lineCap='round';ctx.lineWidth=7;
+    ctx.beginPath();ctx.moveTo(-5,26);ctx.lineTo(-9,50);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(5,26);ctx.lineTo(10,50);ctx.stroke();
+    ctx.lineWidth=6;ctx.strokeStyle='#0b141c';
+    ctx.beginPath();ctx.moveTo(-9,50);ctx.lineTo(-15,51);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(10,50);ctx.lineTo(16,51);ctx.stroke();
+    // hips
+    ctx.fillStyle=cool;ctx.beginPath();ctx.moveTo(-8,8);ctx.lineTo(8,8);ctx.lineTo(9,26);ctx.quadraticCurveTo(0,30,-9,26);ctx.closePath();ctx.fill();
+    // tunic
+    ctx.beginPath();ctx.moveTo(-15,-24);ctx.lineTo(-8,11);ctx.quadraticCurveTo(0,15,8,11);ctx.lineTo(15,-24);ctx.quadraticCurveTo(0,-30,-15,-24);ctx.closePath();ctx.fillStyle=cool;ctx.fill();
+    // cape trailing right (behind him, away from fire)
+    ctx.beginPath();ctx.moveTo(14,-23);ctx.quadraticCurveTo(30,-6,20,24);ctx.quadraticCurveTo(14,-2,9,-18);ctx.closePath();ctx.fillStyle='#0e1c2960';ctx.fill();
+    ctx.strokeStyle=coolRim;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(14,-23);ctx.quadraticCurveTo(30,-6,20,24);ctx.stroke();
+    // warm rim on LEFT (fire side)
+    ctx.strokeStyle=warm;ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-15,-23);ctx.lineTo(-8,10);ctx.stroke();
+    // belt
+    ctx.strokeStyle='rgba(200,160,90,'+(0.5+f*0.25)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-8,10);ctx.quadraticCurveTo(0,14,8,10);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(-14,-24);ctx.quadraticCurveTo(0,-30,15,-24);ctx.stroke();
+    // left arm held out toward the fire's warmth
+    ctx.strokeStyle=cool;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(-13,-18);ctx.quadraticCurveTo(-24,-12,-30,-2);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-14,-19);ctx.quadraticCurveTo(-25,-13,-30,-3);ctx.stroke();
+    // right hand holds his own lantern low and out to the side (free hand)
+    ctx.strokeStyle=cool;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(13,-16);ctx.quadraticCurveTo(17,-4,18,6);ctx.stroke();
+    // neck + head, turned toward the fire/goblin (left)
+    ctx.fillStyle='#101a24';ctx.fillRect(-3.5,-32,7,9);
+    ctx.save();ctx.rotate(-0.06);
+    ctx.beginPath();ctx.moveTo(-7,-35);ctx.quadraticCurveTo(-8,-45,0,-46);ctx.quadraticCurveTo(8,-45,7,-35);ctx.quadraticCurveTo(6,-28,0,-28);ctx.quadraticCurveTo(-6,-28,-7,-35);ctx.closePath();ctx.fillStyle='#111a22';ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.9;ctx.beginPath();ctx.moveTo(-6,-37);ctx.quadraticCurveTo(-7,-28,-1,-28);ctx.stroke();
+    ctx.restore();
+    // circlet
+    ctx.strokeStyle='rgba(255,215,130,'+(0.6+f*0.35)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-7,-43);ctx.quadraticCurveTo(0,-47,7,-43);ctx.stroke();
+    ctx.fillStyle='rgba(255,235,170,'+(0.75+f*0.3)+')';ctx.beginPath();ctx.arc(0,-46,1.4,0,7);ctx.fill();
+    ctx.restore();
+  })(px, py, s);
+  // his little lantern, hanging from his free right hand
+  lanternObj(LX, LY, f);
+  } // end prince (v1 & v2 only)
+
+  drawFog(t);
+  vignette(0.72);
+  paper();
+}
+
+// ===== PAGE 8 — THE AXE =====
+// SYMBOLISM: the inherited lie broken by simply trying. The goblins shivered for
+// generations believing only a magical saw could fell their trees — helpless in a forest
+// full of wood. The prince picks up the humble rusty axe that lay by the woodpile the
+// whole time — the solution they walked past every day — and just tries. The tree falls.
+// The goblins weep for the wasted years and cheer for sudden liberation, both at once.
+function page8(t,variant){variant=variant||0;
+  const f=flickVal(t);
+  nightBase('#100e12','#0c0b10','#08070b');
+
+  // forest wall + a couple of decayed houses, warm-rimmed (same world as page 7)
+  const groundY=H*0.82;
+  ctx.fillStyle='#080b0e';
+  for(let i=0;i<14;i++){const x=i*54-20;const h=64+((i*57)%56);const w=22+((i*17)%14);ctx.beginPath();ctx.moveTo(x,H*0.5);ctx.lineTo(x+w*0.5,H*0.5-h);ctx.lineTo(x+w,H*0.5);ctx.closePath();ctx.fill();}
+
+  // the campfire, off to the LEFT now (prince works to the right of it)
+  const fx=W*0.26, fy=groundY+4;
+  warmGlow(fx, fy-30, 300, 0.5+f*0.12, t);
+  warmGlow(fx, fy-10, 150, 0.5+f*0.14, t);
+  ctx.strokeStyle='#241812';ctx.lineWidth=5;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(fx-14,fy+2);ctx.lineTo(fx+12,fy-4);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(fx-10,fy-4);ctx.lineTo(fx+14,fy+2);ctx.stroke();
+  for(let i=0;i<3;i++){const ff=0.5+Math.sin(t*0.008+i)*0.35;const fw=12-i*3;const fh=(26-i*6)*(0.85+ff*0.35);const off=Math.sin(t*0.008+i*2)*3;
+    let fl=ctx.createLinearGradient(fx,fy-4,fx,fy-4-fh);fl.addColorStop(0,i===0?'#ffd27a':'#ffb347');fl.addColorStop(0.6,'rgba(240,120,40,0.8)');fl.addColorStop(1,'rgba(240,90,30,0)');
+    ctx.fillStyle=fl;ctx.beginPath();ctx.moveTo(fx-fw+off,fy-4);ctx.quadraticCurveTo(fx-fw*0.4+off,fy-4-fh*0.6,fx+off,fy-4-fh);ctx.quadraticCurveTo(fx+fw*0.4+off,fy-4-fh*0.6,fx+fw+off,fy-4);ctx.closePath();ctx.fill();}
+  let fc=ctx.createRadialGradient(fx,fy-8,0,fx,fy-8,14);fc.addColorStop(0,'rgba(255,240,190,'+(0.9+f*0.1)+')');fc.addColorStop(1,'rgba(255,180,90,0)');
+  ctx.fillStyle=fc;ctx.beginPath();ctx.arc(fx,fy-8,14,0,7);ctx.fill();
+
+  // ground
+  const gnd=ctx.createLinearGradient(0,groundY,0,H);gnd.addColorStop(0,'#0b0906');gnd.addColorStop(1,'#060504');
+  ctx.fillStyle=gnd;ctx.fillRect(0,groundY,W,H);
+
+  // ---- the woodpile the rusty axe was resting by (both sub-pages — it stays put) ----
+  (function woodpile(wx,wy){
+    // shadow pool so the stack sits ON the ground
+    ctx.fillStyle='rgba(0,0,0,0.35)';ctx.beginPath();ctx.ellipse(wx,wy+9,27,5,0,0,7);ctx.fill();
+    // stacked logs, end-grain facing us: three below, two nested on top
+    const logs=[[-16,0],[0,0],[16,0],[-8,-14],[8,-14]];
+    for(const lg of logs){
+      const lx=wx+lg[0], ly=wy+lg[1], r=9;
+      ctx.fillStyle='#1d1409';ctx.beginPath();ctx.arc(lx,ly,r,0,7);ctx.fill();                    // bark ring
+      ctx.fillStyle='rgba(190,160,105,0.35)';ctx.beginPath();ctx.arc(lx,ly,r-2.5,0,7);ctx.fill(); // pale end grain
+      ctx.strokeStyle='rgba(120,95,60,0.5)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(lx,ly,r-5.5,0,7);ctx.stroke(); // growth ring
+      // warm rim on the fire-facing (left) side
+      ctx.strokeStyle='rgba(255,170,80,'+(0.28+f*0.15)+')';ctx.lineWidth=1.6;
+      ctx.beginPath();ctx.arc(lx,ly,r-0.5,Math.PI*0.6,Math.PI*1.4);ctx.stroke();
+    }
+  })(W*0.62, groundY-2);
+
+  // ---- reusable goblin ----
+  function goblin(gx,gy,scale,faceDir,warmth,armsUp){
+    ctx.save();ctx.translate(gx,gy);ctx.scale(scale*faceDir,scale);
+    const warm='rgba(255,170,80,'+(0.5*warmth+f*0.2)+')';
+    const body=ctx.createLinearGradient(-20,-30,20,40);body.addColorStop(0,'#2a3a1c');body.addColorStop(1,'#0d1008');
+    ctx.beginPath();ctx.moveTo(-17,42);ctx.quadraticCurveTo(-24,2,-10,-20);ctx.quadraticCurveTo(0,-30,10,-20);ctx.quadraticCurveTo(24,2,17,42);ctx.quadraticCurveTo(0,48,-17,42);ctx.closePath();ctx.fillStyle=body;ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(16,40);ctx.quadraticCurveTo(22,2,9,-19);ctx.stroke();
+    ctx.fillStyle='#1c2612';ctx.beginPath();ctx.moveTo(-10,-18);ctx.quadraticCurveTo(-4,-40,4,-24);ctx.quadraticCurveTo(0,-22,-10,-18);ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.arc(0,-16,8,0,7);ctx.fillStyle='#22190e';ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(2.5,-16,8,-1.1,1.1);ctx.stroke();
+    ctx.fillStyle='rgba(240,200,90,'+(0.7+f*0.3)+')';ctx.beginPath();ctx.arc(-2,-17,1.1,0,7);ctx.fill();ctx.beginPath();ctx.arc(3,-17,1.1,0,7);ctx.fill();
+    // arms raised in astonishment/cheer
+    if(armsUp){ctx.strokeStyle=body;ctx.lineWidth=5;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(-8,-2);ctx.quadraticCurveTo(-18,-16,-14,-30);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(8,-2);ctx.quadraticCurveTo(18,-16,14,-30);ctx.stroke();
+      ctx.strokeStyle=warm;ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(8,-3);ctx.quadraticCurveTo(18,-17,14,-31);ctx.stroke();}
+    ctx.restore();
+  }
+
+  // ---- the goblins: v0 watching quietly (arms down), v1 cheering (arms up) ----
+  const cheer = variant===1;
+  goblin(fx+30,groundY+8,0.9,1,1,cheer);
+  goblin(fx+70,groundY+12,0.82,1,1,cheer);
+  goblin(fx-30,groundY+6,0.85,1,1,false);
+  goblin(fx+100,groundY-6,0.66,1,0.8,cheer);
+
+  // ================= THE GREAT TREE =================
+  // v0: standing tall and untouched. v1: caught MID-FALL, pivoting off a fresh stump.
+  const stumpX=W*0.70, stumpY=groundY+2;
+  // base / stump
+  ctx.fillStyle='#1a1206';ctx.beginPath();ctx.ellipse(stumpX,stumpY,14,5,0,0,7);ctx.fill();
+  ctx.fillStyle='#2a1e10';ctx.fillRect(stumpX-12,stumpY-10,24,10);
+  if(variant===1){
+    // pale exposed cut (freshly felled) — only once the tree has come down
+    ctx.fillStyle='rgba(200,170,110,0.5)';ctx.beginPath();ctx.ellipse(stumpX,stumpY-10,12,4,0,0,7);ctx.fill();
+  }
+
+  // the trunk — upright on v0, leaning hard to the right mid-topple on v1
+  const fall = variant===1 ? 0.62 : 0; // radians of lean
+  ctx.save();ctx.translate(stumpX,stumpY-8);ctx.rotate(fall);
+  // trunk
+  const trunkGrad=ctx.createLinearGradient(0,0,0,-230);trunkGrad.addColorStop(0,'#241a0e');trunkGrad.addColorStop(1,'#160f06');
+  ctx.fillStyle=trunkGrad;
+  ctx.beginPath();ctx.moveTo(-11,0);ctx.lineTo(-7,-210);ctx.lineTo(7,-210);ctx.lineTo(11,0);ctx.closePath();ctx.fill();
+  // warm rim on the fire-facing (left) side of the trunk
+  ctx.strokeStyle='rgba(240,150,70,0.3)';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(-10,-4);ctx.lineTo(-7,-205);ctx.stroke();
+  // canopy at the top (a mass of dark foliage, cold-rimmed by moon)
+  ctx.fillStyle='#101609';
+  ctx.beginPath();ctx.arc(0,-220,34,0,7);ctx.fill();
+  ctx.beginPath();ctx.arc(-24,-206,22,0,7);ctx.fill();
+  ctx.beginPath();ctx.arc(26,-210,24,0,7);ctx.fill();
+  ctx.beginPath();ctx.arc(4,-250,26,0,7);ctx.fill();
+  ctx.strokeStyle='rgba(150,175,210,0.15)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(4,-250,26,-1.2,1.4);ctx.stroke();
+  ctx.restore();
+
+  if(variant===1){
+    // motion arcs trailing the falling canopy (sense of speed)
+    ctx.strokeStyle='rgba(200,210,225,0.10)';ctx.lineWidth=2;
+    const canTipX=stumpX+Math.sin(fall)*250;
+    for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(stumpX,stumpY-8,235-i*8,-Math.PI/2, -Math.PI/2+fall);ctx.stroke();}
+    // a few leaves/debris flying off
+    for(let i=0;i<7;i++){const a=-Math.PI/2+fall*(0.4+i*0.1);const rr=200+((i*30)%60);const lx=stumpX+Math.cos(a)*rr;const ly=(stumpY-8)+Math.sin(a)*rr - ((t*0.04+i*20)%40);ctx.fillStyle='rgba(60,80,40,0.5)';ctx.fillRect(lx,ly,2.5,2.5);}
+    // dust kicking up where it will land
+    let dust=ctx.createRadialGradient(canTipX,groundY,0,canTipX,groundY,60);dust.addColorStop(0,'rgba(120,110,90,0.14)');dust.addColorStop(1,'rgba(120,110,90,0)');
+    ctx.fillStyle=dust;ctx.beginPath();ctx.arc(canTipX,groundY,60,0,7);ctx.fill();
+  }
+
+  // ================= THE PRINCE mid-swing with the rusty axe =================
+  // planted at the base of the falling tree, body torqued, axe swung through.
+  const px=W*0.52, py=groundY+6, s=1.3;
+  // his little lantern SET DOWN, resting on the ground beside him (needs both hands)
+  const LX=px-46*s, LY=groundY-4;
+  warmGlow(LX, LY-6, 110, 0.32+f*0.1, t);
+  lanternObj(LX, LY, f);
+  // little shadow pool under it so it reads as resting on the ground
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.beginPath();ctx.ellipse(LX,LY+9,11,3,0,0,7);ctx.fill();
+
+  (function drawPrinceSwinging(cx,cy,sc){
+    ctx.save();ctx.translate(cx,cy);ctx.scale(sc,sc);
+    const cool=ctx.createLinearGradient(0,-52,0,52);cool.addColorStop(0,'#28455f');cool.addColorStop(0.5,'#183043');cool.addColorStop(1,'#0b141c');
+    const warm='rgba(255,180,95,'+(0.6+f*0.3)+')';
+    const coolRim='rgba(120,160,205,0.3)';
+    // legs planted wide, braced for the swing
+    ctx.strokeStyle=cool;ctx.lineCap='round';ctx.lineWidth=7;
+    ctx.beginPath();ctx.moveTo(-6,24);ctx.lineTo(-16,50);ctx.stroke();   // back leg braced
+    ctx.beginPath();ctx.moveTo(6,24);ctx.lineTo(14,50);ctx.stroke();    // front leg
+    ctx.lineWidth=6;ctx.strokeStyle='#0b141c';
+    ctx.beginPath();ctx.moveTo(-16,50);ctx.lineTo(-23,51);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(14,50);ctx.lineTo(21,51);ctx.stroke();
+    // hips
+    ctx.fillStyle=cool;ctx.beginPath();ctx.moveTo(-9,8);ctx.lineTo(8,8);ctx.lineTo(10,26);ctx.quadraticCurveTo(0,30,-10,26);ctx.closePath();ctx.fill();
+    // torso: v1 torqued hard into the swing; v0 a gentle ready lean
+    ctx.save();ctx.rotate(variant===1?0.16:0.04);
+    ctx.beginPath();ctx.moveTo(-15,-22);ctx.lineTo(-8,12);ctx.quadraticCurveTo(0,16,8,12);ctx.lineTo(15,-22);ctx.quadraticCurveTo(0,-28,-15,-22);ctx.closePath();ctx.fillStyle=cool;ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(-15,-22);ctx.quadraticCurveTo(0,-28,15,-22);ctx.stroke();
+    if(variant===1){
+      // cape flung out behind-left with the motion
+      ctx.beginPath();ctx.moveTo(-14,-21);ctx.quadraticCurveTo(-36,-14,-30,14);ctx.quadraticCurveTo(-18,-6,-9,-16);ctx.closePath();ctx.fillStyle='#0e1c2960';ctx.fill();
+      ctx.strokeStyle=coolRim;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(-14,-21);ctx.quadraticCurveTo(-36,-14,-30,14);ctx.stroke();
+    }else{
+      // cape hanging calm and close (no motion yet)
+      ctx.beginPath();ctx.moveTo(-14,-21);ctx.quadraticCurveTo(-26,-8,-22,18);ctx.quadraticCurveTo(-14,0,-9,-16);ctx.closePath();ctx.fillStyle='#0e1c2960';ctx.fill();
+      ctx.strokeStyle=coolRim;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(-14,-21);ctx.quadraticCurveTo(-26,-8,-22,18);ctx.stroke();
+    }
+    ctx.restore();
+    if(variant===1){
+    // BOTH arms gripping the axe handle, driven across in a powerful horizontal follow-through
+    ctx.strokeStyle=cool;ctx.lineWidth=6;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(-4,-18);ctx.quadraticCurveTo(14,-12,28,-4);ctx.stroke();   // lead arm
+    ctx.beginPath();ctx.moveTo(-8,-14);ctx.quadraticCurveTo(10,-9,26,-2);ctx.stroke();    // trailing arm
+    ctx.strokeStyle=warm;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(-3,-19);ctx.quadraticCurveTo(15,-13,28,-5);ctx.stroke();
+    // ---- the rusty axe: mid-follow-through, still HORIZONTAL with swing momentum ----
+    ctx.save();ctx.translate(28,-4);ctx.rotate(-0.15);
+    // wooden handle, extending out to the right (carried by the swing's force)
+    ctx.strokeStyle='#3a2a18';ctx.lineWidth=3.6;ctx.beginPath();ctx.moveTo(-4,0);ctx.lineTo(50,12);ctx.stroke();
+    // AXE HEAD — a simple grey rectangle at the end of the handle, mounted OFF-CENTRE
+    // so most of the block sits to one side of the pole. Off-centre = axe, not hammer.
+    ctx.save();
+    ctx.translate(50,12);        // to the handle end
+    ctx.rotate(0.23);            // align block roughly perpendicular to the handle
+    // the block sits mostly BELOW/forward of the handle (offset), not centred on it
+    ctx.fillStyle='#5a534b';
+    ctx.fillRect(-3, -2, 11, 15);   // depth ~11px, blade width ~15px (about 4x the handle)
+    // sharpened cutting edge — bright worn line along the leading (bottom) edge of the blade
+    ctx.strokeStyle='rgba(225,225,215,0.6)';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.moveTo(-3,13);ctx.lineTo(8,13);ctx.stroke();
+    // faint rust streaks across the cheek
+    ctx.strokeStyle='rgba(150,90,50,0.4)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(-1,2);ctx.lineTo(6,2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(-1,7);ctx.lineTo(6,7);ctx.stroke();
+    ctx.restore();
+    // faint motion blur arc trailing the axe head (momentum)
+    ctx.strokeStyle='rgba(200,210,225,0.12)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(-4,2,62,-0.5,0.22);ctx.stroke();
+    ctx.restore();
+    }else{
+    // ---- v0 "may I try?" — axe just picked up, hoisted ready over the shoulder ----
+    // both arms raised up-back, hands meeting at the handle grip
+    ctx.strokeStyle=cool;ctx.lineWidth=6;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(-4,-18);ctx.quadraticCurveTo(6,-28,14,-32);ctx.stroke();   // lead arm up
+    ctx.beginPath();ctx.moveTo(-8,-14);ctx.quadraticCurveTo(3,-23,12,-28);ctx.stroke();   // trailing arm up
+    ctx.strokeStyle=warm;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(-3,-19);ctx.quadraticCurveTo(7,-29,14,-33);ctx.stroke();
+    // ---- the rusty axe resting ready over his shoulder ----
+    ctx.save();ctx.translate(14,-32);ctx.rotate(-0.9);
+    // wooden handle rising from his hands, angled up over the shoulder
+    ctx.strokeStyle='#3a2a18';ctx.lineWidth=3.6;ctx.beginPath();ctx.moveTo(-6,2);ctx.lineTo(42,8);ctx.stroke();
+    // SAME off-centre grey block head at the top of the handle (axe, not hammer)
+    ctx.save();
+    ctx.translate(42,8);
+    ctx.rotate(0.23);
+    ctx.fillStyle='#5a534b';
+    ctx.fillRect(-3, -2, 11, 15);
+    // sharpened worn line on the blade edge
+    ctx.strokeStyle='rgba(225,225,215,0.6)';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.moveTo(-3,13);ctx.lineTo(8,13);ctx.stroke();
+    // faint rust streaks across the cheek
+    ctx.strokeStyle='rgba(150,90,50,0.4)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(-1,2);ctx.lineTo(6,2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(-1,7);ctx.lineTo(6,7);ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+    }
+    // neck + head — v1 focused on the cut; v0 turned back toward the goblins, asking
+    ctx.fillStyle='#101a24';ctx.fillRect(-2,-32,7,9);
+    ctx.save();ctx.rotate(variant===1?0.1:-0.12);
+    ctx.beginPath();ctx.moveTo(-6,-35);ctx.quadraticCurveTo(-7,-45,1,-46);ctx.quadraticCurveTo(9,-45,8,-35);ctx.quadraticCurveTo(7,-28,1,-28);ctx.quadraticCurveTo(-5,-28,-6,-35);ctx.closePath();ctx.fillStyle='#111a22';ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.9;ctx.beginPath();ctx.moveTo(7,-37);ctx.quadraticCurveTo(8,-28,2,-28);ctx.stroke();
+    ctx.restore();
+    // circlet
+    ctx.strokeStyle='rgba(255,215,130,'+(0.6+f*0.35)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-6,-43);ctx.quadraticCurveTo(1,-47,8,-43);ctx.stroke();
+    ctx.fillStyle='rgba(255,235,170,'+(0.75+f*0.3)+')';ctx.beginPath();ctx.arc(1,-46,1.4,0,7);ctx.fill();
+    ctx.restore();
+  })(px, py, s);
+
+  drawFog(t);
+  vignette(0.72);
+  paper();
+}
+
+// ===== PAGE 9 — THE INTACT BRIDGE =====
+// SYMBOLISM: secondhand catastrophe. Even the kind goblins, who love him, pressed a
+// disaster on him they never verified — the bridge "has surely crumbled." The prince
+// doesn't argue; he simply declines to act on the assumption until he has looked. And the
+// bridge stands proud and unbroken, as it had all along. Even love will hand you a false
+// catastrophe; the antidote is not cynicism but simply going to see. He walks across, alone,
+// far from the goblins now — the wind howling in a real but survivable gorge beneath him.
+function page9(t,variant){variant=variant||0;
+  const f=flickVal(t);
+  nightBase('#0e131c','#0b0f17','#080a10');
+
+  // dull moon, upper-left, lighting the honest span so we see it's whole
+  const moonX=W*0.30, moonY=H*0.20;
+  let halo=ctx.createRadialGradient(moonX,moonY,6,moonX,moonY,W*0.5);
+  halo.addColorStop(0,'rgba(180,195,215,0.20)');halo.addColorStop(0.4,'rgba(155,172,195,0.09)');halo.addColorStop(1,'rgba(155,172,195,0)');
+  ctx.fillStyle=halo;ctx.fillRect(0,0,W,H);
+  let disc=ctx.createRadialGradient(moonX,moonY,2,moonX,moonY,30);
+  disc.addColorStop(0,'rgba(210,220,235,0.6)');disc.addColorStop(0.6,'rgba(185,200,220,0.28)');disc.addColorStop(1,'rgba(185,200,220,0)');
+  ctx.fillStyle=disc;ctx.beginPath();ctx.arc(moonX,moonY,30,0,7);ctx.fill();
+
+  // far cliffs / mountains beyond the gorge (cold, distant — sense of having travelled)
+  ctx.fillStyle='#0a0f16';
+  ctx.beginPath();ctx.moveTo(0,H*0.44);ctx.lineTo(W*0.18,H*0.30);ctx.lineTo(W*0.34,H*0.42);ctx.lineTo(W*0.52,H*0.28);ctx.lineTo(W*0.7,H*0.40);ctx.lineTo(W*0.86,H*0.30);ctx.lineTo(W,H*0.42);ctx.lineTo(W,H*0.52);ctx.lineTo(0,H*0.52);ctx.closePath();ctx.fill();
+
+  // ---- THE GORGE: a deep chasm, wind howling, real but survivable ----
+  const gorgeTop=H*0.56;
+  // the two cliff walls the bridge spans between
+  const leftEdge=W*0.14, rightEdge=W*0.86;
+  // deep chasm fill (fades to black at the bottom — depth, not a void that swallows)
+  const chasm=ctx.createLinearGradient(0,gorgeTop,0,H);
+  chasm.addColorStop(0,'#0a0e15');chasm.addColorStop(0.5,'#070a10');chasm.addColorStop(1,'#040609');
+  ctx.fillStyle=chasm;ctx.fillRect(0,gorgeTop,W,H);
+  // near cliff edges (the ground the prince came from / goes to), warmer/solid
+  ctx.fillStyle='#0c1119';
+  ctx.beginPath();ctx.moveTo(0,gorgeTop);ctx.lineTo(leftEdge,gorgeTop);ctx.lineTo(leftEdge-30,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(W,gorgeTop);ctx.lineTo(rightEdge,gorgeTop);ctx.lineTo(rightEdge+30,H);ctx.lineTo(W,H);ctx.closePath();ctx.fill();
+  // wind howling in the gorge — faint horizontal streaks drifting through the chasm
+  ctx.strokeStyle='rgba(150,165,185,0.06)';ctx.lineWidth=1;
+  for(let i=0;i<7;i++){const y=gorgeTop+30+i*36;const off=(t*0.6+i*50)%(W+200)-100;
+    ctx.beginPath();ctx.moveTo(off,y);ctx.quadraticCurveTo(off+80,y-4,off+160,y);ctx.stroke();}
+
+  // ================= THE BRIDGE — whole, proud, unbroken =================
+  const bridgeY=gorgeTop+6;
+  // stone deck spanning the full gorge, with a gentle solid arch (intact!)
+  ctx.fillStyle='#141a24';
+  ctx.beginPath();
+  ctx.moveTo(leftEdge,bridgeY);
+  ctx.quadraticCurveTo(W*0.5,bridgeY-26,rightEdge,bridgeY);   // top of deck (arch)
+  ctx.quadraticCurveTo(W*0.5,bridgeY-14,leftEdge,bridgeY);    // underside
+  ctx.closePath();ctx.fill();
+  // solid supporting arch beneath (proof of structure — clearly not crumbled)
+  ctx.strokeStyle='#10151d';ctx.lineWidth=8;
+  ctx.beginPath();ctx.moveTo(leftEdge+6,bridgeY+2);ctx.quadraticCurveTo(W*0.5,bridgeY+56,rightEdge-6,bridgeY+2);ctx.stroke();
+  // support struts from arch to deck
+  ctx.strokeStyle='#10151d';ctx.lineWidth=3;
+  for(let i=1;i<=5;i++){const px=leftEdge+ (rightEdge-leftEdge)*(i/6);const archY=bridgeY+2+Math.sin((i/6)*Math.PI)*54;const deckY=bridgeY-26+Math.sin((i/6)*Math.PI)*0 - (Math.sin((i/6)*Math.PI)*26 - 26);
+    // simpler: strut from deck down to arch
+    const dy=bridgeY-24+ (1-Math.sin((i/6)*Math.PI))*22;
+    ctx.beginPath();ctx.moveTo(px,dy);ctx.lineTo(px,archY);ctx.stroke();}
+  // moonlit rim along the top of the deck — cleanly lit so we SEE it's whole
+  ctx.strokeStyle='rgba(175,195,225,0.4)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(leftEdge,bridgeY);ctx.quadraticCurveTo(W*0.5,bridgeY-26,rightEdge,bridgeY);ctx.stroke();
+  // low railings/posts along the deck (detail of a maintained, standing bridge)
+  ctx.strokeStyle='rgba(175,195,225,0.22)';ctx.lineWidth=1.5;
+  for(let i=0;i<=10;i++){const px=leftEdge+(rightEdge-leftEdge)*(i/10);const dy=bridgeY-26+(1-Math.sin((i/10)*Math.PI))*26;
+    ctx.beginPath();ctx.moveTo(px,dy);ctx.lineTo(px,dy-7);ctx.stroke();}
+  // top rail line
+  ctx.strokeStyle='rgba(175,195,225,0.25)';ctx.lineWidth=1.4;
+  ctx.beginPath();ctx.moveTo(leftEdge,bridgeY-7);ctx.quadraticCurveTo(W*0.5,bridgeY-33,rightEdge,bridgeY-7);ctx.stroke();
+
+  // ================= THE PRINCE crossing, small and calm =================
+  // mid-span, walking, his little lantern lighting his step. Small — the bridge dwarfs him.
+  const bt=0.5; // position across the span (0..1)
+  const px=leftEdge+(rightEdge-leftEdge)*bt;
+  const deckSurfaceY = bridgeY-26+(1-Math.sin(bt*Math.PI))*26; // top of deck at his position
+  const py = deckSurfaceY - 48*0.92; // lift so his FEET land on the deck (legs reach ~+50 local)
+  const s=0.92;
+  const LX=px+20*s, LY=py-16*s;
+  warmGlow(LX, LY, 120, 0.36+f*0.12, t);
+
+  (function drawPrinceCrossing(cx,cy,sc){
+    ctx.save();ctx.translate(cx,cy);ctx.scale(sc,sc);
+    const cool=ctx.createLinearGradient(0,-52,0,52);cool.addColorStop(0,'#213a52');cool.addColorStop(0.5,'#132536');cool.addColorStop(1,'#0a1017');
+    const warm='rgba(255,180,95,'+(0.55+f*0.3)+')';const coolRim='rgba(140,175,215,0.4)';
+    // legs mid-stride (calm walk across)
+    ctx.strokeStyle=cool;ctx.lineCap='round';ctx.lineWidth=7;
+    ctx.beginPath();ctx.moveTo(-5,26);ctx.lineTo(-11,50);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(5,26);ctx.lineTo(12,48);ctx.stroke();
+    ctx.lineWidth=6;ctx.strokeStyle='#0a1017';
+    ctx.beginPath();ctx.moveTo(-11,50);ctx.lineTo(-17,51);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(12,48);ctx.lineTo(19,49);ctx.stroke();
+    // hips
+    ctx.fillStyle=cool;ctx.beginPath();ctx.moveTo(-8,8);ctx.lineTo(8,8);ctx.lineTo(9,26);ctx.quadraticCurveTo(0,30,-9,26);ctx.closePath();ctx.fill();
+    // tunic
+    ctx.beginPath();ctx.moveTo(-15,-24);ctx.lineTo(-8,11);ctx.quadraticCurveTo(0,15,8,11);ctx.lineTo(15,-24);ctx.quadraticCurveTo(0,-30,-15,-24);ctx.closePath();ctx.fillStyle=cool;ctx.fill();
+    // cape drifting in the gorge wind (back-left)
+    const windLean=6+Math.sin(t*0.02)*3;
+    ctx.beginPath();ctx.moveTo(-14,-23);ctx.quadraticCurveTo(-30-windLean,-6,-20-windLean,26);ctx.quadraticCurveTo(-14,-2,-9,-18);ctx.closePath();ctx.fillStyle='#0e1c2960';ctx.fill();
+    ctx.strokeStyle=coolRim;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(-14,-23);ctx.quadraticCurveTo(-30-windLean,-6,-20-windLean,26);ctx.stroke();
+    // warm rim right (lantern side)
+    ctx.strokeStyle=warm;ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(15,-23);ctx.lineTo(8,10);ctx.stroke();
+    // moonlit cool rim left
+    ctx.strokeStyle=coolRim;ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(-15,-23);ctx.lineTo(-8,10);ctx.stroke();
+    // belt + shoulders
+    ctx.strokeStyle='rgba(200,160,90,'+(0.5+f*0.25)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-8,10);ctx.quadraticCurveTo(0,14,8,10);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(-14,-24);ctx.quadraticCurveTo(0,-30,15,-24);ctx.stroke();
+    // right arm with lantern out front
+    ctx.strokeStyle=cool;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(13,-20);ctx.quadraticCurveTo(22,-16,28,-6);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(14,-21);ctx.quadraticCurveTo(23,-17,28,-7);ctx.stroke();
+    // left arm relaxed
+    ctx.strokeStyle=cool;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-13,-18);ctx.lineTo(-16,2);ctx.stroke();
+    // neck + head, calm, facing across (forward/right)
+    ctx.fillStyle='#101820';ctx.fillRect(-3.5,-33,7,9);
+    ctx.beginPath();ctx.moveTo(-7,-36);ctx.quadraticCurveTo(-8,-46,0,-47);ctx.quadraticCurveTo(8,-46,7,-36);ctx.quadraticCurveTo(6,-29,0,-29);ctx.quadraticCurveTo(-6,-29,-7,-36);ctx.closePath();ctx.fillStyle='#111a22';ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.9;ctx.beginPath();ctx.moveTo(6,-38);ctx.quadraticCurveTo(7,-29,1,-29);ctx.stroke();
+    ctx.strokeStyle=coolRim;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-6.5,-38);ctx.quadraticCurveTo(-7,-44,0,-46);ctx.stroke();
+    // circlet
+    ctx.strokeStyle='rgba(255,215,130,'+(0.6+f*0.35)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-7,-44);ctx.quadraticCurveTo(0,-48,7,-44);ctx.stroke();
+    ctx.fillStyle='rgba(255,235,170,'+(0.75+f*0.3)+')';ctx.beginPath();ctx.arc(0,-47,1.4,0,7);ctx.fill();
+    ctx.restore();
+  })(px, py, s);
+  lanternObj(LX, LY, f);
+  for(let i=0;i<5;i++){const ex=LX+Math.sin(t*0.02+i*2)*7;const ey=LY-((t*0.03+i*18)%50);const al=Math.max(0,1-((t*0.03+i*18)%50)/50);ctx.fillStyle='rgba(255,190,105,'+al*0.55+')';ctx.fillRect(ex,ey,1.5,1.5);}
+
+  drawFog(t);
+  vignette(0.72);
+  paper();
+}
+
+// ===== PAGE 10 — THE FAR-OFF LAND =====
+// SYMBOLISM: the breath of relief. A land the fog never reached — warm, colourful, connected.
+// It is the memory of what home once was, kept alive elsewhere; proof the fog is not the
+// world's natural state and that home can be restored because the template still exists.
+// Strung lanterns literally connect house to house (the opposite of page 3's severed
+// threads). The King here is our sprite RESTORED — upright, warm, fully lit, greeting the
+// prince openly — what a king looks like when no phantom whispers in his ear. He explains
+// the oil was sent years ago, as a gift. A taste of the golden ending to come.
+function page10(t,variant){variant=variant||0;
+  const f=flickVal(t);
+  // the FIRST genuinely warm sky in the book — golden dusk
+  const sky=ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#3a2438');sky.addColorStop(0.4,'#7a4638');sky.addColorStop(0.72,'#c87a44');sky.addColorStop(1,'#e6a25a');
+  ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+  // soft dusk sun low on the horizon, warm and whole (no cold moon here)
+  const sunX=W*0.5, sunY=H*0.60;
+  let sun=ctx.createRadialGradient(sunX,sunY,8,sunX,sunY,W*0.6);
+  sun.addColorStop(0,'rgba(255,225,150,0.5)');sun.addColorStop(0.4,'rgba(255,180,100,0.2)');sun.addColorStop(1,'rgba(255,160,90,0)');
+  ctx.fillStyle=sun;ctx.fillRect(0,0,W,H);
+  let disc=ctx.createRadialGradient(sunX,sunY,2,sunX,sunY,40);
+  disc.addColorStop(0,'rgba(255,240,200,0.8)');disc.addColorStop(0.7,'rgba(255,200,130,0.4)');disc.addColorStop(1,'rgba(255,200,130,0)');
+  ctx.fillStyle=disc;ctx.beginPath();ctx.arc(sunX,sunY,40,0,7);ctx.fill();
+
+  // gentle warm hills behind the town
+  ctx.fillStyle='#8a4a34';
+  ctx.beginPath();ctx.moveTo(0,H*0.66);ctx.quadraticCurveTo(W*0.3,H*0.58,W*0.5,H*0.64);ctx.quadraticCurveTo(W*0.75,H*0.70,W,H*0.62);ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+
+  const groundY=H*0.78;
+  // ---- the living town: warm colourful houses (no fog, no decay) ----
+  const houses=[
+    {x:W*0.10,w:70,h:80,c:'#b5623a'},
+    {x:W*0.22,w:60,h:64,c:'#a8543a'},
+    {x:W*0.72,w:66,h:74,c:'#9c5236'},
+    {x:W*0.84,w:72,h:88,c:'#b06038'}
+  ];
+  houses.forEach(hh=>{
+    // body
+    ctx.fillStyle=hh.c;ctx.fillRect(hh.x,groundY-hh.h,hh.w,hh.h);
+    // roof
+    ctx.fillStyle='#6e3a26';ctx.beginPath();ctx.moveTo(hh.x-6,groundY-hh.h);ctx.lineTo(hh.x+hh.w/2,groundY-hh.h-24);ctx.lineTo(hh.x+hh.w+6,groundY-hh.h);ctx.closePath();ctx.fill();
+    // warm-lit windows (glowing — people home, life inside)
+    ctx.fillStyle='rgba(255,210,120,'+(0.85+f*0.15)+')';
+    for(let wy=0;wy<Math.floor(hh.h/26);wy++)for(let wx=0;wx<Math.floor(hh.w/24);wx++){
+      const gx=hh.x+10+wx*24, gy=groundY-hh.h+14+wy*26;
+      ctx.fillRect(gx,gy,9,11);
+      // window glow
+      let wg=ctx.createRadialGradient(gx+4,gy+5,0,gx+4,gy+5,14);wg.addColorStop(0,'rgba(255,210,120,0.4)');wg.addColorStop(1,'rgba(255,210,120,0)');
+      ctx.fillStyle=wg;ctx.fillRect(gx-10,gy-9,29,29);ctx.fillStyle='rgba(255,210,120,'+(0.85+f*0.15)+')';
+    }
+  });
+
+  // ground
+  const gnd=ctx.createLinearGradient(0,groundY,0,H);gnd.addColorStop(0,'#5a3324');gnd.addColorStop(1,'#3a2016');
+  ctx.fillStyle=gnd;ctx.fillRect(0,groundY,W,H);
+
+  // ================= STRUNG LANTERNS connecting house to house =================
+  // sagging strings of warm bulbs across the sky — light literally linking the town together
+  function lanternString(x1,y1,x2,y2,count,sag){
+    // draw the cord (a catenary-ish sag)
+    ctx.strokeStyle='rgba(40,24,16,0.5)';ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.quadraticCurveTo((x1+x2)/2,(y1+y2)/2+sag,x2,y2);ctx.stroke();
+    // hang the little bulbs along it
+    for(let i=1;i<count;i++){const u=i/count;
+      // point on the quadratic
+      const bx=(1-u)*(1-u)*x1 + 2*(1-u)*u*((x1+x2)/2) + u*u*x2;
+      const by=(1-u)*(1-u)*y1 + 2*(1-u)*u*((y1+y2)/2+sag) + u*u*y2;
+      const flick=0.75+Math.sin(t*0.03+i*1.3)*0.2+ (Math.random()-0.5)*0.08;
+      // bulb glow
+      let bg=ctx.createRadialGradient(bx,by+3,0,bx,by+3,12);
+      const hue=i%3; const col=hue===0?'255,190,110':hue===1?'255,150,90':'255,215,140';
+      bg.addColorStop(0,'rgba('+col+','+(0.5*flick)+')');bg.addColorStop(1,'rgba('+col+',0)');
+      ctx.fillStyle=bg;ctx.beginPath();ctx.arc(bx,by+3,12,0,7);ctx.fill();
+      // bulb
+      ctx.fillStyle='rgba('+col+','+(0.9*flick)+')';ctx.beginPath();ctx.arc(bx,by+4,2.4,0,7);ctx.fill();
+    }
+  }
+  lanternString(W*0.12, groundY-96, W*0.30, groundY-70, 8, 34);
+  lanternString(W*0.30, groundY-70, W*0.50, groundY-58, 9, 40);
+  lanternString(W*0.50, groundY-58, W*0.74, groundY-84, 10, 44);
+  lanternString(W*0.74, groundY-84, W*0.88, groundY-100, 7, 30);
+
+  // ================= THE TOWNSFOLK — together, warm, connected =================
+  // small lively figures near each other (golden-green neighbours palette), unfogged
+  function person(pxp,scale,faceDir,lean){
+    ctx.save();ctx.translate(pxp,groundY+4);ctx.scale(scale*faceDir,scale);ctx.rotate(lean||0);
+    const warm=ctx.createLinearGradient(0,-30,0,20);warm.addColorStop(0,'#6a5a34');warm.addColorStop(1,'#3a2c18');
+    ctx.fillStyle=warm;
+    ctx.beginPath();ctx.moveTo(-8,20);ctx.quadraticCurveTo(-10,-8,-5,-18);ctx.quadraticCurveTo(0,-23,5,-18);ctx.quadraticCurveTo(10,-8,8,20);ctx.quadraticCurveTo(0,24,-8,20);ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.arc(0,-23,6,0,7);ctx.fillStyle='#5a4a2c';ctx.fill();
+    // strong warm rim both sides (fully alive in the light)
+    ctx.strokeStyle='rgba(255,195,110,'+(0.6+f*0.2)+')';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.moveTo(7,18);ctx.quadraticCurveTo(10,-8,4,-17);ctx.stroke();
+    ctx.beginPath();ctx.arc(1.5,-23,6,-1,1.1);ctx.stroke();
+    ctx.restore();
+  }
+  // a little cluster on the left, chatting together
+  person(W*0.30,1.0,1,0.03);
+  person(W*0.345,1.06,-1,-0.03);
+  person(W*0.30-22,0.9,1,0);
+  // a pair on the right
+  person(W*0.66,0.96,-1,0.02);
+  person(W*0.62,1.0,1,-0.02);
+
+  // ================= THE KING — restored: upright, warm, greeting =================
+  // our king sprite, but UN-dimmed — standing tall, fully warm-lit, gesturing to the prince.
+  (function drawKingRestored(cx,cy,s){
+    ctx.save();ctx.translate(cx,cy);ctx.scale(s,s);
+    const robe=ctx.createLinearGradient(0,-46,0,50);robe.addColorStop(0,'#6a4a86');robe.addColorStop(0.55,'#4a3468');robe.addColorStop(1,'#2e2044');
+    const warm='rgba(255,190,110,'+(0.6+f*0.25)+')'; // full warmth reaches him now
+    // BROAD square shoulders + straight blocky robe falling in a COLUMN (not a flaring gown)
+    ctx.beginPath();
+    ctx.moveTo(-20,50);                       // hem left (narrow-ish, straight)
+    ctx.lineTo(-19,-18);                       // straight left side up
+    ctx.quadraticCurveTo(-22,-28,-24,-30);     // broad square left shoulder
+    ctx.lineTo(-12,-34);                        // shoulder top to neck
+    ctx.lineTo(12,-34);                         // flat shoulder line across (broad chest)
+    ctx.lineTo(24,-30);                         // broad square right shoulder
+    ctx.quadraticCurveTo(22,-28,19,-18);
+    ctx.lineTo(20,50);                          // straight right side down
+    ctx.lineTo(-20,50);                         // flat hem
+    ctx.closePath();ctx.fillStyle=robe;ctx.fill();
+    // a central robe seam + belt to reinforce the straight, kingly column
+    ctx.strokeStyle='rgba(40,26,50,0.6)';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(0,-30);ctx.lineTo(0,50);ctx.stroke();
+    ctx.strokeStyle='rgba(210,180,120,0.5)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-19,6);ctx.lineTo(19,6);ctx.stroke();
+    // strong warm rim BOTH sides (fully lit, restored)
+    ctx.strokeStyle=warm;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(20,48);ctx.lineTo(19,-18);ctx.quadraticCurveTo(22,-28,24,-30);ctx.stroke();
+    ctx.strokeStyle='rgba(255,190,110,0.4)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-20,48);ctx.lineTo(-19,-18);ctx.quadraticCurveTo(-22,-28,-24,-30);ctx.stroke();
+    // broad shoulder line lit
+    ctx.strokeStyle=warm;ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(-24,-30);ctx.lineTo(-12,-34);ctx.lineTo(12,-34);ctx.lineTo(24,-30);ctx.stroke();
+    // thicker neck + head held HIGH, warm-lit, squarer jaw (masculine)
+    ctx.fillStyle='#2e1e38';ctx.fillRect(-5,-42,10,10);
+    ctx.beginPath();ctx.moveTo(-8,-44);ctx.quadraticCurveTo(-9,-56,0,-57);ctx.quadraticCurveTo(9,-56,8,-44);ctx.quadraticCurveTo(7,-40,0,-40);ctx.quadraticCurveTo(-7,-40,-8,-44);ctx.closePath();ctx.fillStyle='#2e1e38';ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.7;ctx.beginPath();ctx.moveTo(7,-46);ctx.quadraticCurveTo(8,-40,1,-40);ctx.stroke();
+    // suggestion of a short beard (warm underside of jaw)
+    ctx.strokeStyle='rgba(200,150,90,0.4)';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(-5,-41);ctx.quadraticCurveTo(0,-38,5,-41);ctx.stroke();
+    // HEAVY banded crown — a solid horizontal band with short blocky points (kingly, not pointed gown-crown)
+    ctx.fillStyle='rgba(255,205,110,0.5)';
+    ctx.fillRect(-9,-60,18,5);   // the solid band
+    ctx.strokeStyle='rgba(255,215,120,'+(0.75+f*0.25)+')';ctx.lineWidth=2;
+    ctx.strokeRect(-9,-60,18,5);
+    // short square points along the top of the band
+    ctx.fillStyle='rgba(255,215,120,'+(0.7+f*0.25)+')';
+    ctx.fillRect(-9,-64,4,4);ctx.fillRect(-2,-65,4,5);ctx.fillRect(5,-64,4,4);
+    // jewel dots
+    ctx.beginPath();ctx.arc(0,-57.5,1.4,0,7);ctx.fill();
+    // arm raised, gesturing openly toward the prince (welcoming, explaining)
+    ctx.strokeStyle=robe;ctx.lineWidth=7;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(18,-24);ctx.quadraticCurveTo(32,-20,42,-24);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(19,-25);ctx.quadraticCurveTo(33,-21,42,-25);ctx.stroke();
+    // open hand — the gesture of "years ago, as a gift"
+    ctx.strokeStyle=warm;ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(42,-24);ctx.lineTo(47,-28);ctx.moveTo(42,-24);ctx.lineTo(48,-24);ctx.moveTo(42,-24);ctx.lineTo(47,-20);ctx.stroke();
+    ctx.restore();
+  })(W*0.40, groundY, 1.35);
+
+  // ================= THE PRINCE arriving, small — his lantern nearly redundant here =================
+  const px=W*0.60, py=groundY+4, s=1.15;
+  const LX=px+22*s, LY=py+14*s;
+  (function drawPrinceArriving(cx,cy,sc){
+    ctx.save();ctx.translate(cx,cy);ctx.scale(sc,sc);
+    const cool=ctx.createLinearGradient(0,-52,0,52);cool.addColorStop(0,'#2a4a64');cool.addColorStop(0.5,'#1a3548');cool.addColorStop(1,'#0e1a24');
+    const warm='rgba(255,190,110,'+(0.6+f*0.28)+')'; // he too is bathed warm here
+    // legs
+    ctx.strokeStyle=cool;ctx.lineCap='round';ctx.lineWidth=7;
+    ctx.beginPath();ctx.moveTo(-5,26);ctx.lineTo(-10,50);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(5,26);ctx.lineTo(11,50);ctx.stroke();
+    ctx.lineWidth=6;ctx.strokeStyle='#0e1a24';
+    ctx.beginPath();ctx.moveTo(-10,50);ctx.lineTo(-16,51);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(11,50);ctx.lineTo(17,51);ctx.stroke();
+    // hips
+    ctx.fillStyle=cool;ctx.beginPath();ctx.moveTo(-8,8);ctx.lineTo(8,8);ctx.lineTo(9,26);ctx.quadraticCurveTo(0,30,-9,26);ctx.closePath();ctx.fill();
+    // tunic
+    ctx.beginPath();ctx.moveTo(-15,-24);ctx.lineTo(-8,11);ctx.quadraticCurveTo(0,15,8,11);ctx.lineTo(15,-24);ctx.quadraticCurveTo(0,-30,-15,-24);ctx.closePath();ctx.fillStyle=cool;ctx.fill();
+    // cape trailing right
+    ctx.beginPath();ctx.moveTo(14,-23);ctx.quadraticCurveTo(30,-6,20,24);ctx.quadraticCurveTo(14,-2,9,-18);ctx.closePath();ctx.fillStyle='#12243060';ctx.fill();
+    // warm rim both sides (the warm land lights him fully)
+    ctx.strokeStyle=warm;ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(-15,-23);ctx.lineTo(-8,10);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(15,-23);ctx.lineTo(8,10);ctx.stroke();
+    // belt + shoulders
+    ctx.strokeStyle='rgba(200,160,90,'+(0.55+f*0.25)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-8,10);ctx.quadraticCurveTo(0,14,8,10);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(-14,-24);ctx.quadraticCurveTo(0,-30,15,-24);ctx.stroke();
+    // left arm relaxed toward the king (listening)
+    ctx.strokeStyle=cool;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-13,-18);ctx.quadraticCurveTo(-20,-12,-22,-2);ctx.stroke();
+    // right hand holds his little lantern low — nearly redundant in all this warmth
+    ctx.strokeStyle=cool;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(13,-18);ctx.quadraticCurveTo(19,-2,22,14);ctx.stroke();
+    // neck + head, turned toward the king (left)
+    ctx.fillStyle='#0e1a24';ctx.fillRect(-3.5,-32,7,9);
+    ctx.save();ctx.rotate(-0.08);
+    ctx.beginPath();ctx.moveTo(-7,-35);ctx.quadraticCurveTo(-8,-45,0,-46);ctx.quadraticCurveTo(8,-45,7,-35);ctx.quadraticCurveTo(6,-28,0,-28);ctx.quadraticCurveTo(-6,-28,-7,-35);ctx.closePath();ctx.fillStyle='#111d28';ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.9;ctx.beginPath();ctx.moveTo(-6,-37);ctx.quadraticCurveTo(-7,-28,-1,-28);ctx.stroke();
+    ctx.restore();
+    // circlet
+    ctx.strokeStyle='rgba(255,215,130,'+(0.65+f*0.3)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-7,-43);ctx.quadraticCurveTo(0,-47,7,-43);ctx.stroke();
+    ctx.fillStyle='rgba(255,235,170,'+(0.8+f*0.25)+')';ctx.beginPath();ctx.arc(0,-46,1.4,0,7);ctx.fill();
+    ctx.restore();
+  })(px, py, s);
+  // his little lantern, hanging low at his side — its glow barely stands out here (the point)
+  lanternObj(LX, LY, f);
+
+  // NO fog here. just a soft warm vignette.
+  let vg=ctx.createRadialGradient(W/2,H*0.5,H*0.4,W/2,H*0.5,H*0.95);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(30,10,0,0.45)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  paper();
+}
+
+// ===== PAGE 11 — THE BARREL IN THE CUPBOARD =====
+// SYMBOLISM: the quiet gut-punch. The oil the whole kingdom believed was impossibly far —
+// across the sea, beyond the goblin forest, guarded by death — was HOME the entire time,
+// in a dusty cupboard, the gift never opened because the phantom's lie made everyone stop
+// looking in the obvious places. The dust is the point: it sat untouched for years while
+// the kingdom went cold around it. The thing you need is often already in the room; the
+// only barrier was a story that told you not to look. Untapped potential, just waiting.
+function page11(t,variant){variant=variant||0;
+  const f=flickVal(t);
+  // interior: a dim, dusty palace room. cold and neglected, but not fogged — just forgotten.
+  const room=ctx.createLinearGradient(0,0,0,H);
+  room.addColorStop(0,'#14121a');room.addColorStop(0.6,'#100e15');room.addColorStop(1,'#0a080e');
+  ctx.fillStyle=room;ctx.fillRect(0,0,W,H);
+
+  // back wall + floor line
+  const floorY=H*0.74;
+  ctx.fillStyle='#0c0a12';ctx.fillRect(0,floorY,W,H-floorY);
+  // faint floorboards
+  ctx.strokeStyle='rgba(120,110,130,0.05)';ctx.lineWidth=1;
+  for(let i=1;i<7;i++){const y=floorY+i*((H-floorY)/7);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  for(let i=1;i<9;i++){const x=i*(W/9);ctx.beginPath();ctx.moveTo(x,floorY);ctx.lineTo(x+ (x-W/2)*0.15,H);ctx.stroke();}
+
+  // ---- THE CUPBOARD (right-of-centre), doors flung open ----
+  const cabX=W*0.56, cabY=floorY, cabW=190, cabH=210;
+  const cabTop=cabY-cabH;
+  // cupboard carcass (dark old wood)
+  ctx.fillStyle='#1a1410';ctx.fillRect(cabX,cabTop,cabW,cabH);
+  // inner dark cavity
+  ctx.fillStyle='#0a0806';ctx.fillRect(cabX+12,cabTop+12,cabW-24,cabH-20);
+  // a middle shelf
+  ctx.fillStyle='#140f0b';ctx.fillRect(cabX+12,cabTop+cabH*0.5,cabW-24,7);
+  // frame highlight (dim)
+  ctx.strokeStyle='rgba(150,130,100,0.15)';ctx.lineWidth=2;ctx.strokeRect(cabX,cabTop,cabW,cabH);
+
+  // the two doors, flung wide open (one each side, angled outward)
+  // left door swung open to the left
+  ctx.save();ctx.translate(cabX+12,cabTop+10);ctx.rotate(-0.5);
+  ctx.fillStyle='#181209';ctx.fillRect(-70,0,70,cabH-20);
+  ctx.strokeStyle='rgba(150,130,100,0.12)';ctx.lineWidth=1.5;ctx.strokeRect(-70,0,70,cabH-20);
+  ctx.fillStyle='#241a10';ctx.beginPath();ctx.arc(-10,(cabH-20)/2,2.5,0,7);ctx.fill(); // handle
+  ctx.restore();
+  // right door swung open to the right
+  ctx.save();ctx.translate(cabX+cabW-12,cabTop+10);ctx.rotate(0.5);
+  ctx.fillStyle='#181209';ctx.fillRect(0,0,70,cabH-20);
+  ctx.strokeStyle='rgba(150,130,100,0.12)';ctx.lineWidth=1.5;ctx.strokeRect(0,0,70,cabH-20);
+  ctx.fillStyle='#241a10';ctx.beginPath();ctx.arc(10,(cabH-20)/2,2.5,0,7);ctx.fill();
+  ctx.restore();
+
+  // cobwebs in the top corners of the cavity (neglect)
+  ctx.strokeStyle='rgba(180,180,190,0.12)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(cabX+14,cabTop+14);ctx.lineTo(cabX+40,cabTop+14);ctx.lineTo(cabX+14,cabTop+40);ctx.closePath();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cabX+14,cabTop+14);ctx.lineTo(cabX+30,cabTop+30);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cabX+cabW-14,cabTop+14);ctx.lineTo(cabX+cabW-40,cabTop+14);ctx.lineTo(cabX+cabW-14,cabTop+40);ctx.closePath();ctx.stroke();
+
+  // ================= THE BARREL — sitting on the lower shelf, luminous with meaning =================
+  const barX=cabX+cabW*0.5, barY=cabY-24;
+  // a soft glow of significance around it (warm, quiet — untapped potential)
+  let sig=ctx.createRadialGradient(barX,barY-20,4,barX,barY-20,110);
+  sig.addColorStop(0,'rgba(255,200,120,'+(0.28+f*0.1)+')');sig.addColorStop(0.5,'rgba(240,160,80,0.10)');sig.addColorStop(1,'rgba(240,160,80,0)');
+  ctx.fillStyle=sig;ctx.fillRect(cabX,cabTop,cabW,cabH+20);
+  // the barrel body (wooden staves, iron hoops)
+  const bw=54, bh=68;
+  ctx.save();ctx.translate(barX,barY);
+  // body
+  const barrelGrad=ctx.createLinearGradient(-bw/2,0,bw/2,0);
+  barrelGrad.addColorStop(0,'#3a2818');barrelGrad.addColorStop(0.5,'#5a3f24');barrelGrad.addColorStop(1,'#33240f');
+  ctx.fillStyle=barrelGrad;
+  ctx.beginPath();
+  ctx.moveTo(-bw/2,-bh/2);
+  ctx.quadraticCurveTo(-bw/2-8,0,-bw/2,bh/2);
+  ctx.lineTo(bw/2,bh/2);
+  ctx.quadraticCurveTo(bw/2+8,0,bw/2,-bh/2);
+  ctx.closePath();ctx.fill();
+  // top of the barrel (lid)
+  ctx.fillStyle='#4a3620';ctx.beginPath();ctx.ellipse(0,-bh/2,bw/2,7,0,0,7);ctx.fill();
+  ctx.strokeStyle='#2a1c0e';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(0,-bh/2,bw/2,7,0,0,7);ctx.stroke();
+  // stave lines
+  ctx.strokeStyle='rgba(30,20,10,0.5)';ctx.lineWidth=1;
+  for(let i=-2;i<=2;i++){ctx.beginPath();ctx.moveTo(i*10,-bh/2+4);ctx.quadraticCurveTo(i*12,0,i*10,bh/2);ctx.stroke();}
+  // iron hoops
+  ctx.strokeStyle='#6a6258';ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(-bw/2-2,-bh*0.28);ctx.quadraticCurveTo(0,-bh*0.28-3,bw/2+2,-bh*0.28);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-bw/2-2,bh*0.28);ctx.quadraticCurveTo(0,bh*0.28+3,bw/2+2,bh*0.28);ctx.stroke();
+  // warm rim on the lantern-facing (left) side
+  ctx.strokeStyle='rgba(255,190,110,'+(0.4+f*0.15)+')';ctx.lineWidth=1.6;
+  ctx.beginPath();ctx.moveTo(-bw/2,-bh/2+4);ctx.quadraticCurveTo(-bw/2-8,0,-bw/2,bh/2);ctx.stroke();
+  // a coating of dust on the lid + shoulders (years untouched)
+  ctx.fillStyle='rgba(160,155,150,0.12)';ctx.beginPath();ctx.ellipse(0,-bh/2,bw/2-3,5,0,0,7);ctx.fill();
+  ctx.restore();
+
+  // ================= THE PRINCE, caught in the moment of recognition =================
+  // left of the cupboard, having just flung it open, leaning in, lantern raised to look.
+  const px=W*0.24, py=floorY+2, s=1.3;
+  const LX=px+30*s, LY=py-30*s; // lantern raised toward the cupboard to see
+  // his lantern light reaching into the cupboard (the discovery light)
+  warmGlow(LX, LY, 200, 0.4+f*0.12, t);
+
+  (function drawPrinceReaching(cx,cy,sc){
+    ctx.save();ctx.translate(cx,cy);ctx.scale(sc,sc);
+    const cool=ctx.createLinearGradient(0,-52,0,52);cool.addColorStop(0,'#213a52');cool.addColorStop(0.5,'#132536');cool.addColorStop(1,'#0a1017');
+    const warm='rgba(255,185,100,'+(0.6+f*0.28)+')';
+    const coolRim='rgba(120,150,190,0.3)';
+    // legs — one forward, leaning toward the cupboard (arrested motion, just raced in)
+    ctx.strokeStyle=cool;ctx.lineCap='round';ctx.lineWidth=7;
+    ctx.beginPath();ctx.moveTo(-6,24);ctx.lineTo(-14,50);ctx.stroke();  // back leg
+    ctx.beginPath();ctx.moveTo(6,24);ctx.lineTo(16,46);ctx.stroke();   // front leg reaching
+    ctx.lineWidth=6;ctx.strokeStyle='#0a1017';
+    ctx.beginPath();ctx.moveTo(-14,50);ctx.lineTo(-20,51);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(16,46);ctx.lineTo(23,47);ctx.stroke();
+    // hips
+    ctx.fillStyle=cool;ctx.beginPath();ctx.moveTo(-8,8);ctx.lineTo(8,8);ctx.lineTo(10,26);ctx.quadraticCurveTo(0,30,-9,26);ctx.closePath();ctx.fill();
+    // torso leaning toward the cupboard (right)
+    ctx.save();ctx.rotate(0.14);
+    ctx.beginPath();ctx.moveTo(-15,-22);ctx.lineTo(-8,12);ctx.quadraticCurveTo(0,16,8,12);ctx.lineTo(15,-22);ctx.quadraticCurveTo(0,-28,-15,-22);ctx.closePath();ctx.fillStyle=cool;ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(-15,-22);ctx.quadraticCurveTo(0,-28,15,-22);ctx.stroke();
+    // cape settling behind (just stopped moving)
+    ctx.beginPath();ctx.moveTo(-14,-21);ctx.quadraticCurveTo(-34,-10,-26,20);ctx.quadraticCurveTo(-16,-4,-9,-16);ctx.closePath();ctx.fillStyle='#0e1c2960';ctx.fill();
+    ctx.strokeStyle=coolRim;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(-14,-21);ctx.quadraticCurveTo(-34,-10,-26,20);ctx.stroke();
+    ctx.restore();
+    // belt
+    ctx.strokeStyle='rgba(200,160,90,'+(0.5+f*0.25)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-8,10);ctx.quadraticCurveTo(0,14,8,10);ctx.stroke();
+    // right arm RAISED high, holding the lantern up to see into the cupboard
+    ctx.strokeStyle=cool;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(10,-18);ctx.quadraticCurveTo(24,-26,30,-30);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(11,-19);ctx.quadraticCurveTo(25,-27,30,-31);ctx.stroke();
+    // left arm reaching forward toward the barrel (recognition/reaching)
+    ctx.strokeStyle=cool;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-6,-14);ctx.quadraticCurveTo(6,-10,16,-6);ctx.stroke();
+    // neck + head, tilted up/forward, looking INTO the cupboard
+    ctx.fillStyle='#101820';ctx.fillRect(-2,-32,7,9);
+    ctx.save();ctx.rotate(0.12);
+    ctx.beginPath();ctx.moveTo(-6,-35);ctx.quadraticCurveTo(-7,-45,1,-46);ctx.quadraticCurveTo(9,-45,8,-35);ctx.quadraticCurveTo(7,-28,1,-28);ctx.quadraticCurveTo(-5,-28,-6,-35);ctx.closePath();ctx.fillStyle='#111a22';ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.9;ctx.beginPath();ctx.moveTo(7,-37);ctx.quadraticCurveTo(8,-28,2,-28);ctx.stroke();
+    ctx.restore();
+    // circlet
+    ctx.strokeStyle='rgba(255,215,130,'+(0.6+f*0.35)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-6,-43);ctx.quadraticCurveTo(1,-47,8,-43);ctx.stroke();
+    ctx.fillStyle='rgba(255,235,170,'+(0.75+f*0.3)+')';ctx.beginPath();ctx.arc(1,-46,1.4,0,7);ctx.fill();
+    ctx.restore();
+  })(px, py, s);
+  lanternObj(LX, LY, f);
+
+  // ---- dust motes hanging + swirling in the lantern light (disturbed by the opening) ----
+  for(let i=0;i<26;i++){
+    const mx=LX + 30 + ((i*53)%160) + Math.sin(t*0.006+i)*8;
+    const my=LY - 20 + ((i*37)%150) + Math.cos(t*0.005+i*1.3)*8;
+    // only motes within the lantern's reach glow
+    const d=Math.hypot(mx-LX,my-LY);
+    const al=Math.max(0, 1 - d/190) * (0.4+0.4*Math.sin(t*0.02+i));
+    ctx.fillStyle='rgba(230,210,170,'+al*0.5+')';
+    ctx.fillRect(mx,my,1.4,1.4);
+  }
+
+  vignette(0.76);
+  paper();
+}
+
+// ===== PAGE 12 — THE LANTERN ROARS TO LIGHT =====
+// SYMBOLISM: the payoff of every thread at once. The inherited flame (p5) meets the found
+// oil (p11) and becomes light strong enough to banish the lie. Neither alone was enough.
+// The phantom's death is the book's sharpest line: "no phantom can survive being truly seen."
+// Doubt isn't out-fought or out-argued — it dies the instant there is light enough to SEE,
+// because doubt is made of fog and not-looking. Flood the world with sight and it has nothing
+// left to hide in. Light roars up like a sunrise; the phantom shrieks, thins, comes apart.
+function page12(t,variant){variant=variant||0;
+  const f=flickVal(t);
+  // the eruption pulse — a bright surge that swells (the light "roaring up")
+  const surge=0.82+0.12*Math.sin(t*0.012)+0.04*Math.sin(t*0.028);
+
+  // sky going from cold night (edges) to a roaring warm sunrise (centre column)
+  const sky=ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#3a2a2e');sky.addColorStop(0.5,'#7a4a30');sky.addColorStop(1,'#c8823e');
+  ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+
+  const groundY=H*0.82;
+  const lx=W*0.5;
+
+  // ---- the great column of light ROARING upward from the lantern ----
+  const colGrad=ctx.createLinearGradient(lx,groundY,lx,0);
+  colGrad.addColorStop(0,'rgba(255,240,190,'+(0.9*surge)+')');
+  colGrad.addColorStop(0.4,'rgba(255,210,130,'+(0.5*surge)+')');
+  colGrad.addColorStop(1,'rgba(255,190,110,0)');
+  ctx.save();
+  ctx.beginPath();
+  // a widening beam / plume rising from the lantern to the sky
+  ctx.moveTo(lx-26,groundY-40);
+  ctx.quadraticCurveTo(lx-90*surge,H*0.3,lx-140*surge,-20);
+  ctx.lineTo(lx+140*surge,-20);
+  ctx.quadraticCurveTo(lx+90*surge,H*0.3,lx+26,groundY-40);
+  ctx.closePath();
+  ctx.fillStyle=colGrad;ctx.fill();
+  ctx.restore();
+
+  // giant radial burst of warmth centred on the lantern (the sunrise)
+  let burst=ctx.createRadialGradient(lx,groundY-70,10,lx,groundY-70,W*0.9*surge);
+  burst.addColorStop(0,'rgba(255,240,195,'+(0.7*surge)+')');
+  burst.addColorStop(0.25,'rgba(255,200,120,'+(0.35*surge)+')');
+  burst.addColorStop(0.6,'rgba(255,170,90,0.12)');
+  burst.addColorStop(1,'rgba(255,170,90,0)');
+  ctx.fillStyle=burst;ctx.fillRect(0,0,W,H);
+
+  // radiating light rays sweeping out from the source
+  ctx.save();ctx.translate(lx,groundY-70);
+  for(let i=0;i<14;i++){
+    const a=(i/14)*Math.PI*2 + t*0.0002;
+    const len=W*0.7*surge*(0.78+0.18*Math.sin(t*0.01+i));
+    ctx.strokeStyle='rgba(255,230,170,'+(0.05+0.03*Math.sin(t*0.012+i))+')';
+    ctx.lineWidth=6;
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*len,Math.sin(a)*len);ctx.stroke();
+  }
+  ctx.restore();
+
+  // fog being BLASTED apart at the edges — grey wisps fleeing the light, thinning
+  for(let i=0;i<8;i++){
+    const side=i<4?-1:1;
+    const dist=(0.5+ (i%4)*0.16);
+    const fx=lx + side*(W*0.32*dist + Math.sin(t*0.01+i)*10);
+    const fy=H*0.4 + (i%4)*70;
+    const flee=Math.max(0,0.14-(surge-0.7)*0.3); // fog retreats as the surge swells
+    let fg=ctx.createRadialGradient(fx,fy,0,fx,fy,80);
+    fg.addColorStop(0,'rgba(150,158,170,'+flee+')');fg.addColorStop(1,'rgba(150,158,170,0)');
+    ctx.fillStyle=fg;ctx.beginPath();ctx.arc(fx,fy,80,0,7);ctx.fill();
+  }
+
+  // ================= THE PHANTOM — caught mid-vanish, shrieking, coming apart =================
+  // upper area, its cuttlefish form UNRAVELLING: mantle fracturing into wisps, eyes fading,
+  // tendrils tearing away and dissolving upward into the light. "being truly seen" is killing it.
+  const phx=W*0.5, phy=H*0.26, ps=0.9;
+  const dissolve=0.6+0.25*Math.sin(t*0.015); // slow pulses of coming-apart
+  ctx.save();ctx.translate(phx,phy);ctx.scale(ps,ps);
+  // its cold self-glow is being overwhelmed — faint, flickering out
+  ctx.globalAlpha=0.5-0.2*surge;
+  let cg=ctx.createRadialGradient(0,0,4,0,0,110);cg.addColorStop(0,'rgba(120,140,175,0.14)');cg.addColorStop(1,'rgba(120,140,175,0)');
+  ctx.fillStyle=cg;ctx.fillRect(-160,-140,320,320);
+  ctx.globalAlpha=1;
+
+  // the mantle — fracturing: drawn as broken arcs pulling apart, not a solid body
+  ctx.strokeStyle='rgba(90,104,130,'+(0.5-0.25*surge)+')';ctx.lineWidth=3;
+  // top dome breaking into segments that drift outward/up
+  for(let i=-3;i<=3;i++){
+    const sep=Math.abs(i)*dissolve*8;                 // segments separating
+    const up=-dissolve*Math.abs(i)*6;                 // tearing upward into the light
+    const bx=i*11;
+    ctx.beginPath();
+    ctx.moveTo(bx-4, -50 - sep + up);
+    ctx.quadraticCurveTo(bx, -70 - sep + up, bx+4, -50 - sep + up);
+    ctx.stroke();
+  }
+  // flanks of the mantle peeling away as ragged wisps
+  ctx.strokeStyle='rgba(90,104,130,'+(0.4-0.2*surge)+')';ctx.lineWidth=2.4;
+  for(let s=-1;s<=1;s+=2){
+    for(let i=0;i<4;i++){
+      const yy=-30+i*20;
+      const tear=dissolve*(10+i*8);
+      ctx.beginPath();
+      ctx.moveTo(s*(30+i*3), yy);
+      ctx.quadraticCurveTo(s*(50+tear), yy-10-tear, s*(60+tear), yy-30-tear*1.5);
+      ctx.stroke();
+    }
+  }
+  // remnant of the body core, thinning
+  ctx.globalAlpha=Math.max(0.15,0.7-surge*0.5);
+  const core=ctx.createLinearGradient(0,-40,0,50);core.addColorStop(0,'rgba(58,67,86,0.8)');core.addColorStop(1,'rgba(30,38,54,0)');
+  ctx.fillStyle=core;
+  ctx.beginPath();
+  ctx.moveTo(-26,40);
+  ctx.quadraticCurveTo(-36,-6,-18,-40);
+  ctx.quadraticCurveTo(0,-52,18,-40);
+  ctx.quadraticCurveTo(36,-6,26,40);
+  ctx.quadraticCurveTo(0,50,-26,40);
+  ctx.closePath();ctx.fill();
+  ctx.globalAlpha=1;
+
+  // the cold eyes — fading, wide, "seen" at last. one already guttering out.
+  const eyeFade=Math.max(0,0.7-surge*0.6);
+  ctx.fillStyle='rgba(200,214,240,'+eyeFade+')';
+  ctx.save();ctx.translate(-14,-20);ctx.rotate(-0.15);ctx.beginPath();ctx.ellipse(0,0,4,8*(1-dissolve*0.3),0,0,7);ctx.fill();ctx.restore();
+  ctx.fillStyle='rgba(200,214,240,'+(eyeFade*0.5)+')';
+  ctx.save();ctx.translate(15,-20);ctx.rotate(0.15);ctx.beginPath();ctx.ellipse(0,0,4,8*(1-dissolve*0.6),0,0,7);ctx.fill();ctx.restore();
+
+  // tendrils tearing away below, dissolving into rising motes of light
+  ctx.strokeStyle='rgba(90,104,130,'+(0.35-0.2*surge)+')';ctx.lineWidth=2;
+  for(let i=-2;i<=2;i++){
+    const tear=dissolve*20;
+    ctx.beginPath();
+    ctx.moveTo(i*10,40);
+    ctx.quadraticCurveTo(i*12, 55+tear*0.4, i*8 - tear*0.3, 60+tear);
+    ctx.stroke();
+  }
+  // motes of the phantom breaking off and rising into the warm light (being unmade)
+  for(let i=0;i<18;i++){
+    const mx=Math.sin(i*2.1)*50;
+    const my=20 - ((t*0.05+i*14)%120);
+    const al=Math.max(0,(1-((t*0.05+i*14)%120)/120))*(0.4)*(1-surge*0.3);
+    ctx.fillStyle='rgba(150,165,195,'+al+')';
+    ctx.fillRect(mx,my,1.6,1.6);
+  }
+  ctx.restore();
+
+  // ---- the great lantern at the base, blazing (source of it all) ----
+  const lbaseY=groundY+6, lyTop=lbaseY-150;
+  // post
+  ctx.fillStyle='#1a130a';ctx.fillRect(lx-5,lyTop,10,150);
+  // housing, now FULL of roaring flame
+  const lh=58, lw=44;
+  ctx.fillStyle='#20180e';
+  ctx.beginPath();ctx.moveTo(lx-lw/2,lyTop+lh);ctx.lineTo(lx-lw/2,lyTop+6);ctx.lineTo(lx,lyTop-14);ctx.lineTo(lx+lw/2,lyTop+6);ctx.lineTo(lx+lw/2,lyTop+lh);ctx.closePath();ctx.fill();
+  // brilliant flame filling the housing
+  let gl=ctx.createRadialGradient(lx,lyTop+lh-24,0,lx,lyTop+lh-24,40);
+  gl.addColorStop(0,'rgba(255,250,225,'+(0.95)+')');gl.addColorStop(0.4,'rgba(255,215,140,0.9)');gl.addColorStop(1,'rgba(255,180,90,0)');
+  ctx.fillStyle=gl;ctx.beginPath();ctx.arc(lx,lyTop+lh-24,40,0,7);ctx.fill();
+  // iron frame
+  ctx.strokeStyle='rgba(20,14,8,0.9)';ctx.lineWidth=2.4;
+  ctx.beginPath();ctx.moveTo(lx-lw/2,lyTop+6);ctx.lineTo(lx-lw/2,lyTop+lh);ctx.moveTo(lx+lw/2,lyTop+6);ctx.lineTo(lx+lw/2,lyTop+lh);ctx.moveTo(lx,lyTop-14);ctx.lineTo(lx,lyTop+lh);ctx.stroke();
+  ctx.fillStyle='#181008';ctx.beginPath();ctx.moveTo(lx-lw/2-4,lyTop+6);ctx.lineTo(lx,lyTop-18);ctx.lineTo(lx+lw/2+4,lyTop+6);ctx.closePath();ctx.fill();
+  // embers streaming up from the great flame
+  for(let i=0;i<16;i++){const ex=lx+Math.sin(t*0.03+i*1.4)*(14+i);const ey=(lyTop+lh-24)-((t*0.06+i*24)%180);const al=Math.max(0,1-((t*0.06+i*24)%180)/180);ctx.fillStyle='rgba(255,200,120,'+al*0.7+')';ctx.fillRect(ex,ey,2,2);}
+
+  // ---- ground ----
+  const gnd=ctx.createLinearGradient(0,groundY,0,H);gnd.addColorStop(0,'#5a3a20');gnd.addColorStop(1,'#2e1c10');
+  ctx.fillStyle=gnd;ctx.fillRect(0,groundY,W,H);
+
+  // ================= THE PRINCE at the base, small — the humble spark =================
+  // just touched his little flame to the wick; stepping back, looking up at what he started.
+  const px=lx-70, py=groundY+4, s=1.1;
+  const LX=px-18*s, LY=py-14*s;
+  (function drawPrinceLighting(cx,cy,sc){
+    ctx.save();ctx.translate(cx,cy);ctx.scale(sc,sc);
+    const cool=ctx.createLinearGradient(0,-52,0,52);cool.addColorStop(0,'#2a4864');cool.addColorStop(0.5,'#1a3448');cool.addColorStop(1,'#0e1a24');
+    const warm='rgba(255,200,120,'+(0.7+f*0.25)+')'; // blazed in the great light
+    // legs
+    ctx.strokeStyle=cool;ctx.lineCap='round';ctx.lineWidth=7;
+    ctx.beginPath();ctx.moveTo(-5,26);ctx.lineTo(-11,50);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(5,26);ctx.lineTo(11,50);ctx.stroke();
+    ctx.lineWidth=6;ctx.strokeStyle='#0e1a24';
+    ctx.beginPath();ctx.moveTo(-11,50);ctx.lineTo(-17,51);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(11,50);ctx.lineTo(17,51);ctx.stroke();
+    // hips
+    ctx.fillStyle=cool;ctx.beginPath();ctx.moveTo(-8,8);ctx.lineTo(8,8);ctx.lineTo(9,26);ctx.quadraticCurveTo(0,30,-9,26);ctx.closePath();ctx.fill();
+    // tunic
+    ctx.beginPath();ctx.moveTo(-15,-24);ctx.lineTo(-8,11);ctx.quadraticCurveTo(0,15,8,11);ctx.lineTo(15,-24);ctx.quadraticCurveTo(0,-30,-15,-24);ctx.closePath();ctx.fillStyle=cool;ctx.fill();
+    // cape
+    ctx.beginPath();ctx.moveTo(-14,-23);ctx.quadraticCurveTo(-30,-6,-20,24);ctx.quadraticCurveTo(-14,-2,-9,-18);ctx.closePath();ctx.fillStyle='#12243060';ctx.fill();
+    // strong warm rim on the RIGHT (facing the great lantern)
+    ctx.strokeStyle=warm;ctx.lineWidth=2.6;ctx.beginPath();ctx.moveTo(15,-23);ctx.lineTo(8,11);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(-14,-24);ctx.quadraticCurveTo(0,-30,15,-24);ctx.stroke();
+    // belt
+    ctx.strokeStyle='rgba(200,160,90,'+(0.55+f*0.25)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-8,10);ctx.quadraticCurveTo(0,14,8,10);ctx.stroke();
+    // right arm still raised toward the wick he just lit
+    ctx.strokeStyle=cool;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(12,-20);ctx.quadraticCurveTo(24,-24,32,-30);ctx.stroke();
+    ctx.strokeStyle=warm;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(13,-21);ctx.quadraticCurveTo(25,-25,32,-31);ctx.stroke();
+    // left hand holds his little lantern low (the spark that did it)
+    ctx.strokeStyle=cool;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-13,-18);ctx.quadraticCurveTo(-18,-6,-18,6);ctx.stroke();
+    // neck + head, tilted UP, gazing at the roaring light
+    ctx.fillStyle='#0e1a24';ctx.fillRect(-3.5,-33,7,9);
+    ctx.save();ctx.rotate(0.05);
+    ctx.beginPath();ctx.moveTo(-7,-36);ctx.quadraticCurveTo(-8,-47,0,-48);ctx.quadraticCurveTo(8,-47,7,-36);ctx.quadraticCurveTo(6,-29,0,-29);ctx.quadraticCurveTo(-6,-29,-7,-36);ctx.closePath();ctx.fillStyle='#111d28';ctx.fill();
+    ctx.strokeStyle=warm;ctx.lineWidth=1.9;ctx.beginPath();ctx.moveTo(6,-38);ctx.quadraticCurveTo(7,-29,1,-29);ctx.stroke();
+    ctx.restore();
+    // circlet, catching the great light
+    ctx.strokeStyle='rgba(255,225,150,'+(0.8+f*0.2)+')';ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(-7,-45);ctx.quadraticCurveTo(0,-49,7,-45);ctx.stroke();
+    ctx.fillStyle='rgba(255,240,190,'+(0.85+f*0.15)+')';ctx.beginPath();ctx.arc(0,-48,1.5,0,7);ctx.fill();
+    ctx.restore();
+  })(px, py, s);
+  lanternObj(LX, LY+8, f);
+
+  // soft warm vignette (light is winning — lighter than any prior page)
+  let vg=ctx.createRadialGradient(W/2,H*0.5,H*0.45,W/2,H*0.5,H*0.95);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(20,8,0,0.4)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  paper();
+}
+
+// ===== PAGE 13 — FACES IN THE GOLDEN LIGHT =====
+// SYMBOLISM: the restoration of connection — the exact healing of page 3's wound. The fog
+// severed people who stood an arm's length apart; now the light returns and the FIRST thing
+// it does is let them see each other's faces "for the first time in years." Connection isn't
+// a bonus of the light — it's the whole point. Grief and joy arrive together (some wept, some
+// laughed). Festivals begin that very night: life resumes instantly, because underneath the
+// grey it was intact all along, waiting — like the barrel in the cupboard. This is page 3
+// answered: same square, same figures, but the severed golden threads are REJOINED and glowing.
+function page13(t,variant){variant=variant||0;
+  const f=flickVal(t);
+  // warm night sky (festival begins that very night) — the opposite of page 3's cold grey
+  const sky=ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#3a2438');sky.addColorStop(0.4,'#7a4638');sky.addColorStop(0.72,'#c87a44');sky.addColorStop(1,'#e6a25a');
+  ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+  // an overall warm ambient wash lifting the whole square out of the dark (festival glow)
+  let amb=ctx.createRadialGradient(W*0.5,H*0.62,20,W*0.5,H*0.62,W*0.75);
+  amb.addColorStop(0,'rgba(255,200,120,0.28)');amb.addColorStop(0.5,'rgba(255,175,100,0.12)');amb.addColorStop(1,'rgba(255,175,100,0)');
+  ctx.fillStyle=amb;ctx.fillRect(0,0,W,H);
+
+  const groundY=H*0.72;
+  // the same sky-high bridges & town as page 3 — but WARM-lit now, not cold silhouettes
+  // LEFT sky-bridge: two pylons joined by a clear arched span + a deck across the top (reads as a bridge)
+  ctx.fillStyle='#5a3a28';
+  const lp1=W*0.08, lp2=W*0.24, pylTop=H*0.40, deckY=H*0.42;
+  ctx.fillRect(lp1,pylTop,20,groundY-pylTop);          // left pylon
+  ctx.fillRect(lp2,pylTop,20,groundY-pylTop);          // right pylon
+  // bold supporting arch BETWEEN the two pylons (clearly connects them)
+  ctx.strokeStyle='#5a3a28';ctx.lineWidth=9;
+  ctx.beginPath();ctx.moveTo(lp1+10,deckY);ctx.quadraticCurveTo((lp1+lp2)/2+10,deckY-46,lp2+10,deckY);ctx.stroke();
+  // the deck running across the top of the pylons (the road of the bridge)
+  ctx.fillStyle='#5a3a28';ctx.fillRect(lp1-14,pylTop-10,(lp2-lp1)+48,12);
+  ctx.strokeStyle='rgba(255,190,110,0.18)';ctx.lineWidth=1.6;
+  ctx.beginPath();ctx.moveTo(lp1-14,pylTop-10);ctx.lineTo(lp2+34,pylTop-10);ctx.stroke();
+  // little deck railing posts
+  ctx.strokeStyle='#523528';ctx.lineWidth=2;
+  for(let i=0;i<=6;i++){const rx=lp1-8+i*((lp2-lp1+40)/6);ctx.beginPath();ctx.moveTo(rx,pylTop-10);ctx.lineTo(rx,pylTop-17);ctx.stroke();}
+  // clustered rooftops mid-ground (warm now)
+  ctx.fillStyle='#523528';
+  for(let i=0;i<9;i++){const x=W*0.32+i*38;const rh=30+((i*37)%46);ctx.beginPath();ctx.moveTo(x,groundY);ctx.lineTo(x,groundY-rh);ctx.lineTo(x+15,groundY-rh-14);ctx.lineTo(x+30,groundY-rh);ctx.lineTo(x+30,groundY);ctx.closePath();ctx.fill();}
+  // second sky-bridge on the right (also with a deck so it rhymes)
+  ctx.strokeStyle='#4a3022';ctx.lineWidth=7;
+  ctx.beginPath();ctx.moveTo(W*0.64,groundY-70);ctx.quadraticCurveTo(W*0.80,groundY-104,W*0.96,groundY-64);ctx.stroke();
+  ctx.fillStyle='#4a3022';ctx.fillRect(W*0.70,groundY-96,10,96);ctx.fillRect(W*0.86,groundY-92,10,92);
+  ctx.fillRect(W*0.685,groundY-104,W*0.19,8);   // right bridge deck
+
+  // ---- the great lantern glowing warm in the background (relit, now steady) ----
+  const glx=W*0.5, glyTop=groundY-150;
+  warmGlow(glx, glyTop+30, 260, 0.4+f*0.12, t);
+  ctx.fillStyle='#2a1c12';ctx.fillRect(glx-4,glyTop,8,150);
+  ctx.fillStyle='#241810';
+  ctx.beginPath();ctx.moveTo(glx-18,glyTop+40);ctx.lineTo(glx-18,glyTop+2);ctx.lineTo(glx,glyTop-14);ctx.lineTo(glx+18,glyTop+2);ctx.lineTo(glx+18,glyTop+40);ctx.closePath();ctx.fill();
+  let ggl=ctx.createRadialGradient(glx,glyTop+20,0,glx,glyTop+20,22);ggl.addColorStop(0,'rgba(255,240,190,0.95)');ggl.addColorStop(1,'rgba(255,190,100,0)');
+  ctx.fillStyle=ggl;ctx.beginPath();ctx.arc(glx,glyTop+20,22,0,7);ctx.fill();
+
+  // ---- the windows of the town, warm-lit (life inside every home now) ----
+  ctx.fillStyle='rgba(255,210,120,'+(0.8+f*0.15)+')';
+  for(let i=0;i<16;i++){const x=W*0.30+((i*53)%320);const y=groundY-20-((i*29)%60);ctx.fillRect(x,y,4,5);}
+
+  // ---- festival strung lanterns being lit across the square (life resumes at once) ----
+  function fLantern(x1,y1,x2,y2,count,sag){
+    ctx.strokeStyle='rgba(40,24,16,0.4)';ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.quadraticCurveTo((x1+x2)/2,(y1+y2)/2+sag,x2,y2);ctx.stroke();
+    for(let i=1;i<count;i++){const u=i/count;
+      const bx=(1-u)*(1-u)*x1+2*(1-u)*u*((x1+x2)/2)+u*u*x2;
+      const by=(1-u)*(1-u)*y1+2*(1-u)*u*((y1+y2)/2+sag)+u*u*y2;
+      const fl=0.7+Math.sin(t*0.03+i*1.2)*0.25;
+      const hue=i%3;const col=hue===0?'255,190,110':hue===1?'255,150,90':'255,215,140';
+      let bg=ctx.createRadialGradient(bx,by+3,0,bx,by+3,10);bg.addColorStop(0,'rgba('+col+','+(0.45*fl)+')');bg.addColorStop(1,'rgba('+col+',0)');
+      ctx.fillStyle=bg;ctx.beginPath();ctx.arc(bx,by+3,10,0,7);ctx.fill();
+      ctx.fillStyle='rgba('+col+','+(0.85*fl)+')';ctx.beginPath();ctx.arc(bx,by+4,2.2,0,7);ctx.fill();
+    }
+  }
+  // strings anchored to real structures: left bridge deck -> rooftops -> right bridge
+  fLantern(W*0.24+10, H*0.40-14, W*0.44, groundY-58, 8, 26);
+  fLantern(W*0.56, groundY-58, W*0.70, groundY-100, 7, 26);
+
+  // ground, warm
+  const gnd=ctx.createLinearGradient(0,groundY,0,H);gnd.addColorStop(0,'#6a4228');gnd.addColorStop(1,'#3e2618');
+  ctx.fillStyle=gnd;ctx.fillRect(0,groundY,W,H);
+
+  // ================= THE PEOPLE — same row as page 3, but HEALED =================
+  // faces turned toward each other; the once-severed golden threads now REJOINED and glowing.
+  const folk=[
+    {x:W*0.30,scale:1.0,face:1,joy:'embrace'},
+    {x:W*0.395,scale:1.08,face:-1,joy:'embrace'},
+    {x:W*0.50,scale:0.96,face:1,joy:'raise'},
+    {x:W*0.60,scale:1.04,face:1,joy:'turn'},
+    {x:W*0.69,scale:0.92,face:-1,joy:'turn'}
+  ];
+  const fy=groundY+6;
+
+  // the REJOINED threads — warm golden strands running person to person, whole and glowing.
+  for(let i=0;i<folk.length-1;i++){
+    const a=folk[i], b=folk[i+1];
+    const midY=fy-42;
+    const glow=0.4+0.25*Math.sin(t*0.02+i);
+    // a continuous warm strand connecting the two (unbroken now — the healing of page 3)
+    let grad=ctx.createLinearGradient(a.x,midY,b.x,midY);
+    grad.addColorStop(0,'rgba(255,190,100,'+glow+')');
+    grad.addColorStop(0.5,'rgba(255,215,140,'+(glow+0.15)+')');
+    grad.addColorStop(1,'rgba(255,190,100,'+glow+')');
+    ctx.strokeStyle=grad;ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(a.x+8,midY);ctx.quadraticCurveTo((a.x+b.x)/2,midY-8,b.x-8,midY);ctx.stroke();
+    // little travelling glimmer along the restored thread (connection alive again)
+    const u=(t*0.0005+i*0.3)%1;const gx=a.x+8+(b.x-8-(a.x+8))*u;const gy=midY-8*Math.sin(u*Math.PI);
+    let sg=ctx.createRadialGradient(gx,gy,0,gx,gy,6);sg.addColorStop(0,'rgba(255,235,170,0.8)');sg.addColorStop(1,'rgba(255,235,170,0)');
+    ctx.fillStyle=sg;ctx.beginPath();ctx.arc(gx,gy,6,0,7);ctx.fill();
+  }
+
+  // draw each figure warm, faces visible, in postures of reunion & joy
+  folk.forEach((p,i)=>{
+    ctx.save();ctx.translate(p.x,fy);ctx.scale(p.scale,p.scale);
+    // warm pool around each (they share light now, pools overlapping — connected)
+    let pk=ctx.createRadialGradient(0,-20,2,0,-20,46);pk.addColorStop(0,'rgba(255,190,110,0.14)');pk.addColorStop(1,'rgba(255,190,110,0)');
+    ctx.fillStyle=pk;ctx.beginPath();ctx.arc(0,-20,46,0,7);ctx.fill();
+    // body, warm-lit
+    const bodyc=ctx.createLinearGradient(0,-40,0,4);bodyc.addColorStop(0,'#8a6238');bodyc.addColorStop(1,'#3e2814');
+    ctx.fillStyle=bodyc;
+    const lean=p.face*0.08; // leaning toward their neighbour
+    ctx.save();ctx.rotate(lean);
+    ctx.beginPath();ctx.moveTo(-9,4);ctx.quadraticCurveTo(-12,-24,-5,-33);ctx.quadraticCurveTo(0,-38,5,-33);ctx.quadraticCurveTo(12,-24,9,4);ctx.quadraticCurveTo(0,8,-9,4);ctx.closePath();ctx.fill();
+    // head — turned toward neighbour, FACE visible (a warm-lit face, the whole point)
+    ctx.beginPath();ctx.arc(0,-39,6.5,0,7);ctx.fillStyle='#3a2818';ctx.fill();
+    // the lit face — warm crescent showing they can be SEEN now
+    ctx.strokeStyle='rgba(255,210,140,'+(0.7+f*0.2)+')';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.arc(p.face*1.5,-39,6.5,p.face>0?-1:2,p.face>0?1.2:4.2);ctx.stroke();
+    // two little eyes (faces seeing each other)
+    ctx.fillStyle='rgba(255,230,180,0.8)';
+    ctx.beginPath();ctx.arc(p.face*1.5,-40,0.9,0,7);ctx.fill();
+    // warm rim both sides (fully alive in the light)
+    ctx.strokeStyle='rgba(255,190,110,'+(0.55+f*0.2)+')';ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(8,2);ctx.quadraticCurveTo(11,-24,5,-32);ctx.stroke();
+    ctx.restore();
+    // joy gestures
+    if(p.joy==='raise'){ // both arms reaching HIGH overhead in celebration
+      ctx.strokeStyle=bodyc;ctx.lineWidth=4;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(-7,-18);ctx.quadraticCurveTo(-15,-40,-11,-56);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(7,-18);ctx.quadraticCurveTo(15,-40,11,-56);ctx.stroke();
+      ctx.strokeStyle='rgba(255,190,110,0.5)';ctx.lineWidth=1.4;
+      ctx.beginPath();ctx.moveTo(7,-19);ctx.quadraticCurveTo(15,-41,11,-57);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(-7,-19);ctx.quadraticCurveTo(-15,-41,-11,-57);ctx.stroke();
+    } else if(p.joy==='embrace'){ // arm reaching toward neighbour at shoulder height (embrace)
+      ctx.strokeStyle=bodyc;ctx.lineWidth=4;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(p.face*6,-24);ctx.quadraticCurveTo(p.face*16,-26,p.face*26,-24);ctx.stroke();
+      ctx.strokeStyle='rgba(255,190,110,0.5)';ctx.lineWidth=1.4;
+      ctx.beginPath();ctx.moveTo(p.face*6,-25);ctx.quadraticCurveTo(p.face*16,-27,p.face*26,-25);ctx.stroke();
+    }
+    ctx.restore();
+  });
+
+  // gentle warm vignette (no fog — this is page 3 fully healed)
+  let vg=ctx.createRadialGradient(W/2,H*0.5,H*0.4,W/2,H*0.5,H*0.95);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(30,12,0,0.28)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  paper();
+}
+
+// ===== PAGE 14 — "LET'S GO AND LOOK" =====
+// SYMBOLISM: the thesis crystallized into a way of living. The kingdom didn't just get its
+// light back — it kept the method that saved it. "Let's go and look" is the antidote to
+// doubt distilled into a phrase a child can carry: not "be brave", but the repeatable practice
+// of checking for yourself. The phantom can never return, because a whole people now
+// instinctively do the one thing doubt cannot survive — they look. The prince's single
+// inherited flame (p5) has become a whole people carrying their own lights, setting out
+// unafraid, a child among them carrying one too: the method and the light, passed forward.
+function page14(t,variant){variant=variant||0;
+  const f=flickVal(t);
+  // warm, calm dawn — the settled "ever after", forward into a bright horizon
+  const sky=ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#3a2a3e');sky.addColorStop(0.4,'#8a5240');sky.addColorStop(0.72,'#d4924e');sky.addColorStop(1,'#f0c06a');
+  ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+
+  // a bright horizon ahead (where they're headed to look) — a rising warm glow, low centre-right
+  const hzX=W*0.66, hzY=H*0.60;
+  let hz=ctx.createRadialGradient(hzX,hzY,10,hzX,hzY,W*0.7);
+  hz.addColorStop(0,'rgba(255,235,170,0.55)');hz.addColorStop(0.4,'rgba(255,200,120,0.22)');hz.addColorStop(1,'rgba(255,200,120,0)');
+  ctx.fillStyle=hz;ctx.fillRect(0,0,W,H);
+  let sun=ctx.createRadialGradient(hzX,hzY,2,hzX,hzY,44);
+  sun.addColorStop(0,'rgba(255,248,215,0.85)');sun.addColorStop(0.7,'rgba(255,210,140,0.4)');sun.addColorStop(1,'rgba(255,210,140,0)');
+  ctx.fillStyle=sun;ctx.beginPath();ctx.arc(hzX,hzY,44,0,7);ctx.fill();
+
+  const groundY=H*0.74;
+  // gentle rise/hills toward the horizon (open land to go and look at)
+  ctx.fillStyle='#9a5a38';
+  ctx.beginPath();ctx.moveTo(0,H*0.68);ctx.quadraticCurveTo(W*0.35,H*0.62,W*0.66,H*0.66);ctx.quadraticCurveTo(W*0.85,H*0.68,W,H*0.63);ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+
+  // ---- the healed kingdom BEHIND them, on the left: warm town, bridge, great lantern, festival lights ----
+  // (soft, receding — they are leaving it to go look at the wider world)
+  ctx.save();ctx.globalAlpha=0.9;
+  // great lantern glowing steady, left
+  const glx=W*0.14, glTop=groundY-120;
+  warmGlow(glx, glTop+24, 150, 0.35+f*0.1, t);
+  ctx.fillStyle='#3a2418';ctx.fillRect(glx-3,glTop,6,120);
+  ctx.fillStyle='#33200f';
+  ctx.beginPath();ctx.moveTo(glx-13,glTop+30);ctx.lineTo(glx-13,glTop+2);ctx.lineTo(glx,glTop-12);ctx.lineTo(glx+13,glTop+2);ctx.lineTo(glx+13,glTop+30);ctx.closePath();ctx.fill();
+  let ggl=ctx.createRadialGradient(glx,glTop+16,0,glx,glTop+16,16);ggl.addColorStop(0,'rgba(255,240,190,0.9)');ggl.addColorStop(1,'rgba(255,190,100,0)');
+  ctx.fillStyle=ggl;ctx.beginPath();ctx.arc(glx,glTop+16,16,0,7);ctx.fill();
+  // a couple of warm rooftops behind (kept low, foreground of the town cluster)
+  ctx.fillStyle='#5a3826';
+  for(let i=0;i<5;i++){const x=W*0.03+i*38;const rh=30+((i*29)%26);ctx.beginPath();ctx.moveTo(x,groundY);ctx.lineTo(x,groundY-rh);ctx.lineTo(x+13,groundY-rh-11);ctx.lineTo(x+26,groundY-rh);ctx.lineTo(x+26,groundY);ctx.closePath();ctx.fill();}
+  // a small sky-bridge (same clean style as pages 3/13), sitting behind the town
+  const b1=W*0.03, b2=W*0.19, bTop=groundY-118;
+  ctx.fillStyle='#4a3022';
+  ctx.fillRect(b1,bTop,9,groundY-bTop-40);        // left pylon down toward ground
+  ctx.fillRect(b2,bTop,9,groundY-bTop-40);        // right pylon
+  // a single bold arch between the pylons (the span)
+  ctx.strokeStyle='#4a3022';ctx.lineWidth=7;
+  ctx.beginPath();ctx.moveTo(b1+4,bTop+4);ctx.quadraticCurveTo((b1+b2)/2+4,bTop+40,b2+4,bTop+4);ctx.stroke();
+  // the deck running across the top of the pylons
+  ctx.fillRect(b1-8,bTop-6,(b2-b1)+25,7);
+  // festival string, cleanly anchored from the bridge deck down to a rooftop
+  ctx.strokeStyle='rgba(40,24,16,0.4)';ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(b2+8,bTop-4);ctx.quadraticCurveTo(W*0.22,groundY-64,W*0.32,groundY-52);ctx.stroke();
+  for(let i=1;i<7;i++){const u=i/7;const bx=(1-u)*(1-u)*(b2+8)+2*(1-u)*u*(W*0.22)+u*u*(W*0.32);const by=(1-u)*(1-u)*(bTop-4)+2*(1-u)*u*(groundY-64)+u*u*(groundY-52);const fl=0.7+Math.sin(t*0.03+i)*0.25;const hue=i%3;const col=hue===0?'255,190,110':hue===1?'255,150,90':'255,215,140';ctx.fillStyle='rgba('+col+','+(0.8*fl)+')';ctx.beginPath();ctx.arc(bx,by+3,2,0,7);ctx.fill();}
+  ctx.restore();
+
+  // ground
+  const gnd=ctx.createLinearGradient(0,groundY,0,H);gnd.addColorStop(0,'#7a4a2c');gnd.addColorStop(1,'#4a2c1a');
+  ctx.fillStyle=gnd;ctx.fillRect(0,groundY,W,H);
+  // a soft path leading from the town toward the horizon, directly under the procession
+  ctx.fillStyle='rgba(255,210,140,0.12)';
+  ctx.beginPath();
+  ctx.moveTo(W*0.33, H);           // wide at the near foreground (under the front walker)
+  ctx.lineTo(W*0.52, H);
+  ctx.lineTo(hzX+14, hzY+6);        // narrowing to the horizon glow
+  ctx.lineTo(hzX-6, hzY+6);
+  ctx.closePath();ctx.fill();
+  // a soft centre sheen down the road
+  ctx.fillStyle='rgba(255,220,150,0.06)';
+  ctx.beginPath();
+  ctx.moveTo(W*0.40, H);ctx.lineTo(W*0.46, H);ctx.lineTo(hzX+4, hzY+6);ctx.lineTo(hzX-2, hzY+6);
+  ctx.closePath();ctx.fill();
+
+  // ================= THE PEOPLE setting out, each carrying a lantern =================
+  // walking away toward the horizon (seen from behind / three-quarter), easy confident strides.
+  // a small procession receding toward the bright horizon — scale shrinks with distance.
+  // helper: a townsperson walking away, lantern in hand, warm-rimmed.
+  function walker(wx,wy,scale,lanternSide){
+    ctx.save();ctx.translate(wx,wy);ctx.scale(scale,scale);
+    const body=ctx.createLinearGradient(0,-34,0,22);body.addColorStop(0,'#6a4a2c');body.addColorStop(1,'#33200f');
+    // legs mid-stride (walking away)
+    ctx.strokeStyle='#3a2614';ctx.lineCap='round';ctx.lineWidth=5;
+    ctx.beginPath();ctx.moveTo(-3,16);ctx.lineTo(-6,34);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(3,16);ctx.lineTo(7,33);ctx.stroke();
+    // cloak/body (seen from behind — a simple rounded back)
+    ctx.fillStyle=body;
+    ctx.beginPath();ctx.moveTo(-9,18);ctx.quadraticCurveTo(-12,-10,-6,-22);ctx.quadraticCurveTo(0,-27,6,-22);ctx.quadraticCurveTo(12,-10,9,18);ctx.quadraticCurveTo(0,22,-9,18);ctx.closePath();ctx.fill();
+    // head (back of it)
+    ctx.beginPath();ctx.arc(0,-27,5,0,7);ctx.fillStyle='#3a2818';ctx.fill();
+    // warm rim on the horizon-facing side (they walk into the light)
+    ctx.strokeStyle='rgba(255,200,120,'+(0.55+f*0.2)+')';ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(9,16);ctx.quadraticCurveTo(12,-10,6,-21);ctx.stroke();
+    ctx.beginPath();ctx.arc(1.5,-27,5,-1,1.1);ctx.stroke();
+    // arm out with a lantern, held ahead/to the side, lighting the way
+    const ls=lanternSide;
+    ctx.strokeStyle=body;ctx.lineWidth=3.4;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(ls*6,-14);ctx.quadraticCurveTo(ls*13,-8,ls*15,0);ctx.stroke();
+    // the lantern glow + body
+    const lgx=ls*16, lgy=2;
+    let lg=ctx.createRadialGradient(lgx,lgy,0,lgx,lgy,16);lg.addColorStop(0,'rgba(255,215,140,'+(0.6+f*0.2)+')');lg.addColorStop(1,'rgba(255,190,100,0)');
+    ctx.fillStyle=lg;ctx.beginPath();ctx.arc(lgx,lgy,16,0,7);ctx.fill();
+    ctx.strokeStyle='rgba(30,20,10,0.8)';ctx.lineWidth=1;ctx.strokeRect(lgx-3,lgy-4,6,8);
+    ctx.fillStyle='rgba(255,245,205,0.95)';ctx.beginPath();ctx.arc(lgx,lgy,2.2,0,7);ctx.fill();
+    ctx.restore();
+  }
+
+  // the procession, receding toward the horizon (front/large -> back/small), ON the road centre-line
+  walker(W*0.541, groundY+30, 1.25, 1);     // nearest, foreground
+  walker(W*0.558, groundY+16, 1.0, -1);
+  walker(W*0.573, groundY+4, 0.8, 1);
+  walker(W*0.585, groundY-6, 0.62, -1);
+  walker(W*0.595, groundY-14, 0.48, 1);    // furthest, nearly at the horizon glow
+
+  // ---- the CHILD, carrying a little lantern too (the torch passed forward) ----
+  // small, beside the nearest walker (the prince), being led out to look.
+  (function child(cx,cy,sc){
+    ctx.save();ctx.translate(cx,cy);ctx.scale(sc,sc);
+    const body=ctx.createLinearGradient(0,-20,0,16);body.addColorStop(0,'#6a4a2c');body.addColorStop(1,'#33200f');
+    ctx.strokeStyle='#3a2614';ctx.lineCap='round';ctx.lineWidth=4;
+    ctx.beginPath();ctx.moveTo(-2,10);ctx.lineTo(-4,22);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(2,10);ctx.lineTo(5,21);ctx.stroke();
+    ctx.fillStyle=body;
+    ctx.beginPath();ctx.moveTo(-6,12);ctx.quadraticCurveTo(-8,-6,-4,-14);ctx.quadraticCurveTo(0,-18,4,-14);ctx.quadraticCurveTo(8,-6,6,12);ctx.quadraticCurveTo(0,15,-6,12);ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.arc(0,-18,3.6,0,7);ctx.fillStyle='#3a2818';ctx.fill();
+    ctx.strokeStyle='rgba(255,200,120,0.55)';ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(1,-18,3.6,-1,1.1);ctx.stroke();
+    // little arm holding a tiny lantern out front (its own light — the inheritance)
+    ctx.strokeStyle=body;ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(5,-8);ctx.quadraticCurveTo(11,-4,12,2);ctx.stroke();
+    let lg=ctx.createRadialGradient(13,3,0,13,3,11);lg.addColorStop(0,'rgba(255,220,150,'+(0.65+f*0.2)+')');lg.addColorStop(1,'rgba(255,190,100,0)');
+    ctx.fillStyle=lg;ctx.beginPath();ctx.arc(13,3,11,0,7);ctx.fill();
+    ctx.strokeStyle='rgba(30,20,10,0.8)';ctx.lineWidth=0.9;ctx.strokeRect(11,0,4,6);
+    ctx.fillStyle='rgba(255,245,205,0.95)';ctx.beginPath();ctx.arc(13,3,1.6,0,7);ctx.fill();
+    ctx.restore();
+  })(W*0.505, groundY+36, 1.0);
+
+  // the nearest walker is the PRINCE — give him a faint circlet so he reads as grown, leading
+  ctx.save();ctx.translate(W*0.541, groundY+30);ctx.scale(1.25,1.25);
+  ctx.strokeStyle='rgba(255,215,130,'+(0.55+f*0.25)+')';ctx.lineWidth=1.8;
+  ctx.beginPath();ctx.moveTo(-4,-30);ctx.quadraticCurveTo(0,-33,4,-30);ctx.stroke();
+  ctx.restore();
+
+  // gentle warm vignette (bright, settled, at peace)
+  let vg=ctx.createRadialGradient(W*0.6,H*0.5,H*0.45,W*0.6,H*0.5,H*0.98);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(30,14,0,0.30)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  paper();
+}
+
+// ---- reader state & navigation ----
+// ---- SPREADS: one short beat per page (scene fn + variant + text) ----
+// variant lets a scene vary slightly across the 2-3 pages that share it.
+const SPREADS=[
+  // P1 — the bottle (unchanged, one sentence)
+  {s:page1, v:0, t:"Once upon a time, in a kingdom on the edge of the dark forest, a fisherman pulled a strange corked bottle from the sea."},
+
+  // P2 — fog & phantom, split into a transition pair
+  {s:page2, v:0, t:"When he opened it, out poured a cold grey fog, and with it slithered a phantom with a voice like silk."},
+  {s:page2, v:1, t:"The Phantom whispered his way into the castle, right to the king's ear."},
+
+  // P3 — kingdom goes blind, split in two
+  {s:page3, v:0, t:"And the kingdom slowly went blind. Neighbours became shadows."},
+  {s:page3, v:1, t:"The markets fell silent, the festivals were cancelled, and children forgot the faces of their friends."},
+
+  // P4 — cold lantern + goblin lore, split into three
+  {s:page4, v:0, t:"In the town square stood the great lantern, but the kingdom had run out of oil, so it was cold and dark."},
+  {s:page4, v:1, t:"Whenever anyone dreamed of relighting it, the phantom hissed: the oil lies across the sea, beyond the forest of the goblins, and no one who seeks it ever returns."},
+  {s:page4, v:2, t:"And ohh, the tales they told of those goblins — teeth like broken glass, they said. Even the bravest knights refused the road."},
+
+  // P5 — the flame (one sentence)
+  {s:page5, v:0, t:"But the young prince carried a small lantern his mother had lit before the fog came, and its little flame showed him one step ahead."},
+
+  // P6 — into the forest, split in two
+  {s:page6, v:0, t:"The phantom loomed over him and whispered: first, a legendary sword, forged over seven years, or the goblins will tear you apart."},
+  {s:page6, v:1, t:"But the prince looked at his wee flame and said, I will go and see for myself. And he walked into the dark forest empty-handed."},
+
+  // P7 — the forest path, the huge shape, the soup, the goblins' fire (four beats)
+  {s:page7, v:0, t:"The trees creaked. Yellow eyes blinked in the gloom."},
+  {s:page7, v:1, t:"A huge shape stepped onto the path..."},
+  {s:page7, v:2, t:"...and held out a bowl of soup."},
+  {s:page7, v:3, t:"The goblins were strange, but they shared their fire — yet their homes sagged and leaked, for they believed only a magical saw could fell their trees."},
+
+  // P8 — the axe, split in two
+  {s:page8, v:0, t:"The prince picked up a rusty old axe by the woodpile and said, may I try?"},
+  {s:page8, v:1, t:"One swing, two, and a mighty tree came crashing down. The goblins cheered."},
+
+  // P9 — the bridge, split in two
+  {s:page9, v:0, t:"Then they warned him: the great bridge ahead has surely crumbled — stay and cut a dozen wagon loads of timber, or you will fall into the abyss!"},
+  {s:page9, v:1, t:"But he went to look first — and the bridge stood proud and unbroken, as it had all along. He simply walked across."},
+
+  // P10 — far-off land, split in two
+  {s:page10, v:0, t:"In the far-off land, the King frowned and said, oil? Dear prince, we sent your kingdom a whole barrel years ago, as a gift."},
+  {s:page10, v:1, t:"And the prince's heart went cold and then hot, for now he understood the phantom's trick."},
+
+  // P11 — barrel (one sentence)
+  {s:page11, v:0, t:"He raced home, threw open a dusty cupboard, and there sat the barrel."},
+
+  // P12 — relight, split in two
+  {s:page12, v:0, t:"He refilled the lantern and touched his mother's small flame to the wick. The light roared up through the fog like a sunrise."},
+  {s:page12, v:1, t:"The phantom shrieked and thinned and vanished, for no phantom can survive being truly seen."},
+
+  // P13 — faces (one sentence)
+  {s:page13, v:0, t:"And the people saw each other's faces for the first time in years, and some wept, and some laughed, and the festivals began that very night."},
+
+  // P14 — let's go and look (one sentence)
+  {s:page14, v:0, t:"And ever after, when anyone cried that a thing was impossible, the people would just smile and say — well then, let's go and look."},
+];
+const NUM=SPREADS.length;
+
+let idx=-1; // -1 = title screen, 0..13 = pages, NUM = end screen
+const titleScreen=document.getElementById('titleScreen');
+const endScreen=document.getElementById('endScreen');
+const textEl=document.getElementById('text');
+const counter=document.getElementById('counter');
+const progress=document.getElementById('progress');
+
+// build progress dots
+for(let i=0;i<NUM;i++){const d=document.createElement('div');d.className='dot';progress.appendChild(d);}
+const dots=[...progress.children];
+
+function render(){
+  titleScreen.classList.toggle('hidden', idx!==-1);
+  endScreen.classList.toggle('hidden', idx!==NUM);
+  const onPage = idx>=0 && idx<NUM;
+  counter.style.opacity = onPage?1:0;
+  progress.style.opacity = onPage?1:0;
+  document.getElementById('prevArrow').style.opacity = onPage||idx===NUM?1:0;
+  document.getElementById('nextArrow').style.opacity = idx<NUM?1:0;
+  if(onPage){
+    // fade text out then in
+    textEl.style.opacity=0;
+    const capturedIdx=idx;
+    setTimeout(()=>{const sp=SPREADS[capturedIdx];if(sp && idx===capturedIdx){textEl.textContent=sp.t;textEl.style.opacity=1;}},180);
+    counter.textContent=(idx+1)+' / '+NUM;
+    dots.forEach((d,i)=>d.classList.toggle('on',i===idx));
+  } else {
+    textEl.textContent='';
+  }
+}
+function go(n){
+  idx=Math.max(-1,Math.min(NUM,n));
+  render();
+}
+function next(){ go(idx+1); }
+function prev(){ if(idx===NUM){go(NUM-1);} else {go(idx-1);} }
+
+document.getElementById('next').addEventListener('click',next);
+document.getElementById('prev').addEventListener('click',prev);
+// title/end screens: tap anywhere advances
+titleScreen.addEventListener('click',()=>go(0));
+endScreen.addEventListener('click',()=>go(0));
+// keyboard
+window.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' ')next();if(e.key==='ArrowLeft')prev();});
+// swipe
+let tx=0;
+window.addEventListener('touchstart',e=>{tx=e.changedTouches[0].clientX;},{passive:true});
+window.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-tx;if(Math.abs(dx)>45){dx<0?next():prev();}},{passive:true});
+
+// home link -> parent site (adjust as needed)
+document.getElementById('homelink').addEventListener('click',e=>{
+  e.preventDefault();
+  window.location.href='https://aaronunify2.github.io/RecreateMeaning/home.html';
+});
+
+// ---- fullscreen toggle ----
+const fsBtn=document.getElementById('fsBtn');
+const fsIcon=document.getElementById('fsIcon');
+const ENTER_ICON='<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>';
+const EXIT_ICON='<path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/>';
+function isFs(){return document.fullscreenElement||document.webkitFullscreenElement;}
+function toggleFs(){
+  const el=document.documentElement;
+  if(!isFs()){
+    (el.requestFullscreen||el.webkitRequestFullscreen||el.webkitRequestFullScreen).call(el);
+  } else {
+    (document.exitFullscreen||document.webkitExitFullscreen).call(document);
+  }
+}
+function syncFsIcon(){ fsIcon.innerHTML = isFs()?EXIT_ICON:ENTER_ICON; }
+fsBtn.addEventListener('click',e=>{e.stopPropagation();toggleFs();});
+document.addEventListener('fullscreenchange',syncFsIcon);
+document.addEventListener('webkitfullscreenchange',syncFsIcon);
+
+// ---- animation loop: draw whichever page we're on ----
+function loop(t){
+  const onPage = idx>=0 && idx<NUM;
+  if(onPage){
+    SPREADS[idx].s(t, SPREADS[idx].v);
+  } else {
+    // idle: clear to a soft dark so the screens sit on black
+    ctx.fillStyle='#08060a';ctx.fillRect(0,0,W,H);
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+render();
+</script>
+</body></html>
