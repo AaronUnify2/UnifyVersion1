@@ -1,0 +1,2624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The Second Voice</title>
+<meta name="color-scheme" content="dark" />
+<style>
+  html, body { height: 100%; margin: 0; background: #0b0a0d; }
+  #root { min-height: 100%; }
+  *, *::before, *::after { box-sizing: border-box; }
+  #boot {
+    color: #6a6360;
+    font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 2px; padding: 48px 16px; text-align: center;
+  }
+</style>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+</head>
+<body>
+<div id="root"><div id="boot">WAKING THE SLEEPER&hellip;<br /><br />(if this line stays, the page could not reach the React CDN)</div></div>
+<script>
+/* JSX was compiled ahead of time; this is plain ES2017. */
+(function () {
+  if (!window.React || !window.ReactDOM) {
+    document.getElementById("boot").textContent =
+      "COULD NOT LOAD REACT — CHECK THE CONNECTION AND RELOAD";
+    return;
+  }
+  var useState = React.useState, useEffect = React.useEffect, useRef = React.useRef;
+
+/* ============================================================
+   THE SECOND VOICE
+   King Aldous the Fourth of Varn is mad, and there are two
+   things in his sleep. You are one of them.
+
+   v4 — the cycle is explicit now:
+
+     THE DAY     he wakes, three things happen at court
+     THE OMENS   every weak place in the realm is rolled for
+     THE VISION  the Adversary declares, you answer
+     THE DAWN    the vision is rolled for, and he changes
+
+   Both rolls use the same roulette, so a famine and a dream
+   are gambled for in exactly the same way.
+   ============================================================ */
+
+const C = {
+  ink: "#0b0a0d",
+  deep: "#131117",
+  veil: "#1c1922",
+  panel: "#262129",
+  edge: "#3c3442",
+  bone: "#e9e3d7",
+  dim: "#9a9187",
+  faint: "#6a6360",
+  gold: "#c8a24a",
+  teal: "#6fa896",
+  rose: "#b45f68",
+  blood: "#8c2f3a"
+};
+const SERIF = '"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif';
+const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const REDUCED = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)").matches : false;
+const TOTAL_NIGHTS = 18;
+const ENGAGE = 42;
+const CLEAR = 48;
+const THREAT_LINE = 30;
+const EVENTS_PER_DAY = 3;
+/* Three things happen a day now instead of one, so each carries less. */
+const EVENT_SCALE = 0.55;
+const REALM_DRIFT = 0.26;
+const DISASTER_REALM_FIRST = 14;
+const DISASTER_REALM_EXTRA = 7;
+const DISASTER_STAT_HIT = 5;
+/* How hard a wound bites. This is applied to the MEAN ambiguity of the
+   vision, not the sum — a wound should be a steady drag you can work
+   against, not a cliff that swamps every decision you make. */
+const WOUND_BITE = 0.95;
+/* A kingdom partly runs itself: the realm settles toward this line rather
+   than toward the raw average of the king, so a bad month is survivable. */
+const REALM_BASE = 22;
+const REALM_SLOPE = 0.78;
+/* How fast he learns a symbol when a vision lands. A vivid dream is
+   remembered; a mundane one barely registers. This is what makes a wild
+   vision worth the gamble — not raw force, but how quickly it teaches him
+   your language, which is what makes every later vision land cleanly. */
+const BOND_BASE = 0.06;
+const BOND_PER_STRANGE = 0.026;
+/* The risk curve. ODDS_* set how fast a stranger vision becomes unlikely to
+   land; FORCE_* set how much harder it hits when it does; SHATTER is the
+   fraction of your intent that comes back reversed when it fails. Together
+   these decide whether gambling is ever correct. */
+const ODDS_BASE = 0.94;
+const ODDS_SLOPE = 0.028;
+const FORCE_BASE = 0.45;
+const FORCE_SLOPE = 0.095;
+const SHATTER = 0.18;
+/* Overall potency of a vision. This is the master difficulty dial: it scales
+   everything you can do without touching the shape of the risk curve. */
+const SIGNAL = 5.8;
+const STATS = [{
+  key: "clarity",
+  name: "CLARITY",
+  disaster: "FAMINE",
+  hue: "#8fb3d9"
+}, {
+  key: "mercy",
+  name: "MERCY",
+  disaster: "REVOLT",
+  hue: "#d8a0b0"
+}, {
+  key: "resolve",
+  name: "RESOLVE",
+  disaster: "INVASION",
+  hue: "#d9a05a"
+}, {
+  key: "prudence",
+  name: "PRUDENCE",
+  disaster: "PLAGUE",
+  hue: "#9fc79a"
+}, {
+  key: "piety",
+  name: "PIETY",
+  disaster: "DROUGHT",
+  hue: "#b9a2d6"
+}];
+const HUE = {};
+STATS.forEach(s => HUE[s.key] = s.hue);
+const CATS = ["SETTING", "FIGURE", "OBJECT", "EVENT", "OMEN"];
+
+/* ---------------- THE LEXICON ---------------- */
+
+const SYMBOLS = [
+// Every stat spans ◈1 to ◈5, and every category offers the same spread of
+// risk, so no stat is ever the cheap option and no slot forces your hand.
+// SETTING
+{
+  id: "a1",
+  cat: "SETTING",
+  s: 1,
+  lean: "clarity",
+  name: "A Room With The Shutters Thrown Open",
+  phrase: "a room with the shutters thrown open"
+}, {
+  id: "a2",
+  cat: "SETTING",
+  s: 2,
+  lean: "prudence",
+  name: "A Granary With The Count Chalked On The Door",
+  phrase: "a granary with the count chalked on the door"
+}, {
+  id: "a3",
+  cat: "SETTING",
+  s: 2,
+  lean: "resolve",
+  name: "A Bridge Being Built Toward You",
+  phrase: "a bridge being built toward you"
+}, {
+  id: "a4",
+  cat: "SETTING",
+  s: 3,
+  lean: "clarity",
+  name: "A Corridor Where The Lamps Light As You Reach Them",
+  phrase: "a corridor where the lamps light as you reach them"
+}, {
+  id: "a5",
+  cat: "SETTING",
+  s: 3,
+  lean: "mercy",
+  name: "A Gaol With The Doors Left Standing Open",
+  phrase: "a gaol with the doors left standing open"
+}, {
+  id: "a6",
+  cat: "SETTING",
+  s: 4,
+  lean: "mercy",
+  name: "A Gallows With A Vine Grown Up Through It",
+  phrase: "a gallows with a vine grown up through it"
+}, {
+  id: "a7",
+  cat: "SETTING",
+  s: 5,
+  lean: "piety",
+  name: "A Cathedral With No Roof, Full Of Weather",
+  phrase: "a cathedral with no roof, full of weather"
+},
+// FIGURE
+{
+  id: "b1",
+  cat: "FIGURE",
+  s: 1,
+  lean: "resolve",
+  name: "A Sentry Who Has Not Moved All Night",
+  phrase: "a sentry who has not moved all night"
+}, {
+  id: "b2",
+  cat: "FIGURE",
+  s: 2,
+  lean: "resolve",
+  name: "Your Own Hand, Steady On The Seal",
+  phrase: "your own hand, steady on the seal"
+}, {
+  id: "b3",
+  cat: "FIGURE",
+  s: 2,
+  lean: "piety",
+  name: "A Child Who Says Grace Without Being Asked",
+  phrase: "a child who says grace without being asked"
+}, {
+  id: "b4",
+  cat: "FIGURE",
+  s: 3,
+  lean: "clarity",
+  name: "A Physician Who Says The True Thing Plainly",
+  phrase: "a physician who says the true thing plainly"
+}, {
+  id: "b5",
+  cat: "FIGURE",
+  s: 3,
+  lean: "prudence",
+  name: "A Steward Who Has Never Once Lied To You",
+  phrase: "a steward who has never once lied to you"
+}, {
+  id: "b6",
+  cat: "FIGURE",
+  s: 4,
+  lean: "prudence",
+  name: "A Wolf That Has Been Fed, And Is Simply Sitting There",
+  phrase: "a wolf that has been fed, and is simply sitting there"
+}, {
+  id: "b7",
+  cat: "FIGURE",
+  s: 5,
+  lean: "mercy",
+  name: "A Beggar Wearing Your Father's Face, Who Forgives You",
+  phrase: "a beggar wearing your father's face, who forgives you"
+},
+// OBJECT
+{
+  id: "c1",
+  cat: "OBJECT",
+  s: 1,
+  lean: "piety",
+  name: "A Candle Lit In A Window",
+  phrase: "a candle lit in a window"
+}, {
+  id: "c2",
+  cat: "OBJECT",
+  s: 2,
+  lean: "mercy",
+  name: "A Sword Grown Too Heavy To Lift",
+  phrase: "a sword grown too heavy to lift"
+}, {
+  id: "c3",
+  cat: "OBJECT",
+  s: 2,
+  lean: "piety",
+  name: "A Bell Heard From Very Far Off",
+  phrase: "a bell heard from very far off"
+}, {
+  id: "c4",
+  cat: "OBJECT",
+  s: 3,
+  lean: "resolve",
+  name: "A Seal Pressed Deep Enough To Go Through The Page",
+  phrase: "a seal pressed deep enough to go through the page"
+}, {
+  id: "c5",
+  cat: "OBJECT",
+  s: 3,
+  lean: "prudence",
+  name: "A Ledger That Balances, And Goes On Balancing",
+  phrase: "a ledger that balances, and goes on balancing"
+}, {
+  id: "c6",
+  cat: "OBJECT",
+  s: 4,
+  lean: "clarity",
+  name: "A Crown That Fits, For Once",
+  phrase: "a crown that fits, for once"
+}, {
+  id: "c7",
+  cat: "OBJECT",
+  s: 5,
+  lean: "clarity",
+  name: "A Map That Redraws Itself While You Watch, Correctly",
+  phrase: "a map that redraws itself while you watch, correctly"
+},
+// EVENT
+{
+  id: "d1",
+  cat: "EVENT",
+  s: 1,
+  lean: "mercy",
+  name: "You Let Someone Finish Speaking",
+  phrase: "you let someone finish speaking"
+}, {
+  id: "d2",
+  cat: "EVENT",
+  s: 2,
+  lean: "clarity",
+  name: "The Fever Breaks Before Dawn",
+  phrase: "the fever breaks before dawn"
+}, {
+  id: "d3",
+  cat: "EVENT",
+  s: 2,
+  lean: "mercy",
+  name: "You Pardon Someone Who Had It Coming",
+  phrase: "you pardon someone who had it coming"
+}, {
+  id: "d4",
+  cat: "EVENT",
+  s: 3,
+  lean: "resolve",
+  name: "You Open A Door You Have Walked Past For Years",
+  phrase: "you open a door you have walked past for years"
+}, {
+  id: "d5",
+  cat: "EVENT",
+  s: 3,
+  lean: "piety",
+  name: "You Kneel Without Being Told To",
+  phrase: "you kneel without being told to"
+}, {
+  id: "d6",
+  cat: "EVENT",
+  s: 4,
+  lean: "resolve",
+  name: "You Say The Word, And Nothing Recalls It",
+  phrase: "you say the word, and nothing recalls it"
+}, {
+  id: "d7",
+  cat: "EVENT",
+  s: 5,
+  lean: "prudence",
+  name: "You Are Shown The Whole Account, Every Year At Once",
+  phrase: "you are shown the whole account, every year of it at once"
+},
+// OMEN
+{
+  id: "e1",
+  cat: "OMEN",
+  s: 1,
+  lean: "prudence",
+  name: "Winter Arrives, And You Were Ready",
+  phrase: "winter arrives, and you were ready"
+}, {
+  id: "e2",
+  cat: "OMEN",
+  s: 2,
+  lean: "clarity",
+  name: "The Morning Is Simply The Morning",
+  phrase: "the morning is simply the morning"
+}, {
+  id: "e3",
+  cat: "OMEN",
+  s: 2,
+  lean: "prudence",
+  name: "The Stores Outlast The Cold By A Month",
+  phrase: "the stores outlast the cold by a month"
+}, {
+  id: "e4",
+  cat: "OMEN",
+  s: 3,
+  lean: "mercy",
+  name: "The Block Is Used As A Table",
+  phrase: "the block is used as a table"
+}, {
+  id: "e5",
+  cat: "OMEN",
+  s: 3,
+  lean: "piety",
+  name: "The Star Stays Where It Is",
+  phrase: "the star stays where it is"
+}, {
+  id: "e6",
+  cat: "OMEN",
+  s: 4,
+  lean: "piety",
+  name: "It Ends In Snow, And No One Is Cold",
+  phrase: "it ends in snow, and no one is cold"
+}, {
+  id: "e7",
+  cat: "OMEN",
+  s: 5,
+  lean: "resolve",
+  name: "The Standard Is Up, And Always Was, And Cannot Come Down",
+  phrase: "the standard is up, and always was, and cannot come down"
+}];
+const SYM_BY_ID = {};
+SYMBOLS.forEach(s => SYM_BY_ID[s.id] = s);
+
+/* ---------------- THE ADVERSARY ---------------- */
+
+const ADVERSARY_VISIONS = {
+  clarity: ["He dreams the map is bleeding, and the rivers have been moved in the night, and nobody will say who moved them.", "He dreams every document in the chancery is signed in his hand and he has read none of them."],
+  mercy: ["He dreams the crowd is chanting his name, and the chant resolves, slowly, into a different word.", "He dreams of a very small mercy he once showed, and of everything it cost him after."],
+  resolve: ["He dreams that every door he opens has an identical door behind it, and so on, and so on.", "He dreams he is signing an order, and the ink will not dry, and the messenger is very patient."],
+  prudence: ["He dreams of a chest of coin that refills faster than he spends it, and wakes generous and ruined.", "He dreams the granary is full, and does not go and look."],
+  piety: ["He dreams he is the only thing in the sky.", "He dreams the cathedral was built to his own measurements, and always was."]
+};
+
+/* ---------------- THE COURT ---------------- */
+
+const WAKE_LINES = ["He woke at four, and lay there, and did not ring for anyone.", "He woke late, and would not say what he had dreamed.", "He woke early and was already talking when the page came in.", "He woke with his boots on, in a chair, in the long gallery.", "He woke twice. The second time he seemed to recognise the room."];
+const COURT = [{
+  text: "He held audience for nine hours and would not let anyone sit, including himself.",
+  key: "prudence",
+  d: -5
+}, {
+  text: "The Karsh envoy was made to wait three days, then received warmly, then made to wait three more.",
+  key: "resolve",
+  d: -5
+}, {
+  text: "He had the western assize records burned. He would not say what was in them.",
+  key: "mercy",
+  d: -6
+}, {
+  text: "He asked the Lord Chancellor's name four times in one morning, and laughed each time.",
+  key: "clarity",
+  d: -6
+}, {
+  text: "He gave the cathedral roof-lead to the foundry, and the bishop said nothing, loudly.",
+  key: "piety",
+  d: -6
+}, {
+  text: "He signed the Genoese loan without reading past the seal.",
+  key: "prudence",
+  d: -6
+}, {
+  text: "He ordered the bells rung at three in the morning to see who would come.",
+  key: "clarity",
+  d: -5
+}, {
+  text: "He promised the same office to two men on the same afternoon.",
+  key: "resolve",
+  d: -5
+}, {
+  text: "He would not sleep in the royal apartments. He slept in the kennels, with the dogs, and slept well.",
+  key: "piety",
+  d: -4
+}, {
+  text: "He returned a petition with a note that was cruel, accurate, and entirely correct.",
+  key: "mercy",
+  d: -4
+}, {
+  text: "He wept at a falconer's funeral and could not be got to leave.",
+  key: "mercy",
+  d: 4
+}, {
+  text: "He corrected an error in the salt tax himself, on the page, in front of the assessor.",
+  key: "clarity",
+  d: 4
+}, {
+  text: "He walked the wall at dawn and the garrison saw him do it.",
+  key: "resolve",
+  d: 4
+}, {
+  text: "He asked the price of the Flemish tapestries and then did not buy them.",
+  key: "prudence",
+  d: 4
+}, {
+  text: "He stayed for the whole of the Vigil, on his knees, and told no one after.",
+  key: "piety",
+  d: 4
+}, {
+  text: "Someone made a joke about his father and lived, which surprised the court.",
+  key: "mercy",
+  d: 3
+}, {
+  text: "He sent the physician to the low quarter instead of keeping him at the door.",
+  key: "prudence",
+  d: 3
+}, {
+  text: "He heard a case to the end without interrupting once, which nobody had seen before.",
+  key: "resolve",
+  d: 3
+}];
+const LOW_LINES = {
+  clarity: ["He spent the afternoon explaining something to a chair, patiently, twice.", "He signed a decree he could not afterward account for.", "He asked what year it was and did not appear to be joking."],
+  mercy: ["Two names were added to the list. Neither had a charge written beside it.", "He watched the sentencing from the gallery, and was seen to enjoy some of it.", "The gaoler has stopped asking whether the prisoners are to be fed."],
+  resolve: ["Eleven petitions are on the table. They have been there eleven days.", "He began four sentences at council and finished none of them.", "The eastern muster was ordered, then unordered, then ordered again."],
+  prudence: ["The treasury has stopped putting the true figure in the report he reads.", "He gave away a river's worth of tolls to a man who amused him at supper.", "Nobody has counted the granary since the feast of St. Ostel."],
+  piety: ["He has not been to the cathedral in some weeks. The bishop has stopped asking.", "He told the confessor there was nothing above the ceiling, and asked him to prove otherwise.", "The Vigil was held without him, which the city noticed."]
+};
+const SLEEP_LINES = ["The candles went out at eleven. The palace listened to him not sleeping.", "He went up early and sat on the edge of the bed for a long while first.", "He dismissed the body-servant at the door, which he has started doing.", "He slept before the fire was banked, still dressed, mid-sentence."];
+const DECREES = {
+  clarity: "He read the grain ledgers himself, found the error on the fourth page, and had nobody killed about it.",
+  mercy: "He commuted every sentence in the western assize. The gaoler wept, mostly from confusion.",
+  resolve: "He settled the succession in a single afternoon. In writing. With witnesses.",
+  prudence: "He refused the Genoese loan. The court called it timidity. In eight months they will call it foresight.",
+  piety: "He restored the cathedral roof out of his own purse, and forbade anyone to put his name on it."
+};
+const DISASTERS = {
+  clarity: {
+    name: "FAMINE",
+    text: "The spring decrees went out in his own hand and not one of them made sense. Nothing was sown in the eastern fields."
+  },
+  mercy: {
+    name: "REVOLT",
+    text: "They hanged the tax-farmer from his own gate, and then they began walking toward the capital."
+  },
+  resolve: {
+    name: "INVASION",
+    text: "The border garrison waited eleven days for an order that never came. The Karsh crossed at dawn on the twelfth."
+  },
+  prudence: {
+    name: "PLAGUE",
+    text: "The granary was empty, the well was foul, and nobody had been paid to care. It began in the low quarter."
+  },
+  piety: {
+    name: "DROUGHT",
+    text: "The rain stopped, and the priests could not say why, and the people decided that they knew why."
+  }
+};
+const OMEN_WATCH = {
+  clarity: "the eastern fields, unsown",
+  mercy: "the mood at the gates",
+  resolve: "the border, and the silence from it",
+  prudence: "the granary, and the well beneath it",
+  piety: "the sky, which has not rained"
+};
+
+/* ---------------- HELPERS ---------------- */
+
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const round = n => Math.round(n);
+const signed = n => `${n > 0 ? "+" : ""}${round(n)}`;
+function initSymState() {
+  const st = {};
+  SYMBOLS.forEach(s => st[s.id] = {
+    bond: 0.08,
+    target: s.lean,
+    fatigue: 0,
+    corruption: 0,
+    profane: false
+  });
+  return st;
+}
+function bondLabel(bond) {
+  if (bond < 0.25) return "unread";
+  if (bond < 0.55) return "forming";
+  if (bond < 0.85) return "settled";
+  return "fixed";
+}
+function statName(key) {
+  const s = STATS.find(x => x.key === key);
+  return s ? s.name : key;
+}
+function odds(S) {
+  if (S <= 0) return {
+    p: 0,
+    force: 0
+  };
+  return {
+    p: clamp(ODDS_BASE - (S - 6) * ODDS_SLOPE, 0.3, 0.96),
+    force: FORCE_BASE + S * FORCE_SLOPE
+  };
+}
+function oddsVerdict(S) {
+  if (S <= 0) return {
+    text: "—",
+    col: C.faint
+  };
+  const {
+    p
+  } = odds(S);
+  if (p >= 0.85) return {
+    text: "plain — it will land, and it will barely move him",
+    col: C.teal
+  };
+  if (p >= 0.62) return {
+    text: "ordered — likely to land, honest force",
+    col: C.teal
+  };
+  if (p >= 0.44) return {
+    text: "strange — a real gamble, for real force",
+    col: C.gold
+  };
+  return {
+    text: "raving — it will probably shatter, and curdle what you aimed at",
+    col: C.rose
+  };
+}
+function grip(stats) {
+  const sorted = [...STATS].sort((a, b) => stats[a.key] - stats[b.key]);
+  const others = sorted.slice(1);
+  return {
+    lowKey: sorted[0].key,
+    value: others.reduce((a, s) => a + stats[s.key], 0) / others.length
+  };
+}
+function stillRanting(stats, prev) {
+  const {
+    value
+  } = grip(stats);
+  return prev ? value < CLEAR : value < ENGAGE;
+}
+function woundOf(stats, ranting) {
+  return ranting ? grip(stats).lowKey : null;
+}
+function threatChance(v) {
+  return v >= THREAT_LINE ? 0 : (THREAT_LINE - v) * 1.8;
+}
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+function visionText(syms) {
+  const [set, fig, obj, evt, omen] = syms;
+  const open = ["He is in", "It begins in", "He comes to"];
+  const figLine = ["is there, or has just been.", "is waiting, and has been a long time.", "arrives without arriving."];
+  /* A figure whose phrase already carries a subordinate clause needs a closing
+     comma before the verb, or you get "your own hand, steady on the seal is
+     there" with the comma pair left open. */
+  const figure = fig.phrase.includes(",") ? `${cap(fig.phrase)},` : cap(fig.phrase);
+  return `${pick(open)} ${set.phrase}. ${figure} ${pick(figLine)} In his hands: ${obj.phrase}. Then — ${evt.phrase}. And ${omen.phrase}.`;
+}
+function makeAdversary(night, stats) {
+  const sorted = [...STATS].sort((a, b) => stats[a.key] - stats[b.key]);
+  const target = Math.random() < 0.65 ? sorted[0].key : pick(STATS).key;
+  return {
+    target,
+    touched: pick(SYMBOLS).id,
+    intensity: 5 + Math.floor(night / 4) * 2,
+    line: pick(ADVERSARY_VISIONS[target])
+  };
+}
+
+/* How strange a symbol is depends on the night, not on the symbol. Each
+   evening the strangeness values available in a category are dealt out again
+   among that category's symbols. The spread on offer is identical, so the
+   totals you can build are unchanged — but which stat a wild slot feeds is
+   re-rolled, and you can no longer read "piety" as "gamble". */
+function rollStrangeness() {
+  const map = {};
+  CATS.forEach(cat => {
+    const inCat = SYMBOLS.filter(s => s.cat === cat);
+    const values = inCat.map(s => s.s);
+    for (let i = values.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = values[i];
+      values[i] = values[j];
+      values[j] = t;
+    }
+    inCat.forEach((s, i) => map[s.id] = values[i]);
+  });
+  return map;
+}
+function strangenessOf(sym, strange) {
+  return strange && strange[sym.id] !== undefined ? strange[sym.id] : sym.s;
+}
+function computeDeltas(syms, symState, wound, force) {
+  const deltas = {
+    clarity: 0,
+    mercy: 0,
+    resolve: 0,
+    prudence: 0,
+    piety: 0
+  };
+  let ambigTotal = 0;
+  syms.forEach(sym => {
+    const st = symState[sym.id];
+    const signal = SIGNAL * (1 - st.fatigue) * force;
+    const clear = signal * (0.35 + 0.65 * st.bond);
+    const ambig = signal * 0.65 * (1 - st.bond);
+    ambigTotal += ambig;
+    if (st.profane) deltas[st.target] -= clear * 0.9;else deltas[st.target] += clear;
+    if (!wound) STATS.forEach(s => deltas[s.key] += ambig * 0.18);
+  });
+  /* The wound takes one bite of the vision's average ambiguity — it does not
+     get stung once per symbol, or nothing else you choose would matter. */
+  if (wound && syms.length) {
+    deltas[wound] -= ambigTotal / syms.length * WOUND_BITE;
+  }
+  return deltas;
+}
+function project(picks, symState, wound, adversary, strange) {
+  const syms = CATS.filter(c => picks[c]).map(c => SYM_BY_ID[picks[c]]);
+  const S = syms.reduce((a, s) => a + strangenessOf(s, strange), 0);
+  const {
+    force,
+    p
+  } = odds(S);
+  const base = computeDeltas(syms, symState, wound, force);
+  const landed = {
+    ...base
+  };
+  const shattered = {};
+  STATS.forEach(s => shattered[s.key] = base[s.key] * -SHATTER);
+  landed[adversary.target] -= adversary.intensity;
+  shattered[adversary.target] -= adversary.intensity;
+  return {
+    landed,
+    shattered,
+    S,
+    p,
+    force,
+    count: syms.length
+  };
+}
+
+/* ---------------- THE DAY ---------------- */
+
+/* The whole day is decided up front so the report can simply reveal it,
+   beat by beat, without the animation racing the state. */
+function buildDay(stats, realm, floors) {
+  const statsBefore = {
+    ...stats
+  };
+  const pool = [...COURT];
+  const events = [];
+  for (let i = 0; i < EVENTS_PER_DAY && pool.length; i++) {
+    const e = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+    events.push({
+      ...e,
+      d: e.d * EVENT_SCALE
+    });
+  }
+  const afterEvents = {
+    ...stats
+  };
+  events.forEach(e => {
+    afterEvents[e.key] = clamp(afterEvents[e.key] + e.d, floors[e.key] || 0, 100);
+  });
+
+  /* Every weak place gets rolled for, worst first. */
+  const rolls = STATS.map(s => ({
+    key: s.key,
+    chance: threatChance(afterEvents[s.key]) / 100
+  })).filter(r => r.chance > 0).sort((a, b) => b.chance - a.chance).map(r => {
+    const roll = Math.random();
+    return {
+      ...r,
+      roll,
+      hit: roll < r.chance
+    };
+  });
+  const struck = rolls.filter(r => r.hit).map(r => r.key);
+  const statsAfter = {
+    ...afterEvents
+  };
+  struck.forEach(k => {
+    statsAfter[k] = clamp(statsAfter[k] - DISASTER_STAT_HIT, floors[k] || 0, 100);
+  });
+  const avg = STATS.reduce((a, s) => a + statsAfter[s.key], 0) / STATS.length;
+  const settleAt = REALM_BASE + avg * REALM_SLOPE;
+  let realmAfter = realm + (settleAt - realm) * REALM_DRIFT;
+  struck.forEach((_, i) => {
+    realmAfter -= i === 0 ? DISASTER_REALM_FIRST : DISASTER_REALM_EXTRA;
+  });
+  realmAfter = clamp(realmAfter, 0, 100);
+  const lowKey = [...STATS].sort((a, b) => statsAfter[a.key] - statsAfter[b.key])[0].key;
+  return {
+    wake: pick(WAKE_LINES),
+    events,
+    rolls,
+    struck,
+    statsBefore,
+    statsAfterEvents: afterEvents,
+    statsAfter,
+    realmBefore: realm,
+    realmAfter,
+    lowLine: pick(LOW_LINES[lowKey]),
+    sleep: pick(SLEEP_LINES)
+  };
+}
+
+/* ---------------- THE NIGHT ---------------- */
+
+function resolveNight(picks, symState, adversary, wound, strange) {
+  const syms = CATS.map(c => SYM_BY_ID[picks[c]]);
+  const S = syms.reduce((a, s) => a + strangenessOf(s, strange), 0);
+  const {
+    p,
+    force
+  } = odds(S);
+  const roll = Math.random();
+  const landed = roll < p;
+  const deltas = computeDeltas(syms, symState, wound, force);
+  if (!landed) STATS.forEach(s => deltas[s.key] *= -SHATTER);
+  const usedIds = syms.map(s => s.id);
+  const updates = {};
+  SYMBOLS.forEach(sym => {
+    const st = symState[sym.id];
+    const used = usedIds.includes(sym.id);
+    let {
+      bond,
+      target,
+      fatigue,
+      corruption
+    } = st;
+    if (used) {
+      fatigue = Math.min(0.8, fatigue + 0.3);
+      if (landed) {
+        bond = Math.min(1, bond + BOND_BASE + BOND_PER_STRANGE * S);
+        if (corruption > 0) corruption -= 1;
+      } else {
+        bond = Math.max(0, bond - 0.06);
+        if (bond < 0.4 && Math.random() < 0.3) {
+          target = pick(STATS.map(s => s.key).filter(k => k !== target));
+        }
+      }
+    } else {
+      fatigue = Math.max(0, fatigue - 0.12);
+      if (sym.id === adversary.touched) corruption += 1;
+    }
+    updates[sym.id] = {
+      bond,
+      target,
+      fatigue,
+      corruption,
+      profane: corruption >= 2
+    };
+  });
+  deltas[adversary.target] -= adversary.intensity;
+  const defended = usedIds.includes(adversary.touched) && landed;
+  return {
+    syms,
+    S,
+    p,
+    roll,
+    landed,
+    force,
+    deltas,
+    updates,
+    advDamage: adversary.intensity,
+    defended,
+    wound
+  };
+}
+
+/* Symbol phrases are not grammatically interchangeable: settings, figures and
+   objects are noun phrases, events are second-person clauses ("you pardon
+   someone who had it coming"), and omens are whole sentences. So the frame
+   that carries a fragment into the morning has to match the slot it came
+   from — one frame for all five produces things like "he woke holding a
+   sentry who has not moved all night". */
+const MORNING_FRAMES = {
+  SETTING: [ph => `He woke with ${ph} still around him, and had to be told which room he was in.`, ph => `For a moment the bedchamber was the wrong shape, because he had been in ${ph}.`],
+  FIGURE: [ph => `He woke still half-attending to ${ph}.`, ph => `He woke with the sense of not having been alone in it — ${ph}.`],
+  OBJECT: [ph => `He woke holding ${ph}, and did not put it down for the better part of an hour.`, ph => `He woke with ${ph} in his hands, or with the weight of it, which is nearly the same.`],
+  EVENT: [ph => `He woke with one piece of it intact: ${ph}.`, ph => `It went with him through the shaving and the prayers — ${ph}.`],
+  OMEN: [ph => `He woke and it was somehow still true: ${ph}.`, ph => `He woke holding the end of it and none of the beginning: ${ph}.`]
+};
+function morningText(res) {
+  const sym = pick(res.syms);
+  const frame = pick(MORNING_FRAMES[sym.cat]);
+  const opening = frame(sym.phrase);
+  if (res.landed) {
+    return `${opening} He sat on the edge of the bed a while, and then behaved slightly differently all day, and could not have told you why.`;
+  }
+  return `${opening} The rest of it came apart on the way up, and he spent the morning arguing with the shape of what was missing.`;
+}
+
+/* ---------------- ANIMATION PRIMITIVES ---------------- */
+
+function useTween(target, ms = 800) {
+  const [value, setValue] = useState(target);
+  const from = useRef(target);
+  const raf = useRef(null);
+  useEffect(() => {
+    const start = from.current;
+    if (start === target) return;
+    if (REDUCED || typeof requestAnimationFrame !== "function") {
+      from.current = target;
+      setValue(target);
+      return;
+    }
+    const t0 = Date.now();
+    const step = () => {
+      const t = Math.min(1, (Date.now() - t0) / ms);
+      const e = 1 - Math.pow(1 - t, 3);
+      const v = start + (target - start) * e;
+      from.current = v;
+      setValue(v);
+      if (t < 1) raf.current = requestAnimationFrame(step);else from.current = target;
+    };
+    raf.current = requestAnimationFrame(step);
+    return () => {
+      if (raf.current) cancelAnimationFrame(raf.current);
+    };
+  }, [target, ms]);
+  return value;
+}
+function useDelayed(active, delay) {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    if (REDUCED || delay <= 0) {
+      setOn(true);
+      return;
+    }
+    const t = setTimeout(() => setOn(true), delay);
+    return () => clearTimeout(t);
+  }, [active, delay]);
+  return on;
+}
+
+/* Walks a beat counter forward. Returns [step, skipToEnd, advanceOne]. */
+function useBeats(total, delayFor) {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    if (REDUCED) {
+      setStep(total);
+      return;
+    }
+    if (step >= total) return;
+    const t = setTimeout(() => setStep(s => Math.min(total, s + 1)), delayFor(step));
+    return () => clearTimeout(t);
+  }, [step, total]);
+  return [step, () => setStep(total), () => setStep(s => Math.min(total, s + 1))];
+}
+
+/* ---------------- SHARED UI ---------------- */
+
+function Track({
+  children,
+  height = 8
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      height,
+      background: C.ink,
+      borderRadius: 3,
+      overflow: "hidden"
+    }
+  }, children);
+}
+
+/* One roulette, used for both the omens and the vision. The shaded band is
+   the chance of the thing happening; the needle spins the full width a few
+   times and decelerates into where it actually fell. */
+function Roulette({
+  chance,
+  roll,
+  active,
+  zoneColor,
+  zoneLabel,
+  elseLabel,
+  hitIsGood,
+  resultText,
+  height = 26,
+  spins = 3,
+  ms = 1900
+}) {
+  const go = useDelayed(active, 140);
+  const total = spins * 100 + roll * 100;
+  const d = useTween(go ? total : 0, ms);
+  const pos = (d % 100 + 100) % 100;
+  const settled = go && Math.abs(d - total) < 0.4;
+  const hit = roll < chance;
+  const col = settled ? hit === hitIsGood ? C.teal : C.rose : C.gold;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      fontFamily: MONO,
+      fontSize: 10,
+      letterSpacing: 1.4,
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: zoneColor
+    }
+  }, "◀ ", round(chance * 100), "% ", zoneLabel), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.faint
+    }
+  }, elseLabel, " ▶")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      height,
+      background: C.ink,
+      borderRadius: 3,
+      border: `1px solid ${C.edge}`,
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: `${chance * 100}%`,
+      background: zoneColor,
+      opacity: 0.18
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: `${chance * 100}%`,
+      top: 0,
+      bottom: 0,
+      width: 1,
+      background: C.edge
+    }
+  }), [10, 20, 30, 40, 50, 60, 70, 80, 90].map(t => /*#__PURE__*/React.createElement("div", {
+    key: t,
+    style: {
+      position: "absolute",
+      left: `${t}%`,
+      top: 0,
+      height: 4,
+      width: 1,
+      background: C.edge,
+      opacity: 0.7
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    className: settled ? "needle-settle" : "",
+    style: {
+      position: "absolute",
+      left: `${clamp(pos, 0, 100)}%`,
+      top: -2,
+      bottom: -2,
+      width: 2,
+      background: col,
+      boxShadow: `0 0 9px ${col}`
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: MONO,
+      fontSize: 10,
+      color: settled ? col : C.faint,
+      marginTop: 6,
+      letterSpacing: 1,
+      minHeight: 14
+    }
+  }, settled ? `${round(roll * 100)} — ${resultText(hit)}` : "\u2026"));
+}
+function ProjectedStatBar({
+  s,
+  value,
+  projected,
+  wounded,
+  floored,
+  touchedByAdversary
+}) {
+  const shown = useTween(value, 500);
+  const projShown = useTween(clamp(projected, 0, 100), 450);
+  const gain = projected > value;
+  const lo = Math.min(shown, projShown);
+  const hi = Math.max(shown, projShown);
+  const risk = threatChance(value);
+  const delta = projected - value;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      fontFamily: MONO,
+      fontSize: 10,
+      letterSpacing: 1.4,
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: wounded ? C.rose : C.dim
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: s.hue
+    }
+  }, "■ "), s.name, floored ? " ✦" : "", wounded ? " · WOUND" : ""), /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "baseline"
+    }
+  }, risk > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.blood
+    }
+  }, s.disaster, " ", round(risk), "%"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.dim
+    }
+  }, round(shown)), Math.abs(delta) >= 0.5 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: gain ? C.teal : C.rose,
+      minWidth: 34,
+      textAlign: "right"
+    }
+  }, signed(delta)))), /*#__PURE__*/React.createElement(Track, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: `${THREAT_LINE}%`,
+      top: 0,
+      bottom: 0,
+      width: 1,
+      background: C.blood,
+      opacity: 0.55
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: "70%",
+      top: 0,
+      bottom: 0,
+      width: 1,
+      background: C.edge
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: `${clamp(shown, 0, 100)}%`,
+      background: s.hue,
+      opacity: 0.9
+    }
+  }), Math.abs(delta) >= 0.5 && /*#__PURE__*/React.createElement("div", {
+    className: "proj-pulse",
+    style: {
+      position: "absolute",
+      left: `${lo}%`,
+      width: `${Math.max(hi - lo, 0.6)}%`,
+      top: 0,
+      bottom: 0,
+      background: gain ? s.hue : C.blood,
+      opacity: gain ? 0.4 : 0.75,
+      borderRight: `1px solid ${gain ? C.teal : C.rose}`
+    }
+  })), touchedByAdversary && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: MONO,
+      fontSize: 9,
+      color: C.rose,
+      marginTop: 3,
+      letterSpacing: 1
+    }
+  }, "← the Adversary is working here tonight"));
+}
+function ReportStatBar({
+  s,
+  from,
+  to,
+  active,
+  delay
+}) {
+  const go = useDelayed(active, delay);
+  const shown = useTween(go ? to : from, 900);
+  const delta = to - from;
+  const moved = Math.abs(delta) >= 0.5;
+  const gain = delta > 0;
+  const risk = threatChance(to);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      fontFamily: MONO,
+      fontSize: 10,
+      letterSpacing: 1.4,
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.dim
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: s.hue
+    }
+  }, "■ "), s.name), /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "baseline"
+    }
+  }, risk > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.blood
+    }
+  }, s.disaster, " ", round(risk), "%"), moved && go && /*#__PURE__*/React.createElement("span", {
+    className: "float-up",
+    style: {
+      color: gain ? C.teal : C.rose,
+      fontSize: 11
+    }
+  }, signed(delta)), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.bone
+    }
+  }, round(shown)))), /*#__PURE__*/React.createElement(Track, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: `${THREAT_LINE}%`,
+      top: 0,
+      bottom: 0,
+      width: 1,
+      background: C.blood,
+      opacity: 0.55
+    }
+  }), moved && go && /*#__PURE__*/React.createElement("div", {
+    className: "ghost-fade",
+    style: {
+      position: "absolute",
+      left: `${clamp(Math.min(from, to), 0, 100)}%`,
+      width: `${clamp(Math.abs(delta), 0, 100)}%`,
+      top: 0,
+      bottom: 0,
+      background: gain ? s.hue : C.blood
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: `${clamp(shown, 0, 100)}%`,
+      background: s.hue,
+      opacity: 0.9
+    }
+  })));
+}
+function RealmBar({
+  from,
+  to,
+  active,
+  big
+}) {
+  const go = useDelayed(active, 0);
+  const shown = useTween(go ? to : from, 1100);
+  const col = shown < 25 ? C.blood : shown < 50 ? C.rose : C.teal;
+  const word = shown < 15 ? "IN PIECES" : shown < 30 ? "FAILING" : shown < 50 ? "STRAINED" : shown < 70 ? "HOLDING" : "THRIVING";
+  const delta = to - from;
+  const moved = Math.abs(delta) >= 0.5 && active;
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      fontFamily: MONO,
+      fontSize: 10,
+      letterSpacing: 2,
+      color: col,
+      marginBottom: 5
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "THE REALM OF VARN"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "flex",
+      gap: 10
+    }
+  }, moved && go && /*#__PURE__*/React.createElement("span", {
+    className: "float-up",
+    style: {
+      color: delta > 0 ? C.teal : C.rose
+    }
+  }, signed(delta)), /*#__PURE__*/React.createElement("span", null, round(shown), " · ", word))), /*#__PURE__*/React.createElement(Track, {
+    height: big ? 14 : 12
+  }, moved && go && /*#__PURE__*/React.createElement("div", {
+    className: "ghost-fade",
+    style: {
+      position: "absolute",
+      left: `${clamp(Math.min(from, to), 0, 100)}%`,
+      width: `${clamp(Math.abs(delta), 0, 100)}%`,
+      top: 0,
+      bottom: 0,
+      background: delta > 0 ? C.teal : C.blood
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: `${clamp(shown, 0, 100)}%`,
+      background: col,
+      opacity: 0.85
+    }
+  })));
+}
+function GripBar({
+  value,
+  ranting
+}) {
+  const shown = useTween(value, 600);
+  const target = ranting ? CLEAR : ENGAGE;
+  const col = ranting ? C.rose : C.teal;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14,
+      paddingTop: 13,
+      borderTop: `1px solid ${C.edge}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      fontFamily: MONO,
+      fontSize: 10,
+      letterSpacing: 1.5,
+      color: col,
+      marginBottom: 5
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "HIS GRIP"), /*#__PURE__*/React.createElement("span", null, round(shown), " — ", ranting ? `${CLEAR} TO STEADY` : `HOLDS ABOVE ${ENGAGE}`)), /*#__PURE__*/React.createElement(Track, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: `${clamp(shown, 0, 100)}%`,
+      background: col,
+      opacity: 0.7
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: `${target}%`,
+      top: -2,
+      bottom: -2,
+      width: 2,
+      background: C.bone,
+      opacity: 0.75
+    }
+  })));
+}
+const CYCLE = [{
+  id: "day",
+  label: "THE DAY"
+}, {
+  id: "omens",
+  label: "THE OMENS"
+}, {
+  id: "vision",
+  label: "THE VISION"
+}, {
+  id: "dawn",
+  label: "THE DAWN"
+}];
+function CycleRibbon({
+  stage,
+  night
+}) {
+  const i = CYCLE.findIndex(c => c.id === stage);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      flexWrap: "wrap",
+      marginBottom: 16,
+      fontFamily: MONO,
+      fontSize: 9,
+      letterSpacing: 1.5
+    }
+  }, CYCLE.map((c, n) => /*#__PURE__*/React.createElement(React.Fragment, {
+    key: c.id
+  }, n > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.edge
+    }
+  }, "›"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: n === i ? C.ink : n < i ? C.dim : C.faint,
+      background: n === i ? C.gold : "transparent",
+      border: `1px solid ${n === i ? C.gold : C.edge}`,
+      borderRadius: 3,
+      padding: "3px 7px",
+      transition: REDUCED ? "none" : "all 260ms ease"
+    }
+  }, c.label))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: "auto",
+      color: C.faint
+    }
+  }, "DAY ", night, " / ", TOTAL_NIGHTS));
+}
+function OddsPanel({
+  S,
+  proj,
+  wound
+}) {
+  const {
+    p,
+    force
+  } = odds(S);
+  const v = oddsVerdict(S);
+  const pShown = useTween(p * 100, 400);
+  const worst = STATS.reduce((a, b) => proj.shattered[a.key] < proj.shattered[b.key] ? a : b);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      fontFamily: MONO,
+      fontSize: 10,
+      letterSpacing: 1.5,
+      color: C.dim,
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "STRANGENESS ", S), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: v.col
+    }
+  }, S > 0 ? `${round(pShown)}% TO LAND · FORCE ×${force.toFixed(2)}` : "—")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      height: 16,
+      background: C.ink,
+      borderRadius: 3,
+      border: `1px solid ${C.edge}`,
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: `${pShown}%`,
+      height: "100%",
+      background: v.col,
+      opacity: 0.28
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      left: `${clamp(pShown, 0, 100)}%`,
+      top: -2,
+      bottom: -2,
+      width: 2,
+      background: v.col
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: MONO,
+      fontSize: 10,
+      color: v.col,
+      marginTop: 6
+    }
+  }, v.text), S > 0 && proj.count === CATS.length && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: MONO,
+      fontSize: 10,
+      color: C.faint,
+      marginTop: 6,
+      letterSpacing: 0.5
+    }
+  }, "IF IT SHATTERS: ", statName(worst.key), " ", signed(proj.shattered[worst.key]), wound ? " · and he is taking it personally" : ""));
+}
+function Chip({
+  sym,
+  st,
+  selected,
+  onClick,
+  night,
+  touched,
+  strength,
+  wildest,
+  plainest
+}) {
+  const locked = false;
+  const known = st.bond >= 0.25;
+  const meaning = known ? statName(st.target) : `${statName(sym.lean)}?`;
+  const border = st.profane ? C.blood : touched ? C.rose : selected ? C.gold : C.edge;
+  return /*#__PURE__*/React.createElement("button", {
+    onClick: onClick,
+    disabled: locked,
+    className: locked ? "" : "chip",
+    style: {
+      textAlign: "left",
+      background: selected ? C.panel : "transparent",
+      border: `1px solid ${border}`,
+      borderLeft: `3px solid ${locked ? C.edge : st.profane ? C.blood : HUE[st.target]}`,
+      borderRadius: 4,
+      padding: "8px 10px",
+      color: locked ? C.faint : st.profane ? C.rose : C.bone,
+      cursor: locked ? "not-allowed" : "pointer",
+      opacity: locked ? 0.32 : 1,
+      fontFamily: SERIF,
+      fontSize: 13,
+      lineHeight: 1.3,
+      flex: "1 1 200px",
+      minWidth: 0,
+      transform: selected ? "translateY(-1px)" : "none",
+      transition: REDUCED ? "none" : "transform 140ms ease, border-color 140ms ease, background 140ms ease"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 5
+    }
+  }, locked ? "— not yet —" : sym.name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: MONO,
+      fontSize: 9,
+      letterSpacing: 1,
+      color: C.faint,
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: locked ? C.faint : wildest ? C.gold : plainest ? C.faint : C.dim
+    }
+  }, "◈".repeat(strength), !locked && wildest ? " wild tonight" : ""), !locked && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: st.profane ? C.blood : known ? HUE[st.target] : C.faint
+    }
+  }, st.profane ? "PROFANE" : `${meaning} · ${bondLabel(st.bond)}`), !locked && st.fatigue > 0.35 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.rose
+    }
+  }, "worn"), !locked && touched && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.rose
+    }
+  }, "touched")));
+}
+
+/* ---------------- THE DAY REPORT ---------------- */
+
+function DayReport({
+  night,
+  day,
+  notes,
+  onSleep,
+  ruined,
+  card,
+  eyebrow,
+  btn
+}) {
+  const beats = [];
+  beats.push({
+    kind: "wake"
+  });
+  day.events.forEach((_, i) => beats.push({
+    kind: "event",
+    i
+  }));
+  beats.push({
+    kind: "stats"
+  });
+  if (day.rolls.length) {
+    beats.push({
+      kind: "omenHead"
+    });
+    day.rolls.forEach((_, i) => beats.push({
+      kind: "roll",
+      i
+    }));
+  } else {
+    beats.push({
+      kind: "safe"
+    });
+  }
+  if (day.struck.length) beats.push({
+    kind: "struck"
+  });
+  beats.push({
+    kind: "realm"
+  });
+  if (notes.length) beats.push({
+    kind: "notes"
+  });
+  beats.push({
+    kind: "sleep"
+  });
+  const delayFor = i => {
+    const k = beats[i] ? beats[i].kind : "sleep";
+    if (k === "wake") return 1100;
+    if (k === "event") return 1900;
+    if (k === "stats") return 1900;
+    if (k === "omenHead") return 1100;
+    if (k === "roll") return 2500;
+    if (k === "safe") return 1200;
+    if (k === "struck") return 2400;
+    if (k === "realm") return 1600;
+    if (k === "notes") return 1600;
+    return 0;
+  };
+  const [step, skip, advance] = useBeats(beats.length, delayFor);
+  const at = (kind, i) => beats.findIndex(b => b.kind === kind && (i === undefined || b.i === i));
+  const reached = (kind, i) => {
+    const idx = at(kind, i);
+    return idx >= 0 && step >= idx;
+  };
+  const done = step >= beats.length;
+  const struckReached = reached("struck");
+  const stage = reached("omenHead") || reached("safe") ? "omens" : "day";
+  return /*#__PURE__*/React.createElement("div", {
+    onClick: done ? undefined : advance,
+    style: {
+      cursor: done ? "default" : "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(CycleRibbon, {
+    stage: stage,
+    night: night
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      ...eyebrow,
+      marginBottom: 0
+    }
+  }, "THE COURT, AS IT WAS MINUTED"), !done && /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      skip();
+    },
+    style: {
+      background: "none",
+      border: "none",
+      color: C.faint,
+      fontFamily: MONO,
+      fontSize: 10,
+      letterSpacing: 1,
+      cursor: "pointer"
+    }
+  }, "SKIP →")), /*#__PURE__*/React.createElement("div", {
+    className: "fadeup",
+    style: {
+      fontFamily: SERIF,
+      fontSize: 19,
+      lineHeight: 1.55,
+      marginBottom: 6,
+      borderLeft: `2px solid ${C.gold}`,
+      paddingLeft: 16
+    }
+  }, day.wake), /*#__PURE__*/React.createElement("div", {
+    className: "fadeup",
+    style: {
+      fontFamily: SERIF,
+      fontSize: 15,
+      lineHeight: 1.6,
+      color: C.dim,
+      marginBottom: 18,
+      paddingLeft: 18
+    }
+  }, day.lowLine), day.events.map((e, i) => reached("event", i) ? /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: "fadeup",
+    style: {
+      ...card,
+      display: "flex",
+      gap: 14,
+      alignItems: "flex-start"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: MONO,
+      fontSize: 10,
+      color: C.faint,
+      letterSpacing: 1,
+      paddingTop: 3,
+      minWidth: 22
+    }
+  }, i + 1), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 16,
+      lineHeight: 1.6
+    }
+  }, e.text), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: MONO,
+      fontSize: 10,
+      letterSpacing: 1,
+      marginTop: 8,
+      color: e.d > 0 ? C.teal : C.rose
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: HUE[e.key]
+    }
+  }, "■ "), statName(e.key), " ", signed(e.d)))) : null), reached("stats") && /*#__PURE__*/React.createElement("div", {
+    className: "fadeup",
+    style: card
+  }, /*#__PURE__*/React.createElement("div", {
+    style: eyebrow
+  }, "WHERE THAT LEAVES HIM"), STATS.map((s, i) => /*#__PURE__*/React.createElement(ReportStatBar, {
+    key: s.key,
+    s: s,
+    from: day.statsBefore[s.key],
+    to: struckReached ? day.statsAfter[s.key] : day.statsAfterEvents[s.key],
+    active: true,
+    delay: i * 200
+  }))), reached("safe") && /*#__PURE__*/React.createElement("div", {
+    className: "fadeup",
+    style: {
+      ...card,
+      borderColor: C.teal
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...eyebrow,
+      color: C.teal,
+      letterSpacing: 3
+    }
+  }, "THE OMENS"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 16,
+      lineHeight: 1.6,
+      color: C.dim
+    }
+  }, "Nothing in him is weak enough to be tested tonight. The realm is not asked any questions.")), reached("omenHead") && /*#__PURE__*/React.createElement("div", {
+    className: "fadeup",
+    style: {
+      ...card,
+      borderColor: C.blood
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...eyebrow,
+      color: C.blood,
+      letterSpacing: 3
+    }
+  }, "THE OMENS"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 15,
+      lineHeight: 1.6,
+      color: C.dim,
+      marginBottom: 16
+    }
+  }, "Everything below ", THREAT_LINE, " is put to the question, worst first."), day.rolls.map((r, i) => reached("roll", i) ? /*#__PURE__*/React.createElement("div", {
+    key: r.key,
+    className: "fadeup",
+    style: {
+      marginBottom: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: MONO,
+      fontSize: 10,
+      letterSpacing: 1.5,
+      color: HUE[r.key],
+      marginBottom: 8
+    }
+  }, "■ ", DISASTERS[r.key].name, " — ", statName(r.key), " at ", round(day.statsAfterEvents[r.key]), " · watching ", OMEN_WATCH[r.key]), /*#__PURE__*/React.createElement(Roulette, {
+    chance: r.chance,
+    roll: r.roll,
+    active: true,
+    zoneColor: C.blood,
+    zoneLabel: `${DISASTERS[r.key].name} STRIKES`,
+    elseLabel: "THE REALM HOLDS",
+    hitIsGood: false,
+    resultText: hit => hit ? `${DISASTERS[r.key].name}` : "it holds, this time"
+  })) : null)), struckReached && day.struck.map((k, i) => /*#__PURE__*/React.createElement("div", {
+    key: k,
+    className: "shake",
+    style: {
+      ...card,
+      borderColor: C.blood,
+      background: "#1a0f12"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...eyebrow,
+      color: C.blood,
+      letterSpacing: 4
+    }
+  }, DISASTERS[k].name), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 17,
+      lineHeight: 1.55
+    }
+  }, DISASTERS[k].text), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: MONO,
+      fontSize: 10,
+      color: C.blood,
+      marginTop: 10,
+      letterSpacing: 1
+    }
+  }, "REALM −", i === 0 ? DISASTER_REALM_FIRST : DISASTER_REALM_EXTRA, " · ", statName(k), " −", DISASTER_STAT_HIT))), reached("realm") && /*#__PURE__*/React.createElement("div", {
+    className: "fadeup",
+    style: card
+  }, /*#__PURE__*/React.createElement(RealmBar, {
+    from: day.realmBefore,
+    to: day.realmAfter,
+    active: true,
+    big: true
+  })), reached("notes") && notes.map((b, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: "fadeup",
+    style: {
+      ...card,
+      borderColor: C.gold,
+      background: C.veil
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...eyebrow,
+      color: C.gold
+    }
+  }, "WORD FROM THE COURT"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 17,
+      lineHeight: 1.5
+    }
+  }, b))), done && /*#__PURE__*/React.createElement("div", {
+    className: "fadeup"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 17,
+      lineHeight: 1.6,
+      color: C.dim,
+      fontStyle: "italic",
+      marginBottom: 16,
+      paddingLeft: 18,
+      borderLeft: `2px solid ${C.edge}`
+    }
+  }, day.sleep), /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      onSleep();
+    },
+    style: btn(true)
+  }, ruined ? "SEE HOW THE REIGN ENDED" : "LET HIM SLEEP")));
+}
+
+/* ---------------- THE NIGHT REPORT ---------------- */
+
+function NightReport({
+  night,
+  result,
+  adversary,
+  statsBefore,
+  statsAfter,
+  notes,
+  onContinue,
+  isLast,
+  card,
+  eyebrow,
+  btn
+}) {
+  const beats = [{
+    kind: "vision"
+  }, {
+    kind: "roll"
+  }, {
+    kind: "verdict"
+  }, {
+    kind: "adversary"
+  }, {
+    kind: "stats"
+  }];
+  if (notes.length) beats.push({
+    kind: "notes"
+  });
+  beats.push({
+    kind: "end"
+  });
+  const delayFor = i => {
+    const k = beats[i] ? beats[i].kind : "end";
+    if (k === "vision") return 1600;
+    if (k === "roll") return 2600;
+    if (k === "verdict") return 1400;
+    if (k === "adversary") return 2100;
+    if (k === "stats") return 2000;
+    if (k === "notes") return 1600;
+    return 0;
+  };
+  const [step, skip, advance] = useBeats(beats.length, delayFor);
+  const reached = kind => {
+    const i = beats.findIndex(b => b.kind === kind);
+    return i >= 0 && step >= i;
+  };
+  const done = step >= beats.length;
+  return /*#__PURE__*/React.createElement("div", {
+    onClick: done ? undefined : advance,
+    style: {
+      cursor: done ? "default" : "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(CycleRibbon, {
+    stage: "dawn",
+    night: night
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline",
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      ...eyebrow,
+      marginBottom: 0
+    }
+  }, "WHAT YOU SENT"), !done && /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      skip();
+    },
+    style: {
+      background: "none",
+      border: "none",
+      color: C.faint,
+      fontFamily: MONO,
+      fontSize: 10,
+      letterSpacing: 1,
+      cursor: "pointer"
+    }
+  }, "SKIP →")), /*#__PURE__*/React.createElement("div", {
+    className: "fadeup",
+    style: {
+      fontFamily: SERIF,
+      fontSize: 21,
+      lineHeight: 1.55,
+      fontStyle: "italic",
+      marginBottom: 20,
+      borderLeft: `2px solid ${C.gold}`,
+      paddingLeft: 16
+    }
+  }, visionText(result.syms)), reached("roll") && /*#__PURE__*/React.createElement("div", {
+    className: "fadeup",
+    style: card
+  }, /*#__PURE__*/React.createElement(Roulette, {
+    chance: result.p,
+    roll: result.roll,
+    active: true,
+    zoneColor: C.teal,
+    zoneLabel: "IT LANDS",
+    elseLabel: "IT SHATTERS",
+    hitIsGood: true,
+    resultText: hit => hit ? "it holds together" : "it comes apart"
+  }), reached("verdict") && /*#__PURE__*/React.createElement("div", {
+    className: "stamp",
+    style: {
+      fontFamily: MONO,
+      fontSize: 16,
+      letterSpacing: 6,
+      color: result.landed ? C.teal : C.rose,
+      textAlign: "center",
+      padding: "6px 0 2px"
+    }
+  }, result.landed ? "IT LANDED" : "IT SHATTERED"), reached("verdict") && !result.landed && /*#__PURE__*/React.createElement("div", {
+    className: "fadeup",
+    style: {
+      fontFamily: SERIF,
+      fontSize: 14,
+      color: C.rose,
+      textAlign: "center",
+      fontStyle: "italic"
+    }
+  }, "it does ", round(SHATTER * 100), "% of what you meant, backwards")), reached("adversary") && /*#__PURE__*/React.createElement("div", {
+    className: "fadeup",
+    style: {
+      ...card,
+      borderColor: C.blood
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...eyebrow,
+      color: C.rose
+    }
+  }, "AND THE OTHER ONE SENT"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 17,
+      lineHeight: 1.55,
+      fontStyle: "italic",
+      color: C.dim,
+      marginBottom: 10
+    }
+  }, adversary.line), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: MONO,
+      fontSize: 10,
+      letterSpacing: 1,
+      color: C.rose
+    }
+  }, statName(adversary.target), " −", result.advDamage, result.defended ? ` · YOU HELD ${SYM_BY_ID[adversary.touched].name.toUpperCase()}` : ` · ${SYM_BY_ID[adversary.touched].name.toUpperCase()} SLIPPED FURTHER`)), reached("stats") && /*#__PURE__*/React.createElement("div", {
+    className: "fadeup",
+    style: card
+  }, /*#__PURE__*/React.createElement("div", {
+    style: eyebrow
+  }, "WHAT IT DID TO HIM"), STATS.map((s, i) => /*#__PURE__*/React.createElement(ReportStatBar, {
+    key: s.key,
+    s: s,
+    from: statsBefore[s.key],
+    to: statsAfter[s.key],
+    active: true,
+    delay: i * 200
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 15,
+      lineHeight: 1.6,
+      color: C.dim,
+      marginTop: 14
+    }
+  }, morningText(result), result.wound ? " Somewhere in it he also heard a judgement. There was not one." : "")), reached("notes") && notes.map((b, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: "fadeup",
+    style: {
+      ...card,
+      borderColor: C.gold,
+      background: C.veil
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...eyebrow,
+      color: C.gold
+    }
+  }, "WORD FROM THE COURT"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 17,
+      lineHeight: 1.5
+    }
+  }, b))), done && /*#__PURE__*/React.createElement("div", {
+    className: "fadeup"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: e => {
+      e.stopPropagation();
+      onContinue();
+    },
+    style: btn(true)
+  }, isLast ? "SEE HOW THE REIGN ENDED" : `DAY ${night + 1} — HE WAKES`)));
+}
+
+/* ---------------- MAIN ---------------- */
+
+const START_STATS = {
+  clarity: 44,
+  mercy: 32,
+  resolve: 38,
+  prudence: 47,
+  piety: 35
+};
+const START_REALM = 58;
+function SecondVoice() {
+  const [phase, setPhase] = useState("title");
+  const [night, setNight] = useState(1);
+  const [stats, setStats] = useState(START_STATS);
+  const [realm, setRealm] = useState(START_REALM);
+  const [prevStats, setPrevStats] = useState(START_STATS);
+  const [ranting, setRanting] = useState(true);
+  const [floors, setFloors] = useState({});
+  const [symState, setSymState] = useState(initSymState);
+  const [picks, setPicks] = useState({});
+  const [adversary, setAdversary] = useState(() => makeAdversary(1, START_STATS));
+  const [strange, setStrange] = useState(() => rollStrangeness());
+  const [dayData, setDayData] = useState(null);
+  const [result, setResult] = useState(null);
+  const [decrees, setDecrees] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [showHelp, setShowHelp] = useState(false);
+  const ready = CATS.every(c => picks[c]);
+  const {
+    value: gripValue
+  } = grip(stats);
+  const wound = woundOf(stats, ranting);
+  const proj = project(picks, symState, wound, adversary, strange);
+
+  /* Fires decrees, updates the grip flag, returns the narrative notes. */
+  function settle(next, prevRanting, already) {
+    const newly = [];
+    STATS.forEach(s => {
+      if (next[s.key] >= 70 && !already.includes(s.key)) newly.push(s.key);
+    });
+    const nextFloors = {
+      ...floors
+    };
+    newly.forEach(k => nextFloors[k] = 55);
+    const nextRanting = stillRanting(next, prevRanting);
+    const out = newly.map(k => DECREES[k]);
+    if (prevRanting && !nextRanting) out.unshift("His grip steadied. What he cannot place, he has stopped taking as an insult.");
+    if (!prevRanting && nextRanting) out.unshift("His grip went. He is taking everything personally again.");
+    setFloors(nextFloors);
+    setDecrees([...already, ...newly]);
+    setRanting(nextRanting);
+    return out;
+  }
+  function beginDay(n, fromStats, fromRealm, fromFloors) {
+    const d = buildDay(fromStats, fromRealm, fromFloors);
+    const out = settle(d.statsAfter, ranting, decrees);
+    setDayData(d);
+    setStats(d.statsAfter);
+    setRealm(d.realmAfter);
+    setAdversary(makeAdversary(n, d.statsAfter));
+    setStrange(rollStrangeness());
+    setNotes(out);
+    setNight(n);
+    setPicks({});
+    setResult(null);
+    setPhase("day");
+  }
+  function sendVision() {
+    const res = resolveNight(picks, symState, adversary, wound, strange);
+    const next = {
+      ...stats
+    };
+    STATS.forEach(s => {
+      next[s.key] = clamp(next[s.key] + res.deltas[s.key], floors[s.key] || 0, 100);
+    });
+    const out = settle(next, ranting, decrees);
+    setPrevStats(stats);
+    setSymState(res.updates);
+    setStats(next);
+    setNotes(out);
+    setResult(res);
+    setPhase("result");
+  }
+  function afterNight() {
+    if (night >= TOTAL_NIGHTS) {
+      setPhase("end");
+      return;
+    }
+    beginDay(night + 1, stats, realm, floors);
+  }
+  function restart() {
+    setNight(1);
+    setStats(START_STATS);
+    setPrevStats(START_STATS);
+    setRealm(START_REALM);
+    setRanting(true);
+    setFloors({});
+    setSymState(initSymState());
+    setPicks({});
+    setDecrees([]);
+    setNotes([]);
+    setResult(null);
+    const d = buildDay(START_STATS, START_REALM, {});
+    setDayData(d);
+    setStats(d.statsAfter);
+    setRealm(d.realmAfter);
+    setAdversary(makeAdversary(1, d.statsAfter));
+    setStrange(rollStrangeness());
+    setPhase("day");
+  }
+  const wrap = {
+    minHeight: "100%",
+    background: `radial-gradient(120% 80% at 50% 0%, ${C.veil} 0%, ${C.ink} 68%)`,
+    color: C.bone,
+    padding: "24px 16px 64px",
+    fontFamily: MONO
+  };
+  const inner = {
+    maxWidth: 800,
+    margin: "0 auto"
+  };
+  const card = {
+    background: C.deep,
+    border: `1px solid ${C.edge}`,
+    borderRadius: 6,
+    padding: 16,
+    marginBottom: 16
+  };
+  const eyebrow = {
+    fontFamily: MONO,
+    fontSize: 10,
+    letterSpacing: 2,
+    color: C.faint,
+    marginBottom: 10
+  };
+  const btn = on => ({
+    width: "100%",
+    padding: "14px 16px",
+    background: on ? C.gold : C.deep,
+    color: on ? C.ink : C.faint,
+    border: `1px solid ${on ? C.gold : C.edge}`,
+    borderRadius: 4,
+    fontFamily: MONO,
+    fontSize: 12,
+    letterSpacing: 2,
+    cursor: on ? "pointer" : "not-allowed",
+    fontWeight: 600
+  });
+  const styleTag = /*#__PURE__*/React.createElement("style", null, `
+      .fadeup { animation: fadeup 520ms ease both; }
+      @keyframes fadeup { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+      .float-up { animation: floatup 1800ms ease-out both; }
+      @keyframes floatup {
+        0%   { opacity: 0; transform: translateY(6px); }
+        18%  { opacity: 1; transform: translateY(0); }
+        70%  { opacity: 1; transform: translateY(-4px); }
+        100% { opacity: 0; transform: translateY(-12px); }
+      }
+
+      .ghost-fade { animation: ghostfade 1700ms ease-out both; }
+      @keyframes ghostfade { 0% { opacity: .85; } 55% { opacity: .7; } 100% { opacity: 0; } }
+
+      .proj-pulse { animation: projpulse 2200ms ease-in-out infinite; }
+      @keyframes projpulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.45); } }
+
+      .needle-settle { animation: settle 420ms ease-out both; }
+      @keyframes settle { 0% { transform: scaleY(1.6); } 100% { transform: scaleY(1); } }
+
+      .stamp { animation: stamp 620ms cubic-bezier(.2,1.5,.4,1) both; }
+      @keyframes stamp {
+        from { opacity: 0; transform: scale(1.5); letter-spacing: 16px; }
+        to   { opacity: 1; transform: scale(1); letter-spacing: 6px; }
+      }
+
+      .shake { animation: shake 620ms cubic-bezier(.36,.07,.19,.97) both; }
+      @keyframes shake {
+        0%,100% { transform: translateX(0); }
+        12% { transform: translateX(-8px); } 26% { transform: translateX(7px); }
+        40% { transform: translateX(-5px); } 54% { transform: translateX(4px); }
+        68% { transform: translateX(-2px); } 82% { transform: translateX(1px); }
+      }
+
+      .chip:hover { border-color: ${C.dim} !important; }
+      .chip:active { transform: translateY(1px) !important; }
+      button:focus-visible { outline: 2px solid ${C.gold}; outline-offset: 2px; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .fadeup, .float-up, .ghost-fade, .proj-pulse, .stamp, .shake, .needle-settle { animation: none !important; }
+        .ghost-fade { opacity: 0 !important; }
+      }
+    `);
+
+  /* ---------- TITLE ---------- */
+  if (phase === "title") {
+    return /*#__PURE__*/React.createElement("div", {
+      style: wrap
+    }, styleTag, /*#__PURE__*/React.createElement("div", {
+      style: {
+        ...inner,
+        paddingTop: 40
+      },
+      className: "fadeup"
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: MONO,
+        fontSize: 11,
+        letterSpacing: 6,
+        color: C.gold,
+        marginBottom: 18
+      }
+    }, "THE SECOND VOICE"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: SERIF,
+        fontSize: 26,
+        lineHeight: 1.45,
+        marginBottom: 24
+      }
+    }, "King Aldous the Fourth of Varn is mad, and there are two things down here in the dark with him. You are the newer one."), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: SERIF,
+        fontSize: 16,
+        lineHeight: 1.6,
+        color: C.dim,
+        marginBottom: 20
+      }
+    }, "Eighteen days. Each one runs the same way: he wakes and three things happen at court, every weak place in him is rolled against the realm, and then he sleeps — and the Adversary declares its work, and you answer it with a vision of five symbols, and that gets rolled for too."), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: SERIF,
+        fontSize: 16,
+        lineHeight: 1.6,
+        color: C.dim,
+        marginBottom: 28
+      }
+    }, "Plain visions land almost always and move him almost none. Wild ones carry enormous force and usually shatter — and a shattered vision does the opposite of what you meant. But a wild vision that ", /*#__PURE__*/React.createElement("em", null, "holds"), " teaches him your symbols several times faster, and a symbol he has learned delivers everything you put in it."), /*#__PURE__*/React.createElement("button", {
+      onClick: restart,
+      style: btn(true)
+    }, "THE FIRST DAY")));
+  }
+
+  /* ---------- END ---------- */
+  if (phase === "end") {
+    const ruined = realm <= 0;
+    const band = realm < 20 ? 0 : realm < 40 ? 1 : realm < 60 ? 2 : realm < 80 ? 3 : 4;
+    const endings = ["Varn did not survive him. What is left is administered from elsewhere, badly, and there is no longer anyone to dream at. You go on speaking into the dark out of habit.", "The kingdom endured, the way a wall endures. Fewer of them each year, and none of them fond, but it stands, and he stands in it.", "It held. Not well and not gracefully, but the borders are where they were, and the granaries were counted twice this year. That is a great deal more than was expected.", "Varn prospered, quietly, under a king the chroniclers will call difficult and the farmers will call fair. They will never agree on why.", "They will write that Aldous the Fourth came to himself in his fortieth year, and that nobody could say what changed. Nobody ever will. That was always the arrangement."];
+    return /*#__PURE__*/React.createElement("div", {
+      style: wrap
+    }, styleTag, /*#__PURE__*/React.createElement("div", {
+      style: inner,
+      className: "fadeup"
+    }, /*#__PURE__*/React.createElement("div", {
+      style: eyebrow
+    }, ruined ? "THE REIGN ENDED EARLY" : `AFTER ${TOTAL_NIGHTS} DAYS`), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: MONO,
+        fontSize: 46,
+        color: C.gold,
+        marginBottom: 4
+      }
+    }, round(realm), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 18,
+        color: C.faint
+      }
+    }, " REALM")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        ...eyebrow,
+        marginBottom: 24
+      }
+    }, decrees.length, " OF 5 DECREES · DAY ", night, " OF ", TOTAL_NIGHTS), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: SERIF,
+        fontSize: 19,
+        lineHeight: 1.6,
+        marginBottom: 24
+      }
+    }, endings[ruined ? 0 : band]), decrees.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: card
+    }, /*#__PURE__*/React.createElement("div", {
+      style: eyebrow
+    }, "WHAT HE ACTUALLY DID"), decrees.map(k => /*#__PURE__*/React.createElement("div", {
+      key: k,
+      style: {
+        fontFamily: SERIF,
+        fontSize: 15,
+        lineHeight: 1.6,
+        color: C.dim,
+        marginBottom: 8
+      }
+    }, "— ", DECREES[k]))), /*#__PURE__*/React.createElement("button", {
+      onClick: restart,
+      style: btn(true)
+    }, "ANOTHER SLEEPER")));
+  }
+
+  /* ---------- THE DAY ---------- */
+  if (phase === "day" && dayData) {
+    const ruined = realm <= 0;
+    return /*#__PURE__*/React.createElement("div", {
+      style: wrap
+    }, styleTag, /*#__PURE__*/React.createElement("div", {
+      style: inner
+    }, /*#__PURE__*/React.createElement(DayReport, {
+      key: `day-${night}`,
+      night: night,
+      day: dayData,
+      notes: notes,
+      ruined: ruined,
+      onSleep: () => setPhase(ruined ? "end" : "compose"),
+      card: card,
+      eyebrow: eyebrow,
+      btn: btn
+    })));
+  }
+
+  /* ---------- THE DAWN ---------- */
+  if (phase === "result" && result) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: wrap
+    }, styleTag, /*#__PURE__*/React.createElement("div", {
+      style: inner
+    }, /*#__PURE__*/React.createElement(NightReport, {
+      key: `night-${night}`,
+      night: night,
+      result: result,
+      adversary: adversary,
+      statsBefore: prevStats,
+      statsAfter: stats,
+      notes: notes,
+      onContinue: afterNight,
+      isLast: night >= TOTAL_NIGHTS,
+      card: card,
+      eyebrow: eyebrow,
+      btn: btn
+    })));
+  }
+
+  /* ---------- THE VISION ---------- */
+  return /*#__PURE__*/React.createElement("div", {
+    style: wrap
+  }, styleTag, /*#__PURE__*/React.createElement("div", {
+    style: inner
+  }, /*#__PURE__*/React.createElement(CycleRibbon, {
+    stage: "vision",
+    night: night
+  }), /*#__PURE__*/React.createElement("div", {
+    style: card
+  }, /*#__PURE__*/React.createElement(RealmBar, {
+    from: realm,
+    to: realm,
+    active: false,
+    big: true
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...card,
+      borderColor: C.blood
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...eyebrow,
+      color: C.rose,
+      letterSpacing: 3
+    }
+  }, "THE ADVERSARY DECLARES"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 18,
+      lineHeight: 1.55,
+      marginBottom: 12
+    }
+  }, "Tonight it works on his ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: HUE[adversary.target]
+    }
+  }, statName(adversary.target).toLowerCase()), ", for ", adversary.intensity, ", and it has laid a hand on ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: C.rose
+    }
+  }, SYM_BY_ID[adversary.touched].name), "."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 14,
+      lineHeight: 1.55,
+      color: C.dim,
+      fontStyle: "italic"
+    }
+  }, "Use that symbol tonight and land the vision to hold it. Leave it and it slips — two nights untended and it turns profane, and everything it carries comes back inverted."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 14,
+      lineHeight: 1.55,
+      color: C.gold,
+      fontStyle: "italic",
+      marginTop: 10
+    }
+  }, "And what is strange to him has moved again overnight. The ◈ on every symbol was dealt fresh this evening — a ledger can be the most disturbing thing in the world, on the right night.")), /*#__PURE__*/React.createElement("div", {
+    style: card
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "baseline"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: eyebrow
+  }, "WHAT THE KING IS RUNNING ON"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...eyebrow,
+      color: proj.count > 0 ? C.teal : C.faint
+    }
+  }, proj.count > 0 ? "SHADED = IF IT LANDS" : "PICK SYMBOLS TO PROJECT")), STATS.map(s => /*#__PURE__*/React.createElement(ProjectedStatBar, {
+    key: s.key,
+    s: s,
+    value: stats[s.key],
+    projected: clamp(stats[s.key] + proj.landed[s.key], 0, 100),
+    wounded: wound === s.key,
+    floored: !!floors[s.key],
+    touchedByAdversary: adversary.target === s.key
+  })), /*#__PURE__*/React.createElement(GripBar, {
+    value: gripValue,
+    ranting: ranting
+  }), wound ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 14,
+      lineHeight: 1.55,
+      color: C.rose,
+      marginTop: 12,
+      fontStyle: "italic"
+    }
+  }, "He has nothing else to stand on, so anything he cannot place lands on his ", statName(wound).toLowerCase(), ". Aiming at it directly only makes it worse. Raise the other four until his grip reaches ", CLEAR, ".") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: SERIF,
+      fontSize: 14,
+      lineHeight: 1.55,
+      color: C.teal,
+      marginTop: 12,
+      fontStyle: "italic"
+    }
+  }, "His grip holds. What he cannot place, he lets drift. This is when the ruined places are reachable — until his grip falls under ", ENGAGE, ".")), /*#__PURE__*/React.createElement("div", {
+    style: card
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: eyebrow
+  }, "COMPOSE THE VISION"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowHelp(!showHelp),
+    style: {
+      background: "none",
+      border: "none",
+      color: C.faint,
+      fontFamily: MONO,
+      fontSize: 10,
+      letterSpacing: 1,
+      cursor: "pointer"
+    }
+  }, showHelp ? "HIDE RULES" : "RULES")), showHelp && /*#__PURE__*/React.createElement("div", {
+    className: "fadeup",
+    style: {
+      fontFamily: SERIF,
+      fontSize: 14,
+      lineHeight: 1.65,
+      color: C.dim,
+      borderLeft: `1px solid ${C.edge}`,
+      paddingLeft: 12,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "0 0 8px"
+    }
+  }, /*#__PURE__*/React.createElement("strong", null, "The cycle."), " He wakes, three things happen at court, every stat under ", THREAT_LINE, " is rolled against its disaster, he sleeps, the Adversary declares, you compose, and your vision is rolled for."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "0 0 8px"
+    }
+  }, /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: C.gold
+    }
+  }, "◈ is re-dealt every night."), " How strange a symbol is depends on the night, not on the symbol — the same spread is always on offer within a category, but which symbol carries which value moves. So you cannot learn \"piety means gamble\"; you have to read the board each evening. The wildest option in each category is marked."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "0 0 8px"
+    }
+  }, "Five slots. ◈ is how strange a symbol is tonight. The total sets your odds: ", /*#__PURE__*/React.createElement("strong", null, "low strangeness lands nearly always and barely moves him; high strangeness carries enormous force and usually shatters"), ". A shattered vision does ", round(SHATTER * 100), "% of what you intended, in reverse."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "0 0 8px"
+    }
+  }, "As you pick, the bars above shade to show where each stat lands ", /*#__PURE__*/React.createElement("em", null, "if the vision holds"), ". The Adversary's damage is already subtracted from it."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "0 0 8px"
+    }
+  }, /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: C.gold
+    }
+  }, "Why gamble at all:"), " a vision that lands also teaches him its symbols, and a vivid one teaches several times faster than a plain one. The force is not the prize — the language is. Wild early, plain late, is a real strategy."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "0 0 8px"
+    }
+  }, "A symbol starts ", /*#__PURE__*/React.createElement("em", null, "unread"), " — he doesn't know what you mean by it, so most of its force scatters. Land visions with it and it goes forming → settled → fixed, and delivers cleanly."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "0 0 8px"
+    }
+  }, /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: C.rose
+    }
+  }, "The Adversary"), " declares its target and damage before you compose, and it always lands. It also touches one symbol a night. Untended symbols corrupt; at two corruptions they turn ", /*#__PURE__*/React.createElement("strong", {
+    style: {
+      color: C.blood
+    }
+  }, "profane"), " and invert. Land a vision using a profane symbol to redeem it."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "0 0 8px"
+    }
+  }, /*#__PURE__*/React.createElement("strong", null, "Grip"), " is the average of everything except his worst stat. Below ", ENGAGE, " he takes all ambiguity as accusation, aimed at his weakest place, and you cannot fix that head-on. Get grip above ", CLEAR, " first."), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: 0
+    }
+  }, "At 70 a stat becomes a decree and stops sliding below 55.")), CATS.map(cat => /*#__PURE__*/React.createElement("div", {
+    key: cat,
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: MONO,
+      fontSize: 9,
+      letterSpacing: 2,
+      color: C.faint,
+      marginBottom: 6
+    }
+  }, cat), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 6
+    }
+  }, (() => {
+    const inCat = SYMBOLS.filter(s => s.cat === cat);
+    const vals = inCat.map(s => strangenessOf(s, strange));
+    const hi = Math.max.apply(null, vals);
+    const lo = Math.min.apply(null, vals);
+    return inCat.map(s => {
+      const strength = strangenessOf(s, strange);
+      return /*#__PURE__*/React.createElement(Chip, {
+        key: s.id,
+        sym: s,
+        st: symState[s.id],
+        night: night,
+        strength: strength,
+        wildest: strength === hi && hi !== lo,
+        plainest: strength === lo && hi !== lo,
+        touched: adversary.touched === s.id,
+        selected: picks[cat] === s.id,
+        onClick: () => setPicks({
+          ...picks,
+          [cat]: picks[cat] === s.id ? undefined : s.id
+        })
+      });
+    });
+  })()))), /*#__PURE__*/React.createElement(OddsPanel, {
+    S: proj.S,
+    proj: proj,
+    wound: wound
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: ready ? sendVision : undefined,
+    disabled: !ready,
+    style: btn(ready)
+  }, ready ? "SEND IT DOWN" : `FILL ALL FIVE SLOTS — ${proj.count}/5`)));
+}
+
+  ReactDOM.createRoot(document.getElementById("root")).render(
+    React.createElement(SecondVoice)
+  );
+})();
+</script>
+</body>
+</html>
