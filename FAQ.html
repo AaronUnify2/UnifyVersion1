@@ -292,17 +292,18 @@ h1 {
 </head>
 <body>
 
-<!-- Tabs and panels are built from FAQ.json at load time. -->
+<!-- Tabs and panels are built from the JSON content file at load time. -->
 <div class="tab-bar" id="tabBar"></div>
 <div id="panels"></div>
 <p id="loadError" style="display:none; color:#a00; font-size:14px;"></p>
 
 <script>
 // ─────────────────────────────────────────────────────────────
-//  All FAQ content lives in FAQ.json.
-//  To update questions/answers, edit FAQ.json — no need to touch
-//  this page. (The page must be served over http/https so the
-//  browser is allowed to fetch the JSON — see the note below.)
+//  All FAQ content lives in a JSON file (see DATA_URL below).
+//  To update questions/answers, edit that file — no need to touch
+//  this page. The page must be served over http/https so the
+//  browser is allowed to fetch the JSON (single-file exports
+//  embed the data instead and work anywhere).
 // ─────────────────────────────────────────────────────────────
 
 function el(tag, className, html) {
@@ -410,8 +411,17 @@ function render(data) {
   resolveVariables(data);
 }
 
+// If the URL ends in #tabid (e.g. FAQ.html#waste), open that tab.
+// Unknown or missing hash simply leaves the first tab active.
+function applyHashTab() {
+  var id = decodeURIComponent((location.hash || '').replace(/^#/, '')).trim();
+  if (id && document.getElementById('tab-' + id)) {
+    switchTab(id);
+  }
+}
+
 // Fill in content variables (fees, URLs, times…) from the top-level
-// "variables" list in FAQ.json. The list is the single source of truth:
+// "variables" list in the JSON. The list is the single source of truth:
 // any <span class="faq-var" data-var="id"> gets its text from it, and any
 // element with data-var-href gets its link address from it. Missing ids
 // keep whatever fallback text/href is already in the HTML.
@@ -430,20 +440,20 @@ function resolveVariables(data) {
   });
 }
 
-// If the URL ends in #tabid (e.g. FAQ.html#waste), open that tab.
-// Unknown or missing hash simply leaves the first tab active.
-function applyHashTab() {
-  var id = decodeURIComponent((location.hash || '').replace(/^#/, '')).trim();
-  if (id && document.getElementById('tab-' + id)) {
-    switchTab(id);
-  }
-}
-
 window.addEventListener('hashchange', applyHashTab);
 
-fetch('FAQ.json')
+// Content source. Normally this page fetches DATA_URL (a FAQ.json next to it).
+// A "single file" export from the FAQ Editor embeds the data below instead,
+// in which case no fetch happens and the page works standalone.
+var DATA_URL = 'FAQ.json' /*__FAQ_URL__*/;
+var EMBEDDED_DATA = null /*__FAQ_EMBED__*/;
+
+if (EMBEDDED_DATA) {
+  render(EMBEDDED_DATA);
+} else {
+fetch(DATA_URL)
   .then(function (res) {
-    if (!res.ok) throw new Error('HTTP ' + res.status + ' loading FAQ.json');
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' loading content');
     return res.json();
   })
   .then(render)
@@ -451,10 +461,12 @@ fetch('FAQ.json')
     var box = document.getElementById('loadError');
     box.style.display = 'block';
     box.textContent =
-      'Could not load FAQ.json (' + err.message + '). ' +
+      'Could not load ' + DATA_URL + ' (' + err.message + '). ' +
       'This page needs to be opened through a web server (http://), not directly from the file system.';
     console.error(err);
   });
+}
+
 </script>
 </body>
 </html>
