@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<title>Forest Helpers — everyone has a special job</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bark:#4A3526;
+    --bark-soft:#6B4E37;
+    --cream:#FFF4DE;
+    --moss:#5C8A2E;
+    --pine:#264F3A;
+    --honey:#F5B335;
+    --berry:#D8544F;
+    --sky-top:#9FD8F2;
+    --sky-bot:#DFF1D6;
+    --plank:#B07B4B;
+    --plank-dark:#8A5C34;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0;overflow:hidden}
+  body{
+    font-family:'Nunito','Trebuchet MS',system-ui,sans-serif;
+    color:var(--bark);
+    background:linear-gradient(180deg,var(--sky-top) 0%, #C8E9F0 45%, var(--sky-bot) 100%);
+    touch-action:manipulation;
+  }
+  canvas{display:block;position:fixed;inset:0}
+
+  /* ---------- shared chunky button ---------- */
+  .btn{
+    font-family:'Baloo 2','Trebuchet MS',system-ui,sans-serif;
+    font-weight:800;border:none;cursor:pointer;color:var(--cream);
+    background:var(--moss);border-radius:999px;
+    box-shadow:0 6px 0 #3F6320, 0 10px 18px rgba(38,79,58,.28);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .btn:active{transform:translateY(5px);box-shadow:0 1px 0 #3F6320, 0 4px 10px rgba(38,79,58,.25)}
+  .btn:focus-visible{outline:4px solid #fff;outline-offset:3px}
+
+  /* ---------- top bar ---------- */
+  #hud{
+    position:fixed;top:0;left:0;right:0;z-index:5;
+    padding:calc(env(safe-area-inset-top) + 10px) 14px 0;
+    display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
+    pointer-events:none;
+  }
+  #jobs{
+    display:flex;gap:6px;background:rgba(255,244,222,.82);
+    border:3px solid rgba(107,78,55,.35);border-radius:999px;padding:6px 10px;
+    backdrop-filter:blur(4px);
+  }
+  .tok{
+    width:38px;height:38px;border-radius:50%;display:grid;place-items:center;
+    font-size:21px;background:rgba(107,78,55,.14);filter:grayscale(1);opacity:.45;
+    transition:transform .35s cubic-bezier(.2,1.6,.4,1), filter .35s, opacity .35s, background .35s;
+  }
+  .tok.done{filter:none;opacity:1;background:var(--honey);transform:scale(1.12)}
+  #mute{
+    pointer-events:auto;width:48px;height:48px;font-size:22px;flex:none;
+    background:var(--bark-soft);box-shadow:0 5px 0 #47301f;
+  }
+
+  /* ---------- job sign (the signature element) ---------- */
+  #sign{
+    position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 16px);
+    transform:translateX(-50%);z-index:5;width:min(680px,calc(100% - 24px));
+    transform-origin:top center;
+    animation:swing 5.5s ease-in-out infinite;
+    display:none;pointer-events:none;
+  }
+  #sign.show{display:block}
+  @keyframes swing{0%,100%{transform:translateX(-50%) rotate(-.7deg)}50%{transform:translateX(-50%) rotate(.7deg)}}
+  #sign .rope{height:16px;display:flex;justify-content:space-between;padding:0 34px}
+  #sign .rope i{display:block;width:5px;height:16px;background:var(--bark-soft);border-radius:3px}
+  #sign .board{
+    background:
+      repeating-linear-gradient(180deg, var(--plank) 0 33.33%, var(--plank-dark) 33.33% 34%);
+    border:5px solid var(--bark);border-radius:16px;
+    padding:14px 16px;display:flex;align-items:center;gap:14px;
+    box-shadow:0 10px 22px rgba(74,53,38,.35), inset 0 0 0 3px rgba(255,244,222,.25);
+  }
+  #jobIcon{font-size:min(13vw,52px);line-height:1;flex:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))}
+  #jobText{
+    font-family:'Baloo 2','Trebuchet MS',sans-serif;font-weight:800;
+    font-size:clamp(17px,4.4vw,27px);line-height:1.16;color:var(--cream);
+    text-shadow:0 2px 0 rgba(74,53,38,.55);flex:1;
+  }
+  #again{pointer-events:auto;width:54px;height:54px;font-size:24px;flex:none;background:var(--honey);color:var(--bark);box-shadow:0 5px 0 #C98A18}
+
+  /* ---------- toast ---------- */
+  #toast{
+    position:fixed;left:50%;top:52%;transform:translate(-50%,-50%) scale(.7);
+    z-index:6;max-width:min(560px,88%);text-align:center;
+    font-family:'Baloo 2',sans-serif;font-weight:800;font-size:clamp(18px,4.6vw,28px);
+    background:var(--cream);color:var(--bark);border:5px solid var(--bark);
+    border-radius:24px;padding:16px 22px;box-shadow:0 14px 30px rgba(74,53,38,.3);
+    opacity:0;pointer-events:none;transition:opacity .25s, transform .3s cubic-bezier(.2,1.7,.4,1);
+  }
+  #toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  #toast.warm{background:var(--honey)}
+
+  /* ---------- overlays ---------- */
+  .screen{
+    position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:20px;
+    background:radial-gradient(120% 90% at 50% 0%, rgba(159,216,242,.96), rgba(94,140,86,.96));
+  }
+  .screen[hidden]{display:none}
+  .card{
+    width:min(560px,100%);background:var(--cream);border:6px solid var(--bark);
+    border-radius:30px;padding:26px 24px;text-align:center;
+    box-shadow:0 18px 40px rgba(38,79,58,.4);
+  }
+  .card h1{
+    font-family:'Baloo 2',sans-serif;font-weight:800;margin:.1em 0 .05em;
+    font-size:clamp(30px,8vw,50px);color:var(--pine);line-height:1;
+  }
+  .card p{margin:.4em 0 0;font-size:clamp(15px,3.6vw,18px);line-height:1.45}
+  .critters{font-size:clamp(28px,9vw,46px);letter-spacing:.08em;margin-bottom:2px}
+  .play{font-size:clamp(22px,6vw,30px);padding:16px 46px;margin-top:20px}
+  .grown{
+    margin-top:18px;border-top:3px dashed rgba(107,78,55,.35);padding-top:12px;
+    font-size:13px;line-height:1.5;color:var(--bark-soft);text-align:left;
+  }
+  .grown b{color:var(--pine)}
+  #endList{
+    display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px;
+    font-size:13px;font-weight:800;
+  }
+  #endList span{background:rgba(92,138,46,.16);border-radius:999px;padding:6px 12px}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  @media (prefers-reduced-motion:reduce){
+    #sign{animation:none}
+    *{transition-duration:.01ms !important}
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="jobs" aria-hidden="true"></div>
+  <button id="mute" class="btn" aria-label="Turn the voice off">🔊</button>
+</div>
+
+<div id="sign">
+  <div class="rope"><i></i><i></i></div>
+  <div class="board">
+    <div id="jobIcon">🪵</div>
+    <div id="jobText">Loading…</div>
+    <button id="again" class="btn" aria-label="Say the job again">🔁</button>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<div class="screen" id="startScreen">
+  <div class="card">
+    <div class="critters">🦫 🐿️ 🐝 🐰 🐦</div>
+    <h1>Forest Helpers</h1>
+    <p>Five animal friends are building a camp.<br>Tap the animal whose <b>special skill</b> fits the job!</p>
+    <button id="playBtn" class="btn play">Let's help! ▶</button>
+    <div class="grown">
+      <b>For grown-ups:</b> this game teaches <b>specialisation</b> — the idea that we each do the job we're best at, and everyone gains. Your child hears each job read aloud (no reading needed), picks a helper, and watches the camp get built one skill at a time. Wrong taps are never punished; they get a friendly hint instead.
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="endScreen" hidden>
+  <div class="card">
+    <div class="critters">🎉 🌲 🎉</div>
+    <h1>The camp is built!</h1>
+    <p>Everybody did the job they are <b>best</b> at.<br>That's called <b>specialising</b> — and it makes the forest a happy home.</p>
+    <div id="endList"></div>
+    <button id="replayBtn" class="btn play">Play again ↻</button>
+  </div>
+</div>
+
+<p class="sr">Keyboard: press 1 to 5 to choose a helper, or R to hear the job again.</p>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+'use strict';
+
+/* =======================================================================
+   0.  Content — animals, their special skills, and the jobs they suit
+   ======================================================================= */
+
+const ANIMALS = [
+  { id:'beaver',  name:'Beaver',   emoji:'🦫', pad:0xC98A45,
+    skill:'chopping wood with strong teeth' },
+  { id:'squirrel',name:'Squirrel', emoji:'🐿️', pad:0xE08A3C,
+    skill:'climbing right to the top of tall trees' },
+  { id:'bee',     name:'Bee',      emoji:'🐝', pad:0xF5C93C,
+    skill:'visiting flowers and making sweet honey' },
+  { id:'rabbit',  name:'Rabbit',   emoji:'🐰', pad:0xD9CFC2,
+    skill:'digging deep tunnels with quick paws' },
+  { id:'bird',    name:'Bird',     emoji:'🐦', pad:0x66B6E0,
+    skill:'flying high over the mountain' }
+];
+
+const JOBS = [
+  { answer:'beaver',   icon:'🪵',
+    ask:'Our bridge fell into the stream! Who can chop wood with strong teeth?',
+    yay:'Yes! The beaver has strong teeth for chopping wood. A new bridge!',
+    built:'Beaver built the bridge' },
+  { answer:'squirrel', icon:'🌰',
+    ask:'The acorns are at the very top of the tall tree! Who can climb up and fetch them?',
+    yay:'Yes! The squirrel climbs high and fast. A basket full of acorns!',
+    built:'Squirrel gathered the acorns' },
+  { answer:'bee',      icon:'🍯',
+    ask:'We want something sweet for our picnic! Who visits flowers and makes honey?',
+    yay:'Yes! The bee makes honey from flowers. A whole pot of it!',
+    built:'Bee made the honey' },
+  { answer:'rabbit',   icon:'🕳️',
+    ask:'We need a cosy little home under the ground. Who can dig a deep burrow?',
+    yay:'Yes! The rabbit digs fast with strong paws. A cosy burrow!',
+    built:'Rabbit dug the burrow' },
+  { answer:'bird',     icon:'✉️',
+    ask:'This letter must go over the mountain! Who can fly it there?',
+    yay:'Yes! The bird can fly high over the mountain. The letter is on its way!',
+    built:'Bird carried the letter' }
+];
+
+/* =======================================================================
+   1.  Small helpers
+   ======================================================================= */
+
+const $ = (s) => document.querySelector(s);
+const clamp = (v,a,b) => Math.min(b, Math.max(a, v));
+const lerp  = (a,b,t) => a + (b-a)*t;
+const easeOut = (t) => 1 - Math.pow(1-t, 3);
+const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function shuffle(arr){
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* =======================================================================
+   2.  Sound — spoken jobs (Web Speech) + gentle chimes (Web Audio)
+   ======================================================================= */
+
+let muted = false;
+let audioCtx = null;
+let voice = null;
+
+function pickVoice(){
+  if (!('speechSynthesis' in window)) return;
+  const vs = speechSynthesis.getVoices();
+  if (!vs.length) return;
+  const en = vs.filter(v => /^en/i.test(v.lang));
+  const nice = ['Samantha','Karen','Moira','Google UK English Female','Google US English','Serena','Zira','Fiona'];
+  voice = en.find(v => nice.some(n => v.name.indexOf(n) !== -1)) || en[0] || vs[0];
+}
+if ('speechSynthesis' in window){
+  pickVoice();
+  speechSynthesis.onvoiceschanged = pickVoice;
+}
+
+function say(text){
+  if (muted || !('speechSynthesis' in window)) return;
+  try{
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.88; u.pitch = 1.25; u.volume = 1;
+    if (voice) { u.voice = voice; u.lang = voice.lang; }
+    speechSynthesis.speak(u);
+  }catch(e){ /* speech is a bonus, never a blocker */ }
+}
+
+function initAudio(){
+  if (audioCtx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (AC) audioCtx = new AC();
+}
+
+function tone(freq, start, dur, type, vol){
+  if (!audioCtx || muted) return;
+  const t0 = audioCtx.currentTime + start;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol || 0.18, t0 + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(g).connect(audioCtx.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.05);
+}
+const sfx = {
+  correct(){ [523.25, 659.25, 783.99, 1046.5].forEach((f,i) => tone(f, i*0.09, 0.35, 'triangle', 0.16)); },
+  retry(){ tone(330, 0, 0.16, 'sine', 0.12); tone(262, 0.12, 0.22, 'sine', 0.12); },
+  pop(){ tone(880, 0, 0.12, 'triangle', 0.12); },
+  fanfare(){ [523,659,784,1047,1319].forEach((f,i)=>tone(f, i*0.13, 0.5,'triangle',0.15)); }
+};
+
+/* =======================================================================
+   3.  Scene
+   ======================================================================= */
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xCBE7DC, 22, 52);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 120);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+if ('outputEncoding' in renderer) renderer.outputEncoding = THREE.sRGBEncoding;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xCFEFFF, 0x6B8F3F, 0.95));
+const sun = new THREE.DirectionalLight(0xFFF3D6, 1.15);
+sun.position.set(6, 11, 7);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.left = -14; sun.shadow.camera.right = 14;
+sun.shadow.camera.top = 14;   sun.shadow.camera.bottom = -14;
+sun.shadow.camera.near = 1;   sun.shadow.camera.far = 34;
+sun.shadow.bias = -0.0012;
+scene.add(sun);
+scene.add(sun.target);
+
+/* --- material / mesh shorthands ------------------------------------- */
+function M(color, rough){
+  return new THREE.MeshStandardMaterial({ color:color, roughness: rough === undefined ? 0.9 : rough, metalness:0 });
+}
+function ball(r, color, seg){
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, seg || 18, (seg || 18) - 4), M(color));
+  m.castShadow = true; return m;
+}
+function box(w,h,d,color){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), M(color));
+  m.castShadow = true; return m;
+}
+function cone(r,h,color,seg){
+  const m = new THREE.Mesh(new THREE.ConeGeometry(r,h, seg || 14), M(color));
+  m.castShadow = true; return m;
+}
+function cyl(rt,rb,h,color,seg){
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h, seg || 14), M(color));
+  m.castShadow = true; return m;
+}
+function at(mesh, x,y,z){ mesh.position.set(x,y,z); return mesh; }
+
+/* --- ground & forest ------------------------------------------------- */
+const ground = new THREE.Mesh(new THREE.CircleGeometry(46, 48), M(0x7FB24A, 1));
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const clearing = new THREE.Mesh(new THREE.CircleGeometry(7.4, 40), M(0x93C25C, 1));
+clearing.rotation.x = -Math.PI/2;
+clearing.position.y = 0.01;
+clearing.receiveShadow = true;
+scene.add(clearing);
+
+function makeTree(x, z, s){
+  const g = new THREE.Group();
+  const trunk = at(cyl(0.17,0.24, 1.1, 0x7A5433, 9), 0, 0.55, 0);
+  g.add(trunk);
+  const greens = [0x2F6B3C, 0x3C8046, 0x479043];
+  for (let i = 0; i < 3; i++){
+    const c = at(cone(0.95 - i*0.22, 1.05, greens[i], 12), 0, 1.15 + i*0.55, 0);
+    c.receiveShadow = true;
+    g.add(c);
+  }
+  g.position.set(x, 0, z);
+  g.scale.setScalar(s);
+  g.rotation.y = Math.random() * Math.PI;
+  scene.add(g);
+  return g;
+}
+
+function makeBush(x, z, s){
+  const g = new THREE.Group();
+  [[0,0,0,0.5],[0.34,-0.06,0.1,0.36],[-0.3,-0.05,-0.08,0.33]].forEach(p => {
+    const b = at(ball(p[3], 0x4E9B3E, 12), p[0], p[3]*0.8 + p[1], p[2]);
+    b.receiveShadow = true; g.add(b);
+  });
+  g.position.set(x,0,z); g.scale.setScalar(s);
+  scene.add(g);
+}
+
+const TREES = [
+  [-8.6,-5.5,1.25],[-6.4,-8.4,1.0],[-11,-2.2,1.4],[-3.4,-9.6,0.9],[0.4,-11,1.15],
+  [4.2,-9.4,1.0],[7.2,-7.4,1.3],[10.4,-3.6,1.15],[-9.8,1.6,1.1],[9.6,1.4,1.2],
+  [-12.5,-8,1.5],[12.2,-8.6,1.35],[-6.2,3.6,0.85],[6.6,3.8,0.9]
+];
+TREES.forEach(t => makeTree(t[0], t[1], t[2]));
+[[-5.2,-4.4,1],[5.4,-4.6,1.1],[-2.6,-6.4,.8],[2.8,-6.6,.85],[-8,-0.6,.9],[8.2,-0.8,.95]]
+  .forEach(b => makeBush(b[0], b[1], b[2]));
+
+/* rolling hills on the horizon */
+[[-16,-20,7],[2,-26,9],[18,-19,6.5]].forEach(h => {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(h[2], 16, 10, 0, Math.PI*2, 0, Math.PI/2), M(0x6FA05A, 1));
+  m.position.set(h[0], -0.6, h[1]);
+  m.scale.y = 0.42;
+  scene.add(m);
+});
+
+/* =======================================================================
+   4.  The five animals
+   ======================================================================= */
+
+function eyes(g, x, y, z, r){
+  [-1,1].forEach(s => {
+    g.add(at(ball(r || 0.045, 0x241A14, 10), s*x, y, z));
+    g.add(at(ball((r||0.045)*0.42, 0xFFFFFF, 8), s*x + s*0.012, y + 0.02, z + 0.03));
+  });
+}
+
+function buildBeaver(){
+  const g = new THREE.Group(), p = {};
+  const body = at(ball(0.46, 0x8A5B34), 0, 0.5, 0); body.scale.set(1, 0.98, 1.14); g.add(body);
+  const belly = at(ball(0.3, 0xC08B5C), 0, 0.44, 0.3); belly.scale.set(1,0.9,0.6); g.add(belly);
+  const head = at(ball(0.31, 0x9A6A3E), 0, 0.94, 0.16); g.add(head);
+  p.head = head;
+  head.add(at(ball(0.2, 0xC49466, 14), 0, -0.07, 0.2));
+  head.add(at(ball(0.055, 0x3A2A20, 10), 0, 0.02, 0.31));
+  [-1,1].forEach(s => head.add(at(box(0.085,0.13,0.05,0xFFFDF2), s*0.05, -0.18, 0.3)));
+  [-1,1].forEach(s => head.add(at(ball(0.085, 0x74492A, 10), s*0.25, 0.2, -0.04)));
+  eyes(head, 0.13, 0.09, 0.25, 0.05);
+  const tail = at(box(0.42, 0.09, 0.52, 0x5E3C22), 0, 0.24, -0.62);
+  tail.rotation.x = -0.22; g.add(tail); p.tail = tail;
+  [-1,1].forEach(s => g.add(at(ball(0.13, 0x74492A, 10), s*0.42, 0.42, 0.12)));
+  [-1,1].forEach(s => { const f = at(ball(0.15, 0x5E3C22, 10), s*0.22, 0.09, 0.18); f.scale.set(1,0.5,1.3); g.add(f); });
+  g.userData.parts = p;
+  return g;
+}
+
+function buildSquirrel(){
+  const g = new THREE.Group(), p = {};
+  const tail = new THREE.Group();
+  const arc = [[0,0.16,-0.18,0.24],[0,0.52,-0.34,0.29],[0,0.92,-0.28,0.31],[0,1.2,0.0,0.26]];
+  arc.forEach(a => tail.add(at(ball(a[3], 0xB35B22, 12), a[0], a[1], a[2])));
+  tail.position.set(0, 0.28, -0.44); g.add(tail); p.tail = tail;
+  const body = at(ball(0.38, 0xC4682F), 0, 0.48, 0); body.scale.set(1, 1.1, 0.94); g.add(body);
+  const belly = at(ball(0.24, 0xF0D6AE), 0, 0.44, 0.26); belly.scale.set(1,1,0.55); g.add(belly);
+  const head = at(ball(0.28, 0xC4682F), 0, 0.95, 0.08); g.add(head); p.head = head;
+  head.add(at(ball(0.15, 0xF0D6AE, 14), 0, -0.06, 0.2));
+  head.add(at(ball(0.045, 0x2E2018, 10), 0, -0.01, 0.31));
+  [-1,1].forEach(s => { const e = at(cone(0.085, 0.22, 0xA9531D, 10), s*0.16, 0.27, -0.02); e.rotation.z = s*0.16; head.add(e); });
+  eyes(head, 0.12, 0.08, 0.23, 0.05);
+  const nut = at(ball(0.1, 0xC89A5A, 10), 0, 0.5, 0.44); g.add(nut);
+  nut.add(at(cyl(0.09,0.09,0.06, 0x6B4526, 10), 0, 0.08, 0));
+  [-1,1].forEach(s => g.add(at(ball(0.1, 0xA9531D, 10), s*0.2, 0.5, 0.34)));
+  g.userData.parts = p;
+  return g;
+}
+
+function buildBee(){
+  const g = new THREE.Group(), p = {};
+  const body = at(ball(0.3, 0xF2C230), 0, 0, 0); body.scale.set(1, 0.92, 1.25); g.add(body);
+  [-0.1, 0.16].forEach(z => {
+    const r = new THREE.Mesh(new THREE.TorusGeometry(0.285, 0.055, 8, 22), M(0x33261C));
+    r.rotation.x = Math.PI/2; r.position.set(0, 0, z); r.scale.set(1, 1, 1.1);
+    r.castShadow = true; g.add(r);
+  });
+  const head = at(ball(0.22, 0x33261C), 0, 0.06, 0.36); g.add(head); p.head = head;
+  [-1,1].forEach(s => head.add(at(ball(0.07, 0xFFFFFF, 10), s*0.1, 0.03, 0.16)));
+  [-1,1].forEach(s => head.add(at(ball(0.028, 0x241A14, 8), s*0.11, 0.04, 0.21)));
+  [-1,1].forEach(s => {
+    const a = at(cyl(0.014,0.014,0.2, 0x33261C, 6), s*0.08, 0.2, 0.02);
+    a.rotation.z = s*0.4; head.add(a);
+    head.add(at(ball(0.045, 0xF2C230, 8), s*0.14, 0.29, 0.02));
+  });
+  const sting = at(cone(0.09, 0.2, 0x33261C, 10), 0, 0, -0.42);
+  sting.rotation.x = -Math.PI/2; g.add(sting);
+  const wingMat = new THREE.MeshStandardMaterial({ color:0xEAF7FF, transparent:true, opacity:0.62, roughness:0.25, metalness:0 });
+  p.wings = [];
+  [-1,1].forEach(s => {
+    const w = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 8), wingMat);
+    w.scale.set(1.0, 0.1, 0.5);
+    w.position.set(s*0.24, 0.24, -0.02);
+    w.rotation.z = s*0.35;
+    g.add(w); p.wings.push(w);
+  });
+  g.userData.parts = p;
+  g.userData.hover = 0.95;
+  return g;
+}
+
+function buildRabbit(){
+  const g = new THREE.Group(), p = {};
+  const body = at(ball(0.38, 0xEDE6DB), 0, 0.46, 0); body.scale.set(1, 1.05, 1.05); g.add(body);
+  const chest = at(ball(0.24, 0xFFFDF7), 0, 0.42, 0.26); chest.scale.set(1,1,0.6); g.add(chest);
+  const head = at(ball(0.29, 0xEDE6DB), 0, 0.94, 0.12); g.add(head); p.head = head;
+  head.add(at(ball(0.05, 0xE79AA6, 10), 0, -0.02, 0.29));
+  eyes(head, 0.13, 0.08, 0.24, 0.05);
+  p.ears = [];
+  [-1,1].forEach(s => {
+    const ear = new THREE.Group();
+    const outer = ball(0.1, 0xEDE6DB, 12); outer.scale.set(1, 3.0, 0.62); outer.position.y = 0.3; ear.add(outer);
+    const inner = ball(0.062, 0xE79AA6, 10); inner.scale.set(1, 2.9, 0.4); inner.position.set(0, 0.3, 0.05); ear.add(inner);
+    ear.position.set(s*0.13, 1.14, 0.04);
+    ear.rotation.z = s*0.2;
+    g.add(ear); p.ears.push(ear);
+  });
+  g.add(at(ball(0.16, 0xFFFDF7, 12), 0, 0.5, -0.42));
+  [-1,1].forEach(s => { const f = at(ball(0.14, 0xFFFDF7, 10), s*0.2, 0.1, 0.2); f.scale.set(1,0.55,1.5); g.add(f); });
+  [-1,1].forEach(s => g.add(at(ball(0.11, 0xEDE6DB, 10), s*0.35, 0.46, 0.1)));
+  g.userData.parts = p;
+  return g;
+}
+
+function buildBird(){
+  const g = new THREE.Group(), p = {};
+  const body = at(ball(0.33, 0x4FA3D1), 0, 0.55, 0); body.scale.set(1, 1.02, 1.2); g.add(body);
+  const belly = at(ball(0.21, 0xDCF0FA), 0, 0.48, 0.24); belly.scale.set(1,1,0.6); g.add(belly);
+  const head = at(ball(0.25, 0x3E93C4), 0, 0.94, 0.14); g.add(head); p.head = head;
+  const beak = at(cone(0.09, 0.24, 0xF08C2E, 10), 0, -0.02, 0.28);
+  beak.rotation.x = Math.PI/2; head.add(beak);
+  eyes(head, 0.12, 0.08, 0.2, 0.05);
+  const crest = at(cone(0.07, 0.2, 0x2E7BA8, 8), 0, 0.26, -0.02); crest.rotation.x = -0.5; head.add(crest);
+  p.wings = [];
+  [-1,1].forEach(s => {
+    const w = ball(0.28, 0x3E93C4, 12);
+    w.scale.set(0.35, 0.7, 1.0);
+    w.position.set(s*0.3, 0.6, -0.02);
+    g.add(w); p.wings.push(w);
+  });
+  const tail = at(box(0.28, 0.07, 0.36, 0x2E7BA8), 0, 0.52, -0.42);
+  tail.rotation.x = 0.35; g.add(tail);
+  [-1,1].forEach(s => g.add(at(cyl(0.03,0.03,0.24, 0xF08C2E, 8), s*0.11, 0.12, 0.03)));
+  g.userData.parts = p;
+  return g;
+}
+
+const BUILDERS = { beaver:buildBeaver, squirrel:buildSquirrel, bee:buildBee, rabbit:buildRabbit, bird:buildBird };
+
+/* --- name plaque ----------------------------------------------------- */
+function plaque(text){
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 96;
+  const x = c.getContext('2d');
+  x.fillStyle = '#FFF4DE';
+  const r = 26;
+  x.beginPath();
+  x.moveTo(r,4); x.lineTo(c.width-r,4); x.quadraticCurveTo(c.width-4,4,c.width-4,r);
+  x.lineTo(c.width-4,c.height-r); x.quadraticCurveTo(c.width-4,c.height-4,c.width-r,c.height-4);
+  x.lineTo(r,c.height-4); x.quadraticCurveTo(4,c.height-4,4,c.height-r);
+  x.lineTo(4,r); x.quadraticCurveTo(4,4,r,4); x.closePath();
+  x.fill();
+  x.lineWidth = 9; x.strokeStyle = '#4A3526'; x.stroke();
+  x.fillStyle = '#4A3526';
+  x.font = 'bold 50px "Baloo 2", "Trebuchet MS", sans-serif';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(text, c.width/2, c.height/2 + 3);
+  const tex = new THREE.CanvasTexture(c);
+  if ('encoding' in tex) tex.encoding = THREE.sRGBEncoding;
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map:tex, transparent:true }));
+  spr.scale.set(1.05, 0.39, 1);
+  return spr;
+}
+
+/* --- assemble the cast ----------------------------------------------- */
+const cast = [];
+ANIMALS.forEach((a, i) => {
+  const root = new THREE.Group();
+
+  const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.82, 0.12, 24), M(a.pad, 1));
+  pad.position.y = 0.06; pad.receiveShadow = true; root.add(pad);
+
+  const model = BUILDERS[a.id]();
+  const hoverY = model.userData.hover || 0;
+  model.position.y = 0.12 + hoverY;
+  root.add(model);
+
+  const name = plaque(a.name);
+  name.position.set(0, 1.95 + hoverY*0.5, 0);
+  root.add(name);
+
+  const hit = new THREE.Mesh(
+    new THREE.BoxGeometry(1.55, 2.3, 1.55),
+    new THREE.MeshBasicMaterial({ transparent:true, opacity:0, depthWrite:false })
+  );
+  hit.position.y = 1.1;
+  root.add(hit);
+
+  scene.add(root);
+
+  const entry = {
+    def:a, root:root, model:model, pad:pad, plaque:name, hit:hit,
+    home: new THREE.Vector3(), hoverY: hoverY,
+    phase: Math.random() * Math.PI * 2,
+    scale: 1, targetScale: 1,
+    busy: false, shake: 0, index: i, done: false
+  };
+  hit.userData.animal = entry;
+  cast.push(entry);
+});
+
+/* =======================================================================
+   5.  Things the animals build (they pop in as jobs are done)
+   ======================================================================= */
+
+function propBridge(){
+  const g = new THREE.Group();
+  const water = new THREE.Mesh(new THREE.CircleGeometry(1.15, 24), M(0x59B4D6, 0.4));
+  water.rotation.x = -Math.PI/2; water.position.y = 0.02; water.scale.set(1.5, 1, 1);
+  g.add(water);
+  for (let i = 0; i < 6; i++){
+    const pl = at(box(0.3, 0.09, 1.5, i%2 ? 0xB07B4B : 0x9A6A3E), -0.85 + i*0.34, 0.28, 0);
+    pl.rotation.x = 0.02; g.add(pl);
+  }
+  [-1,1].forEach(s => {
+    g.add(at(cyl(0.06,0.06,0.5, 0x7A5433, 8), s*0.95, 0.3, 0.6));
+    g.add(at(cyl(0.06,0.06,0.5, 0x7A5433, 8), s*0.95, 0.3, -0.6));
+    const rail = at(box(2.1, 0.08, 0.08, 0x7A5433), 0, 0.55, s*0.6); g.add(rail);
+  });
+  return g;
+}
+function propAcorns(){
+  const g = new THREE.Group();
+  const basket = at(cyl(0.5, 0.38, 0.5, 0xC08B5C, 16), 0, 0.25, 0); g.add(basket);
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 8, 18, Math.PI), M(0x8A5C34));
+  handle.position.y = 0.5; g.add(handle);
+  [[0,0.55,0],[0.22,0.6,0.14],[-0.2,0.58,-0.1],[0.05,0.72,-0.15]].forEach(p => {
+    const n = at(ball(0.15, 0xD9AC6B, 12), p[0], p[1], p[2]); g.add(n);
+    n.add(at(cyl(0.14,0.14,0.09, 0x6B4526, 10), 0, 0.1, 0));
+  });
+  return g;
+}
+function propHoney(){
+  const g = new THREE.Group();
+  const pot = at(cyl(0.36, 0.3, 0.55, 0xC97B2A, 18), 0, 0.28, 0); g.add(pot);
+  g.add(at(cyl(0.42, 0.42, 0.1, 0xE8A33D, 18), 0, 0.58, 0));
+  g.add(at(box(0.36, 0.2, 0.02, 0xFFF4DE), 0, 0.3, 0.31));
+  [[-0.75,0.1],[0.72,-0.15],[-0.35,-0.6],[0.5,0.55]].forEach(p => {
+    g.add(at(cyl(0.03,0.03,0.42, 0x4E9B3E, 6), p[0], 0.21, p[1]));
+    const f = at(ball(0.14, [0xF06C8B,0xF5D93C,0xB98BE0,0xFFFFFF][Math.floor(Math.random()*4)], 10), p[0], 0.46, p[1]);
+    f.scale.y = 0.6; g.add(f);
+    f.add(at(ball(0.06, 0xF5C93C, 8), 0, 0.1, 0));
+  });
+  return g;
+}
+function propBurrow(){
+  const g = new THREE.Group();
+  const mound = new THREE.Mesh(new THREE.SphereGeometry(0.85, 20, 12, 0, Math.PI*2, 0, Math.PI/2), M(0x7A5433, 1));
+  mound.scale.y = 0.62; mound.castShadow = true; g.add(mound);
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(0.3, 18), M(0x2B1D14, 1));
+  hole.position.set(0, 0.14, 0.66); hole.rotation.x = -0.35; g.add(hole);
+  const carrot = at(cone(0.11, 0.34, 0xF08C2E, 10), 0.62, 0.2, 0.5);
+  carrot.rotation.x = Math.PI; g.add(carrot);
+  g.add(at(ball(0.1, 0x4E9B3E, 8), 0.62, 0.4, 0.5));
+  [[-0.5,0.55],[0.1,0.75]].forEach(p => g.add(at(ball(0.16, 0x4E9B3E, 10), p[0], 0.12, p[1])));
+  return g;
+}
+function propFlag(){
+  const g = new THREE.Group();
+  g.add(at(cyl(0.06, 0.07, 1.7, 0x9A6A3E, 10), 0, 0.85, 0));
+  const flag = at(box(0.8, 0.5, 0.05, 0xD8544F), 0.42, 1.5, 0); g.add(flag);
+  flag.add(at(box(0.34, 0.24, 0.05, 0xFFF4DE), 0, 0, 0.03));
+  g.add(at(ball(0.12, 0xF5C93C, 10), 0, 1.75, 0));
+  return g;
+}
+
+const PROP_BUILDERS = { beaver:propBridge, squirrel:propAcorns, bee:propHoney, rabbit:propBurrow, bird:propFlag };
+const PROP_SPOTS = {
+  beaver:  [-4.3, 0, -3.0],
+  squirrel:[-2.0, 0, -4.2],
+  bee:     [ 0.4, 0, -4.6],
+  rabbit:  [ 2.6, 0, -4.0],
+  bird:    [ 4.6, 0, -2.8]
+};
+
+const props = {};
+ANIMALS.forEach(a => {
+  const g = PROP_BUILDERS[a.id]();
+  const s = PROP_SPOTS[a.id];
+  g.position.set(s[0], s[1], s[2]);
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  g.scale.setScalar(0.001);
+  g.visible = false;
+  scene.add(g);
+  props[a.id] = { group:g, pop:-1 };
+});
+
+/* =======================================================================
+   6.  Confetti
+   ======================================================================= */
+
+const confetti = [];
+const CONFETTI_COLORS = [0xF5C93C, 0xD8544F, 0x66B6E0, 0xFFF4DE, 0x8ED45E, 0xF08C2E];
+for (let i = 0; i < 46; i++){
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.12, 0.02),
+    new THREE.MeshBasicMaterial({ color: CONFETTI_COLORS[i % CONFETTI_COLORS.length] })
+  );
+  m.visible = false;
+  scene.add(m);
+  confetti.push({ mesh:m, v:new THREE.Vector3(), life:0, spin:new THREE.Vector3() });
+}
+function burst(x, y, z, count){
+  let n = 0;
+  for (let i = 0; i < confetti.length && n < (count || 26); i++){
+    const c = confetti[i];
+    if (c.life > 0) continue;
+    c.mesh.visible = true;
+    c.mesh.position.set(x, y, z);
+    c.v.set((Math.random()-0.5)*3.2, 2.6 + Math.random()*2.6, (Math.random()-0.5)*2.2);
+    c.spin.set(Math.random()*8, Math.random()*8, Math.random()*8);
+    c.life = 1.6 + Math.random()*0.7;
+    n++;
+  }
+}
+
+/* =======================================================================
+   7.  Layout that adapts to phone / tablet / desktop
+   ======================================================================= */
+
+let workSpot = new THREE.Vector3(0, 0, 3.2);
+
+function layout(){
+  const w = window.innerWidth, h = window.innerHeight;
+  const aspect = w / h;
+  renderer.setSize(w, h);
+  camera.aspect = aspect;
+
+  const portrait = aspect < 0.95;
+  let halfWidth;
+
+  if (portrait){
+    const front = [-1.85, 0, 1.85];
+    front.forEach((x, i) => cast[i].home.set(x, 0, 2.0));
+    cast[3].home.set(-1.0, 0, 0.1);
+    cast[4].home.set( 1.0, 0, 0.1);
+    halfWidth = 3.0;
+    workSpot.set(0, 0, 3.9);
+  } else {
+    const spacing = aspect > 1.5 ? 1.75 : 1.6;
+    cast.forEach((c, i) => {
+      const x = (i - 2) * spacing;
+      c.home.set(x, 0, 1.7 - Math.abs(i - 2) * 0.16);
+    });
+    halfWidth = spacing * 2 + 1.1;
+    workSpot.set(0, 0, 3.4);
+  }
+
+  const vHalf = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+  const dist = clamp(halfWidth / (vHalf * aspect), 8.5, 21);
+  camera.position.set(0, dist * 0.40, dist * 0.94 + 1.2);
+  camera.lookAt(0, 1.05, 0.3);
+  camera.updateProjectionMatrix();
+
+  sun.target.position.set(0, 0, 0);
+}
+window.addEventListener('resize', layout);
+layout();
+
+/* =======================================================================
+   8.  Game flow
+   ======================================================================= */
+
+const ui = {
+  jobs: $('#jobs'), icon: $('#jobIcon'), text: $('#jobText'), sign: $('#sign'),
+  toast: $('#toast'), mute: $('#mute'), again: $('#again'),
+  start: $('#startScreen'), end: $('#endScreen'), endList: $('#endList'),
+  play: $('#playBtn'), replay: $('#replayBtn')
+};
+
+ANIMALS.forEach(a => {
+  const d = document.createElement('div');
+  d.className = 'tok';
+  d.dataset.id = a.id;
+  d.textContent = a.emoji;
+  ui.jobs.appendChild(d);
+});
+
+const game = {
+  phase: 'intro',       // intro | ask | busy | end
+  queue: [],
+  job: null,
+  solved: [],
+  action: null,
+  lock: false
+};
+
+let toastTimer = 0;
+function toast(msg, warm){
+  ui.toast.textContent = msg;
+  ui.toast.className = 'show' + (warm ? ' warm' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { ui.toast.className = ''; }, warm ? 3600 : 2600);
+}
+
+function askJob(){
+  game.job = game.queue.shift();
+  if (!game.job) { finish(); return; }
+  game.phase = 'ask';
+  game.lock = false;
+  ui.icon.textContent = game.job.icon;
+  ui.text.textContent = game.job.ask;
+  ui.sign.classList.add('show');
+  say(game.job.ask);
+}
+
+function markToken(id){
+  const t = ui.jobs.querySelector('[data-id="' + id + '"]');
+  if (t) t.classList.add('done');
+}
+
+function choose(entry){
+  if (game.phase !== 'ask' || game.lock) return;
+  if (entry.done) { nudge(entry, entry.def.name + ' already did a job. Someone else can help now!'); return; }
+
+  if (entry.def.id === game.job.answer){
+    game.lock = true;
+    game.phase = 'busy';
+    sfx.correct();
+    say(game.job.yay);
+    toast(game.job.yay);
+    ui.sign.classList.remove('show');
+    if (hovered){ hovered.targetScale = 1; hovered = null; }
+    renderer.domElement.style.cursor = 'default';
+    entry.done = true;
+    game.solved.push(game.job.built);
+    startAction(entry);
+  } else {
+    sfx.retry();
+    const hint = entry.def.name + ' is very good at ' + entry.def.skill + ' — but that is not this job. Try another friend!';
+    nudge(entry, hint);
+  }
+}
+
+function nudge(entry, hint){
+  entry.shake = 0.7;
+  toast(hint, true);
+  say(hint);
+}
+
+function startAction(entry){
+  entry.busy = true;
+  game.action = {
+    entry: entry,
+    stage: 'go',
+    t: 0,
+    from: entry.root.position.clone(),
+    to: workSpot.clone(),
+    popped: false
+  };
+}
+
+function finish(){
+  game.phase = 'end';
+  ui.sign.classList.remove('show');
+  ui.endList.innerHTML = '';
+  game.solved.forEach(s => {
+    const el = document.createElement('span');
+    el.textContent = s;
+    ui.endList.appendChild(el);
+  });
+  ui.end.hidden = false;
+  sfx.fanfare();
+  say('Look what we built! Everybody did the job they are best at. That is called specialising, and it makes the forest a happy home.');
+  for (let i = 0; i < 3; i++){
+    setTimeout(() => burst((Math.random()-0.5)*6, 1.5, 0.5, 16), i * 350);
+  }
+}
+
+function resetGame(){
+  game.queue = shuffle(JOBS);
+  game.solved = [];
+  game.action = null;
+  game.lock = false;
+  cast.forEach(c => {
+    c.done = false;
+    c.busy = false;
+    c.root.position.copy(c.home);
+    c.root.rotation.set(0,0,0);
+    c.scale = c.targetScale = 1;
+  });
+  ui.jobs.querySelectorAll('.tok').forEach(t => t.classList.remove('done'));
+  ANIMALS.forEach(a => {
+    props[a.id].group.visible = false;
+    props[a.id].group.scale.setScalar(0.001);
+    props[a.id].pop = -1;
+  });
+  ui.end.hidden = true;
+  askJob();
+}
+
+/* =======================================================================
+   9.  Input
+   ======================================================================= */
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const hitTargets = cast.map(c => c.hit);
+let hovered = null;
+const sway = { x:0, y:0, tx:0, ty:0 };
+
+function toNDC(ev){
+  pointer.x = (ev.clientX / window.innerWidth) * 2 - 1;
+  pointer.y = -(ev.clientY / window.innerHeight) * 2 + 1;
+}
+function pick(){
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(hitTargets, false);
+  return hits.length ? hits[0].object.userData.animal : null;
+}
+
+renderer.domElement.addEventListener('pointermove', (ev) => {
+  toNDC(ev);
+  sway.tx = pointer.x * 0.5;
+  sway.ty = pointer.y * 0.22;
+  if (ev.pointerType === 'mouse' && game.phase === 'ask'){
+    const found = pick();
+    if (found !== hovered){
+      if (hovered) hovered.targetScale = 1;
+      hovered = found;
+      if (hovered && !hovered.busy) hovered.targetScale = 1.14;
+      renderer.domElement.style.cursor = hovered ? 'pointer' : 'default';
+    }
+  }
+});
+
+renderer.domElement.addEventListener('pointerdown', (ev) => {
+  if (game.phase !== 'ask') return;
+  toNDC(ev);
+  const found = pick();
+  if (found){
+    sfx.pop();
+    found.scale = 1.3;
+    choose(found);
+  }
+});
+
+window.addEventListener('keydown', (ev) => {
+  if (game.phase !== 'ask') return;
+  const n = parseInt(ev.key, 10);
+  if (n >= 1 && n <= cast.length){ sfx.pop(); choose(cast[n-1]); }
+  if (ev.key === 'r' || ev.key === 'R') say(game.job.ask);
+});
+
+ui.again.addEventListener('click', () => { if (game.job) say(game.job.ask); });
+
+ui.mute.addEventListener('click', () => {
+  muted = !muted;
+  ui.mute.textContent = muted ? '🔇' : '🔊';
+  ui.mute.setAttribute('aria-label', muted ? 'Turn the voice on' : 'Turn the voice off');
+  if (muted && 'speechSynthesis' in window) speechSynthesis.cancel();
+  else if (game.phase === 'ask' && game.job) say(game.job.ask);
+});
+
+ui.play.addEventListener('click', () => {
+  initAudio();
+  ui.start.hidden = true;
+  say('Welcome to the forest camp! Tap the animal who is best at each job.');
+  setTimeout(resetGame, 2900);
+});
+ui.replay.addEventListener('click', () => { initAudio(); resetGame(); });
+
+/* =======================================================================
+   10.  Frame loop
+   ======================================================================= */
+
+const clock = new THREE.Clock();
+
+function updateAction(dt){
+  const a = game.action;
+  if (!a) return;
+  const e = a.entry;
+  a.t += dt;
+
+  if (a.stage === 'go'){
+    const dur = 1.15;
+    const k = clamp(a.t / dur, 0, 1);
+    const p = easeOut(k);
+    e.root.position.x = lerp(a.from.x, a.to.x, p);
+    e.root.position.z = lerp(a.from.z, a.to.z, p);
+    e.root.position.y = Math.abs(Math.sin(k * Math.PI * 3)) * 0.55;
+    e.root.rotation.y = Math.sin(k * Math.PI * 3) * 0.12;
+    e.scale = 1 + p * 0.12;
+    if (k === 1){ a.stage = 'work'; a.t = 0; }
+
+  } else if (a.stage === 'work'){
+    const dur = 1.7;
+    const k = clamp(a.t / dur, 0, 1);
+    const id = e.def.id;
+    if (id === 'beaver')   e.model.rotation.x = Math.sin(a.t * 16) * 0.22;
+    if (id === 'squirrel') e.root.position.y = Math.abs(Math.sin(a.t * 7)) * 0.9;
+    if (id === 'bee'){
+      e.root.position.x = a.to.x + Math.sin(a.t * 4.4) * 0.7;
+      e.root.position.y = Math.sin(a.t * 3) * 0.35 + 0.3;
+    }
+    if (id === 'rabbit'){
+      e.model.rotation.x = 0.35 + Math.sin(a.t * 15) * 0.2;
+      e.root.position.y = -Math.abs(Math.sin(a.t * 15)) * 0.1;
+    }
+    if (id === 'bird'){
+      e.root.position.y = 0.4 + Math.sin(a.t * 3) * 0.35;
+      e.root.rotation.y = Math.sin(a.t * 2) * 0.3;
+    }
+    if (!a.popped && k > 0.35){
+      a.popped = true;
+      const pr = props[id];
+      pr.group.visible = true;
+      pr.pop = 0;
+      sfx.pop();
+      markToken(id);
+      const sp = PROP_SPOTS[id];
+      burst(sp[0], 1.2, sp[2], 20);
+    }
+    if (k === 1){
+      a.stage = 'back'; a.t = 0;
+      a.from.copy(e.root.position);
+      e.model.rotation.set(0,0,0);
+    }
+
+  } else if (a.stage === 'back'){
+    const dur = 1.0;
+    const k = clamp(a.t / dur, 0, 1);
+    const p = easeOut(k);
+    e.root.position.x = lerp(a.from.x, e.home.x, p);
+    e.root.position.z = lerp(a.from.z, e.home.z, p);
+    e.root.position.y = Math.abs(Math.sin(k * Math.PI * 2)) * 0.4 * (1 - k);
+    e.scale = lerp(1.12, 1, p);
+    if (k === 1){
+      e.busy = false;
+      e.root.rotation.y = 0;
+      game.action = null;
+      if (game.queue.length) askJob(); else finish();
+    }
+  }
+}
+
+function tick(){
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  /* animals: idle life, gentle homing, tap feedback */
+  cast.forEach((c, i) => {
+    const bob = Math.sin(t * 2.1 + c.phase) * 0.055;
+    if (!c.busy){
+      c.root.position.x += (c.home.x - c.root.position.x) * Math.min(1, dt * 5);
+      c.root.position.z += (c.home.z - c.root.position.z) * Math.min(1, dt * 5);
+      c.root.position.y = Math.max(0, bob + 0.02);
+      c.root.rotation.y = Math.sin(t * 0.7 + c.phase) * 0.09 - c.home.x * 0.06;
+    }
+    if (c.shake > 0){
+      c.shake = Math.max(0, c.shake - dt * 2.2);
+      c.root.rotation.y += Math.sin(t * 34) * 0.28 * c.shake;
+    }
+    c.scale += (c.targetScale - c.scale) * Math.min(1, dt * 9);
+    const doneLift = c.done ? 1.02 : 1;
+    c.root.scale.setScalar(c.scale * doneLift);
+    c.pad.material.color.setHex(c.done ? 0xF5C93C : c.def.pad);
+
+    const p = c.model.userData.parts;
+    if (p.tail && c.def.id === 'squirrel') p.tail.rotation.x = Math.sin(t * 3 + c.phase) * 0.18;
+    if (p.tail && c.def.id === 'beaver')   p.tail.rotation.z = Math.sin(t * 2.4 + c.phase) * 0.12;
+    if (p.ears) p.ears.forEach((e, k) => { e.rotation.x = Math.sin(t * 2.3 + k) * 0.14; });
+    if (p.wings){
+      const speed = c.def.id === 'bee' ? 26 : 6;
+      const amp = c.def.id === 'bee' ? 0.6 : (c.busy ? 0.9 : 0.25);
+      p.wings.forEach((w, k) => { w.rotation.z = (k ? 1 : -1) * (0.35 + Math.sin(t * speed) * amp); });
+    }
+    if (p.head) p.head.rotation.z = Math.sin(t * 1.6 + c.phase * 1.7) * 0.07;
+    if (c.model.userData.hover){
+      c.model.position.y = 0.12 + c.model.userData.hover + Math.sin(t * 3.3 + c.phase) * 0.08;
+    }
+  });
+
+  /* props springing into place */
+  ANIMALS.forEach(a => {
+    const pr = props[a.id];
+    if (pr.pop >= 0 && pr.pop < 1){
+      pr.pop = Math.min(1, pr.pop + dt * 1.8);
+      const k = pr.pop;
+      const s = 1 + Math.sin(k * Math.PI * 2.2) * 0.22 * (1 - k);
+      pr.group.scale.setScalar(Math.max(0.001, easeOut(k) * s));
+    }
+  });
+
+  updateAction(dt);
+
+  /* confetti */
+  confetti.forEach(c => {
+    if (c.life <= 0){ if (c.mesh.visible) c.mesh.visible = false; return; }
+    c.life -= dt;
+    c.v.y -= 6.5 * dt;
+    c.mesh.position.addScaledVector(c.v, dt);
+    c.mesh.rotation.x += c.spin.x * dt;
+    c.mesh.rotation.y += c.spin.y * dt;
+    c.mesh.rotation.z += c.spin.z * dt;
+    if (c.life <= 0) c.mesh.visible = false;
+  });
+
+  /* very gentle camera life */
+  if (!REDUCED){
+    sway.x += (sway.tx - sway.x) * Math.min(1, dt * 1.6);
+    sway.y += (sway.ty - sway.y) * Math.min(1, dt * 1.6);
+    camera.position.x = sway.x + Math.sin(t * 0.25) * 0.18;
+    camera.lookAt(0, 1.05 + sway.y * 0.2, 0.3);
+  }
+
+  renderer.render(scene, camera);
+}
+tick();
+
+/* keep the first paint tidy before the child presses play */
+cast.forEach(c => c.root.position.copy(c.home));
+
+})();
+</script>
+</body>
+</html>
