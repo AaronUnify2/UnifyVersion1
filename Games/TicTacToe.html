@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tic-Tac-Toe</title>
+<style>
+  :root {
+    --bg: #10131a;
+    --panel: #1a1f2b;
+    --line: #2e3648;
+    --text: #e8ecf4;
+    --muted: #93a0b8;
+    --x: #56b6ff;
+    --o: #ffb056;
+    --win: #3ddc84;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 20px;
+  }
+  .game {
+    width: 100%;
+    max-width: 380px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+  }
+  h1 {
+    margin: 0 0 4px;
+    font-size: 1.5rem;
+    text-align: center;
+    letter-spacing: 0.02em;
+  }
+  .status {
+    text-align: center;
+    color: var(--muted);
+    min-height: 1.4em;
+    margin-bottom: 18px;
+    font-size: 1rem;
+  }
+  .modes {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .modes button {
+    flex: 1;
+    padding: 9px 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .modes button:hover { color: var(--text); border-color: #3f4a63; }
+  .modes button.active {
+    color: var(--bg);
+    background: var(--text);
+    border-color: var(--text);
+    font-weight: 600;
+  }
+  .board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .cell {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.8rem;
+    font-weight: 700;
+    color: var(--text);
+    background: #131824;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.08s ease;
+    user-select: none;
+    font-family: inherit;
+    padding: 0;
+  }
+  .cell:hover:not(:disabled) { background: #1c2333; }
+  .cell:active:not(:disabled) { transform: scale(0.97); }
+  .cell:disabled { cursor: default; }
+  .cell.x { color: var(--x); }
+  .cell.o { color: var(--o); }
+  .cell.win {
+    border-color: var(--win);
+    background: rgba(61, 220, 132, 0.12);
+  }
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 18px;
+    gap: 12px;
+  }
+  .score {
+    display: flex;
+    gap: 14px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .score b { color: var(--text); font-weight: 600; }
+  .reset {
+    padding: 9px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--bg);
+    background: var(--text);
+    border: none;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .reset:hover { opacity: 0.88; }
+</style>
+</head>
+<body>
+  <div class="game">
+    <h1>Tic-Tac-Toe</h1>
+    <p class="status" id="status">X to play</p>
+
+    <div class="modes">
+      <button type="button" data-mode="human" class="active">2 Players</button>
+      <button type="button" data-mode="easy">vs Easy</button>
+      <button type="button" data-mode="hard">vs Hard</button>
+    </div>
+
+    <div class="board" id="board"></div>
+
+    <div class="footer">
+      <div class="score">
+        <span>X <b id="scoreX">0</b></span>
+        <span>O <b id="scoreO">0</b></span>
+        <span>Draw <b id="scoreD">0</b></span>
+      </div>
+      <button type="button" class="reset" id="reset">New game</button>
+    </div>
+  </div>
+
+<script>
+(function () {
+  var LINES = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8],
+    [0, 3, 6], [1, 4, 7], [2, 5, 8],
+    [0, 4, 8], [2, 4, 6]
+  ];
+
+  var boardEl = document.getElementById('board');
+  var statusEl = document.getElementById('status');
+  var resetEl = document.getElementById('reset');
+  var modeButtons = Array.prototype.slice.call(document.querySelectorAll('.modes button'));
+  var scoreEls = { X: document.getElementById('scoreX'), O: document.getElementById('scoreO'), D: document.getElementById('scoreD') };
+
+  var board, current, over, mode, locked;
+  var scores = { X: 0, O: 0, D: 0 };
+  var cells = [];
+
+  for (var i = 0; i < 9; i++) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cell';
+    btn.dataset.index = String(i);
+    btn.setAttribute('aria-label', 'Square ' + (i + 1));
+    boardEl.appendChild(btn);
+    cells.push(btn);
+  }
+
+  function winnerOf(b) {
+    for (var i = 0; i < LINES.length; i++) {
+      var l = LINES[i];
+      if (b[l[0]] && b[l[0]] === b[l[1]] && b[l[1]] === b[l[2]]) {
+        return { player: b[l[0]], line: l };
+      }
+    }
+    return null;
+  }
+
+  function emptyCells(b) {
+    var out = [];
+    for (var i = 0; i < 9; i++) { if (!b[i]) out.push(i); }
+    return out;
+  }
+
+  // Minimax with depth preference, so the AI wins fast and stalls losses.
+  function minimax(b, player, depth) {
+    var win = winnerOf(b);
+    if (win) { return { score: win.player === 'O' ? 10 - depth : depth - 10 }; }
+    var free = emptyCells(b);
+    if (free.length === 0) { return { score: 0 }; }
+
+    var best = null;
+    for (var i = 0; i < free.length; i++) {
+      var idx = free[i];
+      b[idx] = player;
+      var result = minimax(b, player === 'O' ? 'X' : 'O', depth + 1);
+      b[idx] = '';
+      var candidate = { score: result.score, index: idx };
+      if (best === null ||
+          (player === 'O' && candidate.score > best.score) ||
+          (player === 'X' && candidate.score < best.score)) {
+        best = candidate;
+      }
+    }
+    return best;
+  }
+
+  function aiMove() {
+    var free = emptyCells(board);
+    if (free.length === 0) { return -1; }
+    if (mode === 'easy') {
+      // Mostly random, with an occasional smart move.
+      if (Math.random() < 0.35) { return minimax(board.slice(), 'O', 0).index; }
+      return free[Math.floor(Math.random() * free.length)];
+    }
+    return minimax(board.slice(), 'O', 0).index;
+  }
+
+  function render(win) {
+    for (var i = 0; i < 9; i++) {
+      var v = board[i];
+      cells[i].textContent = v;
+      cells[i].className = 'cell' + (v ? ' ' + v.toLowerCase() : '');
+      cells[i].disabled = over || !!v || locked;
+    }
+    if (win) {
+      for (var j = 0; j < win.line.length; j++) {
+        cells[win.line[j]].classList.add('win');
+      }
+    }
+  }
+
+  function finish(win) {
+    over = true;
+    if (win) {
+      scores[win.player]++;
+      if (mode === 'human') {
+        statusEl.textContent = win.player + ' wins!';
+      } else {
+        statusEl.textContent = win.player === 'X' ? 'You win!' : 'Computer wins.';
+      }
+    } else {
+      scores.D++;
+      statusEl.textContent = "It's a draw.";
+    }
+    scoreEls.X.textContent = scores.X;
+    scoreEls.O.textContent = scores.O;
+    scoreEls.D.textContent = scores.D;
+    render(win);
+  }
+
+  function updateStatus() {
+    if (mode === 'human') {
+      statusEl.textContent = current + ' to play';
+    } else {
+      statusEl.textContent = current === 'X' ? 'Your turn (X)' : 'Computer thinking…';
+    }
+  }
+
+  function play(index) {
+    if (over || board[index]) { return; }
+    board[index] = current;
+
+    var win = winnerOf(board);
+    if (win || emptyCells(board).length === 0) {
+      finish(win);
+      return;
+    }
+
+    current = current === 'X' ? 'O' : 'X';
+    updateStatus();
+
+    if (mode !== 'human' && current === 'O') {
+      locked = true;
+      render(null);
+      setTimeout(function () {
+        locked = false;
+        var move = aiMove();
+        if (move >= 0) { play(move); }
+      }, 320);
+      return;
+    }
+    render(null);
+  }
+
+  function newGame() {
+    board = ['', '', '', '', '', '', '', '', ''];
+    current = 'X';
+    over = false;
+    locked = false;
+    updateStatus();
+    render(null);
+  }
+
+  boardEl.addEventListener('click', function (e) {
+    var cell = e.target.closest('.cell');
+    if (!cell || cell.disabled) { return; }
+    play(Number(cell.dataset.index));
+  });
+
+  resetEl.addEventListener('click', newGame);
+
+  modeButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      modeButtons.forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      mode = btn.dataset.mode;
+      scores = { X: 0, O: 0, D: 0 };
+      scoreEls.X.textContent = '0';
+      scoreEls.O.textContent = '0';
+      scoreEls.D.textContent = '0';
+      newGame();
+    });
+  });
+
+  mode = 'human';
+  newGame();
+})();
+</script>
+</body>
+</html>
