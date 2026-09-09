@@ -1,0 +1,2837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dispute Resolution Workbench</title>
+<style>
+/* ===== Dispute Resolution Workbench — design tokens shared with the FAQ Editor ===== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --color-bg: #F5F7FA;
+  --color-surface: #FFFFFF;
+  --color-text: #1D1D1F;
+  --color-text-soft: #6E6E73;
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-strong: rgba(0, 0, 0, 0.16);
+  --color-accent: #0A66C2;
+  --color-accent-hover: #084A8E;
+  --color-accent-soft: #e7f0fb;
+  --color-danger: #C0392B;
+  --color-good: #2E9F5C;
+  --color-warn: #D97706;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --sidebar-width: 264px;
+}
+
+html, body { height: 100%; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+button, input, select, textarea { font-family: inherit; }
+
+/* ---------- Header ---------- */
+.app-header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.7rem 1.1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-shrink: 0;
+  z-index: 900;
+}
+.app-brand { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.app-title { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
+.app-subtitle { font-size: 0.76rem; color: var(--color-text-soft); margin-top: 0.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.header-actions { display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+
+.btn {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  padding: 0.48rem 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--color-text);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--color-bg); border-color: var(--color-border-strong); }
+.btn.primary { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+.btn.primary:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+.btn.danger { color: var(--color-danger); }
+.btn.danger:hover { background: #fbeae8; border-color: #e7b9b3; }
+.btn.small { padding: 0.3rem 0.55rem; font-size: 0.76rem; }
+.btn.tiny { padding: 0.15rem 0.4rem; font-size: 0.72rem; font-weight: 700; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.nav-toggle { display: none; }
+
+.save-pill {
+  font-size: 0.73rem;
+  color: var(--color-text-soft);
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.save-pill.dirty { color: var(--color-warn); border-color: #f0d09a; background: #fff8ec; }
+.save-pill.saved { color: var(--color-good); border-color: #b9e3c9; background: #f0faf4; }
+
+/* ---------- Layout ---------- */
+.main-area { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+
+.sidebar {
+  width: var(--sidebar-width);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: 0;
+}
+.step-nav { flex: 1; min-height: 0; overflow-y: auto; padding: 0.6rem 0.55rem; }
+.step {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.55rem 0.6rem;
+  cursor: pointer;
+  margin-bottom: 0.2rem;
+}
+.step:hover { background: var(--color-bg); }
+.step.active { background: var(--color-accent-soft); border-color: #bcd6f3; }
+.step-num {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-soft);
+  font-size: 0.72rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 0.1rem;
+}
+.step.active .step-num { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+.step.done .step-num { background: var(--color-good); border-color: var(--color-good); color: #fff; }
+.step-text { min-width: 0; flex: 1; }
+.step-label { font-size: 0.86rem; font-weight: 600; line-height: 1.25; }
+.step-hint { font-size: 0.72rem; color: var(--color-text-soft); margin-top: 0.1rem; line-height: 1.3; }
+
+.sidebar-footer {
+  padding: 0.6rem 0.7rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.mini-stat { font-size: 0.72rem; color: var(--color-text-soft); line-height: 1.5; }
+.mini-stat b { color: var(--color-text); }
+
+.nav-scrim { display: none; }
+
+.view-container { flex: 1; min-width: 0; overflow-y: auto; background: var(--color-bg); }
+.view-inner { max-width: 900px; margin: 0 auto; padding: 1.4rem 1.4rem 5rem; }
+
+/* ---------- Section headings ---------- */
+.section-head { margin-bottom: 1.1rem; }
+.section-kicker {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase;
+  color: var(--color-accent); margin-bottom: 0.3rem;
+}
+.section-title { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.015em; }
+.section-blurb { font-size: 0.87rem; color: var(--color-text-soft); margin-top: 0.4rem; line-height: 1.55; max-width: 62ch; }
+
+.card-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  padding: 1.2rem 1.3rem;
+  margin-bottom: 1.1rem;
+}
+.panel-title { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.25rem; }
+.panel-sub { font-size: 0.8rem; color: var(--color-text-soft); margin-bottom: 1rem; line-height: 1.5; }
+
+/* ---------- Fields ---------- */
+.field { margin-bottom: 0.95rem; }
+.field:last-child { margin-bottom: 0; }
+.field > label { display: block; font-size: 0.81rem; font-weight: 600; margin-bottom: 0.32rem; }
+.field .hint { font-weight: 400; color: var(--color-text-soft); font-size: 0.75rem; margin-left: 0.35rem; }
+
+.field input[type="text"], .field input[type="number"], .field input[type="date"],
+.field input[type="url"], .field textarea, .field select {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 7px;
+  font-size: 0.88rem;
+  color: var(--color-text);
+  background: #fff;
+}
+.field textarea { resize: vertical; min-height: 74px; line-height: 1.5; }
+.field input:focus, .field textarea:focus, .field select:focus { outline: 2px solid var(--color-accent); outline-offset: 1px; border-color: var(--color-accent); }
+
+.field-row { display: flex; gap: 0.85rem; flex-wrap: wrap; }
+.field-row > .field { flex: 1; min-width: 170px; margin-bottom: 0.95rem; }
+.field-row > .field.narrow { flex: 0 1 130px; min-width: 110px; }
+
+.check-field { display: flex; align-items: center; gap: 0.45rem; font-size: 0.83rem; cursor: pointer; }
+.check-field input { width: 16px; height: 16px; flex-shrink: 0; }
+
+.range-field input[type="range"] { width: 100%; }
+.range-value { font-size: 0.78rem; color: var(--color-text-soft); }
+
+/* ---------- Cards (demands / events / concessions) ---------- */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 0.7rem;
+  overflow: hidden;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  cursor: pointer;
+  user-select: none;
+  background: var(--color-surface);
+}
+.card-head:hover { background: var(--color-bg); }
+.card-caret { font-size: 0.68rem; color: var(--color-text-soft); width: 0.85rem; text-align: center; transition: transform 0.15s; flex-shrink: 0; }
+.card.collapsed .card-caret { transform: rotate(-90deg); }
+.card.collapsed .card-body { display: none; }
+.card-rank {
+  flex-shrink: 0; font-size: 0.72rem; font-weight: 700; color: var(--color-accent);
+  background: var(--color-accent-soft); border-radius: 5px; padding: 0.1rem 0.35rem; min-width: 26px; text-align: center;
+}
+.card-title { flex: 1; min-width: 0; font-size: 0.88rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-title.untitled { color: var(--color-text-soft); font-weight: 400; font-style: italic; }
+.card-actions { display: flex; gap: 0.2rem; flex-shrink: 0; }
+.card-body { padding: 0.2rem 0.9rem 1rem; border-top: 1px solid var(--color-border); }
+.card-grip { cursor: grab; color: var(--color-text-soft); font-size: 0.85rem; flex-shrink: 0; }
+.card.dragging { opacity: 0.4; }
+.card.drop-target { box-shadow: inset 0 3px 0 var(--color-accent); }
+
+.badge {
+  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
+  padding: 0.12rem 0.4rem; border-radius: 4px; flex-shrink: 0;
+  background: var(--color-bg); color: var(--color-text-soft); border: 1px solid var(--color-border);
+}
+.badge.must { background: #fbeae8; color: #a3271b; border-color: #eebcb4; }
+.badge.important { background: #fff5e6; color: #9a5b06; border-color: #f0d09a; }
+.badge.nice { background: #eef4f0; color: #37714f; border-color: #c3ddcd; }
+.badge.good { background: #f0faf4; color: #22764a; border-color: #b9e3c9; }
+.badge.warn { background: #fff8ec; color: #9a5b06; border-color: #f0d09a; }
+.badge.danger { background: #fbeae8; color: #a3271b; border-color: #eebcb4; }
+.badge.info { background: var(--color-accent-soft); color: var(--color-accent-hover); border-color: #bcd6f3; }
+.badge.muted { opacity: 0.8; }
+
+.list-toolbar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.list-toolbar .spacer { flex: 1; }
+.list-empty {
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 10px;
+  padding: 1.6rem 1.2rem;
+  text-align: center;
+  color: var(--color-text-soft);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  background: var(--color-surface);
+}
+
+/* ---------- Numbers / gauge ---------- */
+.stat-grid { display: flex; gap: 0.7rem; flex-wrap: wrap; }
+.stat {
+  flex: 1; min-width: 150px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  padding: 0.7rem 0.8rem;
+  background: var(--color-bg);
+}
+.stat-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-text-soft); }
+.stat-value { font-size: 1.25rem; font-weight: 700; margin-top: 0.2rem; letter-spacing: -0.02em; }
+.stat-note { font-size: 0.74rem; color: var(--color-text-soft); margin-top: 0.2rem; line-height: 1.4; }
+.stat.accent { background: var(--color-accent-soft); border-color: #bcd6f3; }
+.stat.accent .stat-value { color: var(--color-accent-hover); }
+
+.gauge-wrap { margin-top: 1.2rem; }
+.gauge-bar {
+  position: relative;
+  height: 26px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  display: flex;
+}
+.gz { height: 100%; }
+.gz.bad { background: repeating-linear-gradient(45deg, #f7d9d5, #f7d9d5 6px, #fbeae8 6px, #fbeae8 12px); }
+.gz.ok { background: #fdf0d9; }
+.gz.great { background: #dff2e6; }
+.gz.plain { background: var(--color-bg); }
+.gauge-marks { position: relative; height: 74px; margin-top: 2px; }
+.gmark { position: absolute; transform: translateX(-50%); text-align: center; width: 92px; }
+.gmark .stem { width: 2px; height: 9px; background: var(--color-text-soft); margin: 0 auto 2px; }
+.gmark .gm-label { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--color-text-soft); line-height: 1.2; }
+.gmark .gm-val { font-size: 0.76rem; font-weight: 700; }
+.gmark.low { top: 38px; }
+.gmark.hi { top: 0; }
+.gauge-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.74rem; color: var(--color-text-soft); margin-top: 0.9rem; }
+.gauge-legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 0.3rem; vertical-align: -1px; }
+.gauge-legend .l-bad::before { background: #f7d9d5; }
+.gauge-legend .l-ok::before { background: #fdf0d9; }
+.gauge-legend .l-great::before { background: #dff2e6; }
+
+.callout {
+  border-left: 3px solid var(--color-accent);
+  background: #f6f9fd;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0 7px 7px 0;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  margin-top: 1rem;
+}
+.callout.warn { border-left-color: var(--color-warn); background: #fff8ec; }
+.callout.danger { border-left-color: var(--color-danger); background: #fdf1ef; }
+.callout b { font-weight: 700; }
+
+/* ---------- Stakes chips ---------- */
+.stake-row { display: flex; gap: 0.5rem; align-items: flex-start; margin-bottom: 0.5rem; }
+.stake-row .s-label { flex: 2; min-width: 120px; }
+.stake-row .s-impact { flex: 0 1 130px; }
+.stake-row .s-note { flex: 3; min-width: 140px; }
+.stake-row input, .stake-row select {
+  width: 100%; padding: 0.45rem 0.55rem; border: 1px solid var(--color-border-strong);
+  border-radius: 6px; font-size: 0.84rem; background: #fff;
+}
+.stake-row .rm { flex-shrink: 0; }
+
+/* ---------- Timeline ---------- */
+.tl { position: relative; padding-left: 1.5rem; }
+.tl::before {
+  content: ''; position: absolute; left: 6.5px; top: 4px; bottom: 4px;
+  width: 2px; background: #d3d6dc;
+}
+.tl-node { position: relative; }
+.tl-node > .card { margin-bottom: 0.7rem; }
+.tl-node::before {
+  content: ''; position: absolute; left: -1.28rem; top: 1rem;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--color-accent); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--color-accent);
+}
+.tl-node.is-key::before { background: var(--color-warn); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--color-warn); }
+.tl-node.is-disputed::before { background: var(--color-danger); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--color-danger); }
+.tl-date {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
+  color: var(--color-text-soft); flex-shrink: 0; min-width: 84px;
+}
+
+.ev-list { margin-top: 0.5rem; }
+.ev-head {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--color-text-soft); margin: 1rem 0 0.4rem; display: flex; align-items: center; gap: 0.5rem;
+}
+.ev-head .spacer { flex: 1; }
+.ev-item {
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0 8px 8px 0;
+  background: var(--color-bg);
+  padding: 0.6rem 0.7rem;
+  margin-bottom: 0.5rem;
+}
+.ev-item.weak { border-left-color: #d0d0d4; }
+.ev-item.strong { border-left-color: var(--color-good); }
+.ev-top { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem; }
+.ev-top .ev-title { flex: 1; font-size: 0.84rem; font-weight: 600; }
+
+table.reg { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+table.reg th, table.reg td { border: 1px solid var(--color-border); padding: 0.4rem 0.55rem; text-align: left; vertical-align: top; line-height: 1.45; }
+table.reg thead th { background: var(--color-bg); font-size: 0.7rem; letter-spacing: 0.4px; text-transform: uppercase; color: var(--color-text-soft); }
+.table-scroll { overflow-x: auto; }
+
+/* ---------- Support chips (link demands to events) ---------- */
+.chip-picker { display: flex; flex-wrap: wrap; gap: 0.35rem; max-height: 130px; overflow-y: auto; padding: 0.15rem; }
+.chip {
+  border: 1px solid var(--color-border-strong); background: #fff; border-radius: 999px;
+  padding: 0.22rem 0.6rem; font-size: 0.76rem; cursor: pointer; color: var(--color-text-soft);
+}
+.chip:hover { border-color: var(--color-accent); }
+.chip.on { background: var(--color-accent-soft); border-color: #bcd6f3; color: var(--color-accent-hover); font-weight: 600; }
+
+/* ---------- Red lines ---------- */
+.redline-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.45rem; }
+.redline-row input {
+  flex: 1; padding: 0.5rem 0.6rem; border: 1px solid var(--color-border-strong);
+  border-radius: 6px; font-size: 0.85rem; background: #fff;
+}
+
+/* ---------- Brief ---------- */
+.brief h2 {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--color-accent); margin: 1.6rem 0 0.6rem; padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.brief h2:first-child { margin-top: 0; }
+.brief h3 { font-size: 0.92rem; margin: 0.9rem 0 0.3rem; }
+.brief p { font-size: 0.86rem; line-height: 1.6; margin-bottom: 0.5rem; }
+.brief ul { margin: 0.3rem 0 0.7rem 1.1rem; font-size: 0.86rem; line-height: 1.6; }
+.brief li { margin-bottom: 0.25rem; }
+.brief .muted { color: var(--color-text-soft); }
+.brief .b-item { border-left: 3px solid var(--color-border-strong); padding: 0.15rem 0 0.15rem 0.7rem; margin-bottom: 0.7rem; }
+.brief .b-item.must { border-left-color: var(--color-danger); }
+.brief .b-item.important { border-left-color: var(--color-warn); }
+.brief .b-item.nice { border-left-color: var(--color-good); }
+.brief .b-item .b-title { font-size: 0.88rem; font-weight: 700; }
+.brief .b-item .b-meta { font-size: 0.78rem; color: var(--color-text-soft); margin-top: 0.1rem; line-height: 1.5; }
+.brief .b-item .b-detail { font-size: 0.83rem; line-height: 1.55; margin-top: 0.25rem; }
+.check-list { list-style: none; margin-left: 0; }
+.check-list li { display: flex; gap: 0.5rem; align-items: flex-start; font-size: 0.84rem; margin-bottom: 0.3rem; line-height: 1.5; }
+.check-list .ic { flex-shrink: 0; font-weight: 700; }
+.check-list .ok .ic { color: var(--color-good); }
+.check-list .gap .ic { color: var(--color-warn); }
+
+/* ---------- Toast & modal ---------- */
+.toast {
+  position: fixed; bottom: 1.3rem; left: 50%; transform: translateX(-50%) translateY(160%);
+  background: #1d1d1f; color: #fff; padding: 0.7rem 1.2rem; border-radius: 8px;
+  font-size: 0.85rem; box-shadow: var(--shadow-md); z-index: 4000; transition: transform 0.25s ease; max-width: 90%;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+.toast.error { background: #7a1d16; }
+
+.modal { position: fixed; inset: 0; background: rgba(15,23,42,0.45); display: none; align-items: center; justify-content: center; z-index: 3000; }
+.modal.open { display: flex; }
+.modal-box { background: #fff; border-radius: 12px; padding: 1.4rem; width: 440px; max-width: 92%; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+.modal-box h3 { font-size: 1.02rem; margin-bottom: 0.4rem; }
+.modal-box p.sub { font-size: 0.84rem; color: var(--color-text-soft); margin-bottom: 0.9rem; line-height: 1.5; }
+.modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.1rem; }
+
+.hidden-file { display: none; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 820px) {
+  .nav-toggle { display: inline-block; }
+  .app-subtitle { display: none; }
+  .app-title { font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .app-header { flex-wrap: wrap; padding: 0.55rem 0.7rem; gap: 0.5rem; }
+  .app-brand { flex: 1 1 100%; min-width: 0; }
+  .header-actions { flex-shrink: 1; min-width: 0; width: 100%; justify-content: flex-start; }
+  .gmark { width: 74px; }
+  .gmark .gm-label { font-size: 0.6rem; }
+  .gmark .gm-val { font-size: 0.7rem; }
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 268px; z-index: 1200;
+    transform: translateX(-100%); transition: transform 0.2s ease;
+  }
+  body.nav-open .sidebar { transform: none; box-shadow: var(--shadow-md); }
+  .nav-scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 1100; }
+  body.nav-open .nav-scrim { display: block; }
+  .view-inner { padding: 1rem 0.9rem 4rem; }
+  .card-panel { padding: 1rem; }
+  .btn { padding: 0.45rem 0.7rem; font-size: 0.8rem; }
+}
+
+@media print {
+  body { overflow: visible; height: auto; display: block; background: #fff; }
+  .app-header, .sidebar, .nav-scrim, .no-print, .toast, .modal { display: none !important; }
+  .main-area { display: block; overflow: visible; }
+  .view-container { overflow: visible; background: #fff; }
+  .view-inner { max-width: none; padding: 0; }
+  .card-panel { box-shadow: none; border: none; padding: 0; margin-bottom: 0.8rem; page-break-inside: avoid; }
+  .brief h2 { page-break-after: avoid; }
+  .brief .b-item, .ev-item, table.reg { page-break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-brand">
+      <button class="btn small nav-toggle" id="navToggle" title="Show the steps">&#9776;</button>
+      <div>
+        <div class="app-title">Dispute Resolution Workbench</div>
+        <div class="app-subtitle" id="appSubtitle">Prepare a negotiation: alternatives, demands, evidence, concessions.</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="save-pill" id="savePill">Loading&hellip;</span>
+      <button class="btn" id="exampleBtn" title="Fill the workbench with a worked example you can edit or clear">Example</button>
+      <button class="btn" id="importBtn" title="Open a workbench file saved earlier">Import</button>
+      <button class="btn" id="briefFileBtn" title="Download the negotiation brief as a standalone web page">&#10515; Brief</button>
+      <button class="btn" id="printBtn" title="Print the brief, or save it as a PDF">&#9113; Print</button>
+      <button class="btn primary" id="exportBtn" title="Download everything as a JSON file you can re-import later">&#10515; Save file</button>
+      <input type="file" id="importFile" class="hidden-file" accept="application/json,.json">
+    </div>
+  </header>
+
+  <div class="main-area">
+    <aside class="sidebar" id="sidebar">
+      <nav class="step-nav" id="stepNav"></nav>
+      <div class="sidebar-footer">
+        <div class="mini-stat" id="miniStat"></div>
+        <button class="btn small danger" id="resetBtn">Clear everything</button>
+      </div>
+    </aside>
+
+    <div class="view-container" id="viewContainer">
+      <div class="view-inner" id="view"></div>
+    </div>
+  </div>
+
+  <div class="nav-scrim" id="navScrim"></div>
+  <div class="toast" id="toast"></div>
+
+  <div class="modal" id="confirmModal">
+    <div class="modal-box">
+      <h3 id="confirmTitle">Are you sure?</h3>
+      <p class="sub" id="confirmSub"></p>
+      <div class="modal-actions">
+        <button class="btn" id="confirmCancel">Cancel</button>
+        <button class="btn danger" id="confirmOk">Yes, do it</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ===============================================================
+   Dispute Resolution Workbench
+   ---------------------------------------------------------------
+   A single-file negotiation preparation tool. Five steps:
+     0. The dispute      — who is involved and what it is about
+     1. BATNA / WATNA    — what happens if no agreement is reached
+     2. Desired end state— ranked, specified demands
+     3. Record of truth  — dated events with attached evidence
+     4. Concessions      — what you can trade away to get the above
+     5. Brief            — a printable summary of the lot
+
+   Everything is kept in localStorage as you type, and can be saved
+   to (or loaded from) a JSON file. No server, no dependencies.
+   =============================================================== */
+(function () {
+  'use strict';
+
+  var DRAFT_KEY = 'dispute_workbench_v1';
+  var UI_KEY = 'dispute_workbench_ui_v1';
+
+  /* ---------------- small helpers ---------------- */
+
+  function $(id) { return document.getElementById(id); }
+  function uid(p) { return (p || 'x') + '_' + Math.random().toString(36).slice(2, 9); }
+  function el(tag, cls, html) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
+  }
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
+  }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+  function isNum(v) { return typeof v === 'number' && isFinite(v); }
+  function trimmed(v) { return String(v == null ? '' : v).trim(); }
+  function has(v) { return trimmed(v) !== ''; }
+
+  function toast(msg, isError) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isError ? ' error' : '');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { t.className = 'toast'; }, 3000);
+  }
+
+  function uiConfirm(title, sub, okLabel) {
+    return new Promise(function (resolve) {
+      var m = $('confirmModal');
+      $('confirmTitle').textContent = title;
+      $('confirmSub').textContent = sub || '';
+      $('confirmOk').textContent = okLabel || 'Yes, do it';
+      m.classList.add('open');
+      function done(v) {
+        m.classList.remove('open');
+        $('confirmOk').onclick = null;
+        $('confirmCancel').onclick = null;
+        resolve(v);
+      }
+      $('confirmOk').onclick = function () { done(true); };
+      $('confirmCancel').onclick = function () { done(false); };
+    });
+  }
+
+  function downloadFile(name, text, mime) {
+    var blob = new Blob([text], { type: mime || 'application/octet-stream' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function slug(s) {
+    return String(s || '').toLowerCase().trim()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'dispute';
+  }
+
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function fmtDate(d) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed(d));
+    if (!m) return has(d) ? trimmed(d) : 'No date';
+    return Number(m[3]) + ' ' + MONTHS[Number(m[2]) - 1] + ' ' + m[1];
+  }
+  function todayIso() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+
+  function fmtMoney(n) {
+    if (!isNum(n)) return '—';
+    var cur = trimmed(state.matter.currency) || '$';
+    var neg = n < 0;
+    var a = Math.abs(n);
+    var body = a >= 1000
+      ? Math.round(a).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+      : String(Math.round(a * 100) / 100);
+    return (neg ? '−' : '') + cur + body;
+  }
+
+  /* ---------------- state ---------------- */
+
+  var state = blankState();
+  var ui = { section: 'matter', collapsed: {} };
+  var saveTimer = null;
+
+  function blankState() {
+    return {
+      version: 1,
+      matter: {
+        title: '', otherParty: '', myRole: '', summary: '',
+        deadline: '', forum: '', currency: '$'
+      },
+      alt: {
+        best: { desc: '', value: null, prob: 25 },
+        likely: { desc: '', value: null, prob: 50 },
+        worst: { desc: '', value: null, prob: 25 },
+        riskAversion: 30,
+        reservationOverride: null,
+        target: null,
+        stakes: [],
+        theirs: { best: '', bestValue: null, worst: '', worstValue: null, pressure: '' }
+      },
+      demands: [],
+      events: [],
+      concessions: [],
+      redlines: []
+    };
+  }
+
+  /* Repair anything loaded from disk or an older draft so the rest of
+     the code can assume every field exists. */
+  function normalise(raw) {
+    var s = blankState();
+    if (!raw || typeof raw !== 'object') return s;
+
+    var m = raw.matter || {};
+    ['title', 'otherParty', 'myRole', 'summary', 'deadline', 'forum', 'currency'].forEach(function (k) {
+      if (m[k] != null) s.matter[k] = String(m[k]);
+    });
+    if (!has(s.matter.currency)) s.matter.currency = '$';
+
+    var a = raw.alt || {};
+    ['best', 'likely', 'worst'].forEach(function (k) {
+      var src = a[k] || {};
+      s.alt[k].desc = src.desc != null ? String(src.desc) : '';
+      s.alt[k].value = isNum(src.value) ? src.value : null;
+      s.alt[k].prob = isNum(src.prob) ? src.prob : s.alt[k].prob;
+    });
+    if (isNum(a.riskAversion)) s.alt.riskAversion = a.riskAversion;
+    if (isNum(a.reservationOverride)) s.alt.reservationOverride = a.reservationOverride;
+    if (isNum(a.target)) s.alt.target = a.target;
+    s.alt.stakes = (Array.isArray(a.stakes) ? a.stakes : []).map(function (st) {
+      return {
+        id: st.id || uid('st'),
+        label: String(st.label || ''),
+        impact: st.impact || 'medium',
+        notes: String(st.notes || '')
+      };
+    });
+    var th = a.theirs || {};
+    s.alt.theirs = {
+      best: String(th.best || ''),
+      bestValue: isNum(th.bestValue) ? th.bestValue : null,
+      worst: String(th.worst || ''),
+      worstValue: isNum(th.worstValue) ? th.worstValue : null,
+      pressure: String(th.pressure || '')
+    };
+
+    s.demands = (Array.isArray(raw.demands) ? raw.demands : []).map(function (d) {
+      return {
+        id: d.id || uid('dm'),
+        title: String(d.title || ''),
+        category: d.category || 'money',
+        tier: d.tier || 'important',
+        spec: String(d.spec || ''),
+        when: String(d.when || ''),
+        who: String(d.who || ''),
+        proof: String(d.proof || ''),
+        opening: String(d.opening || ''),
+        target: String(d.target || ''),
+        minimum: String(d.minimum || ''),
+        why: String(d.why || ''),
+        support: Array.isArray(d.support) ? d.support.slice() : []
+      };
+    });
+
+    s.events = (Array.isArray(raw.events) ? raw.events : []).map(function (e) {
+      return {
+        id: e.id || uid('ev'),
+        date: String(e.date || ''),
+        title: String(e.title || ''),
+        type: e.type || 'other',
+        what: String(e.what || ''),
+        who: String(e.who || ''),
+        status: e.status || 'unverified',
+        key: !!e.key,
+        evidence: (Array.isArray(e.evidence) ? e.evidence : []).map(function (v) {
+          return {
+            id: v.id || uid('vd'),
+            label: String(v.label || ''),
+            type: v.type || 'document',
+            where: String(v.where || ''),
+            link: String(v.link || ''),
+            strength: v.strength || 'moderate',
+            theyHave: !!v.theyHave,
+            notes: String(v.notes || '')
+          };
+        })
+      };
+    });
+
+    s.concessions = (Array.isArray(raw.concessions) ? raw.concessions : []).map(function (c) {
+      return {
+        id: c.id || uid('cn'),
+        label: String(c.label || ''),
+        detail: String(c.detail || ''),
+        cost: isNum(c.cost) ? c.cost : 3,
+        value: isNum(c.value) ? c.value : 3,
+        condition: String(c.condition || ''),
+        tradeFor: String(c.tradeFor || ''),
+        stage: c.stage || 'mid',
+        status: c.status || 'available'
+      };
+    });
+
+    s.redlines = (Array.isArray(raw.redlines) ? raw.redlines : []).map(function (r) {
+      return { id: (r && r.id) || uid('rl'), text: String((r && r.text) || (typeof r === 'string' ? r : '')) };
+    });
+
+    return s;
+  }
+
+  /* ---------------- saving ---------------- */
+
+  function setPill(kind) {
+    var p = $('savePill');
+    if (kind === 'dirty') { p.className = 'save-pill dirty'; p.textContent = 'Saving…'; }
+    else if (kind === 'saved') { p.className = 'save-pill saved'; p.textContent = 'Saved in this browser'; }
+    else { p.className = 'save-pill'; p.textContent = 'Loading…'; }
+  }
+
+  function saveDraft() {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(state));
+      localStorage.setItem(UI_KEY, JSON.stringify({ section: ui.section, collapsed: ui.collapsed }));
+      setPill('saved');
+    } catch (e) {
+      setPill('');
+      $('savePill').textContent = 'Could not save';
+    }
+  }
+
+  function markDirty() {
+    setPill('dirty');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveDraft, 400);
+  }
+
+  /* ---------------- form field builders ----------------
+     Each control writes straight into the state object it was given and
+     schedules a save. `after` lets a card refresh its own header or a
+     derived panel without re-rendering (and losing focus on) the field
+     being typed into. */
+
+  function makeField(label, hint, control) {
+    var f = el('div', 'field');
+    if (label) {
+      var l = document.createElement('label');
+      l.innerHTML = escapeHtml(label) + (hint ? ' <span class="hint">' + escapeHtml(hint) + '</span>' : '');
+      f.appendChild(l);
+    }
+    f.appendChild(control);
+    return f;
+  }
+
+  function textControl(obj, key, placeholder, after, type) {
+    var i = document.createElement('input');
+    i.type = type || 'text';
+    if (placeholder) i.placeholder = placeholder;
+    i.value = obj[key] == null ? '' : obj[key];
+    i.addEventListener('input', function () {
+      obj[key] = i.value;
+      markDirty();
+      if (after) after();
+    });
+    return i;
+  }
+
+  function numControl(obj, key, placeholder, after) {
+    var i = document.createElement('input');
+    i.type = 'number';
+    i.step = 'any';
+    i.inputMode = 'decimal';
+    if (placeholder) i.placeholder = placeholder;
+    i.value = isNum(obj[key]) ? obj[key] : '';
+    i.addEventListener('input', function () {
+      var t = i.value.trim();
+      var n = parseFloat(t);
+      obj[key] = (t === '' || !isFinite(n)) ? null : n;
+      markDirty();
+      if (after) after();
+    });
+    return i;
+  }
+
+  /* Textareas grow to fit what is in them — people write paragraphs in
+     this tool and a clipped box hides half of it. */
+  function growArea(t) {
+    if (!t || !t.offsetHeight) return;      // not visible: nothing to measure
+    t.style.height = 'auto';
+    t.style.height = (t.scrollHeight + 2) + 'px';
+  }
+  function growAll(root) {
+    Array.prototype.forEach.call((root || document).querySelectorAll('textarea'), growArea);
+  }
+
+  function areaControl(obj, key, placeholder, after, minHeight) {
+    var t = document.createElement('textarea');
+    if (placeholder) t.placeholder = placeholder;
+    if (minHeight) t.style.minHeight = minHeight;
+    t.value = obj[key] == null ? '' : obj[key];
+    t.addEventListener('input', function () {
+      obj[key] = t.value;
+      growArea(t);
+      markDirty();
+      if (after) after();
+    });
+    return t;
+  }
+
+  function selectControl(obj, key, options, after) {
+    var s = document.createElement('select');
+    options.forEach(function (o) {
+      var op = document.createElement('option');
+      op.value = o.v;
+      op.textContent = o.l;
+      s.appendChild(op);
+    });
+    s.value = obj[key];
+    if (s.value !== obj[key]) { obj[key] = s.value; }   // fall back to first option
+    s.addEventListener('change', function () {
+      obj[key] = s.value;
+      markDirty();
+      if (after) after();
+    });
+    return s;
+  }
+
+  function checkControl(labelText, obj, key, after) {
+    var w = el('label', 'check-field');
+    var i = document.createElement('input');
+    i.type = 'checkbox';
+    i.checked = !!obj[key];
+    i.addEventListener('change', function () {
+      obj[key] = i.checked;
+      markDirty();
+      if (after) after();
+    });
+    w.appendChild(i);
+    w.appendChild(document.createTextNode(labelText));
+    return w;
+  }
+
+  function row() {
+    var r = el('div', 'field-row');
+    for (var i = 0; i < arguments.length; i++) if (arguments[i]) r.appendChild(arguments[i]);
+    return r;
+  }
+
+  function panel(title, sub) {
+    var p = el('div', 'card-panel');
+    if (title) p.appendChild(el('div', 'panel-title', escapeHtml(title)));
+    if (sub) p.appendChild(el('div', 'panel-sub', sub));
+    return p;
+  }
+
+  function sectionHead(kicker, title, blurb) {
+    var h = el('div', 'section-head');
+    h.appendChild(el('div', 'section-kicker', escapeHtml(kicker)));
+    h.appendChild(el('div', 'section-title', escapeHtml(title)));
+    if (blurb) h.appendChild(el('div', 'section-blurb', blurb));
+    return h;
+  }
+
+  function emptyState(text) { return el('div', 'list-empty', text); }
+
+  /* ---------------- option lists ---------------- */
+
+  var IMPACT_OPTS = [
+    { v: 'high', l: 'High impact' },
+    { v: 'medium', l: 'Medium impact' },
+    { v: 'low', l: 'Low impact' }
+  ];
+  var TIER_OPTS = [
+    { v: 'must', l: 'Must have — no deal without it' },
+    { v: 'important', l: 'Important — push hard' },
+    { v: 'nice', l: 'Nice to have — tradeable' }
+  ];
+  var TIER_LABEL = { must: 'Must have', important: 'Important', nice: 'Nice to have' };
+  var CATEGORY_OPTS = [
+    { v: 'money', l: 'Money — payment or refund' },
+    { v: 'work', l: 'Work — repair, replace, complete' },
+    { v: 'delivery', l: 'Goods or services delivered' },
+    { v: 'documents', l: 'Documents or information' },
+    { v: 'conduct', l: 'Future conduct or terms' },
+    { v: 'apology', l: 'Apology or acknowledgement' },
+    { v: 'release', l: 'Release — end of claims' },
+    { v: 'other', l: 'Other' }
+  ];
+  var CATEGORY_LABEL = {};
+  CATEGORY_OPTS.forEach(function (o) { CATEGORY_LABEL[o.v] = o.l.split(' — ')[0]; });
+
+  var EVENT_TYPE_OPTS = [
+    { v: 'agreement', l: 'Agreement or contract' },
+    { v: 'meeting', l: 'Meeting or call' },
+    { v: 'message', l: 'Email, letter or message' },
+    { v: 'payment', l: 'Payment or invoice' },
+    { v: 'delivery', l: 'Delivery or work done' },
+    { v: 'failure', l: 'Failure or breach' },
+    { v: 'complaint', l: 'Complaint raised' },
+    { v: 'notice', l: 'Formal notice' },
+    { v: 'other', l: 'Other' }
+  ];
+  var EVENT_TYPE_LABEL = {};
+  EVENT_TYPE_OPTS.forEach(function (o) { EVENT_TYPE_LABEL[o.v] = o.l; });
+
+  var EVENT_STATUS_OPTS = [
+    { v: 'agreed', l: 'Both sides agree this happened' },
+    { v: 'disputed', l: 'They dispute this' },
+    { v: 'unverified', l: 'Not tested yet' }
+  ];
+  var EVENT_STATUS_LABEL = { agreed: 'Agreed', disputed: 'Disputed', unverified: 'Untested' };
+
+  var EVIDENCE_TYPE_OPTS = [
+    { v: 'document', l: 'Document or contract' },
+    { v: 'email', l: 'Email or letter' },
+    { v: 'message', l: 'Text or chat message' },
+    { v: 'invoice', l: 'Invoice, receipt or statement' },
+    { v: 'photo', l: 'Photo or video' },
+    { v: 'recording', l: 'Audio recording' },
+    { v: 'witness', l: 'Witness account' },
+    { v: 'report', l: 'Expert or inspection report' },
+    { v: 'note', l: 'Own notes or diary' },
+    { v: 'other', l: 'Other' }
+  ];
+  var EVIDENCE_TYPE_LABEL = {};
+  EVIDENCE_TYPE_OPTS.forEach(function (o) { EVIDENCE_TYPE_LABEL[o.v] = o.l; });
+
+  var STRENGTH_OPTS = [
+    { v: 'strong', l: 'Strong — hard to argue with' },
+    { v: 'moderate', l: 'Moderate — helps' },
+    { v: 'weak', l: 'Weak — needs support' }
+  ];
+  var STRENGTH_LABEL = { strong: 'Strong', moderate: 'Moderate', weak: 'Weak' };
+
+  var SCALE_OPTS = [
+    { v: 1, l: '1 — very low' },
+    { v: 2, l: '2 — low' },
+    { v: 3, l: '3 — moderate' },
+    { v: 4, l: '4 — high' },
+    { v: 5, l: '5 — very high' }
+  ];
+  var STAGE_OPTS = [
+    { v: 'open', l: 'Offer early — opens the door' },
+    { v: 'mid', l: 'Mid-negotiation — trade for movement' },
+    { v: 'close', l: 'Hold to close the deal' },
+    { v: 'last', l: 'Last resort only' }
+  ];
+  var STAGE_LABEL = {
+    open: 'Offer early', mid: 'Trade mid-way', close: 'Closing chip', last: 'Last resort'
+  };
+  var STATUS_OPTS = [
+    { v: 'available', l: 'Not offered yet' },
+    { v: 'offered', l: 'Offered' },
+    { v: 'accepted', l: 'Accepted by them' },
+    { v: 'withdrawn', l: 'Withdrawn' }
+  ];
+  var STATUS_LABEL = {
+    available: 'Not offered', offered: 'Offered', accepted: 'Accepted', withdrawn: 'Withdrawn'
+  };
+
+  /* A numeric select needs its own binding — option values are strings. */
+  function scaleControl(obj, key, after) {
+    var s = document.createElement('select');
+    SCALE_OPTS.forEach(function (o) {
+      var op = document.createElement('option');
+      op.value = String(o.v);
+      op.textContent = o.l;
+      s.appendChild(op);
+    });
+    s.value = String(obj[key]);
+    s.addEventListener('change', function () {
+      obj[key] = parseInt(s.value, 10);
+      markDirty();
+      if (after) after();
+    });
+    return s;
+  }
+
+  /* ---------------- the maths behind step 1 ----------------
+     Every figure is "what I end up with, in money, if no agreement is
+     reached" — negative numbers are losses. */
+
+  function computeAlt() {
+    var a = state.alt;
+    var best = isNum(a.best.value) ? a.best.value : null;
+    var likely = isNum(a.likely.value) ? a.likely.value : null;
+    var worst = isNum(a.worst.value) ? a.worst.value : null;
+
+    var scenarios = [];
+    if (best !== null) scenarios.push({ v: best, p: Math.max(0, isNum(a.best.prob) ? a.best.prob : 0) });
+    if (likely !== null) scenarios.push({ v: likely, p: Math.max(0, isNum(a.likely.prob) ? a.likely.prob : 0) });
+    if (worst !== null) scenarios.push({ v: worst, p: Math.max(0, isNum(a.worst.prob) ? a.worst.prob : 0) });
+
+    var expected = null;
+    if (scenarios.length) {
+      var totalP = 0, weighted = 0, plain = 0;
+      scenarios.forEach(function (s) { totalP += s.p; weighted += s.v * s.p; plain += s.v; });
+      expected = totalP > 0 ? weighted / totalP : plain / scenarios.length;
+    }
+
+    /* Risk aversion pulls the acceptable floor down from the expected
+       outcome towards the worst case: someone who cannot absorb the
+       downside should settle for less than the gamble is "worth". */
+    var floor = expected;
+    var aversion = (isNum(a.riskAversion) ? a.riskAversion : 0) / 100;
+    if (expected !== null && worst !== null && worst < expected) {
+      floor = expected - aversion * (expected - worst);
+    }
+
+    var reservation = isNum(a.reservationOverride) ? a.reservationOverride : floor;
+    var spread = (best !== null && worst !== null) ? best - worst : null;
+
+    var theirSpread = null;
+    var tb = a.theirs.bestValue, tw = a.theirs.worstValue;
+    if (isNum(tb) && isNum(tw)) theirSpread = tb - tw;
+
+    return {
+      best: best, likely: likely, worst: worst,
+      expected: expected, floor: floor, reservation: reservation,
+      target: isNum(a.target) ? a.target : null,
+      spread: spread, theirSpread: theirSpread,
+      overridden: isNum(a.reservationOverride)
+    };
+  }
+
+  /* ---------------- navigation ---------------- */
+
+  var SECTIONS = [
+    { id: 'matter', num: '0', label: 'The dispute', hint: 'Parties, subject, deadline' },
+    { id: 'alt', num: '1', label: 'BATNA & WATNA', hint: 'What no deal costs you' },
+    { id: 'demands', num: '2', label: 'Desired end state', hint: 'Ranked list of demands' },
+    { id: 'timeline', num: '3', label: 'Record of truth', hint: 'Events and evidence' },
+    { id: 'concessions', num: '4', label: 'Concessions', hint: 'What you can trade' },
+    { id: 'brief', num: '5', label: 'Negotiation brief', hint: 'Print or share' }
+  ];
+
+  function sectionDone(id) {
+    var c;
+    if (id === 'matter') return has(state.matter.title) && has(state.matter.otherParty);
+    if (id === 'alt') {
+      c = computeAlt();
+      return has(state.alt.best.desc) && has(state.alt.worst.desc) && c.reservation !== null;
+    }
+    if (id === 'demands') return state.demands.length > 0;
+    if (id === 'timeline') return state.events.length > 0;
+    if (id === 'concessions') return state.concessions.length > 0;
+    return false;
+  }
+
+  function renderNav() {
+    var nav = $('stepNav');
+    clear(nav);
+    SECTIONS.forEach(function (s) {
+      var b = el('button', 'step' + (ui.section === s.id ? ' active' : '') + (sectionDone(s.id) ? ' done' : ''));
+      b.appendChild(el('div', 'step-num', sectionDone(s.id) && ui.section !== s.id ? '&#10003;' : s.num));
+      var t = el('div', 'step-text');
+      t.appendChild(el('div', 'step-label', escapeHtml(s.label)));
+      t.appendChild(el('div', 'step-hint', escapeHtml(s.hint)));
+      b.appendChild(t);
+      b.addEventListener('click', function () { go(s.id); });
+      nav.appendChild(b);
+    });
+
+    var c = computeAlt();
+    var bits = [];
+    bits.push('<b>' + state.demands.length + '</b> demand' + (state.demands.length === 1 ? '' : 's'));
+    bits.push('<b>' + state.events.length + '</b> event' + (state.events.length === 1 ? '' : 's'));
+    bits.push('<b>' + countEvidence() + '</b> evidence item' + (countEvidence() === 1 ? '' : 's'));
+    bits.push('<b>' + state.concessions.length + '</b> concession' + (state.concessions.length === 1 ? '' : 's'));
+    var walk = c.reservation !== null ? 'Walk-away line: <b>' + escapeHtml(fmtMoney(c.reservation)) + '</b>' : 'Walk-away line: <b>not set</b>';
+    $('miniStat').innerHTML = bits.join(' &middot; ') + '<br>' + walk;
+  }
+
+  function countEvidence() {
+    var n = 0;
+    state.events.forEach(function (e) { n += e.evidence.length; });
+    return n;
+  }
+
+  function go(id) {
+    ui.section = id;
+    document.body.classList.remove('nav-open');
+    saveDraft();
+    render();
+    $('viewContainer').scrollTop = 0;
+  }
+
+  function render() {
+    renderNav();
+    var v = $('view');
+    clear(v);
+    if (ui.section === 'matter') renderMatter(v);
+    else if (ui.section === 'alt') renderAlt(v);
+    else if (ui.section === 'demands') renderDemands(v);
+    else if (ui.section === 'timeline') renderTimeline(v);
+    else if (ui.section === 'concessions') renderConcessions(v);
+    else renderBrief(v);
+    growAll(v);
+  }
+
+  function nextButton(nextId, label) {
+    var wrap = el('div', 'no-print');
+    wrap.style.marginTop = '0.4rem';
+    var b = el('button', 'btn primary', escapeHtml(label));
+    b.addEventListener('click', function () { go(nextId); });
+    wrap.appendChild(b);
+    return wrap;
+  }
+
+  /* =====================================================================
+     STEP 0 — the dispute
+     ===================================================================== */
+
+  function renderMatter(v) {
+    v.appendChild(sectionHead('Step 0', 'The dispute',
+      'Set the scene. Everything else in the workbench refers back to this: who you are negotiating with, ' +
+      'what the disagreement is about, and how long you have.'));
+
+    var p = panel('Basics', 'Short and factual — this heads up your printed brief.');
+    p.appendChild(makeField('What is the dispute about?', 'a short name',
+      textControl(state.matter, 'title', 'e.g. Unpaid final invoice — Riverside fit-out', afterMatter)));
+    p.appendChild(row(
+      makeField('The other party', 'person or organisation',
+        textControl(state.matter, 'otherParty', 'e.g. Riverside Developments Pty Ltd', afterMatter)),
+      makeField('Your role in it', '',
+        textControl(state.matter, 'myRole', 'e.g. Subcontractor / tenant / buyer', afterMatter))
+    ));
+    p.appendChild(makeField('What happened, in a few lines?', 'the version you would tell a mediator',
+      areaControl(state.matter, 'summary',
+        'Keep it neutral and factual. Who did what, what went wrong, and what you have asked for so far.', null, '110px')));
+    p.appendChild(row(
+      makeField('Deadline or key date', 'when this has to be resolved by',
+        textControl(state.matter, 'deadline', 'e.g. Mediation 14 Nov, or before the lease ends', afterMatter)),
+      makeField('Where it will be resolved', '',
+        textControl(state.matter, 'forum', 'e.g. Direct talks, then tribunal', afterMatter))
+    ));
+    var cur = makeField('Currency symbol', 'used for every figure in the tool',
+      textControl(state.matter, 'currency', '$', afterMatter));
+    cur.classList.add('narrow');
+    cur.style.maxWidth = '160px';
+    p.appendChild(cur);
+    v.appendChild(p);
+
+    var g = panel('How to use this workbench', '');
+    g.innerHTML +=
+      '<ul style="margin-left:1.1rem; font-size:0.86rem; line-height:1.7; color:#3a3a3f;">' +
+      '<li><b>Step 1 — BATNA &amp; WATNA.</b> Work out what happens if you never reach agreement. That, not what you hope for, sets the price of walking away.</li>' +
+      '<li><b>Step 2 — Desired end state.</b> Write down exactly what you want, to what specification, by when — then rank it.</li>' +
+      '<li><b>Step 3 — Record of truth.</b> Put the events on a timeline and note the evidence for each one, including where it is stored.</li>' +
+      '<li><b>Step 4 — Concessions.</b> List what you can afford to give up, and what each thing should buy you.</li>' +
+      '<li><b>Step 5 — Brief.</b> Print the lot, or save it as a file to pick up later.</li>' +
+      '</ul>' +
+      '<div class="callout" style="margin-top:0.8rem;">Your work is kept in this browser only. Nothing is uploaded. ' +
+      'Use <b>Save file</b> to keep a copy you can re-open on another device, and <b>Import</b> to bring it back.</div>';
+    v.appendChild(g);
+
+    v.appendChild(nextButton('alt', 'Next: what happens if there is no deal →'));
+
+    function afterMatter() { renderNav(); }
+  }
+
+  /* =====================================================================
+     STEP 1 — BATNA / WATNA
+     ===================================================================== */
+
+  function renderAlt(v) {
+    v.appendChild(sectionHead('Step 1', 'BATNA & WATNA — your skin in the game',
+      'Your <b>BATNA</b> is the best you can realistically do if you walk away and never agree. Your <b>WATNA</b> is the worst. ' +
+      'The distance between them is what you actually have riding on this negotiation — and your BATNA, not your hopes, ' +
+      'is the yardstick every offer should be measured against.'));
+
+    var derived = el('div');   // refreshed in place as numbers change
+    function refresh() { renderAltDerived(derived); renderNav(); }
+
+    var p = panel('If no agreement is ever reached',
+      'Describe the three realistic ways this ends without a deal, and put a figure on each: what you are left with, ' +
+      'after costs. Losses are negative numbers.');
+
+    p.appendChild(altScenario('BATNA — best realistic outcome without a deal',
+      'e.g. Win at tribunal in 9 months, recover most of the invoice',
+      state.alt.best, refresh));
+    p.appendChild(altScenario('Most likely outcome without a deal',
+      'e.g. Partial recovery after a long fight, own costs not repaid',
+      state.alt.likely, refresh));
+    p.appendChild(altScenario('WATNA — worst realistic outcome without a deal',
+      'e.g. Lose, pay their costs, write off the debt and the relationship',
+      state.alt.worst, refresh));
+
+    var ra = makeField('How much can you absorb the downside?', 'risk tolerance', riskSlider(refresh));
+    p.appendChild(ra);
+
+    p.appendChild(row(
+      makeField('Walk-away line', 'blank = use the calculated one',
+        numControl(state.alt, 'reservationOverride', 'calculated below', refresh)),
+      makeField('Target settlement', 'what a good deal looks like',
+        numControl(state.alt, 'target', 'e.g. 42000', refresh))
+    ));
+    v.appendChild(p);
+
+    v.appendChild(derived);
+    renderAltDerived(derived);
+
+    /* Non-financial stakes */
+    var sp = panel('What else is on the line?',
+      'Not everything that matters is money. Relationships, reputation, time, licences, sleep. ' +
+      'These rarely change the numbers but they often change the decision.');
+    var stakeList = el('div');
+    sp.appendChild(stakeList);
+    var addStake = el('button', 'btn small', '+ Add something at stake');
+    addStake.addEventListener('click', function () {
+      state.alt.stakes.push({ id: uid('st'), label: '', impact: 'high', notes: '' });
+      markDirty();
+      drawStakes();
+    });
+    sp.appendChild(addStake);
+    v.appendChild(sp);
+
+    function drawStakes() {
+      clear(stakeList);
+      if (!state.alt.stakes.length) {
+        var e = el('div', 'panel-sub', 'Nothing added yet — e.g. “Working relationship with their site manager”, “Two months of my time”.');
+        e.style.marginBottom = '0.7rem';
+        stakeList.appendChild(e);
+        return;
+      }
+      state.alt.stakes.forEach(function (st) {
+        var r = el('div', 'stake-row');
+        var a = el('div', 's-label'); a.appendChild(textControl(st, 'label', 'What is at stake', null)); r.appendChild(a);
+        var b = el('div', 's-impact'); b.appendChild(selectControl(st, 'impact', IMPACT_OPTS, null)); r.appendChild(b);
+        var c = el('div', 's-note'); c.appendChild(textControl(st, 'notes', 'Why it matters', null)); r.appendChild(c);
+        var rm = el('button', 'btn tiny danger rm', '✕');
+        rm.title = 'Remove';
+        rm.addEventListener('click', function () {
+          state.alt.stakes = state.alt.stakes.filter(function (x) { return x !== st; });
+          markDirty();
+          drawStakes();
+        });
+        r.appendChild(rm);
+        stakeList.appendChild(r);
+      });
+    }
+    drawStakes();
+
+    /* The other side */
+    var tp = panel('Their alternatives — your best guess',
+      'The side with the weaker walk-away position concedes more. Guess theirs honestly; it is often better than you fear ' +
+      'and worse than they claim.');
+    tp.appendChild(row(
+      makeField('Their best outcome without a deal', '',
+        textControl(state.alt.theirs, 'best', 'e.g. We drop it and they keep the money', refresh)),
+      makeField('Worth to them', 'optional',
+        numControl(state.alt.theirs, 'bestValue', '', refresh))
+    ));
+    tp.appendChild(row(
+      makeField('Their worst outcome without a deal', '',
+        textControl(state.alt.theirs, 'worst', 'e.g. Pay in full plus costs, plus public findings', refresh)),
+      makeField('Cost to them', 'optional',
+        numControl(state.alt.theirs, 'worstValue', '', refresh))
+    ));
+    tp.appendChild(makeField('What pressure are they under?', 'time, cash flow, reputation, a board, a deadline',
+      areaControl(state.alt.theirs, 'pressure', 'e.g. They are refinancing in March and want no open disputes on the books.', null, '70px')));
+    v.appendChild(tp);
+
+    v.appendChild(nextButton('demands', 'Next: what do you actually want? →'));
+  }
+
+  function altScenario(label, placeholder, obj, refresh) {
+    var wrap = el('div');
+    wrap.style.marginBottom = '1rem';
+    wrap.appendChild(makeField(label, '', areaControl(obj, 'desc', placeholder, refresh, '62px')));
+    var vf = makeField('Where that leaves you', 'in money, after costs — a loss is negative',
+      numControl(obj, 'value', 'e.g. -8000', refresh));
+    var pf = makeField('Chance of it', '%', numControl(obj, 'prob', '25', refresh));
+    pf.classList.add('narrow');
+    wrap.appendChild(row(vf, pf));
+    return wrap;
+  }
+
+  function riskSlider(refresh) {
+    var wrap = el('div', 'range-field');
+    var i = document.createElement('input');
+    i.type = 'range';
+    i.min = '0';
+    i.max = '100';
+    i.step = '5';
+    i.value = String(isNum(state.alt.riskAversion) ? state.alt.riskAversion : 30);
+    var out = el('div', 'range-value');
+    function label() {
+      var n = parseInt(i.value, 10);
+      var word = n <= 15 ? 'I can take the worst case on the chin — hold out for the best odds'
+        : n <= 45 ? 'I would rather not test the worst case'
+          : n <= 75 ? 'The worst case would really hurt — I want certainty'
+            : 'The worst case would be ruinous — almost any deal beats it';
+      out.textContent = n + '% — ' + word;
+    }
+    i.addEventListener('input', function () {
+      state.alt.riskAversion = parseInt(i.value, 10);
+      label();
+      markDirty();
+      if (refresh) refresh();
+    });
+    label();
+    wrap.appendChild(i);
+    wrap.appendChild(out);
+    return wrap;
+  }
+
+  function renderAltDerived(host) {
+    clear(host);
+    var c = computeAlt();
+    var p = panel('What the numbers say', '');
+
+    var grid = el('div', 'stat-grid');
+    grid.appendChild(stat('At stake', c.spread !== null ? fmtMoney(c.spread) : '—',
+      c.spread !== null ? 'The gap between your best and worst outcome without a deal. This is your skin in the game.'
+        : 'Put a figure on your BATNA and WATNA to see this.'));
+    grid.appendChild(stat('Expected without a deal', c.expected !== null ? fmtMoney(c.expected) : '—',
+      c.expected !== null ? 'Your three outcomes, weighted by the odds you gave them.' : 'Add values and odds above.'));
+    var walkStat = stat('Walk-away line', c.reservation !== null ? fmtMoney(c.reservation) : '—',
+      c.reservation === null ? 'Needs at least one valued outcome above.'
+        : c.overridden ? 'Set by you by hand.'
+          : 'Expected outcome, adjusted for how much risk you can carry.');
+    walkStat.className = 'stat accent';
+    grid.appendChild(walkStat);
+    p.appendChild(grid);
+
+    var gauge = buildGauge(c);
+    if (gauge) p.appendChild(gauge);
+
+    if (c.reservation !== null) {
+      var co = el('div', 'callout');
+      co.innerHTML = 'Any offer worth less than <b>' + escapeHtml(fmtMoney(c.reservation)) + '</b> leaves you better off ' +
+        'walking away and taking your chances. Below that line, saying no is not stubbornness — it is arithmetic.' +
+        (c.target !== null ? ' You are aiming for <b>' + escapeHtml(fmtMoney(c.target)) + '</b>.' : '');
+      p.appendChild(co);
+    }
+    if (c.target !== null && c.reservation !== null && c.target < c.reservation) {
+      p.appendChild(el('div', 'callout danger',
+        'Your target (<b>' + escapeHtml(fmtMoney(c.target)) + '</b>) is <b>below</b> your walk-away line ' +
+        '(<b>' + escapeHtml(fmtMoney(c.reservation)) + '</b>). Either you are aiming too low, or your alternatives are better than you thought.'));
+    }
+    if (c.spread !== null && c.theirSpread !== null) {
+      var mine = Math.abs(c.spread), theirs = Math.abs(c.theirSpread);
+      var msg;
+      if (mine > theirs * 1.2) {
+        msg = 'You have more riding on this than they do (<b>' + escapeHtml(fmtMoney(mine)) + '</b> against <b>' +
+          escapeHtml(fmtMoney(theirs)) + '</b>). Expect them to be patient. Your leverage has to come from evidence and from ' +
+          'concessions they want, not from waiting them out.';
+      } else if (theirs > mine * 1.2) {
+        msg = 'They have more riding on this than you do (<b>' + escapeHtml(fmtMoney(theirs)) + '</b> against <b>' +
+          escapeHtml(fmtMoney(mine)) + '</b>). Time is on your side — you can afford to be the one who is comfortable walking away.';
+      } else {
+        msg = 'You both have roughly the same amount at stake. Neither side can simply outlast the other, so the deal will ' +
+          'turn on trades rather than pressure.';
+      }
+      p.appendChild(el('div', 'callout warn', msg));
+    }
+    host.appendChild(p);
+  }
+
+  function stat(label, value, note) {
+    var s = el('div', 'stat');
+    s.appendChild(el('div', 'stat-label', escapeHtml(label)));
+    s.appendChild(el('div', 'stat-value', escapeHtml(value)));
+    if (note) s.appendChild(el('div', 'stat-note', note));
+    return s;
+  }
+
+  /* A single bar from worst to best, with the walk-away line and target
+     marked on it, so the acceptable zone is visible at a glance. */
+  function buildGauge(c) {
+    var pts = [];
+    ['worst', 'likely', 'best', 'expected', 'reservation', 'target'].forEach(function (k) {
+      if (isNum(c[k])) pts.push(c[k]);
+    });
+    if (pts.length < 2) return null;
+    var lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts);
+    if (hi - lo <= 0) return null;
+    var pad = (hi - lo) * 0.1;
+    lo -= pad; hi += pad;
+    function pct(v) { return Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100)); }
+
+    var wrap = el('div', 'gauge-wrap');
+    var bar = el('div', 'gauge-bar');
+
+    if (isNum(c.reservation)) {
+      var rP = pct(c.reservation);
+      var tP = isNum(c.target) ? Math.max(rP, pct(c.target)) : 100;
+      var z1 = el('div', 'gz bad'); z1.style.width = rP + '%'; bar.appendChild(z1);
+      var z2 = el('div', 'gz ok'); z2.style.width = (tP - rP) + '%'; bar.appendChild(z2);
+      if (tP < 100) { var z3 = el('div', 'gz great'); z3.style.width = (100 - tP) + '%'; bar.appendChild(z3); }
+    } else {
+      var z0 = el('div', 'gz plain'); z0.style.width = '100%'; bar.appendChild(z0);
+    }
+    wrap.appendChild(bar);
+
+    var marks = el('div', 'gauge-marks');
+    var defs = [
+      { k: 'worst', label: 'WATNA' },
+      { k: 'expected', label: 'Expected' },
+      { k: 'reservation', label: 'Walk away' },
+      { k: 'best', label: 'BATNA' },
+      { k: 'target', label: 'Target' }
+    ].filter(function (d) { return isNum(c[d.k]); })
+      .sort(function (a, b) { return c[a.k] - c[b.k]; });
+
+    defs.forEach(function (d, i) {
+      var m = el('div', 'gmark ' + (i % 2 ? 'low' : 'hi'));
+      m.style.left = pct(c[d.k]) + '%';
+      if (i % 2) {
+        m.innerHTML = '<div class="stem"></div><div class="gm-label">' + escapeHtml(d.label) + '</div>' +
+          '<div class="gm-val">' + escapeHtml(fmtMoney(c[d.k])) + '</div>';
+      } else {
+        m.innerHTML = '<div class="gm-label">' + escapeHtml(d.label) + '</div>' +
+          '<div class="gm-val">' + escapeHtml(fmtMoney(c[d.k])) + '</div><div class="stem"></div>';
+      }
+      marks.appendChild(m);
+    });
+    wrap.appendChild(marks);
+
+    if (isNum(c.reservation)) {
+      var lg = el('div', 'gauge-legend');
+      lg.innerHTML = '<span class="l-bad">Worse than walking away</span>' +
+        '<span class="l-ok">Acceptable — keep negotiating</span>' +
+        (isNum(c.target) ? '<span class="l-great">At or above target</span>' : '');
+      wrap.appendChild(lg);
+    }
+    return wrap;
+  }
+
+  /* ---------------- shared card plumbing ---------------- */
+
+  function makeCard(id, rankText, titleText, badges, actions) {
+    var collapsed = !!ui.collapsed[id];
+    var body = el('div', 'card-body');
+    var card = el('div', 'card' + (collapsed ? ' collapsed' : ''));
+    card.setAttribute('data-id', id);
+    var head = el('div', 'card-head');
+
+    var grip = el('span', 'card-grip', '⠿');
+    grip.title = 'Drag to reorder';
+    head.appendChild(grip);
+    head.appendChild(el('span', 'card-caret', '▾'));
+    if (rankText != null) head.appendChild(el('span', 'card-rank', escapeHtml(rankText)));
+
+    var title = el('span', 'card-title' + (has(titleText) ? '' : ' untitled'),
+      escapeHtml(has(titleText) ? titleText : 'Untitled — click to fill in'));
+    head.appendChild(title);
+
+    var badgeHost = el('span', 'card-actions');
+    head.appendChild(badgeHost);
+    var actionHost = el('span', 'card-actions');
+    head.appendChild(actionHost);
+
+    head.addEventListener('click', function (e) {
+      if (e.target.closest('button') || e.target === grip) return;
+      ui.collapsed[id] = !ui.collapsed[id];
+      card.classList.toggle('collapsed');
+      if (!ui.collapsed[id]) growAll(body);
+      saveDraft();
+    });
+
+    (actions || []).forEach(function (a) {
+      var b = el('button', 'btn tiny' + (a.danger ? ' danger' : ''), a.label);
+      if (a.title) b.title = a.title;
+      b.addEventListener('click', function (e) { e.stopPropagation(); a.fn(); });
+      actionHost.appendChild(b);
+    });
+
+    card.appendChild(head);
+    card.appendChild(body);
+
+    card._grip = grip;
+    card._body = body;
+    card._setTitle = function (t) {
+      title.textContent = has(t) ? t : 'Untitled — click to fill in';
+      title.className = 'card-title' + (has(t) ? '' : ' untitled');
+    };
+    card._setBadges = function (list) {
+      clear(badgeHost);
+      (list || []).forEach(function (b) { badgeHost.appendChild(el('span', 'badge ' + (b.cls || ''), escapeHtml(b.text))); });
+    };
+    card._setBadges(badges);
+    return card;
+  }
+
+  function attachDnd(card, arr, idx, after) {
+    var grip = card._grip;
+    grip.draggable = true;
+    grip.addEventListener('dragstart', function (e) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(idx));
+      card.classList.add('dragging');
+    });
+    grip.addEventListener('dragend', function () { card.classList.remove('dragging'); });
+    card.addEventListener('dragover', function (e) { e.preventDefault(); card.classList.add('drop-target'); });
+    card.addEventListener('dragleave', function () { card.classList.remove('drop-target'); });
+    card.addEventListener('drop', function (e) {
+      e.preventDefault();
+      card.classList.remove('drop-target');
+      var from = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      if (isNaN(from) || from === idx || from < 0 || from >= arr.length) return;
+      var moved = arr.splice(from, 1)[0];
+      arr.splice(idx, 0, moved);
+      markDirty();
+      after();
+    });
+  }
+
+  function move(arr, item, dir) {
+    var i = arr.indexOf(item), j = i + dir;
+    if (i < 0 || j < 0 || j >= arr.length) return false;
+    arr.splice(i, 1);
+    arr.splice(j, 0, item);
+    return true;
+  }
+
+  /* =====================================================================
+     STEP 2 — desired end state
+     ===================================================================== */
+
+  function renderDemands(v) {
+    v.appendChild(sectionHead('Step 2', 'Your desired end state',
+      'A demand that cannot be measured cannot be agreed. For each thing you want, say <b>what</b>, ' +
+      '<b>to what specification</b>, <b>by when</b>, and <b>how you will know it has been done</b>. ' +
+      'Then rank them — top of the list is what you would keep if you could only keep one.'));
+
+    var summary = el('div');
+    var list = el('div');
+
+    var bar = el('div', 'list-toolbar no-print');
+    var add = el('button', 'btn primary', '+ Add a demand');
+    add.addEventListener('click', function () {
+      var d = {
+        id: uid('dm'), title: '', category: 'money', tier: 'important',
+        spec: '', when: '', who: '', proof: '', opening: '', target: '', minimum: '', why: '', support: []
+      };
+      state.demands.push(d);
+      ui.collapsed[d.id] = false;
+      markDirty();
+      draw();
+      var f = list.querySelector('[data-id="' + d.id + '"] input');
+      if (f) f.focus();
+    });
+    bar.appendChild(add);
+    var sortBtn = el('button', 'btn small', 'Must-haves first');
+    sortBtn.title = 'Reorder so must-haves come first, then important, then nice to have';
+    sortBtn.addEventListener('click', function () {
+      var order = { must: 0, important: 1, nice: 2 };
+      state.demands.sort(function (a, b) { return order[a.tier] - order[b.tier]; });
+      markDirty();
+      draw();
+      toast('Sorted by priority.');
+    });
+    bar.appendChild(sortBtn);
+    bar.appendChild(el('span', 'spacer'));
+    v.appendChild(bar);
+
+    v.appendChild(summary);
+    v.appendChild(list);
+    v.appendChild(nextButton('timeline', 'Next: build the record of truth →'));
+
+    function draw() {
+      drawSummary();
+      drawList();
+      renderNav();
+      growAll(list);
+    }
+
+    function drawSummary() {
+      clear(summary);
+      if (!state.demands.length) return;
+      var counts = { must: 0, important: 0, nice: 0 };
+      state.demands.forEach(function (d) { counts[d.tier]++; });
+      var p = panel(null, null);
+      var g = el('div', 'stat-grid');
+      g.appendChild(stat('Must have', String(counts.must), 'No agreement is worth signing without these.'));
+      g.appendChild(stat('Important', String(counts.important), 'Push hard, trade only for real movement.'));
+      g.appendChild(stat('Nice to have', String(counts.nice), 'Your natural bargaining chips.'));
+      p.appendChild(g);
+      var top = state.demands[0];
+      if (has(top.title)) {
+        p.appendChild(el('div', 'callout', 'Your number one priority is <b>' + escapeHtml(top.title) +
+          '</b>. If the negotiation drifts, this is the thing to steer it back to.'));
+      }
+      if (!counts.nice && state.demands.length > 1) {
+        p.appendChild(el('div', 'callout warn',
+          'Nothing is marked <b>nice to have</b>. A list where everything is essential leaves you no room to trade — ' +
+          'and reads as unreasonable across the table.'));
+      }
+      summary.appendChild(p);
+    }
+
+    function drawList() {
+      clear(list);
+      if (!state.demands.length) {
+        list.appendChild(emptyState('No demands yet. Start with the obvious one — the thing that made you open this tool — ' +
+          'then add the smaller items you would also like settled.'));
+        return;
+      }
+      state.demands.forEach(function (d, idx) {
+        var card = makeCard(d.id, '#' + (idx + 1), d.title, demandBadges(d), [
+          { label: '▲', title: 'Move up', fn: function () { if (move(state.demands, d, -1)) { markDirty(); draw(); } } },
+          { label: '▼', title: 'Move down', fn: function () { if (move(state.demands, d, 1)) { markDirty(); draw(); } } },
+          {
+            label: '✕', title: 'Delete this demand', danger: true, fn: function () {
+              uiConfirm('Delete this demand?', has(d.title) ? d.title : 'It is still untitled.', 'Delete').then(function (ok) {
+                if (!ok) return;
+                state.demands = state.demands.filter(function (x) { return x !== d; });
+                markDirty();
+                draw();
+              });
+            }
+          }
+        ]);
+        attachDnd(card, state.demands, idx, draw);
+
+        var b = card._body;
+        function head() {
+          card._setTitle(d.title);
+          card._setBadges(demandBadges(d));
+          drawSummary();
+          renderNav();
+        }
+
+        b.appendChild(makeField('What do you want?', 'one thing per card',
+          textControl(d, 'title', 'e.g. Payment of the final invoice', head)));
+        b.appendChild(row(
+          makeField('Kind of demand', '', selectControl(d, 'category', CATEGORY_OPTS, head)),
+          makeField('How important is it?', '', selectControl(d, 'tier', TIER_OPTS, head))
+        ));
+        b.appendChild(makeField('Specification', 'exactly what "done" looks like — amount, quality, standard, format',
+          areaControl(d, 'spec', 'e.g. $38,400 including GST, paid in cleared funds to the trading account, no deductions.', null, '80px')));
+        b.appendChild(row(
+          makeField('By when?', 'a date or a trigger', textControl(d, 'when', 'e.g. Within 14 days of signing', null)),
+          makeField('Who does it, and how?', '', textControl(d, 'who', 'e.g. Their finance team, by bank transfer', null))
+        ));
+        b.appendChild(makeField('How will you know it has been done?', 'the proof you will accept',
+          textControl(d, 'proof', 'e.g. Funds cleared in the account and a remittance advice emailed', null)));
+
+        var pos = el('div');
+        pos.appendChild(el('div', 'panel-sub', 'Three positions for this item. Open above your target; never let the ' +
+          'conversation drag you below your minimum without something in return.'));
+        pos.appendChild(row(
+          makeField('Opening ask', '', textControl(d, 'opening', 'e.g. Full invoice + interest', null)),
+          makeField('Realistic target', '', textControl(d, 'target', 'e.g. Full invoice', null)),
+          makeField('Minimum acceptable', '', textControl(d, 'minimum', 'e.g. 85% within 30 days', null))
+        ));
+        b.appendChild(pos);
+
+        b.appendChild(makeField('Why you are entitled to it', 'the argument in one or two lines',
+          areaControl(d, 'why', 'e.g. Clause 14 of the contract; the work passed inspection on 3 March.', null, '62px')));
+
+        if (state.events.length) {
+          var picker = el('div', 'chip-picker');
+          sortedEvents().forEach(function (ev) {
+            var on = d.support.indexOf(ev.id) !== -1;
+            var chip = el('button', 'chip' + (on ? ' on' : ''),
+              escapeHtml(fmtDate(ev.date) + ' — ' + (has(ev.title) ? ev.title : 'untitled event')));
+            chip.addEventListener('click', function () {
+              var i = d.support.indexOf(ev.id);
+              if (i === -1) d.support.push(ev.id); else d.support.splice(i, 1);
+              chip.classList.toggle('on');
+              markDirty();
+            });
+            picker.appendChild(chip);
+          });
+          b.appendChild(makeField('Backed up by which events?', 'from your timeline', picker));
+        }
+
+        list.appendChild(card);
+      });
+    }
+
+    draw();
+  }
+
+  function demandBadges(d) {
+    return [
+      { text: TIER_LABEL[d.tier] || '', cls: d.tier },
+      { text: CATEGORY_LABEL[d.category] || '', cls: 'muted' }
+    ];
+  }
+
+  /* =====================================================================
+     STEP 3 — record of truth
+     ===================================================================== */
+
+  function sortedEvents() {
+    return state.events.slice().sort(function (a, b) {
+      var ad = has(a.date) ? a.date : '9999-99-99';
+      var bd = has(b.date) ? b.date : '9999-99-99';
+      if (ad < bd) return -1;
+      if (ad > bd) return 1;
+      return 0;
+    });
+  }
+
+  function renderTimeline(v) {
+    v.appendChild(sectionHead('Step 3', 'The record of truth',
+      'Facts win arguments that opinions lose. Put every event that matters on the timeline, in order, and note the ' +
+      'evidence that proves it — including <b>where that evidence is kept</b>, so you can lay hands on it in the room. ' +
+      'Events sort themselves by date as you add them.'));
+
+    var bar = el('div', 'list-toolbar no-print');
+    var add = el('button', 'btn primary', '+ Add an event');
+    add.addEventListener('click', function () {
+      var e = {
+        id: uid('ev'), date: todayIso(), title: '', type: 'other', what: '', who: '',
+        status: 'unverified', key: false, evidence: []
+      };
+      state.events.push(e);
+      ui.collapsed[e.id] = false;
+      markDirty();
+      draw();
+      var f = list.querySelector('[data-id="' + e.id + '"] input[type="text"]');
+      if (f) f.focus();
+    });
+    bar.appendChild(add);
+    bar.appendChild(el('span', 'spacer'));
+    v.appendChild(bar);
+
+    var summary = el('div');
+    var list = el('div', 'tl');
+    var register = el('div');
+    v.appendChild(summary);
+    v.appendChild(list);
+    v.appendChild(register);
+    v.appendChild(nextButton('concessions', 'Next: what can you trade? →'));
+
+    function draw() {
+      drawSummary();
+      drawList();
+      drawRegister();
+      renderNav();
+      growAll(list);
+    }
+
+    function drawSummary() {
+      clear(summary);
+      if (!state.events.length) return;
+      var keyN = 0, disputed = 0, unevidenced = 0;
+      state.events.forEach(function (e) {
+        if (e.key) keyN++;
+        if (e.status === 'disputed') disputed++;
+        if ((e.key || e.status === 'disputed') && !e.evidence.length) unevidenced++;
+      });
+      var p = panel(null, null);
+      var g = el('div', 'stat-grid');
+      g.appendChild(stat('Events', String(state.events.length), 'On the timeline.'));
+      g.appendChild(stat('Key moments', String(keyN), 'The ones the whole case turns on.'));
+      g.appendChild(stat('Disputed', String(disputed), 'They tell it differently.'));
+      g.appendChild(stat('Evidence items', String(countEvidence()), 'Attached across all events.'));
+      p.appendChild(g);
+      if (unevidenced) {
+        p.appendChild(el('div', 'callout warn', '<b>' + unevidenced + '</b> key or disputed event' +
+          (unevidenced === 1 ? ' has' : 's have') + ' no evidence attached. Those are the points where you will be asked ' +
+          '“how do you know?” — find something before you get there.'));
+      }
+      summary.appendChild(p);
+    }
+
+    function drawList() {
+      clear(list);
+      if (!state.events.length) {
+        list.appendChild(emptyState('The timeline is empty. Start at the beginning — the agreement, the order, the ' +
+          'handshake — and work forward to today.'));
+        return;
+      }
+      sortedEvents().forEach(function (e) {
+        var badges = [{ text: fmtDate(e.date), cls: 'info' }];
+        if (e.key) badges.push({ text: 'Key', cls: 'warn' });
+        if (e.status === 'disputed') badges.push({ text: 'Disputed', cls: 'danger' });
+        else if (e.status === 'agreed') badges.push({ text: 'Agreed', cls: 'good' });
+        badges.push({ text: e.evidence.length + ' evid.', cls: e.evidence.length ? '' : 'muted' });
+
+        var node = el('div', 'tl-node');
+        var card = makeCard(e.id, null, e.title, badges, [
+          {
+            label: '✕', title: 'Delete this event', danger: true, fn: function () {
+              uiConfirm('Delete this event?', 'Its evidence entries go with it.', 'Delete').then(function (ok) {
+                if (!ok) return;
+                state.events = state.events.filter(function (x) { return x !== e; });
+                state.demands.forEach(function (d) {
+                  d.support = d.support.filter(function (id) { return id !== e.id; });
+                });
+                markDirty();
+                draw();
+              });
+            }
+          }
+        ]);
+        if (e.key) node.classList.add('is-key');
+        if (e.status === 'disputed') node.classList.add('is-disputed');
+        card._grip.style.display = 'none';   // order comes from the dates
+
+        var b = card._body;
+        function head() {
+          card._setTitle(e.title);
+          var bs = [{ text: fmtDate(e.date), cls: 'info' }];
+          if (e.key) bs.push({ text: 'Key', cls: 'warn' });
+          if (e.status === 'disputed') bs.push({ text: 'Disputed', cls: 'danger' });
+          else if (e.status === 'agreed') bs.push({ text: 'Agreed', cls: 'good' });
+          bs.push({ text: e.evidence.length + ' evid.', cls: e.evidence.length ? '' : 'muted' });
+          card._setBadges(bs);
+          node.classList.toggle('is-key', !!e.key);
+          node.classList.toggle('is-disputed', e.status === 'disputed');
+          drawSummary();
+          drawRegister();
+          renderNav();
+        }
+
+        b.appendChild(row(
+          makeField('Date', '', textControl(e, 'date', '', function () { markDirty(); head(); }, 'date')),
+          makeField('What happened?', 'a headline', textControl(e, 'title', 'e.g. Final invoice issued', head))
+        ));
+        b.appendChild(row(
+          makeField('Type of event', '', selectControl(e, 'type', EVENT_TYPE_OPTS, head)),
+          makeField('Where does it stand?', '', selectControl(e, 'status', EVENT_STATUS_OPTS, head))
+        ));
+        b.appendChild(makeField('Detail', 'what was said, done, sent or agreed',
+          areaControl(e, 'what', 'Facts only. Save the interpretation for your argument.', null, '80px')));
+        b.appendChild(row(
+          makeField('Who was involved?', '', textControl(e, 'who', 'e.g. Me, J. Patel (site manager)', null)),
+          makeField('', '', checkControl('This is a key moment in the dispute', e, 'key', head))
+        ));
+
+        /* evidence */
+        var evHead = el('div', 'ev-head');
+        evHead.appendChild(document.createTextNode('Evidence for this event'));
+        evHead.appendChild(el('span', 'spacer'));
+        var addEv = el('button', 'btn tiny', '+ Add evidence');
+        evHead.appendChild(addEv);
+        b.appendChild(evHead);
+
+        var evList = el('div', 'ev-list');
+        b.appendChild(evList);
+
+        addEv.addEventListener('click', function () {
+          e.evidence.push({
+            id: uid('vd'), label: '', type: 'document', where: '', link: '',
+            strength: 'moderate', theyHave: false, notes: ''
+          });
+          markDirty();
+          drawEvidence();
+          head();
+        });
+
+        function drawEvidence() {
+          clear(evList);
+          if (!e.evidence.length) {
+            var n = el('div', 'panel-sub', 'Nothing attached. Even a note saying “no record kept” is worth writing down — ' +
+              'it tells you where you are exposed.');
+            n.style.marginBottom = '0';
+            evList.appendChild(n);
+            return;
+          }
+          e.evidence.forEach(function (ev) {
+            var item = el('div', 'ev-item ' + (ev.strength === 'strong' ? 'strong' : ev.strength === 'weak' ? 'weak' : ''));
+            var top = el('div', 'ev-top');
+            top.appendChild(el('span', 'ev-title', escapeHtml(has(ev.label) ? ev.label : 'New evidence item')));
+            var rm = el('button', 'btn tiny danger', '✕');
+            rm.title = 'Remove this evidence';
+            rm.addEventListener('click', function () {
+              e.evidence = e.evidence.filter(function (x) { return x !== ev; });
+              markDirty();
+              drawEvidence();
+              head();
+            });
+            top.appendChild(rm);
+            item.appendChild(top);
+
+            item.appendChild(row(
+              makeField('What is it?', '', textControl(ev, 'label', 'e.g. Signed variation order VO-12', function () {
+                top.querySelector('.ev-title').textContent = has(ev.label) ? ev.label : 'New evidence item';
+                head();
+              })),
+              makeField('Kind', '', selectControl(ev, 'type', EVIDENCE_TYPE_OPTS, head))
+            ));
+            item.appendChild(row(
+              makeField('Where is it kept?', 'so you can produce it on the day',
+                textControl(ev, 'where', 'e.g. Dropbox / Riverside / Variations, and a printed copy in the red folder', head)),
+              makeField('Link', 'optional', textControl(ev, 'link', 'https://…', head, 'url'))
+            ));
+            item.appendChild(row(
+              makeField('How strong is it?', '', selectControl(ev, 'strength', STRENGTH_OPTS, function () {
+                item.className = 'ev-item ' + (ev.strength === 'strong' ? 'strong' : ev.strength === 'weak' ? 'weak' : '');
+                head();
+              })),
+              makeField('', '', checkControl('They have a copy too', ev, 'theyHave', head))
+            ));
+            item.appendChild(makeField('Notes', 'what it proves, and any weakness in it',
+              textControl(ev, 'notes', 'e.g. Proves they approved the extra work — but it is unsigned by their PM', head)));
+            evList.appendChild(item);
+          });
+        }
+        drawEvidence();
+
+        node.appendChild(card);
+        list.appendChild(node);
+      });
+    }
+
+    function drawRegister() {
+      clear(register);
+      if (!countEvidence()) return;
+      var p = panel('Evidence register', 'Everything you have, in one list — hand this to a lawyer or take it into the room.');
+      var scroll = el('div', 'table-scroll');
+      var t = el('table', 'reg');
+      t.innerHTML = '<thead><tr><th>Evidence</th><th>Kind</th><th>Relates to</th><th>Stored</th><th>Strength</th></tr></thead>';
+      var tb = document.createElement('tbody');
+      sortedEvents().forEach(function (e) {
+        e.evidence.forEach(function (ev) {
+          var tr = document.createElement('tr');
+          var where = escapeHtml(ev.where);
+          if (has(ev.link)) {
+            where += (has(ev.where) ? '<br>' : '') + '<a href="' + escapeHtml(ev.link) + '" target="_blank" rel="noopener">link</a>';
+          }
+          tr.innerHTML =
+            '<td><b>' + escapeHtml(has(ev.label) ? ev.label : '(unnamed)') + '</b>' +
+            (has(ev.notes) ? '<br><span style="color:#6E6E73">' + escapeHtml(ev.notes) + '</span>' : '') + '</td>' +
+            '<td>' + escapeHtml(EVIDENCE_TYPE_LABEL[ev.type] || ev.type) + '</td>' +
+            '<td>' + escapeHtml(fmtDate(e.date)) + '<br>' + escapeHtml(has(e.title) ? e.title : '(untitled event)') + '</td>' +
+            '<td>' + (where || '<span style="color:#D97706">not recorded</span>') + '</td>' +
+            '<td>' + escapeHtml(STRENGTH_LABEL[ev.strength] || ev.strength) + (ev.theyHave ? '<br><span style="color:#6E6E73">they have it</span>' : '') + '</td>';
+          tb.appendChild(tr);
+        });
+      });
+      t.appendChild(tb);
+      scroll.appendChild(t);
+      p.appendChild(scroll);
+      register.appendChild(p);
+    }
+
+    draw();
+  }
+
+  /* =====================================================================
+     STEP 4 — concessions
+     ===================================================================== */
+
+  function chipVerdict(c) {
+    var d = (c.value || 0) - (c.cost || 0);
+    if (d >= 2) return { text: 'Ideal chip', cls: 'good' };
+    if (d === 1) return { text: 'Good value', cls: 'good' };
+    if (d === 0) return { text: 'Even trade', cls: '' };
+    if (d === -1) return { text: 'Costly', cls: 'warn' };
+    return { text: 'Expensive', cls: 'danger' };
+  }
+
+  function demandTitle(id) {
+    var d = null;
+    state.demands.forEach(function (x) { if (x.id === id) d = x; });
+    if (!d) return null;
+    return has(d.title) ? d.title : 'Untitled demand';
+  }
+
+  function renderConcessions(v) {
+    v.appendChild(sectionHead('Step 4', 'Concessions — your bargaining chips',
+      'Nobody signs a deal that only serves the other side. Work out what you can give away, what each thing really ' +
+      'costs you, and what it is worth to them. The best chips are <b>cheap for you and valuable to them</b> — and ' +
+      'every one of them should be spent buying something off your demands list, never given away to be nice.'));
+
+    var bar = el('div', 'list-toolbar no-print');
+    var add = el('button', 'btn primary', '+ Add a concession');
+    add.addEventListener('click', function () {
+      var c = {
+        id: uid('cn'), label: '', detail: '', cost: 2, value: 4,
+        condition: '', tradeFor: '', stage: 'mid', status: 'available'
+      };
+      state.concessions.push(c);
+      ui.collapsed[c.id] = false;
+      markDirty();
+      draw();
+      var f = list.querySelector('[data-id="' + c.id + '"] input');
+      if (f) f.focus();
+    });
+    bar.appendChild(add);
+    var sortBtn = el('button', 'btn small', 'Best chips first');
+    sortBtn.title = 'Order by leverage: cheap for you, valuable to them';
+    sortBtn.addEventListener('click', function () {
+      state.concessions.sort(function (a, b) {
+        return ((b.value || 0) - (b.cost || 0)) - ((a.value || 0) - (a.cost || 0));
+      });
+      markDirty();
+      draw();
+      toast('Sorted by leverage.');
+    });
+    bar.appendChild(sortBtn);
+    v.appendChild(bar);
+
+    var summary = el('div');
+    var list = el('div');
+    var redPanel = el('div');
+    v.appendChild(summary);
+    v.appendChild(list);
+    v.appendChild(redPanel);
+    v.appendChild(nextButton('brief', 'Next: read the whole brief →'));
+
+    function draw() {
+      drawSummary();
+      drawList();
+      renderNav();
+      growAll(list);
+    }
+
+    function drawSummary() {
+      clear(summary);
+      if (!state.concessions.length) return;
+      var best = null, unlinked = 0;
+      state.concessions.forEach(function (c) {
+        if (!has(c.tradeFor) || !demandTitle(c.tradeFor)) unlinked++;
+        var lev = (c.value || 0) - (c.cost || 0);
+        if (!best || lev > (best.value - best.cost)) best = c;
+      });
+      var p = panel(null, null);
+      var g = el('div', 'stat-grid');
+      g.appendChild(stat('Chips on hand', String(state.concessions.length), 'Things you could offer.'));
+      g.appendChild(stat('Best chip', best && has(best.label) ? best.label : '—',
+        best ? 'Costs you ' + best.cost + '/5, worth ' + best.value + '/5 to them.' : ''));
+      g.appendChild(stat('Red lines', String(state.redlines.length), 'Things you will not trade at any price.'));
+      p.appendChild(g);
+      if (unlinked) {
+        p.appendChild(el('div', 'callout warn', '<b>' + unlinked + '</b> concession' + (unlinked === 1 ? ' is' : 's are') +
+          ' not tied to anything you want in return. A concession given for free is not a concession — it is a discount. ' +
+          'Set “what it should buy” on each one.'));
+      }
+      summary.appendChild(p);
+    }
+
+    function drawList() {
+      clear(list);
+      if (!state.concessions.length) {
+        list.appendChild(emptyState('No concessions yet. Think about timing, publicity, paperwork, future work, ' +
+          'interest, instalments, and anything on your demands list marked “nice to have”.'));
+        return;
+      }
+      state.concessions.forEach(function (c, idx) {
+        var card = makeCard(c.id, '#' + (idx + 1), c.label, concessionBadges(c), [
+          { label: '▲', title: 'Move up', fn: function () { if (move(state.concessions, c, -1)) { markDirty(); draw(); } } },
+          { label: '▼', title: 'Move down', fn: function () { if (move(state.concessions, c, 1)) { markDirty(); draw(); } } },
+          {
+            label: '✕', title: 'Delete this concession', danger: true, fn: function () {
+              uiConfirm('Delete this concession?', has(c.label) ? c.label : 'It is still untitled.', 'Delete').then(function (ok) {
+                if (!ok) return;
+                state.concessions = state.concessions.filter(function (x) { return x !== c; });
+                markDirty();
+                draw();
+              });
+            }
+          }
+        ]);
+        attachDnd(card, state.concessions, idx, draw);
+
+        var b = card._body;
+        function head() {
+          card._setTitle(c.label);
+          card._setBadges(concessionBadges(c));
+          drawSummary();
+          renderNav();
+        }
+
+        b.appendChild(makeField('What could you offer?', '',
+          textControl(c, 'label', 'e.g. Accept payment in three monthly instalments', head)));
+        b.appendChild(makeField('The detail', 'exactly what you would be agreeing to',
+          areaControl(c, 'detail', 'e.g. 40% on signing, then two equal payments at 30 and 60 days, interest waived if kept to.', null, '70px')));
+        b.appendChild(row(
+          makeField('What it costs you', '1 = nothing, 5 = a great deal', scaleControl(c, 'cost', head)),
+          makeField('What it is worth to them', 'your honest guess', scaleControl(c, 'value', head))
+        ));
+
+        var demandOpts = [{ v: '', l: '— not tied to anything yet —' }].concat(state.demands.map(function (d, i) {
+          return { v: d.id, l: '#' + (i + 1) + ' ' + (has(d.title) ? d.title : 'Untitled demand') };
+        }));
+        b.appendChild(row(
+          makeField('What should it buy you?', 'from your demands list', selectControl(c, 'tradeFor', demandOpts, head)),
+          makeField('When would you play it?', '', selectControl(c, 'stage', STAGE_OPTS, head))
+        ));
+        b.appendChild(row(
+          makeField('Strings attached', 'the condition you would put on it',
+            textControl(c, 'condition', 'e.g. Only if they confirm the full amount in writing first', null)),
+          makeField('Where it stands', '', selectControl(c, 'status', STATUS_OPTS, head))
+        ));
+
+        var vd = chipVerdict(c);
+        var note = el('div', 'callout' + (vd.cls === 'danger' ? ' danger' : vd.cls === 'warn' ? ' warn' : ''));
+        note.innerHTML = vd.text === 'Ideal chip'
+          ? 'Cheap for you, valuable to them. Lead with this — it buys goodwill you can spend later.'
+          : vd.text === 'Expensive'
+            ? 'This costs you more than it is worth to them. Keep it back; if you have to use it, make sure it closes the deal outright.'
+            : 'Trade this for something real. Name what you expect in return in the same sentence you offer it.';
+        b.appendChild(note);
+
+        list.appendChild(card);
+      });
+    }
+
+    /* red lines */
+    var rp = panel('Red lines', 'The things you will not agree to, whatever is offered. Write them down now, while you are calm.');
+    var rl = el('div');
+    rp.appendChild(rl);
+    var addRl = el('button', 'btn small', '+ Add a red line');
+    addRl.addEventListener('click', function () {
+      state.redlines.push({ id: uid('rl'), text: '' });
+      markDirty();
+      drawRed();
+      var inputs = rl.querySelectorAll('input');
+      if (inputs.length) inputs[inputs.length - 1].focus();
+    });
+    rp.appendChild(addRl);
+    redPanel.appendChild(rp);
+
+    function drawRed() {
+      clear(rl);
+      if (!state.redlines.length) {
+        var n = el('div', 'panel-sub', 'None set — e.g. “No confidentiality clause that stops me warning others”, ' +
+          '“No admission of fault”.');
+        rl.appendChild(n);
+      }
+      state.redlines.forEach(function (r) {
+        var w = el('div', 'redline-row');
+        w.appendChild(textControl(r, 'text', 'e.g. I will not sign away the warranty claim', function () { renderNav(); }));
+        var rm = el('button', 'btn tiny danger', '✕');
+        rm.addEventListener('click', function () {
+          state.redlines = state.redlines.filter(function (x) { return x !== r; });
+          markDirty();
+          drawRed();
+        });
+        w.appendChild(rm);
+        rl.appendChild(w);
+      });
+    }
+    drawRed();
+
+    draw();
+  }
+
+  function concessionBadges(c) {
+    var vd = chipVerdict(c);
+    var b = [
+      { text: vd.text, cls: vd.cls },
+      { text: STAGE_LABEL[c.stage] || '', cls: 'muted' }
+    ];
+    if (c.status !== 'available') b.push({ text: STATUS_LABEL[c.status] || '', cls: 'info' });
+    return b;
+  }
+
+  /* =====================================================================
+     STEP 5 — the brief
+     ===================================================================== */
+
+  function readiness() {
+    var c = computeAlt();
+    var out = [];
+    function add(ok, text) { out.push({ ok: ok, text: text }); }
+
+    add(has(state.matter.title) && has(state.matter.otherParty), 'The dispute and the other party are named.');
+    add(has(state.alt.best.desc) && has(state.alt.worst.desc), 'Both your best and worst outcomes without a deal are described.');
+    add(c.reservation !== null, 'You have a walk-away figure, so you know when to say no.');
+
+    var noMin = state.demands.filter(function (d) { return !has(d.minimum); }).length;
+    add(state.demands.length > 0, state.demands.length ? state.demands.length + ' demands recorded.' : 'No demands recorded yet.');
+    add(state.demands.length > 0 && noMin === 0,
+      noMin ? noMin + ' demand' + (noMin === 1 ? '' : 's') + ' with no minimum acceptable position.' : 'Every demand has a minimum you would accept.');
+    var noSpec = state.demands.filter(function (d) { return !has(d.spec); }).length;
+    add(state.demands.length > 0 && noSpec === 0,
+      noSpec ? noSpec + ' demand' + (noSpec === 1 ? '' : 's') + ' without a specification — “done” is undefined.' : 'Every demand is specified.');
+
+    add(state.events.length > 0, state.events.length ? state.events.length + ' events on the timeline.' : 'The timeline is empty.');
+    var bare = state.events.filter(function (e) { return (e.key || e.status === 'disputed') && !e.evidence.length; }).length;
+    add(state.events.length > 0 && bare === 0,
+      bare ? bare + ' key or disputed event' + (bare === 1 ? '' : 's') + ' with no evidence.' : 'Every key or disputed event has evidence attached.');
+    var noWhere = 0;
+    state.events.forEach(function (e) {
+      e.evidence.forEach(function (ev) { if (!has(ev.where) && !has(ev.link)) noWhere++; });
+    });
+    add(countEvidence() > 0 && noWhere === 0,
+      noWhere ? noWhere + ' evidence item' + (noWhere === 1 ? '' : 's') + ' with no storage location recorded.'
+        : countEvidence() ? 'Every evidence item says where it is kept.' : 'No evidence recorded yet.');
+
+    add(state.concessions.length > 0, state.concessions.length ? state.concessions.length + ' concessions prepared.' : 'No concessions prepared — you have nothing to trade.');
+    var unlinked = state.concessions.filter(function (x) { return !has(x.tradeFor) || !demandTitle(x.tradeFor); }).length;
+    add(state.concessions.length > 0 && unlinked === 0,
+      unlinked ? unlinked + ' concession' + (unlinked === 1 ? '' : 's') + ' not tied to anything you want in return.' : 'Every concession is tied to a demand.');
+    add(state.redlines.length > 0, state.redlines.length ? state.redlines.length + ' red line' + (state.redlines.length === 1 ? '' : 's') + ' set.' : 'No red lines set.');
+
+    return out;
+  }
+
+  function buildBriefHtml() {
+    var m = state.matter, c = computeAlt(), h = [];
+    function esc(s) { return escapeHtml(s); }
+    function para(label, text) {
+      return has(text) ? '<p><b>' + esc(label) + '</b> ' + esc(text).replace(/\n/g, '<br>') + '</p>' : '';
+    }
+
+    h.push('<h2>The dispute</h2>');
+    h.push('<h3>' + esc(has(m.title) ? m.title : 'Untitled dispute') + '</h3>');
+    var line = [];
+    if (has(m.otherParty)) line.push('Against <b>' + esc(m.otherParty) + '</b>');
+    if (has(m.myRole)) line.push('as ' + esc(m.myRole));
+    if (has(m.deadline)) line.push('deadline: ' + esc(m.deadline));
+    if (has(m.forum)) line.push('forum: ' + esc(m.forum));
+    if (line.length) h.push('<p class="muted">' + line.join(' &middot; ') + '</p>');
+    if (has(m.summary)) h.push('<p>' + esc(m.summary).replace(/\n/g, '<br>') + '</p>');
+
+    h.push('<h2>Readiness check</h2><ul class="check-list">');
+    readiness().forEach(function (r) {
+      h.push('<li class="' + (r.ok ? 'ok' : 'gap') + '"><span class="ic">' + (r.ok ? '&#10003;' : '!') + '</span><span>' + esc(r.text) + '</span></li>');
+    });
+    h.push('</ul>');
+
+    h.push('<h2>The bottom line</h2>');
+    h.push('<p><b>Walk-away line:</b> ' + esc(c.reservation !== null ? fmtMoney(c.reservation) : 'not set') +
+      ' &nbsp;&middot;&nbsp; <b>Target:</b> ' + esc(c.target !== null ? fmtMoney(c.target) : 'not set') +
+      ' &nbsp;&middot;&nbsp; <b>At stake:</b> ' + esc(c.spread !== null ? fmtMoney(c.spread) : 'not calculated') + '</p>');
+    if (c.reservation !== null) {
+      h.push('<p>Reject anything worth less than <b>' + esc(fmtMoney(c.reservation)) + '</b> — below that line you are ' +
+        'better off taking your chances without an agreement.</p>');
+    }
+
+    h.push('<h2>If there is no agreement</h2>');
+    h.push(para('Best realistic outcome (BATNA):', state.alt.best.desc));
+    if (isNum(state.alt.best.value)) h.push('<p class="muted">Worth ' + esc(fmtMoney(state.alt.best.value)) + ' &middot; ' + esc(String(state.alt.best.prob || 0)) + '% likely</p>');
+    h.push(para('Most likely outcome:', state.alt.likely.desc));
+    if (isNum(state.alt.likely.value)) h.push('<p class="muted">Worth ' + esc(fmtMoney(state.alt.likely.value)) + ' &middot; ' + esc(String(state.alt.likely.prob || 0)) + '% likely</p>');
+    h.push(para('Worst realistic outcome (WATNA):', state.alt.worst.desc));
+    if (isNum(state.alt.worst.value)) h.push('<p class="muted">Worth ' + esc(fmtMoney(state.alt.worst.value)) + ' &middot; ' + esc(String(state.alt.worst.prob || 0)) + '% likely</p>');
+
+    if (state.alt.stakes.length) {
+      h.push('<h3>Also at stake</h3><ul>');
+      state.alt.stakes.forEach(function (s) {
+        if (!has(s.label) && !has(s.notes)) return;
+        h.push('<li><b>' + esc(s.label) + '</b> (' + esc(s.impact) + ' impact)' + (has(s.notes) ? ' — ' + esc(s.notes) : '') + '</li>');
+      });
+      h.push('</ul>');
+    }
+    var th = state.alt.theirs;
+    if (has(th.best) || has(th.worst) || has(th.pressure)) {
+      h.push('<h3>Their position, as best you can tell</h3>');
+      h.push(para('Their best without a deal:', th.best));
+      h.push(para('Their worst without a deal:', th.worst));
+      h.push(para('Pressure they are under:', th.pressure));
+    }
+
+    h.push('<h2>What you want, in order</h2>');
+    if (!state.demands.length) {
+      h.push('<p class="muted">Nothing recorded.</p>');
+    } else {
+      state.demands.forEach(function (d, i) {
+        h.push('<div class="b-item ' + esc(d.tier) + '">');
+        h.push('<div class="b-title">' + (i + 1) + '. ' + esc(has(d.title) ? d.title : 'Untitled demand') + '</div>');
+        var meta = [TIER_LABEL[d.tier] || '', CATEGORY_LABEL[d.category] || ''];
+        if (has(d.when)) meta.push('by ' + d.when);
+        if (has(d.who)) meta.push(d.who);
+        h.push('<div class="b-meta">' + esc(meta.filter(has).join(' · ')) + '</div>');
+        if (has(d.spec)) h.push('<div class="b-detail"><b>Specification:</b> ' + esc(d.spec).replace(/\n/g, '<br>') + '</div>');
+        if (has(d.proof)) h.push('<div class="b-detail"><b>Proof it is done:</b> ' + esc(d.proof) + '</div>');
+        var pos = [];
+        if (has(d.opening)) pos.push('open at ' + d.opening);
+        if (has(d.target)) pos.push('target ' + d.target);
+        if (has(d.minimum)) pos.push('minimum ' + d.minimum);
+        if (pos.length) h.push('<div class="b-detail"><b>Positions:</b> ' + esc(pos.join(' → ')) + '</div>');
+        if (has(d.why)) h.push('<div class="b-detail"><b>Why:</b> ' + esc(d.why) + '</div>');
+        var sup = (d.support || []).map(function (id) {
+          var found = null;
+          state.events.forEach(function (e) { if (e.id === id) found = e; });
+          return found ? fmtDate(found.date) + ' ' + (has(found.title) ? found.title : 'event') : null;
+        }).filter(Boolean);
+        if (sup.length) h.push('<div class="b-detail muted"><b>Backed by:</b> ' + esc(sup.join('; ')) + '</div>');
+        h.push('</div>');
+      });
+    }
+
+    h.push('<h2>Record of truth</h2>');
+    if (!state.events.length) {
+      h.push('<p class="muted">No events recorded.</p>');
+    } else {
+      sortedEvents().forEach(function (e) {
+        var tags = [EVENT_TYPE_LABEL[e.type] || ''];
+        if (e.key) tags.push('KEY');
+        tags.push(EVENT_STATUS_LABEL[e.status] || '');
+        h.push('<div class="b-item">');
+        h.push('<div class="b-title">' + esc(fmtDate(e.date)) + ' — ' + esc(has(e.title) ? e.title : 'Untitled event') + '</div>');
+        h.push('<div class="b-meta">' + esc(tags.filter(has).join(' · ')) + (has(e.who) ? ' · ' + esc(e.who) : '') + '</div>');
+        if (has(e.what)) h.push('<div class="b-detail">' + esc(e.what).replace(/\n/g, '<br>') + '</div>');
+        if (e.evidence.length) {
+          h.push('<div class="b-detail"><b>Evidence:</b> ' + esc(e.evidence.map(function (v) {
+            return (has(v.label) ? v.label : 'unnamed') + ' (' + (STRENGTH_LABEL[v.strength] || '') + ')';
+          }).join('; ')) + '</div>');
+        } else if (e.key || e.status === 'disputed') {
+          h.push('<div class="b-detail muted"><b>Evidence:</b> none attached</div>');
+        }
+        h.push('</div>');
+      });
+    }
+
+    if (countEvidence()) {
+      h.push('<h2>Evidence register</h2>');
+      h.push('<div class="table-scroll"><table class="reg"><thead><tr><th>Evidence</th><th>Kind</th><th>Relates to</th><th>Stored</th><th>Strength</th></tr></thead><tbody>');
+      sortedEvents().forEach(function (e) {
+        e.evidence.forEach(function (v) {
+          h.push('<tr><td><b>' + esc(has(v.label) ? v.label : '(unnamed)') + '</b>' +
+            (has(v.notes) ? '<br><span class="muted">' + esc(v.notes) + '</span>' : '') + '</td>' +
+            '<td>' + esc(EVIDENCE_TYPE_LABEL[v.type] || v.type) + '</td>' +
+            '<td>' + esc(fmtDate(e.date)) + '<br>' + esc(has(e.title) ? e.title : '(untitled)') + '</td>' +
+            '<td>' + esc(v.where) + (has(v.link) ? '<br>' + esc(v.link) : '') + '</td>' +
+            '<td>' + esc(STRENGTH_LABEL[v.strength] || v.strength) + (v.theyHave ? '<br><span class="muted">they have it</span>' : '') + '</td></tr>');
+        });
+      });
+      h.push('</tbody></table></div>');
+    }
+
+    h.push('<h2>What you can trade</h2>');
+    if (!state.concessions.length) {
+      h.push('<p class="muted">No concessions prepared.</p>');
+    } else {
+      ['open', 'mid', 'close', 'last'].forEach(function (stage) {
+        var group = state.concessions.filter(function (x) { return x.stage === stage; });
+        if (!group.length) return;
+        h.push('<h3>' + esc(STAGE_LABEL[stage]) + '</h3>');
+        group.forEach(function (x) {
+          h.push('<div class="b-item">');
+          h.push('<div class="b-title">' + esc(has(x.label) ? x.label : 'Untitled concession') + '</div>');
+          var buys = demandTitle(x.tradeFor);
+          var meta = ['costs you ' + (x.cost || '?') + '/5', 'worth ' + (x.value || '?') + '/5 to them', chipVerdict(x).text];
+          if (x.status !== 'available') meta.push(STATUS_LABEL[x.status]);
+          h.push('<div class="b-meta">' + esc(meta.join(' · ')) + '</div>');
+          if (has(x.detail)) h.push('<div class="b-detail">' + esc(x.detail).replace(/\n/g, '<br>') + '</div>');
+          h.push('<div class="b-detail"><b>Buys:</b> ' + esc(buys || 'nothing yet — do not give this away for free') + '</div>');
+          if (has(x.condition)) h.push('<div class="b-detail"><b>Only if:</b> ' + esc(x.condition) + '</div>');
+          h.push('</div>');
+        });
+      });
+    }
+
+    h.push('<h2>Red lines</h2>');
+    if (!state.redlines.length) {
+      h.push('<p class="muted">None set.</p>');
+    } else {
+      h.push('<ul>');
+      state.redlines.forEach(function (r) { if (has(r.text)) h.push('<li>' + esc(r.text) + '</li>'); });
+      h.push('</ul>');
+    }
+
+    return h.join('\n');
+  }
+
+  function buildBriefText() {
+    var m = state.matter, c = computeAlt(), out = [];
+    function line(s) { out.push(s == null ? '' : String(s)); }
+    function heading(s) { line(''); line(s.toUpperCase()); line(new Array(s.length + 1).join('=')); }
+
+    line((has(m.title) ? m.title : 'Untitled dispute') + (has(m.otherParty) ? ' — against ' + m.otherParty : ''));
+    if (has(m.deadline)) line('Deadline: ' + m.deadline);
+    if (has(m.summary)) { line(''); line(m.summary); }
+
+    heading('The bottom line');
+    line('Walk-away line: ' + (c.reservation !== null ? fmtMoney(c.reservation) : 'not set'));
+    line('Target: ' + (c.target !== null ? fmtMoney(c.target) : 'not set'));
+    line('At stake: ' + (c.spread !== null ? fmtMoney(c.spread) : 'not calculated'));
+
+    heading('If there is no agreement');
+    line('BATNA (best): ' + (has(state.alt.best.desc) ? state.alt.best.desc : '—') + (isNum(state.alt.best.value) ? ' [' + fmtMoney(state.alt.best.value) + ']' : ''));
+    line('Most likely: ' + (has(state.alt.likely.desc) ? state.alt.likely.desc : '—') + (isNum(state.alt.likely.value) ? ' [' + fmtMoney(state.alt.likely.value) + ']' : ''));
+    line('WATNA (worst): ' + (has(state.alt.worst.desc) ? state.alt.worst.desc : '—') + (isNum(state.alt.worst.value) ? ' [' + fmtMoney(state.alt.worst.value) + ']' : ''));
+
+    heading('What you want, in order');
+    if (!state.demands.length) line('(nothing recorded)');
+    state.demands.forEach(function (d, i) {
+      line((i + 1) + '. ' + (has(d.title) ? d.title : 'Untitled') + '  [' + (TIER_LABEL[d.tier] || '') + ']');
+      if (has(d.spec)) line('   Spec: ' + d.spec.replace(/\n/g, ' '));
+      if (has(d.when)) line('   By: ' + d.when);
+      if (has(d.proof)) line('   Proof: ' + d.proof);
+      var pos = [];
+      if (has(d.opening)) pos.push('open ' + d.opening);
+      if (has(d.target)) pos.push('target ' + d.target);
+      if (has(d.minimum)) pos.push('min ' + d.minimum);
+      if (pos.length) line('   Positions: ' + pos.join(' -> '));
+    });
+
+    heading('Record of truth');
+    if (!state.events.length) line('(nothing recorded)');
+    sortedEvents().forEach(function (e) {
+      line(fmtDate(e.date) + ' — ' + (has(e.title) ? e.title : 'Untitled event') +
+        (e.key ? ' [KEY]' : '') + ' [' + (EVENT_STATUS_LABEL[e.status] || '') + ']');
+      if (has(e.what)) line('   ' + e.what.replace(/\n/g, ' '));
+      e.evidence.forEach(function (v) {
+        line('   * ' + (has(v.label) ? v.label : 'unnamed') + ' (' + (STRENGTH_LABEL[v.strength] || '') + ') — ' +
+          (has(v.where) ? v.where : 'location not recorded') + (has(v.link) ? ' ' + v.link : ''));
+      });
+    });
+
+    heading('What you can trade');
+    if (!state.concessions.length) line('(nothing prepared)');
+    state.concessions.forEach(function (x) {
+      line('- ' + (has(x.label) ? x.label : 'Untitled') + ' [' + (STAGE_LABEL[x.stage] || '') + '; costs ' +
+        (x.cost || '?') + '/5, worth ' + (x.value || '?') + '/5 to them]');
+      if (has(x.detail)) line('   ' + x.detail.replace(/\n/g, ' '));
+      line('   Buys: ' + (demandTitle(x.tradeFor) || 'nothing yet'));
+      if (has(x.condition)) line('   Only if: ' + x.condition);
+    });
+
+    heading('Red lines');
+    if (!state.redlines.length) line('(none set)');
+    state.redlines.forEach(function (r) { if (has(r.text)) line('- ' + r.text); });
+
+    return out.join('\n');
+  }
+
+  function renderBrief(v) {
+    v.appendChild(sectionHead('Step 5', 'Negotiation brief',
+      'Everything you have put in, arranged for the day itself. Print it, save it as a PDF, or download it as a ' +
+      'standalone page you can email to whoever is coming with you.'));
+
+    var bar = el('div', 'list-toolbar no-print');
+    var pr = el('button', 'btn primary', '⎙ Print / save as PDF');
+    pr.addEventListener('click', doPrint);
+    bar.appendChild(pr);
+    var cp = el('button', 'btn', '⧉ Copy as text');
+    cp.addEventListener('click', function () {
+      var text = buildBriefText();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { toast('Brief copied to the clipboard.'); }, fallback);
+      } else { fallback(); }
+      function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); toast('Brief copied to the clipboard.'); }
+        catch (err) { toast('Could not copy — use Print instead.', true); }
+        document.body.removeChild(ta);
+      }
+    });
+    bar.appendChild(cp);
+    var dl = el('button', 'btn', '⤓ Download brief');
+    dl.addEventListener('click', exportBriefFile);
+    bar.appendChild(dl);
+    v.appendChild(bar);
+
+    var p = panel(null, null);
+    p.classList.add('brief');
+    p.innerHTML = buildBriefHtml();
+    v.appendChild(p);
+  }
+
+  function doPrint() {
+    if (ui.section !== 'brief') { go('brief'); setTimeout(function () { window.print(); }, 120); }
+    else window.print();
+  }
+
+  /* =====================================================================
+     Files in and out
+     ===================================================================== */
+
+  function exportJson() {
+    var name = 'dispute-' + slug(state.matter.title) + '.json';
+    downloadFile(name, JSON.stringify(state, null, 2), 'application/json');
+    toast('Saved ' + name + ' to your downloads.');
+  }
+
+  function importFromFile(file) {
+    var r = new FileReader();
+    r.onload = function () {
+      var data;
+      try { data = JSON.parse(String(r.result)); }
+      catch (e) { toast('That file is not readable JSON.', true); return; }
+      if (!data || typeof data !== 'object') { toast('That file does not look like a workbench file.', true); return; }
+      state = normalise(data);
+      ui.collapsed = {};
+      markDirty();
+      render();
+      toast('Loaded ' + file.name + '.');
+    };
+    r.onerror = function () { toast('Could not read that file.', true); };
+    r.readAsText(file);
+  }
+
+  var BRIEF_CSS =
+    'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#1D1D1F;background:#fff;' +
+    'max-width:820px;margin:0 auto;padding:28px 22px 60px;line-height:1.5;font-size:15px;}' +
+    '.doc-title{font-size:1.5rem;font-weight:700;letter-spacing:-0.02em;margin-bottom:0.2rem;}' +
+    '.doc-sub{font-size:0.8rem;color:#6E6E73;margin-bottom:1.4rem;}' +
+    'h2{font-size:0.78rem;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#0A66C2;' +
+    'margin:1.6rem 0 0.6rem;padding-bottom:0.3rem;border-bottom:1px solid rgba(0,0,0,0.08);}' +
+    'h3{font-size:0.92rem;margin:0.9rem 0 0.3rem;}' +
+    'p{font-size:0.86rem;line-height:1.6;margin-bottom:0.5rem;}' +
+    'ul{margin:0.3rem 0 0.7rem 1.1rem;font-size:0.86rem;line-height:1.6;}li{margin-bottom:0.25rem;}' +
+    '.muted{color:#6E6E73;}' +
+    '.b-item{border-left:3px solid rgba(0,0,0,0.16);padding:0.15rem 0 0.15rem 0.7rem;margin-bottom:0.7rem;}' +
+    '.b-item.must{border-left-color:#C0392B;}.b-item.important{border-left-color:#D97706;}.b-item.nice{border-left-color:#2E9F5C;}' +
+    '.b-item .b-title{font-size:0.88rem;font-weight:700;}' +
+    '.b-item .b-meta{font-size:0.78rem;color:#6E6E73;margin-top:0.1rem;line-height:1.5;}' +
+    '.b-item .b-detail{font-size:0.83rem;line-height:1.55;margin-top:0.25rem;}' +
+    '.check-list{list-style:none;margin-left:0;}' +
+    '.check-list li{display:flex;gap:0.5rem;align-items:flex-start;font-size:0.84rem;margin-bottom:0.3rem;}' +
+    '.check-list .ic{flex-shrink:0;font-weight:700;}.check-list .ok .ic{color:#2E9F5C;}.check-list .gap .ic{color:#D97706;}' +
+    '.table-scroll{overflow-x:auto;}' +
+    'table.reg{width:100%;border-collapse:collapse;font-size:0.8rem;}' +
+    'table.reg th,table.reg td{border:1px solid rgba(0,0,0,0.12);padding:0.4rem 0.55rem;text-align:left;vertical-align:top;}' +
+    'table.reg thead th{background:#F5F7FA;font-size:0.7rem;letter-spacing:0.4px;text-transform:uppercase;color:#6E6E73;}' +
+    '@media print{.b-item,table.reg{page-break-inside:avoid;}h2{page-break-after:avoid;}}';
+
+  function exportBriefFile() {
+    var title = has(state.matter.title) ? state.matter.title : 'Negotiation brief';
+    var doc = '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
+      '<title>' + escapeHtml(title) + ' — negotiation brief</title>\n<style>\n' + BRIEF_CSS + '\n</style>\n</head>\n<body>\n' +
+      '<div class="doc-title">Negotiation brief</div>\n' +
+      '<div class="doc-sub">Prepared ' + escapeHtml(fmtDate(todayIso())) + '</div>\n' +
+      buildBriefHtml() + '\n</body>\n</html>\n';
+    var name = 'brief-' + slug(state.matter.title) + '.html';
+    downloadFile(name, doc, 'text/html');
+    toast('Saved ' + name + ' to your downloads.');
+  }
+
+  /* =====================================================================
+     A worked example — an unpaid invoice on a shopfit
+     ===================================================================== */
+
+  function exampleState() {
+    var s = blankState();
+    s.matter = {
+      title: 'Unpaid final invoice — Riverside cafe fit-out',
+      otherParty: 'Riverside Developments Pty Ltd',
+      myRole: 'Joinery subcontractor',
+      summary: 'We completed the joinery package for the Riverside cafe fit-out. The final claim of $38,400 has been ' +
+        'unpaid for 71 days. They say four cabinet doors were not to specification; we say the doors were built to the ' +
+        'drawings they signed off, and that a variation they instructed accounts for most of the disputed amount.',
+      deadline: 'Mediation booked for 14 November',
+      forum: 'Mediation first, then QCAT if it fails',
+      currency: '$'
+    };
+    s.alt = {
+      best: {
+        desc: 'We win at the tribunal in roughly nine months, recover the full $38,400 plus interest, but only a token ' +
+          'contribution to our own costs.',
+        value: 33000, prob: 25
+      },
+      likely: {
+        desc: 'A tribunal splits the difference — we recover most of the claim, lose the argument on the four doors, ' +
+          'and carry our own costs and about six days of my time.',
+        value: 16000, prob: 55
+      },
+      worst: {
+        desc: 'The signed-off drawing cannot be produced, the doors finding goes against us on the whole package, and we ' +
+          'write off the claim plus our costs.',
+        value: -14000, prob: 20
+      },
+      riskAversion: 45,
+      reservationOverride: null,
+      target: 34000,
+      stakes: [
+        { id: uid('st'), label: 'Cash flow through summer', impact: 'high', notes: 'Two staff wages depend on this landing before Christmas.' },
+        { id: uid('st'), label: 'Working relationship with their project manager', impact: 'medium', notes: 'He puts three or four jobs a year our way.' },
+        { id: uid('st'), label: 'Six days of my time', impact: 'medium', notes: 'Preparing for and attending a tribunal hearing.' }
+      ],
+      theirs: {
+        best: 'We give up and go away, and they keep the $38,400.',
+        bestValue: 38400,
+        worst: 'They pay in full plus interest and their own legal costs, and the delay holds up their practical completion.',
+        worstValue: -46000,
+        pressure: 'They are refinancing the site in March and want no open disputes on the books. Their PM has already ' +
+          'asked twice when we can start the next stage.'
+      }
+    };
+    s.demands = [
+      {
+        id: uid('dm'), title: 'Payment of the final invoice', category: 'money', tier: 'must',
+        spec: '$38,400 including GST, paid in cleared funds to our trading account, with no deductions or back charges.',
+        when: 'Within 14 days of signing the agreement', who: 'Their finance team, by bank transfer',
+        proof: 'Funds cleared in the account and a remittance advice emailed to me',
+        opening: 'Full invoice plus $1,900 interest', target: 'Full invoice, $38,400', minimum: '$32,000 paid within 30 days',
+        why: 'Clause 14 of the subcontract: payment 30 days from claim. The claim was certified and never formally disputed in writing.',
+        support: []
+      },
+      {
+        id: uid('dm'), title: 'Variation VO-12 acknowledged in writing', category: 'documents', tier: 'important',
+        spec: 'A signed statement that the extra shelving instructed on 3 March was a variation, not remedial work.',
+        when: 'At the same time as the settlement is signed', who: 'Their project manager',
+        proof: 'A countersigned copy of VO-12 emailed to me',
+        opening: 'Signed variation plus written apology', target: 'Signed variation', minimum: 'An email confirming the instruction',
+        why: 'Without it the same argument reappears on the next job, and it is the bulk of the disputed amount.',
+        support: []
+      },
+      {
+        id: uid('dm'), title: 'Release of the retention', category: 'money', tier: 'important',
+        spec: 'The $4,100 retention released in full, defects liability treated as complete.',
+        when: 'Within 30 days', who: 'Their finance team', proof: 'Funds cleared',
+        opening: 'Released immediately', target: 'Released within 30 days', minimum: 'Released at the end of the defects period in March',
+        why: 'Practical completion was certified in February; nothing has been called up since.',
+        support: []
+      },
+      {
+        id: uid('dm'), title: 'A reference for the completed work', category: 'other', tier: 'nice',
+        spec: 'Two paragraphs on letterhead confirming scope, value and that the work was completed to programme.',
+        when: 'Within a month', who: 'Their project manager', proof: 'A PDF on letterhead',
+        opening: 'Reference plus permission to photograph the fit-out', target: 'Reference letter', minimum: 'Permission to use their name as a client',
+        why: 'Useful for the next tender round.', support: []
+      }
+    ];
+    s.events = [
+      {
+        id: uid('ev'), date: '2025-01-16', title: 'Subcontract signed', type: 'agreement',
+        what: 'Joinery package signed at $164,000, with 30-day payment terms and a 2.5% retention.',
+        who: 'Me, K. Ross (their contracts manager)', status: 'agreed', key: true,
+        evidence: [{
+          id: uid('vd'), label: 'Signed subcontract, all 22 pages', type: 'document',
+          where: 'Dropbox / Riverside / Contract, plus the original in the red folder in my office',
+          link: '', strength: 'strong', theyHave: true,
+          notes: 'Clause 14 sets the payment terms. Both signatures on the execution page.'
+        }]
+      },
+      {
+        id: uid('ev'), date: '2025-03-03', title: 'Extra shelving instructed on site', type: 'meeting',
+        what: 'Their PM asked for an extra 6m of shelving in the back-of-house, said to price it as a variation and keep going.',
+        who: 'Me, J. Patel (their PM)', status: 'disputed', key: true,
+        evidence: [
+          {
+            id: uid('vd'), label: 'Site diary entry, 3 March', type: 'note',
+            where: 'Site diary book, current one in the ute', link: '', strength: 'moderate', theyHave: false,
+            notes: 'Written the same day. Contemporaneous, but it is my own note.'
+          },
+          {
+            id: uid('vd'), label: 'Text message: "yep do the shelves, price it later"', type: 'message',
+            where: 'My phone, screenshot saved to Dropbox / Riverside / Variations', link: '', strength: 'strong', theyHave: true,
+            notes: 'Timestamped 3 March, 2:41pm. This is the strongest thing we have on the variation.'
+          }
+        ]
+      },
+      {
+        id: uid('ev'), date: '2025-04-11', title: 'Practical completion certified', type: 'notice',
+        what: 'Their superintendent certified practical completion with no defects listed against the joinery package.',
+        who: 'Superintendent', status: 'agreed', key: true,
+        evidence: [{
+          id: uid('vd'), label: 'PC certificate', type: 'document',
+          where: 'Dropbox / Riverside / Completion', link: '', strength: 'strong', theyHave: true,
+          notes: 'No defects recorded — this undercuts the story about the doors.'
+        }]
+      },
+      {
+        id: uid('ev'), date: '2025-04-14', title: 'Final claim issued', type: 'payment',
+        what: 'Final progress claim issued for $38,400 including the VO-12 shelving, due 14 May.',
+        who: 'Me', status: 'agreed', key: false,
+        evidence: [{
+          id: uid('vd'), label: 'Invoice 2481 and the claim schedule', type: 'invoice',
+          where: 'Accounting software, and Dropbox / Riverside / Claims', link: '', strength: 'strong', theyHave: true, notes: ''
+        }]
+      },
+      {
+        id: uid('ev'), date: '2025-05-22', title: 'First complaint about the doors', type: 'complaint',
+        what: 'Eight days after payment fell due, an email arrived saying four cabinet doors were "not to spec". No defect ' +
+          'notice was ever issued and no access was offered to inspect.',
+        who: 'K. Ross', status: 'disputed', key: true,
+        evidence: [{
+          id: uid('vd'), label: 'Email of 22 May', type: 'email',
+          where: 'Mail archive, folder Riverside', link: '', strength: 'strong', theyHave: true,
+          notes: 'The timing is the point: the complaint only appears after the invoice is overdue.'
+        }]
+      },
+      {
+        id: uid('ev'), date: '2025-06-24', title: 'Payment demanded in writing', type: 'notice',
+        what: 'Formal letter of demand sent, 14 days to pay. No reply.',
+        who: 'Me', status: 'unverified', key: false, evidence: []
+      }
+    ];
+    s.demands[0].support = [s.events[0].id, s.events[3].id, s.events[4].id];
+    s.demands[1].support = [s.events[1].id];
+    s.demands[2].support = [s.events[2].id];
+
+    s.concessions = [
+      {
+        id: uid('cn'), label: 'Rehang the four disputed doors at our own cost', detail: 'Half a day for one hand, plus hinges. ' +
+          'Cheap for us, and it removes the only thing they can point at.',
+        cost: 1, value: 5, condition: 'Only if the full amount is confirmed in writing first', tradeFor: s.demands[0].id,
+        stage: 'open', status: 'available'
+      },
+      {
+        id: uid('cn'), label: 'Waive the interest claim', detail: 'Drop the $1,900 in interest that has accrued since 14 May.',
+        cost: 2, value: 4, condition: 'Only if the balance is paid within 14 days', tradeFor: s.demands[0].id,
+        stage: 'mid', status: 'available'
+      },
+      {
+        id: uid('cn'), label: 'Accept the retention released in March instead of now',
+        detail: 'Let the $4,100 retention run to the end of the defects period rather than releasing it at settlement.',
+        cost: 2, value: 3, condition: 'Only if the main invoice is paid in full', tradeFor: s.demands[2].id,
+        stage: 'close', status: 'available'
+      },
+      {
+        id: uid('cn'), label: 'Payment in three instalments', detail: '40% on signing, then two equal payments at 30 and 60 days.',
+        cost: 4, value: 5, condition: 'Only with a signed payment schedule and interest reinstated if a payment is missed',
+        tradeFor: s.demands[0].id, stage: 'last', status: 'available'
+      },
+      {
+        id: uid('cn'), label: 'Keep the settlement confidential', detail: 'Agree not to discuss the terms with other subcontractors on the site.',
+        cost: 1, value: 4, condition: 'Does not extend to the reference letter', tradeFor: s.demands[1].id,
+        stage: 'mid', status: 'available'
+      }
+    ];
+    s.redlines = [
+      { id: uid('rl'), text: 'No admission that the joinery was defective — it would follow us onto the next tender.' },
+      { id: uid('rl'), text: 'Nothing below $32,000: under that we are better off at the tribunal.' },
+      { id: uid('rl'), text: 'No agreement that stops us giving a truthful reference about the job if asked.' }
+    ];
+    return s;
+  }
+
+  /* =====================================================================
+     Start up
+     ===================================================================== */
+
+  function init() {
+    $('exportBtn').addEventListener('click', exportJson);
+    $('importBtn').addEventListener('click', function () { $('importFile').click(); });
+    $('importFile').addEventListener('change', function (e) {
+      var f = e.target.files[0];
+      if (f) importFromFile(f);
+      e.target.value = '';
+    });
+    $('printBtn').addEventListener('click', doPrint);
+    $('briefFileBtn').addEventListener('click', exportBriefFile);
+
+    $('exampleBtn').addEventListener('click', function () {
+      uiConfirm('Load the worked example?',
+        'It replaces whatever is in the workbench now. Save a copy first if you want to keep it.',
+        'Load the example').then(function (ok) {
+          if (!ok) return;
+          state = exampleState();
+          ui.collapsed = {};
+          state.demands.concat(state.concessions).forEach(function (x) { ui.collapsed[x.id] = true; });
+          state.events.forEach(function (x) { ui.collapsed[x.id] = true; });
+          markDirty();
+          go('alt');
+          toast('Worked example loaded — edit or clear it as you like.');
+        });
+    });
+
+    $('resetBtn').addEventListener('click', function () {
+      uiConfirm('Clear the whole workbench?',
+        'Everything you have entered is deleted from this browser. This cannot be undone.',
+        'Clear everything').then(function (ok) {
+          if (!ok) return;
+          state = blankState();
+          ui = { section: 'matter', collapsed: {} };
+          markDirty();
+          render();
+          toast('Cleared. Starting fresh.');
+        });
+    });
+
+    $('navToggle').addEventListener('click', function () { document.body.classList.toggle('nav-open'); });
+    $('navScrim').addEventListener('click', function () { document.body.classList.remove('nav-open'); });
+
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 's') { e.preventDefault(); exportJson(); }
+      if (e.key === 'Escape') {
+        document.body.classList.remove('nav-open');
+        Array.prototype.forEach.call(document.querySelectorAll('.modal.open'), function (m) { m.classList.remove('open'); });
+      }
+    });
+    $('confirmModal').addEventListener('click', function (e) {
+      if (e.target === $('confirmModal')) $('confirmCancel').click();
+    });
+
+    try {
+      var savedUi = JSON.parse(localStorage.getItem(UI_KEY) || '{}');
+      if (savedUi.collapsed) ui.collapsed = savedUi.collapsed;
+      if (savedUi.section) ui.section = savedUi.section;
+    } catch (e) { /* first run */ }
+
+    var draft = null;
+    try { draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch (e) { draft = null; }
+    if (draft) {
+      state = normalise(draft);
+      setPill('saved');
+    } else {
+      setPill('saved');
+    }
+    render();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>
