@@ -1,0 +1,2829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="Sling Things - a single-page 3D slingshot game built with three.js and a hand-rolled physics engine.">
+<title>Sling Things</title>
+<style>
+  :root {
+    --ink: #15202b;
+    --panel: rgba(16, 26, 36, 0.78);
+    --panel-soft: rgba(16, 26, 36, 0.55);
+    --edge: rgba(255, 255, 255, 0.16);
+    --accent: #ffd23f;
+    --accent-dark: #e8a800;
+    --good: #7bd66b;
+    --text: #f3f7fa;
+    --muted: #a9bccd;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #9fd7f2;
+    color: var(--text);
+    font-family: "Trebuchet MS", "Segoe UI", system-ui, -apple-system, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+  /* ------------------------------------------------------------- top bar */
+  #hud {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    pointer-events: none;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    border-radius: 14px;
+    padding: 8px 14px;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+  }
+
+  #hudLeft { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  #hudLevel { font-size: clamp(13px, 2.4vw, 17px); font-weight: bold; letter-spacing: 0.02em; }
+  #hudHint { font-size: clamp(11px, 1.9vw, 13px); color: var(--muted); max-width: 46ch; }
+  #hudGnomes { font-size: clamp(14px, 3vw, 20px); letter-spacing: 2px; line-height: 1.2; }
+
+  #hudRight { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  #scoreWrap { text-align: right; }
+  #scoreLabel { font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
+  #hudScore { font-size: clamp(18px, 3.4vw, 26px); font-weight: bold; color: var(--accent); }
+
+  .tools { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; pointer-events: auto; }
+  .tools button {
+    font: inherit;
+    font-size: 11px;
+    color: var(--text);
+    background: var(--panel-soft);
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    padding: 5px 11px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .tools button:hover { background: rgba(255, 255, 255, 0.16); }
+  .tools button:active { transform: translateY(1px); }
+
+  /* ---------------------------------------------------------- bottom bar */
+  #bottom {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    padding: 10px 14px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+
+  #meters {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    pointer-events: auto;
+  }
+  #powerBar {
+    position: relative;
+    flex: 1 1 180px;
+    min-width: 140px;
+    height: 14px;
+    border-radius: 999px;
+    background: rgba(8, 14, 20, 0.6);
+    border: 1px solid var(--edge);
+    overflow: hidden;
+  }
+  #powerFill {
+    position: absolute; inset: 0 auto 0 0;
+    width: 0%;
+    background: linear-gradient(90deg, var(--good), var(--accent) 60%, #ff6b4a);
+    transition: width 40ms linear;
+  }
+  #readout { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+  #yawWrap { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+  #yawSlider { width: clamp(90px, 22vw, 170px); accent-color: var(--accent); }
+
+  #ammoRail {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px;
+    pointer-events: auto;
+    scrollbar-width: thin;
+  }
+  #ammoRail::-webkit-scrollbar { height: 6px; }
+  #ammoRail::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+
+  .ammo {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    min-width: 78px;
+    padding: 7px 10px;
+    font: inherit;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: transform 90ms ease, border-color 90ms ease;
+  }
+  .ammo:hover { transform: translateY(-2px); }
+  .ammo.sel { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(255, 210, 63, 0.35); }
+  .ammo .ai { font-size: 22px; line-height: 1.1; }
+  .ammo .an { font-size: 11px; font-weight: bold; }
+  .ammo .am { font-size: 10px; color: var(--muted); }
+  .empty { font-size: 12px; color: var(--muted); padding: 10px 4px; }
+
+  /* ------------------------------------------------------------- overlay */
+  #overlay {
+    position: fixed; inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(8, 16, 24, 0.55);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    z-index: 20;
+  }
+  #overlay.show { display: flex; }
+
+  #overlayBody {
+    width: min(460px, 100%);
+    max-height: 86vh;
+    overflow-y: auto;
+    text-align: center;
+    background: linear-gradient(160deg, rgba(22, 34, 47, 0.96), rgba(14, 22, 31, 0.96));
+    border: 1px solid var(--edge);
+    border-radius: 20px;
+    padding: 24px 22px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  }
+  #overlayBody h2 {
+    margin: 0 0 10px;
+    font-size: clamp(22px, 5vw, 30px);
+    color: var(--accent);
+    letter-spacing: 0.01em;
+  }
+  .blurb { color: var(--muted); font-size: 14px; line-height: 1.55; margin: 0 0 14px; }
+  .tally { font-size: 14px; line-height: 1.7; margin: 12px 0 16px; }
+  .tally b { color: var(--accent); }
+  .stars { font-size: 34px; letter-spacing: 6px; margin: 4px 0 6px; }
+  .star { color: rgba(255, 255, 255, 0.18); }
+  .star.on { color: var(--accent); text-shadow: 0 0 14px rgba(255, 210, 63, 0.55); }
+
+  .keys {
+    text-align: left;
+    margin: 0 0 18px;
+    padding-left: 18px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .keys b { color: var(--text); }
+
+  button.big {
+    font: inherit;
+    font-weight: bold;
+    font-size: 16px;
+    color: #241c00;
+    background: linear-gradient(180deg, var(--accent), var(--accent-dark));
+    border: none;
+    border-radius: 999px;
+    padding: 12px 26px;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(255, 190, 40, 0.28);
+  }
+  button.big:active { transform: translateY(1px); }
+  button.ghost {
+    font: inherit;
+    font-size: 13px;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    padding: 9px 18px;
+    margin-left: 8px;
+    cursor: pointer;
+  }
+  button.ghost:hover { color: var(--text); }
+
+  @media (max-width: 620px) {
+    #hudHint { display: none; }
+    #readout { font-size: 11px; }
+    .ammo { min-width: 66px; padding: 6px 8px; }
+    .ammo .ai { font-size: 19px; }
+    #overlayBody { padding: 20px 16px; }
+    button.ghost { display: block; margin: 10px auto 0; }
+  }
+  @media (max-height: 460px) {
+    #hudHint, #yawWrap { display: none; }
+    .ammo .am { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+
+<div id="hud">
+  <div id="hudLeft" class="panel">
+    <div id="hudLevel">Sling Things</div>
+    <div id="hudGnomes"></div>
+    <div id="hudHint"></div>
+  </div>
+  <div id="hudRight">
+    <div id="scoreWrap" class="panel">
+      <div id="scoreLabel">Score</div>
+      <div id="hudScore">0</div>
+    </div>
+    <div class="tools">
+      <button id="camBtn" type="button">Camera: wide</button>
+      <button id="soundBtn" type="button">Sound: on</button>
+      <button id="restartLevelBtn" type="button">Restart</button>
+    </div>
+  </div>
+</div>
+
+<div id="bottom">
+  <div id="meters" class="panel">
+    <div id="powerBar"><div id="powerFill"></div></div>
+    <div id="readout">power 0%  ·  angle 28°  ·  aim 0°</div>
+    <div id="yawWrap">
+      <span>aim&nbsp;◀</span>
+      <input id="yawSlider" type="range" min="-26" max="26" step="1" value="0">
+      <span>▶</span>
+    </div>
+  </div>
+  <div id="ammoRail"></div>
+</div>
+
+<div id="overlay"><div id="overlayBody"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ===================== SLING THINGS CORE START ===================== */
+/* ======================================================================
+   SLING THINGS - CORE (physics + game rules, no rendering)
+   ====================================================================== */
+
+/* ---------- small vector / quaternion helpers ---------- */
+
+/* A seeded generator, so a given shot always plays out the same way. Handy
+   for testing, and it keeps a replayed level honest. */
+var RAND_STATE = 123456789;
+function seedRandom(n) { RAND_STATE = (n >>> 0) || 1; }
+function rand() {
+  RAND_STATE ^= RAND_STATE << 13; RAND_STATE >>>= 0;
+  RAND_STATE ^= RAND_STATE >>> 17;
+  RAND_STATE ^= RAND_STATE << 5; RAND_STATE >>>= 0;
+  return RAND_STATE / 4294967296;
+}
+
+function vec(x, y, z) { return { x: x || 0, y: y || 0, z: z || 0 }; }
+function vAdd(a, b) { return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }; }
+function vSub(a, b) { return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }; }
+function vScale(a, s) { return { x: a.x * s, y: a.y * s, z: a.z * s }; }
+function vDot(a, b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+function vCross(a, b) {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x
+  };
+}
+function vLen(a) { return Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z); }
+function vLenSq(a) { return a.x * a.x + a.y * a.y + a.z * a.z; }
+function vNorm(a) {
+  var l = vLen(a);
+  if (l < 1e-9) return vec(0, 1, 0);
+  return { x: a.x / l, y: a.y / l, z: a.z / l };
+}
+function vClone(a) { return { x: a.x, y: a.y, z: a.z }; }
+
+function qIdentity() { return { x: 0, y: 0, z: 0, w: 1 }; }
+function qFromAxisAngle(axis, angle) {
+  var a = vNorm(axis), s = Math.sin(angle / 2);
+  return { x: a.x * s, y: a.y * s, z: a.z * s, w: Math.cos(angle / 2) };
+}
+function qMul(a, b) {
+  return {
+    x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+    y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+    z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z
+  };
+}
+function qNormalize(q) {
+  var l = Math.sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+  if (l < 1e-9) { q.x = 0; q.y = 0; q.z = 0; q.w = 1; return q; }
+  q.x /= l; q.y /= l; q.z /= l; q.w /= l;
+  return q;
+}
+function qConj(q) { return { x: -q.x, y: -q.y, z: -q.z, w: q.w }; }
+/* rotate vector v by quaternion q */
+function qRotate(q, v) {
+  var ix = q.w * v.x + q.y * v.z - q.z * v.y;
+  var iy = q.w * v.y + q.z * v.x - q.x * v.z;
+  var iz = q.w * v.z + q.x * v.y - q.y * v.x;
+  var iw = -q.x * v.x - q.y * v.y - q.z * v.z;
+  return {
+    x: ix * q.w + iw * -q.x + iy * -q.z - iz * -q.y,
+    y: iy * q.w + iw * -q.y + iz * -q.x - ix * -q.z,
+    z: iz * q.w + iw * -q.z + ix * -q.y - iy * -q.x
+  };
+}
+/* 3x3 rotation matrix (row major, 9 floats) from a quaternion */
+function quatToMat3(q, out) {
+  var x = q.x, y = q.y, z = q.z, w = q.w;
+  var x2 = x + x, y2 = y + y, z2 = z + z;
+  var xx = x * x2, xy = x * y2, xz = x * z2;
+  var yy = y * y2, yz = y * z2, zz = z * z2;
+  var wx = w * x2, wy = w * y2, wz = w * z2;
+  out[0] = 1 - (yy + zz); out[1] = xy - wz;       out[2] = xz + wy;
+  out[3] = xy + wz;       out[4] = 1 - (xx + zz); out[5] = yz - wx;
+  out[6] = xz - wy;       out[7] = yz + wx;       out[8] = 1 - (xx + yy);
+  return out;
+}
+function mat3MulVec(m, v) {
+  return {
+    x: m[0] * v.x + m[1] * v.y + m[2] * v.z,
+    y: m[3] * v.x + m[4] * v.y + m[5] * v.z,
+    z: m[6] * v.x + m[7] * v.y + m[8] * v.z
+  };
+}
+
+/* ---------- rigid body ---------- */
+
+var BODY_ID = 1;
+
+function Body(opts) {
+  opts = opts || {};
+  this.id = BODY_ID++;
+  this.type = opts.type || 'box';           // 'box' | 'sphere' | 'plane'
+  this.half = opts.half ? vClone(opts.half) : vec(0.5, 0.5, 0.5);
+  this.radius = opts.radius !== undefined ? opts.radius : 0.5;
+  this.pos = opts.pos ? vClone(opts.pos) : vec();
+  this.quat = opts.quat ? { x: opts.quat.x, y: opts.quat.y, z: opts.quat.z, w: opts.quat.w } : qIdentity();
+  this.vel = vec();
+  this.angVel = vec();
+  this.pseudoVel = vec();
+  this.pseudoAng = vec();
+  this.isStatic = !!opts.isStatic;
+  this.restitution = opts.restitution !== undefined ? opts.restitution : 0.15;
+  this.friction = opts.friction !== undefined ? opts.friction : 0.5;
+  this.tag = opts.tag || 'prop';
+  this.material = opts.material || null;
+  this.hp = opts.hp !== undefined ? opts.hp : Infinity;
+  this.damage = 0;
+  this.dead = false;
+  this.sleeping = false;
+  this.sleepTimer = 0;
+  this.maxImpact = 0;
+  this.lastImpact = 0;
+  this.userData = opts.userData || {};
+  this.invInertiaWorld = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  this.aabb = { minx: 0, miny: 0, minz: 0, maxx: 0, maxy: 0, maxz: 0 };
+
+  var mass = opts.mass !== undefined ? opts.mass : 1;
+  if (this.isStatic) mass = 0;
+  this.setMass(mass);
+
+  this.startPos = vClone(this.pos);
+  this.startQuat = { x: this.quat.x, y: this.quat.y, z: this.quat.z, w: this.quat.w };
+}
+
+Body.prototype.setMass = function (mass) {
+  this.mass = mass;
+  if (mass <= 0) {
+    this.invMass = 0;
+    this.invInertiaLocal = vec(0, 0, 0);
+    return;
+  }
+  this.invMass = 1 / mass;
+  if (this.type === 'sphere') {
+    var i = 0.4 * mass * this.radius * this.radius;
+    this.invInertiaLocal = vec(1 / i, 1 / i, 1 / i);
+  } else {
+    var w = this.half.x * 2, h = this.half.y * 2, d = this.half.z * 2;
+    var ix = (mass / 12) * (h * h + d * d);
+    var iy = (mass / 12) * (w * w + d * d);
+    var iz = (mass / 12) * (w * w + h * h);
+    this.invInertiaLocal = vec(1 / ix, 1 / iy, 1 / iz);
+  }
+};
+
+Body.prototype.updateInertiaWorld = function () {
+  if (this.invMass === 0) return;
+  var R = quatToMat3(this.quat, [0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  var d = this.invInertiaLocal, o = this.invInertiaWorld;
+  for (var i = 0; i < 3; i++) {
+    for (var j = 0; j < 3; j++) {
+      o[i * 3 + j] =
+        R[i * 3 + 0] * d.x * R[j * 3 + 0] +
+        R[i * 3 + 1] * d.y * R[j * 3 + 1] +
+        R[i * 3 + 2] * d.z * R[j * 3 + 2];
+    }
+  }
+};
+
+Body.prototype.updateAABB = function () {
+  var a = this.aabb, p = this.pos;
+  if (this.type === 'sphere') {
+    var r = this.radius;
+    a.minx = p.x - r; a.maxx = p.x + r;
+    a.miny = p.y - r; a.maxy = p.y + r;
+    a.minz = p.z - r; a.maxz = p.z + r;
+  } else {
+    var R = quatToMat3(this.quat, [0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    var h = this.half;
+    var ex = Math.abs(R[0]) * h.x + Math.abs(R[1]) * h.y + Math.abs(R[2]) * h.z;
+    var ey = Math.abs(R[3]) * h.x + Math.abs(R[4]) * h.y + Math.abs(R[5]) * h.z;
+    var ez = Math.abs(R[6]) * h.x + Math.abs(R[7]) * h.y + Math.abs(R[8]) * h.z;
+    a.minx = p.x - ex; a.maxx = p.x + ex;
+    a.miny = p.y - ey; a.maxy = p.y + ey;
+    a.minz = p.z - ez; a.maxz = p.z + ez;
+  }
+};
+
+/* A sleeping body is treated as immovable by the solver - that is what makes
+   a finished tower sit perfectly still instead of quietly creeping. */
+Body.prototype.sleep = function () {
+  if (this.isStatic || this.sleeping) return;
+  this.sleeping = true;
+  this.vel = vec(); this.angVel = vec();
+  this.savedInvMass = this.invMass;
+  this.savedInvInertia = this.invInertiaLocal;
+  this.invMass = 0;
+  this.invInertiaLocal = vec(0, 0, 0);
+  for (var i = 0; i < 9; i++) this.invInertiaWorld[i] = 0;
+};
+
+Body.prototype.wake = function () {
+  if (this.isStatic) return;
+  this.sleepTimer = 0;
+  if (!this.sleeping) return;
+  this.sleeping = false;
+  this.invMass = this.savedInvMass;
+  this.invInertiaLocal = this.savedInvInertia;
+  this.updateInertiaWorld();
+};
+
+Body.prototype.applyImpulse = function (imp, rel) {
+  if (this.invMass === 0) return;
+  this.wake();
+  this.vel.x += imp.x * this.invMass;
+  this.vel.y += imp.y * this.invMass;
+  this.vel.z += imp.z * this.invMass;
+  var t = vCross(rel, imp);
+  var dw = mat3MulVec(this.invInertiaWorld, t);
+  this.angVel.x += dw.x;
+  this.angVel.y += dw.y;
+  this.angVel.z += dw.z;
+};
+
+Body.prototype.corners = function (out) {
+  var h = this.half, p = this.pos, q = this.quat;
+  var k = 0;
+  for (var sx = -1; sx <= 1; sx += 2) {
+    for (var sy = -1; sy <= 1; sy += 2) {
+      for (var sz = -1; sz <= 1; sz += 2) {
+        var l = qRotate(q, vec(h.x * sx, h.y * sy, h.z * sz));
+        out[k++] = { x: p.x + l.x, y: p.y + l.y, z: p.z + l.z };
+      }
+    }
+  }
+  return out;
+};
+
+/* ---------- world ---------- */
+
+function World(opts) {
+  opts = opts || {};
+  this.gravity = opts.gravity !== undefined ? opts.gravity : -24;
+  this.bodies = [];
+  this.contacts = [];
+  this.cache = {};          // warm-start impulse cache keyed per contact feature
+  this.onImpact = null;     // function(bodyA, bodyB, speed, point)
+  this.linearDamping = 0.02;
+  this.angularDamping = 0.06;
+  this.groundFriction = 0.85;
+  this.groundRestitution = 0.12;
+  this.ground = new Body({ type: 'plane', isStatic: true, tag: 'ground' });
+  this.stepCount = 0;
+  this.time = 0;
+}
+
+World.prototype.add = function (body) { this.bodies.push(body); return body; };
+
+World.prototype.remove = function (body) {
+  var i = this.bodies.indexOf(body);
+  if (i >= 0) this.bodies.splice(i, 1);
+};
+
+World.prototype.addContact = function (a, b, point, normal, depth, key, e, mu) {
+  if (depth <= 0) return null;
+  if (depth > 0.5) depth = 0.5;
+  var c = {
+    a: a, b: b,
+    point: point,
+    n: normal,
+    depth: depth,
+    key: key,
+    e: e, mu: mu,
+    rA: vSub(point, a.pos),
+    rB: vSub(point, b.pos),
+    nImp: 0, t1Imp: 0, t2Imp: 0, pImp: 0,
+    t1: vec(), t2: vec(),
+    kn: 0, kt1: 0, kt2: 0,
+    bounce: 0, approach: 0
+  };
+  this.contacts.push(c);
+  return c;
+};
+
+function pairRestitution(a, b) { return Math.max(a.restitution, b.restitution); }
+function pairFriction(a, b) { return Math.sqrt(a.friction * b.friction); }
+
+/* contact generation ------------------------------------------------ */
+
+var TMP_CORNERS = [];
+
+World.prototype.collideGround = function (b) {
+  if (b.isStatic) return;
+  var e = this.groundRestitution * 0.4 + b.restitution * 0.6;
+  var mu = Math.sqrt(b.friction * this.groundFriction);
+  if (b.type === 'sphere') {
+    var d = b.radius - b.pos.y;
+    if (d > 0) {
+      this.addContact(b, this.ground,
+        vec(b.pos.x, b.pos.y - b.radius, b.pos.z), vec(0, 1, 0), d,
+        b.id + ':g:0', e, mu);
+    }
+  } else {
+    var cs = b.corners(TMP_CORNERS);
+    for (var i = 0; i < 8; i++) {
+      var p = cs[i];
+      if (p.y < 0) {
+        this.addContact(b, this.ground, vec(p.x, p.y, p.z), vec(0, 1, 0), -p.y,
+          b.id + ':g:' + i, e, mu);
+      }
+    }
+  }
+};
+
+World.prototype.collideSphereSphere = function (a, b) {
+  var d = vSub(a.pos, b.pos);
+  var dist = vLen(d);
+  var rsum = a.radius + b.radius;
+  if (dist >= rsum || dist < 1e-6) return;
+  var n = vScale(d, 1 / dist);
+  var depth = rsum - dist;
+  var point = vAdd(b.pos, vScale(n, b.radius - depth * 0.5));
+  this.addContact(a, b, point, n, depth, a.id + ':' + b.id + ':ss',
+    pairRestitution(a, b), pairFriction(a, b));
+};
+
+World.prototype.collideSphereBox = function (s, box) {
+  var inv = qConj(box.quat);
+  var local = qRotate(inv, vSub(s.pos, box.pos));
+  var h = box.half;
+  var inside = Math.abs(local.x) <= h.x && Math.abs(local.y) <= h.y && Math.abs(local.z) <= h.z;
+  var nLocal, depth, closest;
+  if (inside) {
+    var dx = h.x - Math.abs(local.x);
+    var dy = h.y - Math.abs(local.y);
+    var dz = h.z - Math.abs(local.z);
+    if (dx <= dy && dx <= dz) {
+      nLocal = vec(local.x >= 0 ? 1 : -1, 0, 0); depth = s.radius + dx;
+      closest = vec((local.x >= 0 ? h.x : -h.x), local.y, local.z);
+    } else if (dy <= dz) {
+      nLocal = vec(0, local.y >= 0 ? 1 : -1, 0); depth = s.radius + dy;
+      closest = vec(local.x, (local.y >= 0 ? h.y : -h.y), local.z);
+    } else {
+      nLocal = vec(0, 0, local.z >= 0 ? 1 : -1); depth = s.radius + dz;
+      closest = vec(local.x, local.y, (local.z >= 0 ? h.z : -h.z));
+    }
+  } else {
+    closest = vec(
+      Math.max(-h.x, Math.min(h.x, local.x)),
+      Math.max(-h.y, Math.min(h.y, local.y)),
+      Math.max(-h.z, Math.min(h.z, local.z))
+    );
+    var delta = vSub(local, closest);
+    var dist = vLen(delta);
+    if (dist >= s.radius || dist < 1e-9) return;
+    nLocal = vScale(delta, 1 / dist);
+    depth = s.radius - dist;
+  }
+  var n = qRotate(box.quat, nLocal);
+  var point = vAdd(box.pos, qRotate(box.quat, closest));
+  this.addContact(s, box, point, n, depth, s.id + ':' + box.id + ':sb',
+    pairRestitution(s, box), pairFriction(s, box));
+};
+
+/* box vs box: full SAT with face clipping. Cheaper schemes (vertex-in-box)
+   pick a sideways normal when two equal boxes line up exactly, which makes
+   stacks slide apart - and this whole game is stacks. */
+
+var TMP_M9 = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+function boxAxes(body) {
+  var m = quatToMat3(body.quat, TMP_M9);
+  return [
+    { x: m[0], y: m[3], z: m[6] },
+    { x: m[1], y: m[4], z: m[7] },
+    { x: m[2], y: m[5], z: m[8] }
+  ];
+}
+function axisComponent(v, i) { return i === 0 ? v.x : (i === 1 ? v.y : v.z); }
+
+/* the four world-space corners of one face of a box */
+function boxFaceVertices(body, axes, half, axisIdx, sign) {
+  var u = [axes[0], axes[1], axes[2]];
+  var h = [half.x, half.y, half.z];
+  var o1 = (axisIdx + 1) % 3, o2 = (axisIdx + 2) % 3;
+  var center = vAdd(body.pos, vScale(u[axisIdx], sign * h[axisIdx]));
+  var a = vScale(u[o1], h[o1]);
+  var b = vScale(u[o2], h[o2]);
+  return [
+    vAdd(center, vAdd(a, b)),
+    vSub(vAdd(center, b), a),
+    vSub(center, vAdd(a, b)),
+    vAdd(vSub(center, b), a)
+  ];
+}
+
+/* Keep the part of a polygon on the negative side of a plane. The tolerance
+   matters: when two identical boxes line up, the incident corners land exactly
+   on the clip planes, and dropping one of them through floating point noise
+   gives the stack a lopsided contact set that makes it walk sideways. */
+var CLIP_EPS = 1e-5;
+function clipPolyToPlane(poly, n, d) {
+  var out = [];
+  for (var i = 0; i < poly.length; i++) {
+    var A = poly[i], B = poly[(i + 1) % poly.length];
+    var da = vDot(n, A) - d, db = vDot(n, B) - d;
+    if (da <= CLIP_EPS) out.push(A);
+    if ((da > CLIP_EPS && db < -CLIP_EPS) || (da < -CLIP_EPS && db > CLIP_EPS)) {
+      var t = da / (da - db);
+      out.push({
+        x: A.x + (B.x - A.x) * t,
+        y: A.y + (B.y - A.y) * t,
+        z: A.z + (B.z - A.z) * t
+      });
+    }
+  }
+  return out;
+}
+
+/* drop duplicates, then keep at most four points - the deepest first */
+function reduceManifold(points, depths, maxPoints) {
+  var idx = [], i, j;
+  for (i = 0; i < points.length; i++) {
+    var dup = false;
+    for (j = 0; j < idx.length; j++) {
+      var q = points[idx[j]];
+      var dx = q.x - points[i].x, dy = q.y - points[i].y, dz = q.z - points[i].z;
+      if (dx * dx + dy * dy + dz * dz < 1e-6) { dup = true; break; }
+    }
+    if (!dup) idx.push(i);
+  }
+  if (idx.length <= maxPoints) return idx;
+  idx.sort(function (p, q) { return depths[q] - depths[p]; });
+  return idx.slice(0, maxPoints);
+}
+
+World.prototype.collideBoxBox = function (a, b) {
+  var ua = boxAxes(a).slice(), ub = boxAxes(b).slice();
+  var ha = [a.half.x, a.half.y, a.half.z];
+  var hb = [b.half.x, b.half.y, b.half.z];
+  var t = vSub(b.pos, a.pos);
+  var i, j;
+
+  var AbsR = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (i = 0; i < 3; i++) {
+    for (j = 0; j < 3; j++) AbsR[i][j] = Math.abs(vDot(ua[i], ub[j])) + 1e-6;
+  }
+
+  var best = Infinity, bestType = -1, bestIndex = -1, bestSign = 1, bestAxis = null;
+  var ov, s;
+
+  for (i = 0; i < 3; i++) {                       /* faces of A */
+    s = vDot(t, ua[i]);
+    ov = ha[i] + (hb[0] * AbsR[i][0] + hb[1] * AbsR[i][1] + hb[2] * AbsR[i][2]) - Math.abs(s);
+    if (ov <= 0) return;
+    if (ov < best) { best = ov; bestType = 0; bestIndex = i; bestSign = s >= 0 ? 1 : -1; }
+  }
+  for (j = 0; j < 3; j++) {                       /* faces of B */
+    s = vDot(t, ub[j]);
+    ov = hb[j] + (ha[0] * AbsR[0][j] + ha[1] * AbsR[1][j] + ha[2] * AbsR[2][j]) - Math.abs(s);
+    if (ov <= 0) return;
+    if (ov < best - 1e-5) { best = ov; bestType = 1; bestIndex = j; bestSign = s >= 0 ? 1 : -1; }
+  }
+  for (i = 0; i < 3; i++) {                       /* edge pairs */
+    for (j = 0; j < 3; j++) {
+      var axis = vCross(ua[i], ub[j]);
+      var len = vLen(axis);
+      if (len < 1e-5) continue;                   /* parallel edges: the face tests cover it */
+      axis = vScale(axis, 1 / len);
+      var ra = ha[0] * Math.abs(vDot(ua[0], axis)) + ha[1] * Math.abs(vDot(ua[1], axis)) + ha[2] * Math.abs(vDot(ua[2], axis));
+      var rb = hb[0] * Math.abs(vDot(ub[0], axis)) + hb[1] * Math.abs(vDot(ub[1], axis)) + hb[2] * Math.abs(vDot(ub[2], axis));
+      s = vDot(t, axis);
+      ov = ra + rb - Math.abs(s);
+      if (ov <= 0) return;
+      /* face contacts are far better conditioned, so only take an edge axis
+         if it is clearly the smaller overlap */
+      if (ov < best * 0.92) {
+        best = ov; bestType = 2; bestIndex = i * 3 + j;
+        bestSign = s >= 0 ? 1 : -1; bestAxis = axis;
+      }
+    }
+  }
+
+  var e = pairRestitution(a, b), mu = pairFriction(a, b);
+  var key = a.id + ':' + b.id + ':';
+
+  if (bestType === 2) {                           /* edge against edge: one point */
+    var n = vScale(bestAxis, bestSign);           /* points from A towards B */
+    i = Math.floor(bestIndex / 3); j = bestIndex % 3;
+    var pa = vClone(a.pos), pb = vClone(b.pos);
+    var k;
+    for (k = 0; k < 3; k++) {
+      if (k !== i) pa = vAdd(pa, vScale(ua[k], (vDot(ua[k], n) >= 0 ? 1 : -1) * ha[k]));
+      if (k !== j) pb = vAdd(pb, vScale(ub[k], (vDot(ub[k], n) >= 0 ? -1 : 1) * hb[k]));
+    }
+    var d1 = ua[i], d2 = ub[j];
+    var r = vSub(pa, pb);
+    var a11 = vDot(d1, d1), a12 = -vDot(d1, d2), a22 = vDot(d2, d2);
+    var b1 = -vDot(d1, r), b2 = vDot(d2, r);
+    var det = a11 * a22 - a12 * a12;
+    var s1 = 0, s2 = 0;
+    if (Math.abs(det) > 1e-8) {
+      s1 = (b1 * a22 - a12 * b2) / det;
+      s2 = (a11 * b2 - a12 * b1) / det;
+      s1 = Math.max(-ha[i], Math.min(ha[i], s1));
+      s2 = Math.max(-hb[j], Math.min(hb[j], s2));
+    }
+    var p1 = vAdd(pa, vScale(d1, s1));
+    var p2 = vAdd(pb, vScale(d2, s2));
+    var mid = vScale(vAdd(p1, p2), 0.5);
+    this.addContact(a, b, mid, vScale(n, -1), best, key + 'e' + bestIndex, e, mu);
+    return;
+  }
+
+  /* face contact: clip the incident face against the reference face */
+  var ref, inc, refAxes, incAxes, refHalf, incHalf, refIdx, refSign;
+  if (bestType === 0) {
+    ref = a; inc = b; refAxes = ua; incAxes = ub;
+    refHalf = ha; incHalf = hb; refIdx = bestIndex; refSign = bestSign;
+  } else {
+    ref = b; inc = a; refAxes = ub; incAxes = ua;
+    refHalf = hb; incHalf = ha; refIdx = bestIndex; refSign = -bestSign;
+  }
+  var refNormal = vScale(refAxes[refIdx], refSign);   /* outward from ref, towards inc */
+
+  /* incident face = the face of `inc` most anti-parallel to refNormal */
+  var bestDot = Infinity, incIdx = 0, incSign = 1;
+  for (i = 0; i < 3; i++) {
+    var dp = vDot(incAxes[i], refNormal);
+    if (dp < bestDot) { bestDot = dp; incIdx = i; incSign = 1; }
+    if (-dp < bestDot) { bestDot = -dp; incIdx = i; incSign = -1; }
+  }
+  var poly = boxFaceVertices(inc, incAxes, inc.half, incIdx, incSign);
+
+  var o1 = (refIdx + 1) % 3, o2 = (refIdx + 2) % 3;
+  var sides = [o1, o2];
+  for (var si = 0; si < 2; si++) {
+    var k2 = sides[si];
+    var ax = refAxes[k2];
+    var base = vDot(ref.pos, ax);
+    poly = clipPolyToPlane(poly, ax, base + refHalf[k2]);
+    if (poly.length === 0) return;
+    poly = clipPolyToPlane(poly, vScale(ax, -1), -base + refHalf[k2]);
+    if (poly.length === 0) return;
+  }
+
+  var planeD = vDot(ref.pos, refNormal) + refHalf[refIdx];
+  /* normal handed to the solver must push `a` away from `b` */
+  var nOut = (ref === a) ? vScale(refNormal, -1) : vClone(refNormal);
+  var keep = [], depths = [];
+  for (i = 0; i < poly.length; i++) {
+    var sep = vDot(poly[i], refNormal) - planeD;
+    depths.push(-sep);
+    if (sep <= 0.002) keep.push(i);
+  }
+  var kept = [], kd = [];
+  for (i = 0; i < keep.length; i++) { kept.push(poly[keep[i]]); kd.push(depths[keep[i]]); }
+  var chosen = reduceManifold(kept, kd, 4);
+  for (i = 0; i < chosen.length; i++) {
+    var ci = chosen[i];
+    this.addContact(a, b, kept[ci], nOut, kd[ci],
+      key + 'f' + bestType + refIdx + ':' + ci, e, mu);
+  }
+};
+
+World.prototype.broadphase = function () {
+  var bs = this.bodies, n = bs.length, i, j;
+  for (i = 0; i < n; i++) { bs[i].updateAABB(); bs[i].updateInertiaWorld(); }
+  for (i = 0; i < n; i++) {
+    var a = bs[i];
+    if (a.dead) continue;
+    if (!a.isStatic) this.collideGround(a);
+    for (j = i + 1; j < n; j++) {
+      var b = bs[j];
+      if (b.dead) continue;
+      if (a.isStatic && b.isStatic) continue;
+      if (a.sleeping && b.sleeping) continue;
+      if (a.sleeping && b.isStatic) continue;
+      if (b.sleeping && a.isStatic) continue;
+      var A = a.aabb, B = b.aabb;
+      if (A.maxx < B.minx || A.minx > B.maxx) continue;
+      if (A.maxy < B.miny || A.miny > B.maxy) continue;
+      if (A.maxz < B.minz || A.minz > B.maxz) continue;
+      var before = this.contacts.length;
+      if (a.type === 'sphere' && b.type === 'sphere') this.collideSphereSphere(a, b);
+      else if (a.type === 'sphere') this.collideSphereBox(a, b);
+      else if (b.type === 'sphere') this.collideSphereBox(b, a);
+      else this.collideBoxBox(a, b);
+      if (this.contacts.length > before) {
+        /* a barely-twitching neighbour must not keep rattling a sleeper awake,
+           or the pair trade wake-ups forever and the tower never settles */
+        if (a.sleeping && !b.sleeping && vLenSq(b.vel) > WAKE_SPEED_SQ) a.wake();
+        if (b.sleeping && !a.sleeping && vLenSq(a.vel) > WAKE_SPEED_SQ) b.wake();
+      }
+    }
+  }
+};
+
+/* solver ------------------------------------------------------------ */
+
+function relVelAt(a, b, rA, rB) {
+  var va = vAdd(a.vel, vCross(a.angVel, rA));
+  var vb = vAdd(b.vel, vCross(b.angVel, rB));
+  return vSub(va, vb);
+}
+function pseudoVelAt(a, b, rA, rB) {
+  var va = vAdd(a.pseudoVel, vCross(a.pseudoAng, rA));
+  var vb = vAdd(b.pseudoVel, vCross(b.pseudoAng, rB));
+  return vSub(va, vb);
+}
+function effectiveMass(a, b, r_A, r_B, dir) {
+  var k = a.invMass + b.invMass;
+  var ra = vCross(r_A, dir);
+  var rb = vCross(r_B, dir);
+  k += vDot(dir, vCross(mat3MulVec(a.invInertiaWorld, ra), r_A));
+  k += vDot(dir, vCross(mat3MulVec(b.invInertiaWorld, rb), r_B));
+  return k;
+}
+function tangentBasis(n) {
+  var t1;
+  if (Math.abs(n.x) >= 0.57735) t1 = vNorm(vec(n.y, -n.x, 0));
+  else t1 = vNorm(vec(0, n.z, -n.y));
+  return [t1, vCross(n, t1)];
+}
+
+var REST_THRESHOLD = 1.2;
+var WARM_START = 1.0;
+var VEL_ITERATIONS = 16;
+var CACHE_TTL = 180;
+var WAKE_SPEED_SQ = 0.25;          /* 0.5 m/s */
+var SLEEP_LINEAR_SQ = 0.09;        /* 0.3 m/s */
+var SLEEP_ANGULAR_SQ = 0.16;       /* 0.4 rad/s */
+var SLEEP_TIME = 0.45;
+var POS_ITERATIONS = 6;
+var SLOP = 0.008;
+var BAUMGARTE = 0.3;
+
+World.prototype.prepareContacts = function (dt) {
+  var impacts = [];
+  var i, c, a, b;
+  /* pass one: geometry and the approach speed every contact sees at the start
+     of the step (warm-start impulses must not pollute these numbers) */
+  for (i = 0; i < this.contacts.length; i++) {
+    c = this.contacts[i];
+    a = c.a; b = c.b;
+    c.rA = vSub(c.point, a.pos);
+    c.rB = vSub(c.point, b.pos);
+    var basis = tangentBasis(c.n);
+    c.t1 = basis[0]; c.t2 = basis[1];
+    c.kn = effectiveMass(a, b, c.rA, c.rB, c.n);
+    c.kt1 = effectiveMass(a, b, c.rA, c.rB, c.t1);
+    c.kt2 = effectiveMass(a, b, c.rA, c.rB, c.t2);
+    if (c.kn < 1e-9) c.kn = 1e-9;
+    if (c.kt1 < 1e-9) c.kt1 = 1e-9;
+    if (c.kt2 < 1e-9) c.kt2 = 1e-9;
+    var rv = relVelAt(a, b, c.rA, c.rB);
+    var vn = vDot(rv, c.n);
+    c.approach = vn;
+    c.bounce = (vn < -REST_THRESHOLD) ? -c.e * vn : 0;
+    if (vn < -1.5) impacts.push(c);
+  }
+  /* pass two: re-apply last step's impulses so resting stacks start solved */
+  for (i = 0; i < this.contacts.length; i++) {
+    c = this.contacts[i];
+    var cached = this.cache[c.key];
+    if (!cached || this.stepCount - cached.stamp > CACHE_TTL) continue;
+    c.nImp = cached.n * WARM_START;
+    c.t1Imp = cached.t1 * WARM_START;
+    c.t2Imp = cached.t2 * WARM_START;
+    var imp = vAdd(vScale(c.n, c.nImp), vAdd(vScale(c.t1, c.t1Imp), vScale(c.t2, c.t2Imp)));
+    applyPair(c.a, c.b, imp, c.rA, c.rB);
+  }
+  return impacts;
+};
+
+function applyPair(a, b, imp, rA, rB) {
+  if (a.invMass > 0) {
+    a.vel.x += imp.x * a.invMass; a.vel.y += imp.y * a.invMass; a.vel.z += imp.z * a.invMass;
+    var dwa = mat3MulVec(a.invInertiaWorld, vCross(rA, imp));
+    a.angVel.x += dwa.x; a.angVel.y += dwa.y; a.angVel.z += dwa.z;
+  }
+  if (b.invMass > 0) {
+    b.vel.x -= imp.x * b.invMass; b.vel.y -= imp.y * b.invMass; b.vel.z -= imp.z * b.invMass;
+    var dwb = mat3MulVec(b.invInertiaWorld, vCross(rB, imp));
+    b.angVel.x -= dwb.x; b.angVel.y -= dwb.y; b.angVel.z -= dwb.z;
+  }
+}
+function applyPseudoPair(a, b, imp, rA, rB) {
+  if (a.invMass > 0) {
+    a.pseudoVel.x += imp.x * a.invMass; a.pseudoVel.y += imp.y * a.invMass; a.pseudoVel.z += imp.z * a.invMass;
+    var dwa = mat3MulVec(a.invInertiaWorld, vCross(rA, imp));
+    a.pseudoAng.x += dwa.x; a.pseudoAng.y += dwa.y; a.pseudoAng.z += dwa.z;
+  }
+  if (b.invMass > 0) {
+    b.pseudoVel.x -= imp.x * b.invMass; b.pseudoVel.y -= imp.y * b.invMass; b.pseudoVel.z -= imp.z * b.invMass;
+    var dwb = mat3MulVec(b.invInertiaWorld, vCross(rB, imp));
+    b.pseudoAng.x -= dwb.x; b.pseudoAng.y -= dwb.y; b.pseudoAng.z -= dwb.z;
+  }
+}
+
+/* Gauss-Seidel is order dependent: always sweeping the contact list the same
+   way gives a tall stack a consistent sideways nudge that compounds floor by
+   floor. Alternating the sweep direction each iteration cancels most of it. */
+World.prototype.solveVelocity = function (iterations) {
+  var cs = this.contacts;
+  for (var it = 0; it < iterations; it++) {
+    var back = (it & 1) === 1;
+    for (var k = 0; k < cs.length; k++) {
+      var i = back ? cs.length - 1 - k : k;
+      var c = cs[i], a = c.a, b = c.b;
+      /* normal */
+      var rv = relVelAt(a, b, c.rA, c.rB);
+      var vn = vDot(rv, c.n);
+      var lambda = (-vn + c.bounce) / c.kn;
+      var oldN = c.nImp;
+      c.nImp = Math.max(0, oldN + lambda);
+      lambda = c.nImp - oldN;
+      applyPair(a, b, vScale(c.n, lambda), c.rA, c.rB);
+      /* friction */
+      var maxF = c.mu * c.nImp;
+      rv = relVelAt(a, b, c.rA, c.rB);
+      var vt1 = vDot(rv, c.t1);
+      var l1 = -vt1 / c.kt1;
+      var old1 = c.t1Imp;
+      c.t1Imp = Math.max(-maxF, Math.min(maxF, old1 + l1));
+      l1 = c.t1Imp - old1;
+      applyPair(a, b, vScale(c.t1, l1), c.rA, c.rB);
+
+      rv = relVelAt(a, b, c.rA, c.rB);
+      var vt2 = vDot(rv, c.t2);
+      var l2 = -vt2 / c.kt2;
+      var old2 = c.t2Imp;
+      c.t2Imp = Math.max(-maxF, Math.min(maxF, old2 + l2));
+      l2 = c.t2Imp - old2;
+      applyPair(a, b, vScale(c.t2, l2), c.rA, c.rB);
+    }
+  }
+};
+
+World.prototype.solvePosition = function (iterations, dt) {
+  var cs = this.contacts;
+  for (var it = 0; it < iterations; it++) {
+    var back = (it & 1) === 1;
+    for (var k = 0; k < cs.length; k++) {
+      var i = back ? cs.length - 1 - k : k;
+      var c = cs[i], a = c.a, b = c.b;
+      var pv = pseudoVelAt(a, b, c.rA, c.rB);
+      var vn = vDot(pv, c.n);
+      var bias = (BAUMGARTE / dt) * Math.max(0, c.depth - SLOP);
+      var lambda = (bias - vn) / c.kn;
+      var old = c.pImp;
+      c.pImp = Math.max(0, old + lambda);
+      lambda = c.pImp - old;
+      applyPseudoPair(a, b, vScale(c.n, lambda), c.rA, c.rB);
+    }
+  }
+};
+
+World.prototype.step = function (dt) {
+  var i, b;
+  var bodies = this.bodies;
+
+  /* integrate velocities */
+  for (i = 0; i < bodies.length; i++) {
+    b = bodies[i];
+    if (b.isStatic || b.sleeping || b.dead) continue;
+    b.vel.y += this.gravity * dt;
+    var ld = Math.max(0, 1 - this.linearDamping * dt);
+    var ad = Math.max(0, 1 - this.angularDamping * dt);
+    b.vel.x *= ld; b.vel.y *= ld; b.vel.z *= ld;
+    b.angVel.x *= ad; b.angVel.y *= ad; b.angVel.z *= ad;
+    b.pseudoVel.x = 0; b.pseudoVel.y = 0; b.pseudoVel.z = 0;
+    b.pseudoAng.x = 0; b.pseudoAng.y = 0; b.pseudoAng.z = 0;
+  }
+
+  /* collision */
+  this.contacts.length = 0;
+  this.broadphase();
+  var impacts = this.prepareContacts(dt);
+
+  /* report impacts before they are solved away */
+  if (this.onImpact) {
+    for (i = 0; i < impacts.length; i++) {
+      var c = impacts[i];
+      var speed = -c.approach;
+      if (speed > c.a.lastImpact) c.a.lastImpact = speed;
+      if (speed > c.b.lastImpact) c.b.lastImpact = speed;
+      if (speed > c.a.maxImpact) c.a.maxImpact = speed;
+      if (speed > c.b.maxImpact) c.b.maxImpact = speed;
+      this.onImpact(c.a, c.b, speed, c.point);
+    }
+  }
+
+  this.solveVelocity(VEL_ITERATIONS);
+  this.solvePosition(POS_ITERATIONS, dt);
+
+  /* Store impulses for warm starting. The cache outlives a short nap: when a
+     body sleeps its contacts stop being generated, and throwing the impulses
+     away means it wakes up with nothing solved and kicks its neighbours. */
+  this.stepCount++;
+  for (i = 0; i < this.contacts.length; i++) {
+    var cc = this.contacts[i];
+    this.cache[cc.key] = { n: cc.nImp, t1: cc.t1Imp, t2: cc.t2Imp, stamp: this.stepCount };
+  }
+  if ((this.stepCount & 63) === 0) {
+    for (var k in this.cache) {
+      if (this.stepCount - this.cache[k].stamp > CACHE_TTL) delete this.cache[k];
+    }
+  }
+
+  /* integrate positions */
+  for (i = 0; i < bodies.length; i++) {
+    b = bodies[i];
+    if (b.isStatic || b.sleeping || b.dead) continue;
+
+    var vx = b.vel.x + b.pseudoVel.x;
+    var vy = b.vel.y + b.pseudoVel.y;
+    var vz = b.vel.z + b.pseudoVel.z;
+    b.pos.x += vx * dt; b.pos.y += vy * dt; b.pos.z += vz * dt;
+
+    var w = vec(b.angVel.x + b.pseudoAng.x, b.angVel.y + b.pseudoAng.y, b.angVel.z + b.pseudoAng.z);
+    var q = b.quat;
+    var dq = qMul({ x: w.x * dt * 0.5, y: w.y * dt * 0.5, z: w.z * dt * 0.5, w: 0 }, q);
+    q.x += dq.x; q.y += dq.y; q.z += dq.z; q.w += dq.w;
+    qNormalize(q);
+
+    b.pseudoVel.x = 0; b.pseudoVel.y = 0; b.pseudoVel.z = 0;
+    b.pseudoAng.x = 0; b.pseudoAng.y = 0; b.pseudoAng.z = 0;
+
+    /* safety net: anything that escapes the world is frozen, not NaN-ed */
+    if (!isFinite(b.pos.x) || !isFinite(b.pos.y) || !isFinite(b.pos.z)) {
+      b.pos = vClone(b.startPos);
+      b.vel = vec(); b.angVel = vec();
+    }
+
+    /* sleeping */
+    var sp = vLenSq(b.vel), asp = vLenSq(b.angVel);
+    if (sp < SLEEP_LINEAR_SQ && asp < SLEEP_ANGULAR_SQ) {
+      b.sleepTimer += dt;
+      if (b.sleepTimer > SLEEP_TIME) b.sleep();
+    } else {
+      b.sleepTimer = 0;
+    }
+  }
+
+  this.time += dt;
+};
+
+World.prototype.allAsleep = function () {
+  for (var i = 0; i < this.bodies.length; i++) {
+    var b = this.bodies[i];
+    if (b.isStatic || b.dead) continue;
+    if (!b.sleeping) return false;
+  }
+  return true;
+};
+
+/* radial impulse, used by TNT */
+World.prototype.explode = function (center, radius, strength) {
+  for (var i = 0; i < this.bodies.length; i++) {
+    var b = this.bodies[i];
+    if (b.isStatic || b.dead) continue;
+    var d = vSub(b.pos, center);
+    var dist = vLen(d);
+    if (dist > radius) continue;
+    b.wake();                       /* asleep means invMass 0, so wake first */
+    if (b.invMass === 0) continue;
+    var falloff = 1 - dist / radius;
+    var dir = dist < 0.05 ? vec(0, 1, 0) : vScale(d, 1 / dist);
+    dir.y += 0.45;
+    dir = vNorm(dir);
+    var mag = strength * falloff * falloff * b.mass;
+    b.applyImpulse(vScale(dir, mag), vec((rand() - 0.5) * 0.3, (rand() - 0.5) * 0.3, (rand() - 0.5) * 0.3));
+  }
+};
+
+/* ======================================================================
+   GAME CONTENT
+   ====================================================================== */
+
+var MATERIALS = {
+  wood:  { name: 'wood',  density: 3.2, color: 0xc08b4a, color2: 0x8a5e2c, friction: 0.58, restitution: 0.10, hp: 55,  score: 55 },
+  stone: { name: 'stone', density: 7.0, color: 0x98a1a8, color2: 0x6f777d, friction: 0.72, restitution: 0.05, hp: 190, score: 90 },
+  ice:   { name: 'ice',   density: 2.2, color: 0x93d6f0, color2: 0x5fb4d8, friction: 0.10, restitution: 0.22, hp: 26,  score: 45 },
+  crate: { name: 'crate', density: 2.4, color: 0xe0a94a, color2: 0xb07c2a, friction: 0.62, restitution: 0.14, hp: 34,  score: 50 },
+  tnt:   { name: 'tnt',   density: 2.6, color: 0xd6402f, color2: 0x8f2418, friction: 0.60, restitution: 0.10, hp: 16,  score: 120, explosive: true }
+};
+
+/* Everything you can sling. All built from three.js primitives - the fun is
+   in the mass / bounce numbers, not in the model. */
+var THINGS = [
+  {
+    id: 'melon', name: 'Watermelon', icon: '🍉', shape: 'sphere', radius: 0.62,
+    mass: 9, restitution: 0.18, friction: 0.5, effect: 'splat',
+    blurb: 'All-rounder. Bursts on impact.'
+  },
+  {
+    id: 'bowling', name: 'Bowling Ball', icon: '🎳', shape: 'sphere', radius: 0.5,
+    mass: 26, restitution: 0.14, friction: 0.35, effect: 'none',
+    blurb: 'Heavy and dense. Punches straight through.'
+  },
+  {
+    id: 'duck', name: 'Rubber Duck', icon: '🦆', shape: 'sphere', radius: 0.55,
+    mass: 3.2, restitution: 0.78, friction: 0.3, effect: 'none',
+    blurb: 'Light and mad bouncy. Goes everywhere.'
+  },
+  {
+    id: 'anvil', name: 'Anvil', icon: '🔨', shape: 'box', half: { x: 0.75, y: 0.42, z: 0.42 },
+    mass: 70, restitution: 0.02, friction: 0.8, effect: 'quake',
+    blurb: 'Absurdly heavy, zero bounce. Fire it flat and low.'
+  },
+  {
+    id: 'tnt', name: 'TNT Barrel', icon: '🧨', shape: 'box', half: { x: 0.5, y: 0.6, z: 0.5 },
+    mass: 8, restitution: 0.1, friction: 0.5, effect: 'explode',
+    blurb: 'Detonates on the first solid hit.'
+  },
+  {
+    id: 'beachball', name: 'Beach Ball', icon: '🏐', shape: 'sphere', radius: 1.25,
+    mass: 2.2, restitution: 0.72, friction: 0.4, effect: 'none',
+    blurb: 'Huge, feather light. Great for sweeping ledges.'
+  },
+  {
+    id: 'gnome', name: 'Garden Gnome', icon: '🧙', shape: 'sphere', radius: 0.48,
+    mass: 12, restitution: 0.25, friction: 0.55, effect: 'shatter',
+    blurb: 'Ceramic. Shatters into shrapnel on impact.'
+  }
+];
+
+function thingById(id) {
+  for (var i = 0; i < THINGS.length; i++) if (THINGS[i].id === id) return THINGS[i];
+  return THINGS[0];
+}
+
+/* ---------- level definitions ---------- */
+
+var LEVELS = [
+  {
+    name: 'Wonky Watchtower',
+    hint: 'Pull back from the sling and let go. Aim for the legs.',
+    ammo: ['melon', 'melon', 'bowling', 'duck'],
+    par: 5000,
+    build: function () {
+      var x = 16, p = [];
+      p.push(block(x - 2.4, 1.5, -1.2, 0.9, 3.0, 0.9, 'wood'));
+      p.push(block(x - 2.4, 1.5, 1.2, 0.9, 3.0, 0.9, 'wood'));
+      p.push(block(x + 2.4, 1.5, -1.2, 0.9, 3.0, 0.9, 'wood'));
+      p.push(block(x + 2.4, 1.5, 1.2, 0.9, 3.0, 0.9, 'wood'));
+      p.push(block(x, 3.35, 0, 7.0, 0.7, 3.6, 'wood'));
+      p.push(block(x - 1.5, 5.2, 0, 0.9, 3.0, 2.6, 'ice'));
+      p.push(block(x + 1.5, 5.2, 0, 0.9, 3.0, 2.6, 'ice'));
+      p.push(block(x, 7.05, 0, 5.0, 0.7, 3.0, 'wood'));
+      p.push(block(x - 1.3, 8.3, 0, 0.7, 1.8, 2.2, 'crate'));
+      p.push(block(x + 1.3, 8.3, 0, 0.7, 1.8, 2.2, 'crate'));
+      p.push(block(x, 9.45, 0, 4.0, 0.5, 2.6, 'stone'));
+      return {
+        pieces: p,
+        gnomes: [
+          { x: x, y: 10.2, z: 0 },
+          { x: x, y: 7.9, z: 0 },
+          { x: x + 4.6, y: 0.5, z: 0.6 }
+        ]
+      };
+    }
+  },
+  {
+    name: 'Crate Castle',
+    hint: 'Crates are light but the stone lintel is not. Drop it on them.',
+    ammo: ['bowling', 'melon', 'tnt', 'duck', 'melon'],
+    par: 7800,
+    build: function () {
+      var x = 17, p = [];
+      /* outer walls of crates */
+      var wallX = [x - 3.6, x + 3.6];
+      for (var w = 0; w < 2; w++) {
+        for (var row = 0; row < 4; row++) {
+          p.push(block(wallX[w], 0.6 + row * 1.2, -1.1, 1.1, 1.2, 1.1, 'crate'));
+          p.push(block(wallX[w], 0.6 + row * 1.2, 1.1, 1.1, 1.2, 1.1, 'crate'));
+        }
+      }
+      /* inner ice pillars, tall enough to carry the lintel */
+      p.push(block(x - 1.2, 2.4, 0, 0.7, 4.8, 0.7, 'ice'));
+      p.push(block(x + 1.2, 2.4, 0, 0.7, 4.8, 0.7, 'ice'));
+      /* a barrel of TNT standing between them */
+      p.push(block(x, 1.0, 0, 1.1, 2.0, 1.1, 'tnt'));
+      /* stone lintel across the top */
+      p.push(block(x, 5.25, 0, 9.4, 0.9, 3.4, 'stone'));
+      /* upper deck */
+      p.push(block(x - 2.0, 6.65, 0, 0.9, 1.9, 2.4, 'wood'));
+      p.push(block(x + 2.0, 6.65, 0, 0.9, 1.9, 2.4, 'wood'));
+      p.push(block(x, 7.9, 0, 6.0, 0.6, 2.8, 'wood'));
+      return {
+        pieces: p,
+        gnomes: [
+          { x: x, y: 8.68, z: 0 },
+          { x: x - 3.0, y: 6.18, z: 0 },
+          { x: x + 3.0, y: 6.18, z: 0 },
+          { x: x, y: 6.18, z: 0 }
+        ]
+      };
+    }
+  },
+  {
+    name: 'The Grand Spire',
+    hint: 'Tall and top heavy. Take out a leg and let gravity do the rest.',
+    ammo: ['anvil', 'bowling', 'tnt', 'beachball', 'melon', 'gnome'],
+    par: 10000,
+    build: function () {
+      var x = 19, p = [];
+      /* stone foundation */
+      p.push(block(x - 2.8, 0.7, 0, 1.6, 1.4, 4.0, 'stone'));
+      p.push(block(x + 2.8, 0.7, 0, 1.6, 1.4, 4.0, 'stone'));
+      p.push(block(x, 1.65, 0, 8.0, 0.5, 4.2, 'stone'));
+      /* storey 1 - wood legs */
+      p.push(block(x - 2.6, 3.4, -1.5, 0.8, 3.0, 0.8, 'wood'));
+      p.push(block(x - 2.6, 3.4, 1.5, 0.8, 3.0, 0.8, 'wood'));
+      p.push(block(x + 2.6, 3.4, -1.5, 0.8, 3.0, 0.8, 'wood'));
+      p.push(block(x + 2.6, 3.4, 1.5, 0.8, 3.0, 0.8, 'wood'));
+      p.push(block(x, 5.2, 0, 7.4, 0.6, 4.0, 'wood'));
+      /* storey 2 - ice */
+      p.push(block(x - 1.8, 6.8, 0, 0.8, 2.6, 3.0, 'ice'));
+      p.push(block(x + 1.8, 6.8, 0, 0.8, 2.6, 3.0, 'ice'));
+      p.push(block(x, 8.4, 0, 5.6, 0.6, 3.4, 'wood'));
+      /* storey 3 - crates and a TNT core */
+      p.push(block(x - 1.2, 9.5, 0, 1.2, 1.6, 2.4, 'crate'));
+      p.push(block(x + 1.2, 9.5, 0, 1.2, 1.6, 2.4, 'crate'));
+      p.push(block(x, 9.5, 0, 1.0, 1.4, 1.4, 'tnt'));
+      p.push(block(x, 10.6, 0, 4.4, 0.6, 2.8, 'stone'));
+      /* the crown */
+      p.push(block(x, 11.6, 0, 1.4, 1.4, 1.4, 'ice'));
+      return {
+        pieces: p,
+        gnomes: [
+          { x: x, y: 12.8, z: 0 },
+          { x: x - 2.4, y: 9.18, z: 0 },
+          { x: x + 2.4, y: 9.18, z: 0 },
+          { x: x - 2.9, y: 5.98, z: 1.2 },
+          { x: x + 2.9, y: 5.98, z: -1.2 }
+        ]
+      };
+    }
+  }
+];
+
+function block(x, y, z, w, h, d, mat) {
+  return { x: x, y: y, z: z, w: w, h: h, d: d, mat: mat };
+}
+
+var GNOME_RADIUS = 0.48;
+
+/* Build one level's bodies into a world. Returns bookkeeping for the game. */
+function buildLevel(world, index) {
+  var def = LEVELS[index];
+  var data = def.build();
+  var blocks = [], gnomes = [], i;
+
+  for (i = 0; i < data.pieces.length; i++) {
+    var pc = data.pieces[i];
+    var m = MATERIALS[pc.mat];
+    var volume = pc.w * pc.h * pc.d;
+    var body = new Body({
+      type: 'box',
+      half: vec(pc.w / 2, pc.h / 2, pc.d / 2),
+      pos: vec(pc.x, pc.y, pc.z),
+      mass: Math.max(1.2, volume * m.density),
+      friction: m.friction,
+      restitution: m.restitution,
+      hp: m.hp,
+      material: m,
+      tag: 'block'
+    });
+    world.add(body);
+    blocks.push(body);
+  }
+
+  for (i = 0; i < data.gnomes.length; i++) {
+    var g = data.gnomes[i];
+    var gb = new Body({
+      type: 'sphere',
+      radius: GNOME_RADIUS,
+      pos: vec(g.x, g.y, g.z),
+      mass: 3.0,
+      friction: 0.5,
+      restitution: 0.2,
+      tag: 'gnome'
+    });
+    world.add(gb);
+    gnomes.push(gb);
+  }
+
+  return { def: def, blocks: blocks, gnomes: gnomes };
+}
+
+/* ---------- scoring ---------- */
+
+var GNOME_POP_SPEED = 6.5;
+var GNOME_FALL = 1.6;
+var TOPPLE_DROP = 0.55;
+var TOPPLE_TILT = 0.35;      /* how far the local up axis may lean */
+
+function gnomeIsPopped(g) {
+  if (g.dead) return true;
+  if (g.maxImpact > GNOME_POP_SPEED) return true;
+  if (g.pos.y < g.startPos.y - GNOME_FALL) return true;
+  return false;
+}
+
+function blockIsToppled(b) {
+  if (b.dead) return true;
+  if (b.startPos.y - b.pos.y > TOPPLE_DROP) return true;
+  var up = qRotate(b.quat, vec(0, 1, 0));
+  if (Math.abs(up.y) < 1 - TOPPLE_TILT) return true;
+  var dx = b.pos.x - b.startPos.x, dz = b.pos.z - b.startPos.z;
+  if (dx * dx + dz * dz > 1.0) return true;
+  return false;
+}
+
+function scoreLevel(state) {
+  var score = 0, i, popped = 0, toppled = 0;
+  for (i = 0; i < state.gnomes.length; i++) {
+    if (gnomeIsPopped(state.gnomes[i])) { score += 1200; popped++; }
+  }
+  for (i = 0; i < state.blocks.length; i++) {
+    var b = state.blocks[i];
+    var worth = b.material ? b.material.score : 50;
+    if (blockIsToppled(b)) {
+      score += worth;
+      toppled++;
+    } else if (b.damage > 0) {
+      /* partial credit, so a solid hit that cracks a beam still reads as progress */
+      score += Math.round(worth * 0.35 * Math.min(1, b.damage / b.hp));
+    }
+  }
+  return { score: score, popped: popped, toppled: toppled };
+}
+
+function starsFor(score, par) {
+  if (score >= par * 1.35) return 3;
+  if (score >= par) return 2;
+  if (score >= par * 0.7) return 1;
+  return 0;
+}
+
+/* ---------- slingshot ---------- */
+
+var SLING = { x: -14, y: 4.2, z: 0 };
+var MIN_SPEED = 13;
+var MAX_SPEED = 31;
+
+/* drag: normalised pull in screen space, -1..1 each axis, plus power 0..1 */
+function launchVelocity(power, pitchDeg, yawDeg) {
+  var speed = MIN_SPEED + (MAX_SPEED - MIN_SPEED) * Math.max(0, Math.min(1, power));
+  var p = pitchDeg * Math.PI / 180;
+  var y = yawDeg * Math.PI / 180;
+  return {
+    x: speed * Math.cos(p) * Math.cos(y),
+    y: speed * Math.sin(p),
+    z: speed * Math.cos(p) * Math.sin(y)
+  };
+}
+
+/* ballistic preview - matches the integrator above (no contacts) */
+function predictPath(origin, velocity, gravity, damping, steps, dt) {
+  var pts = [];
+  var p = vClone(origin), v = vClone(velocity);
+  for (var i = 0; i < steps; i++) {
+    v.y += gravity * dt;
+    var d = Math.max(0, 1 - damping * dt);
+    v.x *= d; v.y *= d; v.z *= d;
+    p.x += v.x * dt; p.y += v.y * dt; p.z += v.z * dt;
+    pts.push(vClone(p));
+    if (p.y < 0) break;
+  }
+  return pts;
+}
+
+/* ======================================================================
+   GAME - ties the physics to the rules. The renderer only reads from this.
+   ====================================================================== */
+
+var DAMAGE_SCALE = 0.03;
+var SPLAT_SPEED = 6;
+var TNT_TRIGGER_SPEED = 5;
+var BLAST_RADIUS = 7.5;
+var BLAST_FORCE = 26;
+var SETTLE_TIMEOUT = 7;
+
+function Game(levelIndex) {
+  this.levelIndex = levelIndex;
+  this.world = new World();
+  this.state = buildLevel(this.world, levelIndex);
+  this.def = LEVELS[levelIndex];
+  this.ammo = this.def.ammo.slice();
+  this.shotsTaken = 0;
+  this.projectiles = [];
+  this.events = [];
+  this.flying = null;
+  this.sinceShot = 0;
+  this.pendingBlasts = [];
+  var self = this;
+  this.world.onImpact = function (a, b, speed, point) { self.handleImpact(a, b, speed, point); };
+}
+
+Game.prototype.emit = function (ev) { this.events.push(ev); };
+
+Game.prototype.energyOf = function (a, b, speed) {
+  var ma = a.invMass > 0 ? a.mass : 1e6;
+  var mb = b.invMass > 0 ? b.mass : 1e6;
+  var reduced = (ma * mb) / (ma + mb);
+  return 0.5 * reduced * speed * speed;
+};
+
+Game.prototype.handleImpact = function (a, b, speed, point) {
+  if (a.dead || b.dead) return;
+  var energy = this.energyOf(a, b, speed);
+  this.emit({ type: 'impact', speed: speed, energy: energy, point: vClone(point), a: a, b: b });
+
+  var pair = [a, b];
+  for (var i = 0; i < 2; i++) {
+    var body = pair[i], other = pair[1 - i];
+    if (body.dead) continue;
+
+    if (body.tag === 'gnome' && speed > GNOME_POP_SPEED) {
+      body.dead = true;
+      this.emit({ type: 'pop', point: vClone(body.pos), body: body });
+      continue;
+    }
+
+    if (body.tag === 'ammo') {
+      var thing = body.userData.thing;
+      if (!thing) continue;
+      if (thing.effect === 'explode' && speed > TNT_TRIGGER_SPEED && other.tag !== 'ammo') {
+        body.dead = true;
+        this.pendingBlasts.push(vClone(body.pos));
+        this.emit({ type: 'explode', point: vClone(body.pos), body: body });
+      } else if ((thing.effect === 'splat' || thing.effect === 'shatter') && speed > SPLAT_SPEED) {
+        body.dead = true;
+        this.emit({ type: thing.effect, point: vClone(body.pos), body: body, thing: thing });
+      } else if (thing.effect === 'quake' && speed > 12) {
+        this.emit({ type: 'quake', point: vClone(body.pos), speed: speed });
+      }
+      continue;
+    }
+
+    if (body.tag === 'block' && isFinite(body.hp)) {
+      body.damage += energy * DAMAGE_SCALE;
+      if (body.damage >= body.hp) {
+        body.dead = true;
+        this.emit({ type: 'break', point: vClone(body.pos), body: body });
+        if (body.material && body.material.explosive) {
+          this.pendingBlasts.push(vClone(body.pos));
+          this.emit({ type: 'explode', point: vClone(body.pos), body: body });
+        }
+      }
+    }
+  }
+};
+
+/* wake everything near a body that just vanished, so what it held up falls */
+Game.prototype.wakeAround = function (point, radius) {
+  var bs = this.world.bodies;
+  for (var i = 0; i < bs.length; i++) {
+    var b = bs[i];
+    if (b.isStatic || b.dead || !b.sleeping) continue;
+    var d = vSub(b.pos, point);
+    if (vLenSq(d) < radius * radius) b.wake();
+  }
+};
+
+Game.prototype.fire = function (thingId, power, pitchDeg, yawDeg) {
+  var idx = this.ammo.indexOf(thingId);
+  if (idx < 0) return null;
+  this.ammo.splice(idx, 1);
+  var t = thingById(thingId);
+  var opts = {
+    type: t.shape,
+    pos: vec(SLING.x, SLING.y, SLING.z),
+    mass: t.mass,
+    restitution: t.restitution,
+    friction: t.friction,
+    tag: 'ammo',
+    userData: { thing: t }
+  };
+  if (t.shape === 'sphere') opts.radius = t.radius;
+  else opts.half = vec(t.half.x, t.half.y, t.half.z);
+  var body = new Body(opts);
+  var v = launchVelocity(power, pitchDeg, yawDeg);
+  body.vel = v;
+  body.angVel = vec((rand() - 0.5) * 4, (rand() - 0.5) * 2, (rand() - 0.5) * 4);
+  this.world.add(body);
+  this.projectiles.push(body);
+  this.flying = body;
+  this.shotsTaken++;
+  this.sinceShot = 0;
+  this.emit({ type: 'launch', body: body, thing: t });
+  return body;
+};
+
+Game.prototype.step = function (dt) {
+  this.world.step(dt);
+  this.sinceShot += dt;
+
+  var i;
+  for (i = 0; i < this.pendingBlasts.length; i++) {
+    this.world.explode(this.pendingBlasts[i], BLAST_RADIUS, BLAST_FORCE);
+  }
+  this.pendingBlasts.length = 0;
+
+  /* clear out anything destroyed this step */
+  var bs = this.world.bodies;
+  for (i = bs.length - 1; i >= 0; i--) {
+    if (!bs[i].dead) continue;
+    var gone = bs[i];
+    bs.splice(i, 1);
+    this.wakeAround(gone.pos, 3.5);
+    if (this.flying === gone) this.flying = null;
+  }
+
+  /* a gnome that has fallen a long way counts as gone too */
+  for (i = 0; i < this.state.gnomes.length; i++) {
+    var g = this.state.gnomes[i];
+    if (!g.dead && gnomeIsPopped(g)) {
+      g.dead = true;
+      this.emit({ type: 'pop', point: vClone(g.pos), body: g });
+      this.world.remove(g);
+    }
+  }
+
+  /* projectiles that leave the map should not hold the turn open */
+  for (i = 0; i < this.projectiles.length; i++) {
+    var p = this.projectiles[i];
+    if (!p.dead && (p.pos.x > 90 || p.pos.x < -60 || Math.abs(p.pos.z) > 45 || p.pos.y < -12)) {
+      p.dead = true;
+    }
+  }
+  if (this.flying && (this.flying.dead || this.flying.sleeping)) this.flying = null;
+};
+
+Game.prototype.isSettled = function () {
+  if (this.sinceShot > SETTLE_TIMEOUT) return true;
+  if (this.sinceShot < 0.6) return false;
+  return this.world.allAsleep();
+};
+
+Game.prototype.gnomesLeft = function () {
+  var n = 0;
+  for (var i = 0; i < this.state.gnomes.length; i++) {
+    if (!gnomeIsPopped(this.state.gnomes[i])) n++;
+  }
+  return n;
+};
+
+Game.prototype.score = function () {
+  var s = scoreLevel(this.state);
+  s.ammoBonus = (this.gnomesLeft() === 0) ? this.ammo.length * 1500 : 0;
+  s.total = s.score + s.ammoBonus;
+  s.stars = starsFor(s.total, this.def.par);
+  return s;
+};
+
+Game.prototype.isWon = function () { return this.gnomesLeft() === 0; };
+Game.prototype.isLost = function () {
+  return !this.isWon() && this.ammo.length === 0 && this.isSettled();
+};
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    vec: vec, vAdd: vAdd, vSub: vSub, vScale: vScale, vLen: vLen, vDot: vDot,
+    qRotate: qRotate, qFromAxisAngle: qFromAxisAngle,
+    Body: Body, World: World,
+    MATERIALS: MATERIALS, THINGS: THINGS, LEVELS: LEVELS,
+    buildLevel: buildLevel, scoreLevel: scoreLevel, starsFor: starsFor,
+    gnomeIsPopped: gnomeIsPopped, blockIsToppled: blockIsToppled,
+    thingById: thingById, launchVelocity: launchVelocity,
+    predictPath: predictPath, SLING: SLING, GNOME_RADIUS: GNOME_RADIUS,
+    Game: Game, seedRandom: seedRandom, rand: rand,
+    MIN_SPEED: MIN_SPEED, MAX_SPEED: MAX_SPEED
+  };
+}
+/* ====================== SLING THINGS CORE END ====================== */
+
+/* ======================================================================
+   SLING THINGS - scene, models, camera, input, sound, UI
+   ====================================================================== */
+
+var FIXED_STEP = 1 / 120;
+var MAX_DRAG = 260;          /* pixels for a full-power pull */
+
+var renderer, scene, camera, sun, skyMesh;
+var game = null;
+var levelIndex = 0;
+var totalScore = 0;
+var running = false;
+
+var meshes = [];             /* {body, mesh} pairs kept in sync each frame */
+var slingGroup, pouch, bandLeft, bandRight, forkTipL, forkTipR;
+var pilesGroup, trailDots = [], aimArrow;
+var camTarget = null, camLook = null, shake = 0, zoom = 1;
+var aiming = false, dragStart = null, dragNow = null;
+var aimPower = 0, aimPitch = 28, aimYaw = 0;
+var selectedAmmo = null;
+var phase = 'title';         /* title | aim | flying | settling | won | lost */
+var soundOn = true, camMode = 0;
+
+var ui = {};
+
+/* ---------------------------------------------------------------- textures */
+
+var texCache = {};
+function canvasTexture(name, size, draw) {
+  if (texCache[name]) return texCache[name];
+  var c = document.createElement('canvas');
+  c.width = c.height = size || 128;
+  draw(c.getContext('2d'), c.width, c.height);
+  var t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  texCache[name] = t;
+  return t;
+}
+function noise(ctx, w, h, n, alpha, spread) {
+  for (var i = 0; i < n; i++) {
+    var x = Math.random() * w, y = Math.random() * h, r = 1 + Math.random() * spread;
+    ctx.globalAlpha = alpha * Math.random();
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function woodTexture() {
+  return canvasTexture('wood', 128, function (g, w, h) {
+    g.fillStyle = '#c08b4a'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(120,76,30,0.45)';
+    for (var i = 0; i < 26; i++) {
+      g.lineWidth = 0.5 + Math.random() * 2;
+      g.beginPath();
+      var y = Math.random() * h;
+      g.moveTo(0, y);
+      g.bezierCurveTo(w * 0.3, y + (Math.random() - 0.5) * 10, w * 0.6, y + (Math.random() - 0.5) * 10, w, y + (Math.random() - 0.5) * 6);
+      g.stroke();
+    }
+    g.fillStyle = '#8a5e2c'; noise(g, w, h, 70, 0.3, 2);
+    g.strokeStyle = 'rgba(80,50,20,0.55)'; g.lineWidth = 3;
+    g.strokeRect(1.5, 1.5, w - 3, h - 3);
+  });
+}
+function stoneTexture() {
+  return canvasTexture('stone', 128, function (g, w, h) {
+    g.fillStyle = '#98a1a8'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#7d868d'; noise(g, w, h, 160, 0.55, 7);
+    g.fillStyle = '#b3bcc2'; noise(g, w, h, 90, 0.4, 5);
+    g.strokeStyle = 'rgba(70,78,84,0.6)'; g.lineWidth = 2;
+    g.strokeRect(1, 1, w - 2, h - 2);
+  });
+}
+function iceTexture() {
+  return canvasTexture('ice', 128, function (g, w, h) {
+    g.fillStyle = '#a9dff3'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(255,255,255,0.75)';
+    for (var i = 0; i < 12; i++) {
+      g.lineWidth = 1 + Math.random() * 2;
+      g.beginPath();
+      var x = Math.random() * w, y = Math.random() * h;
+      g.moveTo(x, y);
+      g.lineTo(x + (Math.random() - 0.5) * 60, y + (Math.random() - 0.5) * 60);
+      g.stroke();
+    }
+    g.strokeStyle = 'rgba(120,190,220,0.8)'; g.lineWidth = 3;
+    g.strokeRect(1.5, 1.5, w - 3, h - 3);
+  });
+}
+function crateTexture() {
+  return canvasTexture('crate', 128, function (g, w, h) {
+    g.fillStyle = '#e0a94a'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#c8912f'; noise(g, w, h, 60, 0.3, 3);
+    g.strokeStyle = '#a2711f'; g.lineWidth = 9;
+    g.strokeRect(5, 5, w - 10, h - 10);
+    g.lineWidth = 7;
+    g.beginPath(); g.moveTo(8, 8); g.lineTo(w - 8, h - 8);
+    g.moveTo(w - 8, 8); g.lineTo(8, h - 8); g.stroke();
+  });
+}
+function tntTexture() {
+  return canvasTexture('tnt', 128, function (g, w, h) {
+    g.fillStyle = '#d6402f'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#f3e6c8'; g.fillRect(0, h * 0.36, w, h * 0.28);
+    g.fillStyle = '#8f2418';
+    g.font = 'bold 42px Georgia, serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('TNT', w / 2, h * 0.5);
+    g.strokeStyle = 'rgba(100,25,15,0.6)'; g.lineWidth = 4;
+    g.strokeRect(2, 2, w - 4, h - 4);
+  });
+}
+function grassTexture() {
+  return canvasTexture('grass', 256, function (g, w, h) {
+    g.fillStyle = '#6faa46'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#5c9438'; noise(g, w, h, 900, 0.5, 2.5);
+    g.fillStyle = '#84bd55'; noise(g, w, h, 600, 0.4, 2);
+    g.fillStyle = '#c9b980'; noise(g, w, h, 90, 0.25, 1.5);
+  });
+}
+function melonTexture() {
+  return canvasTexture('melon', 128, function (g, w, h) {
+    g.fillStyle = '#4e9b3a'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#2f6b23';
+    for (var i = 0; i < 7; i++) {
+      var x = i * (w / 7);
+      g.beginPath();
+      g.moveTo(x, 0);
+      g.quadraticCurveTo(x + 8, h / 2, x, h);
+      g.lineTo(x + 7, h);
+      g.quadraticCurveTo(x + 15, h / 2, x + 7, 0);
+      g.closePath(); g.fill();
+    }
+  });
+}
+function beachTexture() {
+  return canvasTexture('beach', 128, function (g, w, h) {
+    var cols = ['#ff5a5a', '#ffd23f', '#4fc3f7', '#f7f7f7', '#7bd66b', '#ff9f43'];
+    for (var i = 0; i < cols.length; i++) {
+      g.fillStyle = cols[i];
+      g.fillRect(i * (w / cols.length), 0, w / cols.length + 1, h);
+    }
+  });
+}
+function bowlingTexture() {
+  return canvasTexture('bowling', 128, function (g, w, h) {
+    g.fillStyle = '#26262e'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#3a3a48'; noise(g, w, h, 60, 0.4, 6);
+    g.fillStyle = '#101014';
+    var holes = [[0.34, 0.36], [0.46, 0.3], [0.4, 0.48]];
+    for (var i = 0; i < holes.length; i++) {
+      g.beginPath(); g.arc(holes[i][0] * w, holes[i][1] * h, 7, 0, Math.PI * 2); g.fill();
+    }
+  });
+}
+function metalTexture() {
+  return canvasTexture('metal', 128, function (g, w, h) {
+    g.fillStyle = '#4a5058'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#5c636c'; noise(g, w, h, 120, 0.4, 5);
+    g.fillStyle = '#3a4047'; noise(g, w, h, 80, 0.4, 4);
+  });
+}
+
+function materialTexture(name) {
+  if (name === 'wood') return woodTexture();
+  if (name === 'stone') return stoneTexture();
+  if (name === 'ice') return iceTexture();
+  if (name === 'crate') return crateTexture();
+  if (name === 'tnt') return tntTexture();
+  return woodTexture();
+}
+
+/* ------------------------------------------------------------------ models */
+
+function lambert(opts) { return new THREE.MeshLambertMaterial(opts); }
+
+function blockMesh(body) {
+  var m = body.material;
+  var w = body.half.x * 2, h = body.half.y * 2, d = body.half.z * 2;
+  var tex = materialTexture(m.name).clone();
+  tex.needsUpdate = true;
+  tex.repeat.set(Math.max(1, Math.round(w / 1.6)), Math.max(1, Math.round(h / 1.6)));
+  var opts = { map: tex };
+  if (m.name === 'ice') { opts.transparent = true; opts.opacity = 0.82; }
+  var mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lambert(opts));
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  return mesh;
+}
+
+function gnomeMesh() {
+  var g = new THREE.Group();
+  var coat = new THREE.Mesh(new THREE.SphereGeometry(0.44, 16, 12), lambert({ color: 0x2f6fb5 }));
+  coat.scale.set(1, 0.95, 1);
+  coat.position.y = -0.06;
+  g.add(coat);
+  var head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 14, 10), lambert({ color: 0xf2c9a0 }));
+  head.position.y = 0.3;
+  g.add(head);
+  var beard = new THREE.Mesh(new THREE.SphereGeometry(0.21, 12, 10), lambert({ color: 0xf2f2f2 }));
+  beard.position.set(0, 0.2, 0.14); beard.scale.set(1, 1.15, 0.7);
+  g.add(beard);
+  var nose = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 8), lambert({ color: 0xe8a98a }));
+  nose.position.set(0, 0.3, 0.25); nose.rotation.x = Math.PI / 2;
+  g.add(nose);
+  var hat = new THREE.Mesh(new THREE.ConeGeometry(0.27, 0.55, 14), lambert({ color: 0xcf3b34 }));
+  hat.position.y = 0.62;
+  g.add(hat);
+  g.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return g;
+}
+
+function thingMesh(thing) {
+  var g = new THREE.Group(), m;
+  if (thing.id === 'melon') {
+    m = new THREE.Mesh(new THREE.SphereGeometry(thing.radius, 18, 14), lambert({ map: melonTexture() }));
+    m.scale.set(1, 0.92, 1);
+    g.add(m);
+  } else if (thing.id === 'bowling') {
+    m = new THREE.Mesh(new THREE.SphereGeometry(thing.radius, 20, 16), lambert({ map: bowlingTexture() }));
+    g.add(m);
+  } else if (thing.id === 'duck') {
+    var body = new THREE.Mesh(new THREE.SphereGeometry(thing.radius * 0.95, 16, 12), lambert({ color: 0xffd93b }));
+    body.scale.set(1.15, 0.9, 0.9);
+    g.add(body);
+    var head = new THREE.Mesh(new THREE.SphereGeometry(thing.radius * 0.52, 14, 10), lambert({ color: 0xffd93b }));
+    head.position.set(thing.radius * 0.62, thing.radius * 0.62, 0);
+    g.add(head);
+    var beak = new THREE.Mesh(new THREE.ConeGeometry(thing.radius * 0.2, thing.radius * 0.42, 8), lambert({ color: 0xff8c1a }));
+    beak.position.set(thing.radius * 1.05, thing.radius * 0.58, 0);
+    beak.rotation.z = -Math.PI / 2;
+    g.add(beak);
+    var eye = new THREE.Mesh(new THREE.SphereGeometry(thing.radius * 0.09, 8, 6), lambert({ color: 0x1a1a1a }));
+    eye.position.set(thing.radius * 0.82, thing.radius * 0.8, thing.radius * 0.28);
+    g.add(eye);
+  } else if (thing.id === 'anvil') {
+    var tex = metalTexture();
+    var base = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.3, 0.8), lambert({ map: tex }));
+    base.position.y = -0.27;
+    g.add(base);
+    var waist = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.3, 0.55), lambert({ map: tex }));
+    g.add(waist);
+    var top = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.34, 0.82), lambert({ map: tex }));
+    top.position.y = 0.26;
+    g.add(top);
+    var horn = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.5, 10), lambert({ map: tex }));
+    horn.position.set(0.98, 0.26, 0); horn.rotation.z = -Math.PI / 2;
+    g.add(horn);
+  } else if (thing.id === 'tnt') {
+    m = new THREE.Mesh(new THREE.CylinderGeometry(thing.half.x, thing.half.x, thing.half.y * 2, 18), lambert({ map: tntTexture() }));
+    g.add(m);
+    var fuse = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.35, 6), lambert({ color: 0x6b5233 }));
+    fuse.position.set(0.1, thing.half.y + 0.16, 0); fuse.rotation.z = -0.5;
+    g.add(fuse);
+  } else if (thing.id === 'beachball') {
+    m = new THREE.Mesh(new THREE.SphereGeometry(thing.radius, 22, 16), lambert({ map: beachTexture() }));
+    g.add(m);
+  } else if (thing.id === 'gnome') {
+    g.add(gnomeMesh());
+  } else {
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(thing.radius || 0.5, 14, 10), lambert({ color: 0xcccccc })));
+  }
+  g.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return g;
+}
+
+/* ------------------------------------------------------------------- scene */
+
+function buildScene() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x9fd7f2);
+  scene.fog = new THREE.Fog(0xbfe4f5, 70, 240);
+
+  camera = new THREE.PerspectiveCamera(52, 1, 0.1, 500);
+  camera.position.set(SLING.x + 4, 10, 34);
+
+  var hemi = new THREE.HemisphereLight(0xdff1ff, 0x5b7c3a, 0.85);
+  scene.add(hemi);
+
+  sun = new THREE.DirectionalLight(0xfff3d6, 0.95);
+  sun.position.set(-28, 46, 30);
+  sun.castShadow = true;
+  sun.shadow.mapSize.width = sun.shadow.mapSize.height = isSmallScreen() ? 1024 : 2048;
+  var sc = sun.shadow.camera;
+  sc.left = -46; sc.right = 46; sc.top = 46; sc.bottom = -30;
+  sc.near = 1; sc.far = 140;
+  sun.shadow.bias = -0.0012;
+  scene.add(sun);
+  scene.add(sun.target);
+  sun.target.position.set(8, 0, 0);
+
+  /* sky dome */
+  var skyTex = canvasTexture('sky', 256, function (g, w, h) {
+    var grad = g.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, '#2f7fc4');
+    grad.addColorStop(0.45, '#7cc3ea');
+    grad.addColorStop(0.78, '#bfe4f5');
+    grad.addColorStop(1, '#e7f4e0');
+    g.fillStyle = grad; g.fillRect(0, 0, w, h);
+  });
+  skyMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(300, 24, 16),
+    new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false })
+  );
+  scene.add(skyMesh);
+
+  /* ground */
+  var gtex = grassTexture().clone();
+  gtex.needsUpdate = true;
+  gtex.repeat.set(60, 60);
+  var ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(600, 600),
+    lambert({ map: gtex })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  addScenery();
+  buildSlingshot();
+
+  pilesGroup = new THREE.Group();
+  scene.add(pilesGroup);
+
+  buildTrailDots();
+  buildParticles();
+}
+
+function isSmallScreen() {
+  return Math.min(window.innerWidth, window.innerHeight) < 640;
+}
+
+function addScenery() {
+  var group = new THREE.Group();
+  var trunkMat = lambert({ color: 0x7a5230 });
+  var leafMats = [lambert({ color: 0x3f8f3a }), lambert({ color: 0x4fa348 }), lambert({ color: 0x357a33 })];
+  var rockMat = lambert({ color: 0x9a9a92 });
+
+  function tree(x, z, s) {
+    var t = new THREE.Group();
+    var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * s, 0.3 * s, 2.2 * s, 7), trunkMat);
+    trunk.position.y = 1.1 * s;
+    t.add(trunk);
+    for (var i = 0; i < 3; i++) {
+      var cone = new THREE.Mesh(
+        new THREE.ConeGeometry((1.5 - i * 0.32) * s, (1.7 - i * 0.2) * s, 8),
+        leafMats[i % leafMats.length]
+      );
+      cone.position.y = (2.2 + i * 0.95) * s;
+      t.add(cone);
+    }
+    t.position.set(x, 0, z);
+    t.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    group.add(t);
+  }
+  function rock(x, z, s) {
+    var r = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
+    r.position.set(x, s * 0.55, z);
+    r.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+    r.castShadow = true; r.receiveShadow = true;
+    group.add(r);
+  }
+
+  var seeds = [
+    [-34, -16, 1.2], [-26, 20, 0.9], [-20, -24, 1.4], [34, -22, 1.1], [42, 16, 1.3],
+    [26, 24, 0.95], [-42, 8, 1.0], [48, -10, 1.2], [8, -28, 1.0], [2, 26, 1.15],
+    [-12, 30, 0.85], [60, 4, 1.4], [-52, -6, 1.1]
+  ];
+  for (var i = 0; i < seeds.length; i++) tree(seeds[i][0], seeds[i][1], seeds[i][2]);
+  var rocks = [[-8, 12, 0.7], [24, -14, 0.5], [-30, -4, 0.9], [38, 10, 0.6], [12, 18, 0.45]];
+  for (i = 0; i < rocks.length; i++) rock(rocks[i][0], rocks[i][1], rocks[i][2]);
+
+  /* distant hills */
+  var hillMat = lambert({ color: 0x6f9e55 });
+  var hills = [[-90, -120, 34], [40, -150, 46], [140, -110, 38], [-160, -90, 30]];
+  for (i = 0; i < hills.length; i++) {
+    var hill = new THREE.Mesh(new THREE.ConeGeometry(hills[i][2], hills[i][2] * 0.6, 10), hillMat);
+    hill.position.set(hills[i][0], 0, hills[i][1]);
+    group.add(hill);
+  }
+
+  /* clouds */
+  var cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, fog: false });
+  var clouds = [[-30, 34, -60, 7], [20, 40, -80, 9], [60, 30, -50, 6], [-70, 38, -40, 8], [100, 44, -90, 10]];
+  for (i = 0; i < clouds.length; i++) {
+    var c = new THREE.Group();
+    for (var k = 0; k < 4; k++) {
+      var puff = new THREE.Mesh(new THREE.SphereGeometry(clouds[i][3] * (0.5 + Math.random() * 0.5), 10, 8), cloudMat);
+      puff.position.set((k - 1.5) * clouds[i][3] * 0.7, Math.random() * 2, Math.random() * 3);
+      puff.scale.y = 0.6;
+      c.add(puff);
+    }
+    c.position.set(clouds[i][0], clouds[i][1], clouds[i][2]);
+    group.add(c);
+  }
+
+  scene.add(group);
+}
+
+function buildSlingshot() {
+  slingGroup = new THREE.Group();
+  var woodMat = lambert({ map: woodTexture() });
+
+  var base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.9, 0.6, 14), lambert({ color: 0x7a5a36 }));
+  base.position.y = 0.3;
+  slingGroup.add(base);
+
+  var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.6, SLING.y - 0.6, 12), woodMat);
+  stem.position.y = (SLING.y - 0.6) / 2 + 0.3;
+  slingGroup.add(stem);
+
+  var armL = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.42, 3.4, 10), woodMat);
+  armL.position.set(0, SLING.y + 0.9, -1.15);
+  armL.rotation.x = 0.55;
+  slingGroup.add(armL);
+
+  var armR = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.42, 3.4, 10), woodMat);
+  armR.position.set(0, SLING.y + 0.9, 1.15);
+  armR.rotation.x = -0.55;
+  slingGroup.add(armR);
+
+  slingGroup.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  slingGroup.position.set(SLING.x, 0, SLING.z);
+  scene.add(slingGroup);
+
+  forkTipL = new THREE.Vector3(SLING.x, SLING.y + 2.4, SLING.z - 2.0);
+  forkTipR = new THREE.Vector3(SLING.x, SLING.y + 2.4, SLING.z + 2.0);
+
+  var bandMat = lambert({ color: 0x8c3b3b });
+  bandLeft = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1, 6), bandMat);
+  bandRight = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1, 6), bandMat);
+  scene.add(bandLeft); scene.add(bandRight);
+
+  pouch = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.7, 0.9), lambert({ color: 0x5a3a24 }));
+  pouch.castShadow = true;
+  scene.add(pouch);
+}
+
+/* cylinder stretched between two points */
+function spanCylinder(mesh, from, to) {
+  var dir = new THREE.Vector3().subVectors(to, from);
+  var len = dir.length();
+  mesh.position.copy(from).add(dir.clone().multiplyScalar(0.5));
+  mesh.scale.set(1, Math.max(0.001, len), 1);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+}
+
+function buildTrailDots() {
+  var geo = new THREE.SphereGeometry(0.16, 8, 6);
+  var mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
+  for (var i = 0; i < 30; i++) {
+    var d = new THREE.Mesh(geo, mat.clone());
+    d.visible = false;
+    scene.add(d);
+    trailDots.push(d);
+  }
+  aimArrow = new THREE.Mesh(
+    new THREE.ConeGeometry(0.34, 1.0, 10),
+    new THREE.MeshBasicMaterial({ color: 0xffe66d })
+  );
+  aimArrow.visible = false;
+  scene.add(aimArrow);
+}
+
+/* --------------------------------------------------------------- particles */
+
+var PART_MAX = 500;
+var parts = { pos: null, col: null, vel: [], life: [], maxLife: [], geo: null, points: null, next: 0 };
+
+function buildParticles() {
+  parts.pos = new Float32Array(PART_MAX * 3);
+  parts.col = new Float32Array(PART_MAX * 3);
+  for (var i = 0; i < PART_MAX; i++) {
+    parts.pos[i * 3 + 1] = -1000;
+    parts.vel.push(new THREE.Vector3());
+    parts.life.push(0);
+    parts.maxLife.push(1);
+  }
+  parts.geo = new THREE.BufferGeometry();
+  parts.geo.setAttribute('position', new THREE.BufferAttribute(parts.pos, 3));
+  parts.geo.setAttribute('color', new THREE.BufferAttribute(parts.col, 3));
+  parts.points = new THREE.Points(parts.geo, new THREE.PointsMaterial({
+    size: 0.42, vertexColors: true, sizeAttenuation: true,
+    transparent: true, opacity: 0.95, depthWrite: false
+  }));
+  parts.points.frustumCulled = false;
+  scene.add(parts.points);
+}
+
+function burst(point, colorHex, count, speed, life) {
+  var col = new THREE.Color(colorHex);
+  for (var i = 0; i < count; i++) {
+    var idx = parts.next;
+    parts.next = (parts.next + 1) % PART_MAX;
+    parts.pos[idx * 3] = point.x;
+    parts.pos[idx * 3 + 1] = point.y;
+    parts.pos[idx * 3 + 2] = point.z;
+    var s = speed * (0.35 + Math.random() * 0.9);
+    var theta = Math.random() * Math.PI * 2;
+    var phi = Math.acos(2 * Math.random() - 1);
+    parts.vel[idx].set(
+      Math.sin(phi) * Math.cos(theta) * s,
+      Math.abs(Math.cos(phi)) * s * 1.1 + 1.5,
+      Math.sin(phi) * Math.sin(theta) * s
+    );
+    var shade = 0.75 + Math.random() * 0.45;
+    parts.col[idx * 3] = Math.min(1, col.r * shade);
+    parts.col[idx * 3 + 1] = Math.min(1, col.g * shade);
+    parts.col[idx * 3 + 2] = Math.min(1, col.b * shade);
+    parts.life[idx] = life * (0.6 + Math.random() * 0.7);
+    parts.maxLife[idx] = parts.life[idx];
+  }
+}
+
+function updateParticles(dt) {
+  var moved = false;
+  for (var i = 0; i < PART_MAX; i++) {
+    if (parts.life[i] <= 0) continue;
+    moved = true;
+    parts.life[i] -= dt;
+    if (parts.life[i] <= 0) {
+      parts.pos[i * 3 + 1] = -1000;
+      continue;
+    }
+    var v = parts.vel[i];
+    v.y -= 26 * dt;
+    parts.pos[i * 3] += v.x * dt;
+    parts.pos[i * 3 + 1] += v.y * dt;
+    parts.pos[i * 3 + 2] += v.z * dt;
+    if (parts.pos[i * 3 + 1] < 0.08) {
+      parts.pos[i * 3 + 1] = 0.08;
+      v.set(v.x * 0.4, Math.abs(v.y) * 0.25, v.z * 0.4);
+    }
+    var f = parts.life[i] / parts.maxLife[i];
+    var k = f < 0.4 ? f / 0.4 : 1;
+    parts.col[i * 3] *= 1; /* colour kept, fade handled by shrinking life */
+    if (k < 1) {
+      parts.col[i * 3] = parts.col[i * 3] * 0.985 + 0.72 * 0.015;
+      parts.col[i * 3 + 1] = parts.col[i * 3 + 1] * 0.985 + 0.84 * 0.015;
+      parts.col[i * 3 + 2] = parts.col[i * 3 + 2] * 0.985 + 0.93 * 0.015;
+    }
+  }
+  if (moved) {
+    parts.geo.attributes.position.needsUpdate = true;
+    parts.geo.attributes.color.needsUpdate = true;
+  }
+}
+
+/* ------------------------------------------------------------------- sound */
+
+var audio = null;
+function initAudio() {
+  if (audio) return;
+  var Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  audio = new Ctx();
+}
+function tone(freq, dur, type, vol, slideTo) {
+  if (!soundOn || !audio) return;
+  var o = audio.createOscillator(), g = audio.createGain();
+  o.type = type || 'sine';
+  o.frequency.setValueAtTime(freq, audio.currentTime);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), audio.currentTime + dur);
+  g.gain.setValueAtTime(0.0001, audio.currentTime);
+  g.gain.exponentialRampToValueAtTime(vol || 0.2, audio.currentTime + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + dur);
+  o.connect(g); g.connect(audio.destination);
+  o.start(); o.stop(audio.currentTime + dur + 0.02);
+}
+function noiseBurst(dur, vol, filterFreq) {
+  if (!soundOn || !audio) return;
+  var n = Math.floor(audio.sampleRate * dur);
+  var buf = audio.createBuffer(1, n, audio.sampleRate);
+  var data = buf.getChannelData(0);
+  for (var i = 0; i < n; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  var src = audio.createBufferSource();
+  src.buffer = buf;
+  var f = audio.createBiquadFilter();
+  f.type = 'lowpass'; f.frequency.value = filterFreq || 1200;
+  var g = audio.createGain();
+  g.gain.value = vol || 0.25;
+  src.connect(f); f.connect(g); g.connect(audio.destination);
+  src.start();
+}
+var sfx = {
+  launch: function () { tone(680, 0.16, 'square', 0.12, 180); noiseBurst(0.12, 0.12, 2400); },
+  thud: function (v) { tone(90, 0.16, 'sine', Math.min(0.32, 0.06 + v * 0.02), 45); noiseBurst(0.1, Math.min(0.2, 0.04 + v * 0.012), 500); },
+  crack: function () { noiseBurst(0.22, 0.28, 3200); tone(240, 0.12, 'square', 0.1, 90); },
+  glass: function () { noiseBurst(0.3, 0.22, 6000); tone(1400, 0.2, 'triangle', 0.1, 600); },
+  boom: function () { noiseBurst(0.7, 0.45, 420); tone(70, 0.55, 'sine', 0.35, 28); },
+  splat: function () { noiseBurst(0.22, 0.24, 900); tone(160, 0.14, 'sine', 0.14, 60); },
+  pop: function () { tone(880, 0.1, 'triangle', 0.16, 1500); tone(1320, 0.08, 'sine', 0.1); },
+  win: function () {
+    [523, 659, 784, 1047].forEach(function (f, i) {
+      setTimeout(function () { tone(f, 0.22, 'triangle', 0.16); }, i * 110);
+    });
+  },
+  lose: function () {
+    [392, 330, 262].forEach(function (f, i) {
+      setTimeout(function () { tone(f, 0.28, 'sine', 0.16); }, i * 150);
+    });
+  }
+};
+
+/* ------------------------------------------------------------ level set-up */
+
+function clearMeshes() {
+  for (var i = 0; i < meshes.length; i++) scene.remove(meshes[i].mesh);
+  meshes.length = 0;
+  while (pilesGroup.children.length) pilesGroup.remove(pilesGroup.children[0]);
+}
+
+function attachMesh(body, mesh) {
+  scene.add(mesh);
+  meshes.push({ body: body, mesh: mesh });
+  body.userData.mesh = mesh;
+}
+
+function startLevel(index) {
+  levelIndex = index;
+  game = new Game(index);
+  clearMeshes();
+  var i;
+  for (i = 0; i < game.state.blocks.length; i++) {
+    attachMesh(game.state.blocks[i], blockMesh(game.state.blocks[i]));
+  }
+  for (i = 0; i < game.state.gnomes.length; i++) {
+    attachMesh(game.state.gnomes[i], gnomeMesh());
+  }
+  selectedAmmo = game.ammo.length ? game.ammo[0] : null;
+  aimPitch = 28; aimYaw = 0; aimPower = 0;
+  phase = 'aim';
+  shake = 0;
+  refreshPile();
+  updateHud();
+  setOverlay(null);
+  syncMeshes();
+}
+
+/* the heap of unused ammo sitting beside the sling */
+function refreshPile() {
+  while (pilesGroup.children.length) pilesGroup.remove(pilesGroup.children[0]);
+  if (!game) return;
+  var spots = [
+    [-3.2, 0, -2.4], [-4.4, 0, -0.6], [-3.0, 0, 1.9], [-5.2, 0, 1.4],
+    [-2.2, 0, 3.2], [-5.6, 0, -2.2], [-6.6, 0, 0.4]
+  ];
+  for (var i = 0; i < game.ammo.length && i < spots.length; i++) {
+    var t = thingById(game.ammo[i]);
+    var g = thingMesh(t);
+    var lift = t.shape === 'sphere' ? t.radius : t.half.y;
+    g.position.set(SLING.x + spots[i][0], lift, SLING.z + spots[i][2]);
+    g.rotation.y = i * 1.3;
+    if (i === game.ammo.indexOf(selectedAmmo)) {
+      g.position.y += 0.35;                 /* the next one up hovers over the heap */
+      g.userData.isNext = true;
+    }
+    g.userData.baseY = g.position.y;
+    pilesGroup.add(g);
+  }
+}
+
+/* --------------------------------------------------------------- the frame */
+
+function syncMeshes() {
+  for (var i = meshes.length - 1; i >= 0; i--) {
+    var pair = meshes[i];
+    if (pair.body.dead || game.world.bodies.indexOf(pair.body) < 0) {
+      scene.remove(pair.mesh);
+      meshes.splice(i, 1);
+      continue;
+    }
+    var b = pair.body;
+    pair.mesh.position.set(b.pos.x, b.pos.y, b.pos.z);
+    pair.mesh.quaternion.set(b.quat.x, b.quat.y, b.quat.z, b.quat.w);
+  }
+}
+
+function materialColour(body) {
+  if (body.material) return body.material.color;
+  return 0xcccccc;
+}
+
+function drainEvents() {
+  var evs = game.events;
+  for (var i = 0; i < evs.length; i++) {
+    var e = evs[i];
+    if (e.type === 'impact') {
+      if (e.speed > 4) {
+        var col = e.a.material ? e.a.material.color : (e.b.material ? e.b.material.color : 0xdac9a6);
+        burst(e.point, col, Math.min(14, 3 + Math.round(e.speed / 2)), e.speed * 0.25, 0.5);
+        sfx.thud(e.speed);
+        shake = Math.min(1.4, shake + e.speed * 0.012);
+      }
+    } else if (e.type === 'break') {
+      var mat = e.body.material;
+      burst(e.point, mat ? mat.color : 0xc08b4a, 26, 7, 1.1);
+      if (mat && mat.name === 'ice') sfx.glass(); else sfx.crack();
+      shake = Math.min(1.6, shake + 0.3);
+    } else if (e.type === 'explode') {
+      burst(e.point, 0xffb03a, 90, 17, 1.3);
+      burst(e.point, 0x555555, 40, 10, 1.6);
+      sfx.boom();
+      shake = 2.2;
+    } else if (e.type === 'pop') {
+      burst(e.point, 0xcf3b34, 24, 6, 0.9);
+      burst(e.point, 0xf2f2f2, 14, 5, 0.9);
+      sfx.pop();
+    } else if (e.type === 'splat') {
+      burst(e.point, 0xe2445c, 34, 7, 0.9);
+      burst(e.point, 0x4e9b3a, 16, 6, 0.9);
+      sfx.splat();
+    } else if (e.type === 'shatter') {
+      burst(e.point, 0xf2f2f2, 30, 8, 1.0);
+      burst(e.point, 0x2f6fb5, 18, 7, 1.0);
+      sfx.crack();
+    } else if (e.type === 'quake') {
+      burst(e.point, 0x8a6a45, 22, 5, 0.8);
+      shake = Math.min(2.0, shake + 0.8);
+      sfx.thud(14);
+    } else if (e.type === 'launch') {
+      sfx.launch();
+    }
+  }
+  evs.length = 0;
+}
+
+function towerCentre() {
+  if (!game) return new THREE.Vector3(14, 4, 0);
+  var sx = 0, sy = 0, n = 0;
+  for (var i = 0; i < game.state.blocks.length; i++) {
+    var b = game.state.blocks[i];
+    sx += b.startPos.x; sy += b.startPos.y; n++;
+  }
+  return n ? new THREE.Vector3(sx / n, sy / n + 1.5, 0) : new THREE.Vector3(14, 4, 0);
+}
+
+var camPos = null, camAim = null;
+function updateCamera(dt) {
+  if (!camPos) {
+    camPos = camera.position.clone();
+    camAim = new THREE.Vector3(SLING.x + 12, 5, 0);
+  }
+  var wantPos, wantAim;
+  var centre = towerCentre();
+
+  /* A tall phone screen has a much narrower horizontal field of view, which
+     would shove the slingshot off the left edge - so back the camera off
+     until the sling and the tower both fit again. */
+  var fit = Math.max(1, Math.min(3.0, 1.6 / camera.aspect));
+
+  if (game && game.flying && camMode !== 2) {
+    var p = game.flying.pos;
+    wantPos = new THREE.Vector3(p.x - 6, p.y + 5, p.z + 21 * zoom * fit);
+    wantAim = new THREE.Vector3(p.x + 4, p.y, p.z);
+  } else if (camMode === 1) {
+    /* over the shoulder of the slingshot */
+    wantPos = new THREE.Vector3(SLING.x - 13 * fit, SLING.y + 7, SLING.z + 7 * zoom * fit);
+    wantAim = new THREE.Vector3(centre.x, centre.y, 0);
+  } else if (camMode === 2) {
+    /* locked on the tower */
+    wantPos = new THREE.Vector3(centre.x - 6, centre.y + 7, 30 * zoom * fit);
+    wantAim = centre;
+  } else {
+    var mid = (SLING.x + centre.x) / 2;
+    wantPos = new THREE.Vector3(mid - 6 / fit, 11 * Math.min(1.5, fit), 37 * zoom * fit);
+    wantAim = new THREE.Vector3(mid + 3 / fit, 5, 0);
+  }
+
+  var rate = 1 - Math.exp(-dt * 3.2);
+  camPos.lerp(wantPos, rate);
+  camAim.lerp(wantAim, rate);
+
+  camera.position.copy(camPos);
+  if (shake > 0.01) {
+    camera.position.x += (Math.random() - 0.5) * shake * 0.5;
+    camera.position.y += (Math.random() - 0.5) * shake * 0.5;
+    camera.position.z += (Math.random() - 0.5) * shake * 0.3;
+    shake *= Math.pow(0.08, dt);
+    if (shake < 0.01) shake = 0;
+  }
+  camera.lookAt(camAim);
+}
+
+function updateSling() {
+  var dir = launchVelocity(1, aimPitch, aimYaw);
+  var len = vLen(dir);
+  var pull = 0.5 + aimPower * 2.4;
+  var pouchPos = new THREE.Vector3(
+    SLING.x - dir.x / len * pull,
+    SLING.y - dir.y / len * pull,
+    SLING.z - dir.z / len * pull
+  );
+  if (phase !== 'aim') {
+    pouchPos.set(SLING.x, SLING.y, SLING.z);
+  }
+  pouch.position.copy(pouchPos);
+  pouch.lookAt(new THREE.Vector3(SLING.x, SLING.y + 1, SLING.z));
+  spanCylinder(bandLeft, forkTipL, pouchPos);
+  spanCylinder(bandRight, forkTipR, pouchPos);
+
+  var showAim = (phase === 'aim' && aiming);
+  var i;
+  if (showAim) {
+    var v = launchVelocity(aimPower, aimPitch, aimYaw);
+    var path = predictPath(vec(SLING.x, SLING.y, SLING.z), v, game.world.gravity,
+      game.world.linearDamping, 1000, 1 / 60);
+    var stride = Math.max(1, Math.floor(path.length / trailDots.length));
+    for (i = 0; i < trailDots.length; i++) {
+      var k = i * stride;
+      if (k < path.length) {
+        trailDots[i].visible = true;
+        trailDots[i].position.set(path[k].x, path[k].y, path[k].z);
+        trailDots[i].material.opacity = 0.9 - i / trailDots.length * 0.65;
+        var sc = 1 - i / trailDots.length * 0.5;
+        trailDots[i].scale.setScalar(sc);
+      } else {
+        trailDots[i].visible = false;
+      }
+    }
+    aimArrow.visible = true;
+    aimArrow.position.set(
+      SLING.x + v.x / vLen(v) * 3.2,
+      SLING.y + v.y / vLen(v) * 3.2,
+      SLING.z + v.z / vLen(v) * 3.2
+    );
+    aimArrow.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(v.x, v.y, v.z).normalize()
+    );
+  } else {
+    for (i = 0; i < trailDots.length; i++) trailDots[i].visible = false;
+    aimArrow.visible = false;
+  }
+}
+
+var settleTimer = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!running) return;
+  var dt = Math.min(0.05, (now - lastFrame) / 1000);
+  lastFrame = now;
+
+  if (game && phase !== 'title') {
+    var steps = 0;
+    accum += dt;
+    while (accum >= FIXED_STEP && steps < 6) {
+      game.step(FIXED_STEP);
+      accum -= FIXED_STEP;
+      steps++;
+    }
+    if (accum > 0.25) accum = 0;
+    drainEvents();
+    syncMeshes();
+
+    if (phase === 'flying' || phase === 'settling') {
+      if (!game.flying) phase = 'settling';
+      if (game.isSettled()) finishShot();
+    }
+  }
+
+  updateParticles(dt);
+  spinNextAmmo(now);
+  updateSling();
+  updateCamera(dt);
+  renderer.render(scene, camera);
+}
+
+/* slowly turn whichever thing is loaded next, so the choice reads at a glance */
+function spinNextAmmo(now) {
+  if (!pilesGroup) return;
+  for (var i = 0; i < pilesGroup.children.length; i++) {
+    var c = pilesGroup.children[i];
+    if (c.userData && c.userData.isNext) {
+      c.rotation.y = now / 1100;
+      c.position.y = c.userData.baseY + Math.sin(now / 420) * 0.12;
+    }
+  }
+}
+
+function finishShot() {
+  if (game.isWon()) {
+    phase = 'won';
+    var sc = game.score();
+    totalScore += sc.total;
+    sfx.win();
+    showResult(true, sc);
+  } else if (game.ammo.length === 0) {
+    phase = 'lost';
+    sfx.lose();
+    showResult(false, game.score());
+  } else {
+    phase = 'aim';
+    if (game.ammo.indexOf(selectedAmmo) < 0) selectedAmmo = game.ammo[0];
+    refreshPile();
+  }
+  updateHud();
+}
+
+/* ------------------------------------------------------------------- input */
+
+function pointerXY(e) {
+  if (e.touches && e.touches.length) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  if (e.changedTouches && e.changedTouches.length) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+  return { x: e.clientX, y: e.clientY };
+}
+
+function beginDrag(e) {
+  if (phase !== 'aim' || !selectedAmmo) return;
+  initAudio();
+  aiming = true;
+  dragStart = pointerXY(e);
+  dragNow = dragStart;
+  updateAim();
+}
+function moveDrag(e) {
+  if (!aiming) return;
+  dragNow = pointerXY(e);
+  updateAim();
+  e.preventDefault();
+}
+function endDrag() {
+  if (!aiming) return;
+  aiming = false;
+  if (aimPower > 0.06) {
+    game.fire(selectedAmmo, aimPower, aimPitch, aimYaw);
+    var body = game.flying;
+    if (body) attachMesh(body, thingMesh(thingById(selectedAmmo)));
+    phase = 'flying';
+    aimPower = 0;
+    refreshPile();
+    updateHud();
+  }
+}
+function updateAim() {
+  var dx = dragStart.x - dragNow.x;      /* pulled backwards = positive */
+  var dy = dragStart.y - dragNow.y;      /* pulled upwards   = positive */
+  var len = Math.sqrt(dx * dx + dy * dy);
+  aimPower = Math.max(0, Math.min(1, len / MAX_DRAG));
+  var lift = Math.max(-1, Math.min(1, -dy / MAX_DRAG));
+  aimPitch = Math.max(3, Math.min(80, 26 + lift * 46));
+  updateReadout();
+}
+
+function bindInput() {
+  var cv = renderer.domElement;
+  cv.addEventListener('mousedown', beginDrag);
+  window.addEventListener('mousemove', moveDrag);
+  window.addEventListener('mouseup', endDrag);
+  cv.addEventListener('touchstart', function (e) { beginDrag(e); e.preventDefault(); }, { passive: false });
+  window.addEventListener('touchmove', moveDrag, { passive: false });
+  window.addEventListener('touchend', endDrag);
+  cv.addEventListener('wheel', function (e) {
+    zoom = Math.max(0.5, Math.min(2.2, zoom + (e.deltaY > 0 ? 0.08 : -0.08)));
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener('keydown', function (e) {
+    if (e.key >= '1' && e.key <= '9') {
+      var i = parseInt(e.key, 10) - 1;
+      if (game && game.ammo[i]) { selectedAmmo = game.ammo[i]; refreshPile(); updateHud(); }
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'a') { aimYaw = Math.max(-26, aimYaw - 2); updateReadout(); }
+    if (e.key === 'ArrowRight' || e.key === 'd') { aimYaw = Math.min(26, aimYaw + 2); updateReadout(); }
+    if (e.key === 'ArrowUp' || e.key === 'w') { aimPitch = Math.min(80, aimPitch + 2); updateReadout(); }
+    if (e.key === 'ArrowDown' || e.key === 's') { aimPitch = Math.max(3, aimPitch - 2); updateReadout(); }
+    if (e.key === 'c' || e.key === 'C') cycleCamera();
+    if (e.key === 'r' || e.key === 'R') startLevel(levelIndex);
+    if (e.key === ' ' && phase === 'aim' && selectedAmmo) {
+      aimPower = 1;
+      game.fire(selectedAmmo, 1, aimPitch, aimYaw);
+      if (game.flying) attachMesh(game.flying, thingMesh(thingById(selectedAmmo)));
+      phase = 'flying'; aimPower = 0; refreshPile(); updateHud();
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener('resize', resize);
+}
+
+function cycleCamera() {
+  camMode = (camMode + 1) % 3;
+  ui.camBtn.textContent = ['Camera: wide', 'Camera: sling', 'Camera: tower'][camMode];
+}
+
+function resize() {
+  var w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+
+/* ---------------------------------------------------------------------- UI */
+
+function el(id) { return document.getElementById(id); }
+
+function cacheUi() {
+  ui.hudLevel = el('hudLevel');
+  ui.hudScore = el('hudScore');
+  ui.hudGnomes = el('hudGnomes');
+  ui.hudHint = el('hudHint');
+  ui.ammoRail = el('ammoRail');
+  ui.power = el('powerFill');
+  ui.readout = el('readout');
+  ui.overlay = el('overlay');
+  ui.overlayBody = el('overlayBody');
+  ui.camBtn = el('camBtn');
+  ui.soundBtn = el('soundBtn');
+  ui.yaw = el('yawSlider');
+}
+
+function updateHud() {
+  if (!game) return;
+  ui.hudLevel.textContent = 'Level ' + (levelIndex + 1) + '/' + LEVELS.length + ' — ' + game.def.name;
+  var sc = game.score();
+  ui.hudScore.textContent = (totalScore + sc.total).toLocaleString();
+  var left = game.gnomesLeft(), total = game.state.gnomes.length;
+  var dots = '';
+  for (var i = 0; i < total; i++) dots += (i < left ? '🧙' : '💥');
+  ui.hudGnomes.textContent = dots;
+  ui.hudHint.textContent = game.def.hint;
+
+  updateReadout();
+  renderAmmoRail();
+}
+
+/* cheap enough to run on every pointer move */
+function updateReadout() {
+  ui.power.style.width = Math.round(aimPower * 100) + '%';
+  ui.readout.textContent = 'power ' + Math.round(aimPower * 100) + '%  ·  angle ' +
+    Math.round(aimPitch) + '°  ·  aim ' + (aimYaw > 0 ? '+' : '') + Math.round(aimYaw) + '°';
+  if (ui.yaw && parseFloat(ui.yaw.value) !== aimYaw) ui.yaw.value = aimYaw;
+}
+
+function renderAmmoRail() {
+  var html = '';
+  for (var i = 0; i < game.ammo.length; i++) {
+    var t = thingById(game.ammo[i]);
+    var sel = (game.ammo[i] === selectedAmmo && game.ammo.indexOf(selectedAmmo) === i) ? ' sel' : '';
+    html += '<button class="ammo' + sel + '" data-i="' + i + '" title="' + t.blurb + '">' +
+      '<span class="ai">' + t.icon + '</span><span class="an">' + t.name + '</span>' +
+      '<span class="am">' + t.mass + ' kg</span></button>';
+  }
+  if (!game.ammo.length) html = '<div class="empty">Out of things to sling</div>';
+  ui.ammoRail.innerHTML = html;
+  var btns = ui.ammoRail.querySelectorAll('.ammo');
+  for (var k = 0; k < btns.length; k++) {
+    btns[k].addEventListener('click', function () {
+      selectedAmmo = game.ammo[parseInt(this.getAttribute('data-i'), 10)];
+      refreshPile();
+      updateHud();
+    });
+  }
+}
+
+function setOverlay(html) {
+  if (!html) { ui.overlay.classList.remove('show'); return; }
+  ui.overlayBody.innerHTML = html;
+  ui.overlay.classList.add('show');
+}
+
+function starRow(n) {
+  var s = '';
+  for (var i = 0; i < 3; i++) s += '<span class="star' + (i < n ? ' on' : '') + '">★</span>';
+  return s;
+}
+
+function showResult(won, sc) {
+  var last = levelIndex === LEVELS.length - 1;
+  var title = won ? (last ? 'Every tower flattened!' : 'Tower down!') : 'Out of ammo';
+  var body = '<h2>' + title + '</h2>' + '<div class="stars">' + starRow(won ? sc.stars : 0) + '</div>' +
+    '<p class="tally">' +
+    'Gnomes toppled: <b>' + sc.popped + '/' + game.state.gnomes.length + '</b><br>' +
+    'Blocks knocked over: <b>' + sc.toppled + '</b><br>' +
+    (sc.ammoBonus ? 'Ammo left over: <b>+' + sc.ammoBonus.toLocaleString() + '</b><br>' : '') +
+    'Level score: <b>' + sc.total.toLocaleString() + '</b></p>';
+
+  if (won && !last) {
+    body += '<button class="big" id="nextBtn">Next level →</button>' +
+      '<button class="ghost" id="againBtn">Replay this one</button>';
+  } else if (won && last) {
+    body += '<p class="tally">Final score: <b>' + totalScore.toLocaleString() + '</b></p>' +
+      '<button class="big" id="restartBtn">Play again from level 1</button>';
+  } else {
+    body += '<button class="big" id="againBtn">Try again</button>';
+  }
+  setOverlay(body);
+
+  var nb = el('nextBtn'), ab = el('againBtn'), rb = el('restartBtn');
+  if (nb) nb.addEventListener('click', function () { startLevel(levelIndex + 1); });
+  if (ab) ab.addEventListener('click', function () {
+    if (phase === 'won') totalScore -= game.score().total;
+    startLevel(levelIndex);
+  });
+  if (rb) rb.addEventListener('click', function () { totalScore = 0; startLevel(0); });
+}
+
+function showTitle() {
+  setOverlay(
+    '<h2>Sling Things</h2>' +
+    '<p class="blurb">Load the slingshot, drag back, and let fly. ' +
+    'Knock every garden gnome off the tower before you run out of things to throw.</p>' +
+    '<ul class="keys">' +
+    '<li><b>Drag</b> on the scene to pull the sling — back for power, down for a higher lob</li>' +
+    '<li><b>Aim slider</b> (or ← →) swings the shot left and right</li>' +
+    '<li><b>1–9</b> pick what to sling · <b>C</b> camera · <b>R</b> restart · <b>Space</b> full-power shot</li>' +
+    '</ul>' +
+    '<button class="big" id="startBtn">Start slinging</button>'
+  );
+  el('startBtn').addEventListener('click', function () {
+    initAudio();
+    totalScore = 0;
+    startLevel(0);
+  });
+}
+
+/* ------------------------------------------------------------------- boot */
+
+var lastFrame = 0, accum = 0;
+
+function boot() {
+  cacheUi();
+  if (typeof THREE === 'undefined') {
+    setOverlay('<h2>Could not load three.js</h2><p class="blurb">' +
+      'This page pulls three.js from a CDN. Check your connection and reload.</p>');
+    return;
+  }
+  renderer = new THREE.WebGLRenderer({ antialias: !isSmallScreen() });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  el('stage').appendChild(renderer.domElement);
+
+  buildScene();
+  resize();
+  bindInput();
+
+  ui.camBtn.addEventListener('click', cycleCamera);
+  ui.soundBtn.addEventListener('click', function () {
+    soundOn = !soundOn;
+    ui.soundBtn.textContent = soundOn ? 'Sound: on' : 'Sound: off';
+  });
+  el('restartLevelBtn').addEventListener('click', function () { startLevel(levelIndex); });
+  ui.yaw.addEventListener('input', function () {
+    aimYaw = parseFloat(this.value);
+    updateReadout();
+  });
+
+  /* a quiet demo level behind the title card */
+  game = new Game(0);
+  for (var i = 0; i < game.state.blocks.length; i++) attachMesh(game.state.blocks[i], blockMesh(game.state.blocks[i]));
+  for (i = 0; i < game.state.gnomes.length; i++) attachMesh(game.state.gnomes[i], gnomeMesh());
+  selectedAmmo = game.ammo[0];
+  refreshPile();
+  updateHud();
+  syncMeshes();
+  phase = 'title';
+  showTitle();
+
+  running = true;
+  lastFrame = performance.now();
+  requestAnimationFrame(frame);
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+</script>
+</body>
+</html>
