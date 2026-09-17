@@ -1347,16 +1347,17 @@ var LEVELS = [
     build: function () {
       var p = [], i;
       /* the lane: long, slick, and raised just off the grass */
-      for (i = 0; i < 6; i++) {
+      for (i = 0; i < 7; i++) {
         p.push(slab(-2 + i * 9, 0.2, 0, 9, 0.4, 11, {
           kind: 'lane', mat: 'stone', friction: 0.03, restitution: 0.06
         }));
       }
       /* low bumpers so a slightly wayward ball still gets there */
-      p.push(slab(20, 0.6, -5.9, 54, 1.2, 0.8, { kind: 'bumper', mat: 'wood' }));
-      p.push(slab(20, 0.6, 5.9, 54, 1.2, 0.8, { kind: 'bumper', mat: 'wood' }));
-      /* back wall, so the pins have something to rattle off */
-      p.push(slab(45, 1.6, 0, 1.0, 3.2, 12, { kind: 'wall', mat: 'stone' }));
+      p.push(slab(24, 0.6, -5.9, 62, 1.2, 0.8, { kind: 'bumper', mat: 'wood' }));
+      p.push(slab(24, 0.6, 5.9, 62, 1.2, 0.8, { kind: 'bumper', mat: 'wood' }));
+      /* back wall, far enough past the pins that they scatter rather than
+         getting pinned against it by the ball */
+      p.push(slab(52, 1.6, 0, 1.0, 3.2, 12, { kind: 'wall', mat: 'stone' }));
       return {
         pieces: p,
         /* A wide triangle puts its corner pins where a straight ball can
@@ -1808,7 +1809,11 @@ function skittleIsDown(p) {
   return false;
 }
 
+/* Once a target has gone over it stays over. A later ball can shove a fallen
+   pin about, and can even stand it back up again, but it does not get to
+   climb back onto the scoreboard. */
 function targetIsDown(t) {
+  if (t.knockedDown) return true;
   return t.tag === 'skittle' ? skittleIsDown(t) : gnomeIsPopped(t);
 }
 
@@ -1921,6 +1926,7 @@ function Game(levelIndex) {
   this.sinceShot = 0;
   this.pendingBlasts = [];
   this.bestDistance = 0;          /* for the driving range */
+  this.swept = false;
   this.mode = this.def.mode || 'targets';
   var self = this;
   this.world.onImpact = function (a, b, speed, point) { self.handleImpact(a, b, speed, point); };
@@ -2048,6 +2054,7 @@ Game.prototype.fire = function (thingId, power, pitchDeg, yawDeg) {
   this.flying = body;
   this.shotsTaken++;
   this.sinceShot = 0;
+  this.swept = false;
   this.emit({ type: 'launch', body: body, thing: t });
   return body;
 };
@@ -2056,7 +2063,9 @@ Game.prototype.railTargets = function () {
   var ts = this.state.targets;
   for (var i = 0; i < ts.length; i++) {
     var t = ts[i];
-    if (t.dead) continue;
+    /* a fallen pin is free to go wherever the ball sends it - it only has to
+       stay in the firing line while it still counts for something */
+    if (t.dead || t.knockedDown) continue;
     t.vel.z *= TARGET_RAIL_DAMP;
     var dz = t.pos.z - t.startPos.z;
     if (dz > TARGET_RAIL) { t.pos.z = t.startPos.z + TARGET_RAIL; t.vel.z = 0; }
@@ -2068,6 +2077,12 @@ Game.prototype.step = function (dt) {
   this.world.step(dt);
   this.railTargets();
   this.sinceShot += dt;
+
+  var ti, tg;
+  for (ti = 0; ti < this.state.targets.length; ti++) {
+    tg = this.state.targets[ti];
+    if (!tg.knockedDown && targetIsDown(tg)) tg.knockedDown = true;
+  }
 
   var i;
   for (i = 0; i < this.pendingBlasts.length; i++) {
@@ -2149,6 +2164,23 @@ Game.prototype.step = function (dt) {
     }
   }
   if (this.flying && (this.flying.dead || this.flying.sleeping)) this.flying = null;
+
+  if (!this.swept && this.isSettled()) {
+    this.swept = true;
+    this.sweepFallen();
+  }
+};
+
+/* the alley sweeper: fallen pins are cleared once everything has stopped, so
+   the next ball is not deflected by a pile of them */
+Game.prototype.sweepFallen = function () {
+  for (var i = 0; i < this.state.targets.length; i++) {
+    var t = this.state.targets[i];
+    if (t.dead || t.tag !== 'skittle' || !t.knockedDown) continue;
+    t.dead = true;
+    this.emit({ type: 'sweep', point: vClone(t.pos), body: t });
+    this.world.remove(t);
+  }
 };
 
 Game.prototype.isSettled = function () {
@@ -3114,6 +3146,8 @@ function drainEvents() {
     } else if (e.type === 'boost') {
       burst(e.point, 0xffd23f, 10, 4, 0.4);
       tone(420, 0.09, 'square', 0.09, 900);
+    } else if (e.type === 'sweep') {
+      burst(e.point, 0xf0f0ea, 10, 3, 0.5);
     } else if (e.type === 'retire') {
       burst(e.point, 0xdfe8ef, 12, 3, 0.55);
     } else if (e.type === 'launch') {
