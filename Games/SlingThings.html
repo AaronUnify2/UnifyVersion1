@@ -413,6 +413,7 @@ function Body(opts) {
   this.userData = opts.userData || {};
   this.invInertiaWorld = [0, 0, 0, 0, 0, 0, 0, 0, 0];
   this.aabb = { minx: 0, miny: 0, minz: 0, maxx: 0, maxy: 0, maxz: 0 };
+  this.links = [];          /* the dynamic bodies this one is resting against */
 
   var mass = opts.mass !== undefined ? opts.mass : 1;
   if (this.isStatic) mass = 0;
@@ -851,9 +852,15 @@ World.prototype.collideBoxBox = function (a, b) {
   }
 };
 
+var LINK_MARGIN = 0.08;
+
 World.prototype.broadphase = function () {
   var bs = this.bodies, n = bs.length, i, j;
-  for (i = 0; i < n; i++) { bs[i].updateAABB(); bs[i].updateInertiaWorld(); }
+  for (i = 0; i < n; i++) {
+    bs[i].updateAABB();
+    bs[i].updateInertiaWorld();
+    bs[i].links.length = 0;
+  }
   for (i = 0; i < n; i++) {
     var a = bs[i];
     if (a.dead) continue;
@@ -862,10 +869,15 @@ World.prototype.broadphase = function () {
       var b = bs[j];
       if (b.dead) continue;
       if (a.isStatic && b.isStatic) continue;
-      if (a.sleeping && b.sleeping) continue;
-      if (a.sleeping && b.isStatic) continue;
-      if (b.sleeping && a.isStatic) continue;
       var A = a.aabb, B = b.aabb;
+      /* a slightly generous test first, to record what is resting on what -
+         this graph is what tells a sleeping tower its support has gone */
+      if (A.maxx < B.minx - LINK_MARGIN || A.minx > B.maxx + LINK_MARGIN) continue;
+      if (A.maxy < B.miny - LINK_MARGIN || A.miny > B.maxy + LINK_MARGIN) continue;
+      if (A.maxz < B.minz - LINK_MARGIN || A.minz > B.maxz + LINK_MARGIN) continue;
+      if (!a.isStatic && !b.isStatic) { a.links.push(b); b.links.push(a); }
+      /* neither can move, so there is nothing to solve between them */
+      if ((a.isStatic || a.sleeping) && (b.isStatic || b.sleeping)) continue;
       if (A.maxx < B.minx || A.minx > B.maxx) continue;
       if (A.maxy < B.miny || A.miny > B.maxy) continue;
       if (A.maxz < B.minz || A.minz > B.maxz) continue;
@@ -1044,9 +1056,77 @@ World.prototype.solvePosition = function (iterations, dt) {
   }
 };
 
+/* A body asleep on its own has no idea the thing holding it up has been shot
+   away - it just hangs there. So before anything moves, wake any sleeper whose
+   neighbour has started moving or has been destroyed, and let that spread. */
+World.prototype.propagateWake = function () {
+  var bs = this.bodies, i, k, queue = [];
+  for (i = 0; i < bs.length; i++) {
+    var b = bs[i];
+    if (b.isStatic || b.dead || !b.sleeping) continue;
+    for (k = 0; k < b.links.length; k++) {
+      var L = b.links[k];
+      if (L.dead || !L.sleeping) { queue.push(b); break; }
+    }
+  }
+  for (i = 0; i < queue.length; i++) {
+    var body = queue[i];
+    if (!body.sleeping) continue;
+    body.wake();
+    for (k = 0; k < body.links.length; k++) {
+      var nb = body.links[k];
+      if (nb.sleeping && !nb.dead) queue.push(nb);
+    }
+  }
+};
+
+/* Sleep whole islands at once. Letting blocks nod off one at a time is what
+   lets half a tower freeze in place while the rest of it falls. */
+World.prototype.updateSleeping = function (dt) {
+  var bs = this.bodies, i, k, b;
+  for (i = 0; i < bs.length; i++) {
+    b = bs[i];
+    if (b.isStatic || b.dead || b.sleeping) continue;
+    if (vLenSq(b.vel) < SLEEP_LINEAR_SQ && vLenSq(b.angVel) < SLEEP_ANGULAR_SQ) b.sleepTimer += dt;
+    else b.sleepTimer = 0;
+  }
+
+  var index = {}, list = [];
+  for (i = 0; i < bs.length; i++) {
+    if (bs[i].isStatic || bs[i].dead) continue;
+    index[bs[i].id] = list.length;
+    list.push(bs[i]);
+  }
+  var parent = new Array(list.length);
+  for (i = 0; i < list.length; i++) parent[i] = i;
+  function find(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+  for (i = 0; i < list.length; i++) {
+    var links = list[i].links;
+    for (k = 0; k < links.length; k++) {
+      var j = index[links[k].id];
+      if (j === undefined) continue;
+      var ra = find(i), rb = find(j);
+      if (ra !== rb) parent[ra] = rb;
+    }
+  }
+
+  var ready = {};
+  for (i = 0; i < list.length; i++) {
+    var root = find(i);
+    if (ready[root] === undefined) ready[root] = true;
+    if (list[i].sleeping) continue;
+    if (list[i].sleepTimer <= SLEEP_TIME) ready[root] = false;
+  }
+  for (i = 0; i < list.length; i++) {
+    if (!list[i].sleeping && ready[find(i)]) list[i].sleep();
+  }
+};
+
 World.prototype.step = function (dt) {
   var i, b;
   var bodies = this.bodies;
+
+  this.propagateWake();
 
   /* integrate velocities */
   for (i = 0; i < bodies.length; i++) {
@@ -1121,16 +1201,9 @@ World.prototype.step = function (dt) {
       b.vel = vec(); b.angVel = vec();
     }
 
-    /* sleeping */
-    var sp = vLenSq(b.vel), asp = vLenSq(b.angVel);
-    if (sp < SLEEP_LINEAR_SQ && asp < SLEEP_ANGULAR_SQ) {
-      b.sleepTimer += dt;
-      if (b.sleepTimer > SLEEP_TIME) b.sleep();
-    } else {
-      b.sleepTimer = 0;
-    }
   }
 
+  this.updateSleeping(dt);
   this.time += dt;
 };
 
@@ -1227,7 +1300,7 @@ var LEVELS = [
     set: 'main',
     name: 'Wonky Watchtower',
     hint: 'Pull back from the sling and let go. Aim for the legs.',
-    ammo: ['melon', 'melon', 'bowling', 'duck'],
+    ammo: ['melon', 'melon', 'bowling', 'duck', 'melon'],
     par: 5000,
     build: function () {
       var x = 16, p = [];
@@ -1250,7 +1323,7 @@ var LEVELS = [
         gnomes: [
           { x: x, y: 10.2, z: 0 },
           { x: x, y: 7.9, z: 0 },
-          { x: x + 4.6, y: 0.5, z: 0.6 }
+          { x: x - 4.2, y: 0.5, z: 0.8 }
         ]
       };
     }
@@ -1575,7 +1648,8 @@ var SPLAT_SPEED = 6;
 var TNT_TRIGGER_SPEED = 5;
 var BLAST_RADIUS = 7.5;
 var BLAST_FORCE = 26;
-var SETTLE_TIMEOUT = 7;
+var SETTLE_TIMEOUT = 6;
+var PROJECTILE_LIFE = 4;      /* seconds before a spent thing is taken off the field */
 
 function Game(levelIndex) {
   this.levelIndex = levelIndex;
@@ -1676,6 +1750,7 @@ Game.prototype.fire = function (thingId, power, pitchDeg, yawDeg) {
   if (t.shape === 'sphere') opts.radius = t.radius;
   else opts.half = vec(t.half.x, t.half.y, t.half.z);
   var body = new Body(opts);
+  body.userData.born = this.world.time;
   var v = launchVelocity(power, pitchDeg, yawDeg);
   body.vel = v;
   body.angVel = vec((rand() - 0.5) * 4, (rand() - 0.5) * 2, (rand() - 0.5) * 4);
@@ -1718,11 +1793,17 @@ Game.prototype.step = function (dt) {
     }
   }
 
-  /* projectiles that leave the map should not hold the turn open */
+  /* Spent ammo is retired a few seconds after launch. A bowling ball will
+     happily trundle for ten seconds and seventy metres otherwise, and the
+     turn cannot end until it stops. */
   for (i = 0; i < this.projectiles.length; i++) {
     var p = this.projectiles[i];
-    if (!p.dead && (p.pos.x > 90 || p.pos.x < -60 || Math.abs(p.pos.z) > 45 || p.pos.y < -12)) {
+    if (p.dead) continue;
+    var offMap = p.pos.x > 90 || p.pos.x < -60 || Math.abs(p.pos.z) > 45 || p.pos.y < -12;
+    if (offMap) { p.dead = true; continue; }
+    if (this.world.time - (p.userData.born || 0) > PROJECTILE_LIFE) {
       p.dead = true;
+      this.emit({ type: 'retire', point: vClone(p.pos), body: p, thing: p.userData.thing });
     }
   }
   if (this.flying && (this.flying.dead || this.flying.sleeping)) this.flying = null;
@@ -2520,6 +2601,8 @@ function drainEvents() {
       burst(e.point, 0x8a6a45, 22, 5, 0.8);
       shake = Math.min(2.0, shake + 0.8);
       sfx.thud(14);
+    } else if (e.type === 'retire') {
+      burst(e.point, 0xdfe8ef, 12, 3, 0.55);
     } else if (e.type === 'launch') {
       sfx.launch();
     }
