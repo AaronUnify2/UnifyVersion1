@@ -1422,30 +1422,30 @@ var LEVELS = [
     set: 'main',
     mode: 'distance',
     name: 'The Driving Range',
-    hint: 'No gnomes here. Land it on the slope, hit the treadmills, see how far it runs.',
+    hint: 'Land on the slope and chain the treadmills. Miss one and the drive dies there.',
     ammo: ['golfball', 'golfball', 'bowling', 'golfball', 'beachball', 'golfball'],
-    par: 11000,
-    targetDistance: 150,
-    groundFriction: 0.14,
-    projectileLife: 15,
-    settleTimeout: 17,
-    bounds: 430,
-    view: 54,
+    par: 22000,
+    targetDistance: 1000,
+    groundFriction: 0.07,
+    projectileLife: 48,
+    settleTimeout: 50,
+    bounds: 5200,
+    view: 58,
     build: function () {
       var p = [];
       /* the big downslope: land on this and it gathers speed */
       p.push(slab(16, 2.6, 0, 16, 1.4, 14, { tilt: -0.26, kind: 'slope', mat: 'stone' }));
-      /* a run-out wedge so the drop back to the grass is not a cliff */
       p.push(slab(26.5, 0.45, 0, 6, 0.9, 14, { tilt: -0.12, kind: 'slope', mat: 'stone' }));
-      /* treadmills, each one a little quicker than the last */
-      var pads = [[36, 34], [58, 39], [82, 44], [110, 49], [142, 54]];
+      /* Treadmills that multiply rather than set a speed. A fixed speed makes
+         the whole chain decided by whether you reached the first pad; this way
+         the pace you arrive with carries all the way down the course, and a
+         drive that is merely good runs out of road long before the last one. */
+      var pads = [[40, 1.9], [220, 1.9], [700, 1.8], [1500, 1.7], [2600, 1.6], [4000, 1.5]];
       for (var i = 0; i < pads.length; i++) {
-        p.push(slab(pads[i][0], -0.18, 0, 9, 0.4, 11, {
-          kind: 'boost', boost: pads[i][1], mat: 'stone', friction: 0.04
+        p.push(slab(pads[i][0], -0.18, 0, 11, 0.4, 11, {
+          kind: 'boost', mult: pads[i][1], mat: 'stone', friction: 0.04
         }));
       }
-      /* a kicker at the far end to send a fast ball soaring */
-      p.push(slab(176, 1.3, 0, 9, 1.0, 11, { tilt: 0.34, kind: 'kicker', mat: 'stone' }));
       return { pieces: p, targets: [] };
     }
   },
@@ -1550,6 +1550,40 @@ var LEVELS = [
       pins.push({ x: x - 4.6, y: 0.5, z: 0.9 });
       pins.push({ x: x + 4.6, y: 0.5, z: -0.9 });
       return { pieces: p, targets: pins };
+    }
+  },
+{
+    set: 'main',
+    mode: 'hole',
+    name: 'Hole In One',
+    hint: 'One treadmill, then a long rough run to the green. Too soft and you come up short.',
+    ammo: ['golfball', 'golfball', 'golfball', 'golfball', 'golfball', 'golfball'],
+    par: 15000,
+    hole: { x: 220, z: 0, radius: 3.2, maxSpeed: 26 },
+    groundFriction: 0.55,
+    projectileLife: 26,
+    settleTimeout: 28,
+    bounds: 420,
+    view: 210,
+    build: function () {
+      var p = [], H = 220;
+      p.push(slab(16, 2.6, 0, 16, 1.4, 14, { tilt: -0.26, kind: 'slope', mat: 'stone' }));
+      p.push(slab(26.5, 0.45, 0, 6, 0.9, 14, { tilt: -0.12, kind: 'slope', mat: 'stone' }));
+      /* One multiplier rather than a fixed speed: it doubles whatever pace the
+         shot arrived with, so how hard you hit it still decides where it stops. */
+      p.push(slab(46, -0.18, 0, 12, 0.4, 11, {
+        kind: 'boost', mult: 1.75, mat: 'stone', friction: 0.04
+      }));
+      /* the green: a ramp onto a plateau, then a shallow valley with the cup
+         at the bottom, so anything that reaches it feeds in */
+      p.push(slab(H - 28, 1.0, 0, 24, 1.0, 26, { tilt: 0.125, kind: 'green', mat: 'stone', friction: 0.02 }));
+      p.push(slab(H - 8, 1.3, 0, 16, 1.0, 26, { tilt: -0.1503, kind: 'green', mat: 'stone', friction: 0.02 }));
+      p.push(slab(H + 8, 1.3, 0, 16, 1.0, 26, { tilt: 0.1503, kind: 'green', mat: 'stone', friction: 0.02 }));
+      /* a back wall, so an overcooked drive drops back into the valley */
+      p.push(slab(H + 17, 5.8, 0, 1.2, 5.6, 28, { kind: 'wall', mat: 'stone' }));
+      p.push(slab(H - 6, 3.2, -13.6, 52, 2.6, 1.2, { kind: 'wall', mat: 'wood' }));
+      p.push(slab(H - 6, 3.2, 13.6, 52, 2.6, 1.2, { kind: 'wall', mat: 'wood' }));
+      return { pieces: p, targets: [] };
     }
   },
   {
@@ -1699,6 +1733,7 @@ function slab(x, y, z, w, h, d, opts) {
     kind: opts.kind || 'deck',
     tint: opts.tint,
     boost: opts.boost || 0,
+    mult: opts.mult || 0,
     lift: opts.lift,
     friction: opts.friction,
     restitution: opts.restitution
@@ -1736,12 +1771,15 @@ function buildLevel(world, index) {
       hp: pc.fixed ? Infinity : (pc.hp !== undefined ? pc.hp : m.hp),
       material: m,
       tag: pc.fixed ? 'scenery' : 'block',
-      userData: { tint: pc.tint, kind: pc.kind || null, boost: pc.boost || 0, lift: pc.lift }
+      userData: {
+        tint: pc.tint, kind: pc.kind || null,
+        boost: pc.boost || 0, mult: pc.mult || 0, lift: pc.lift
+      }
     });
     world.add(body);
     if (pc.fixed) {
       scenery.push(body);
-      if (pc.boost) boosters.push(body);
+      if (pc.boost || pc.mult) boosters.push(body);
     } else {
       blocks.push(body);
     }
@@ -1906,11 +1944,13 @@ var BLAST_DAMAGE = 130;
 var TARGET_RAIL = 0.3;
 var TARGET_RAIL_DAMP = 0.72;
 
-var BOOST_LIFT = 5.5;      /* treadmills hop the ball to the next one */
+var BOOST_LIFT = 5.5;
+var MAX_BOOST_SPEED = 360;   /* a ceiling, so nothing outruns the solver */      /* treadmills hop the ball to the next one */
 var SPLAT_RADIUS = 4.2;
 var SPLAT_FORCE = 11;
 var SETTLE_TIMEOUT = 6;
-var DISTANCE_POINTS = 60;   /* score per metre on the driving range */
+var DISTANCE_POINTS = 8;    /* score per metre on the driving range */
+var HOLE_BONUS = 14000;
 var PROJECTILE_LIFE = 4;      /* seconds before a spent thing is taken off the field */
 
 function Game(levelIndex) {
@@ -1926,6 +1966,7 @@ function Game(levelIndex) {
   this.sinceShot = 0;
   this.pendingBlasts = [];
   this.bestDistance = 0;          /* for the driving range */
+  this.holed = false;
   this.swept = false;
   this.mode = this.def.mode || 'targets';
   var self = this;
@@ -2117,7 +2158,6 @@ Game.prototype.step = function (dt) {
   var pads = this.state.boosters;
   for (i = 0; i < pads.length; i++) {
     var pad = pads[i];
-    var speed = pad.userData.boost;
     for (var k = 0; k < this.projectiles.length; k++) {
       var ball = this.projectiles[k];
       if (ball.dead) continue;
@@ -2126,18 +2166,49 @@ Game.prototype.step = function (dt) {
       if (Math.abs(ball.pos.z - pad.pos.z) > pad.half.z + r) continue;
       var over = ball.pos.y - (pad.pos.y + pad.half.y);
       if (over < -r || over > r + 0.6) continue;
-      if (ball.vel.x < speed) {
-        ball.wake();
-        ball.vel.x = speed;
-        /* a flat shove just fires the ball into the lip of the next pad, where
-           it loses everything it just gained - so send it up as well as along */
-        var lift = pad.userData.lift || BOOST_LIFT;
-        if (ball.vel.y < lift) ball.vel.y = lift;
-        if (this.world.time - (ball.userData.lastBoost || -9) > 0.25) {
-          ball.userData.lastBoost = this.world.time;
-          this.emit({ type: 'boost', point: vClone(ball.pos), body: ball });
+
+      var lift = pad.userData.lift || BOOST_LIFT;
+      var kicked = false;
+      if (pad.userData.mult) {
+        /* A multiplier keeps whatever pace the shot arrived with, so a long
+           drive stays a test of the shot rather than of the pad's setting.
+           Only once per pad, or it would wind up forever. */
+        if (!ball.userData.usedPads) ball.userData.usedPads = {};
+        if (!ball.userData.usedPads[pad.id] && ball.vel.x > 1) {
+          ball.userData.usedPads[pad.id] = true;
+          ball.vel.x = Math.min(MAX_BOOST_SPEED, ball.vel.x * pad.userData.mult);
+          kicked = true;
         }
+      } else if (ball.vel.x < pad.userData.boost) {
+        ball.vel.x = pad.userData.boost;
+        kicked = true;
       }
+      if (!kicked) continue;
+      ball.wake();
+      /* a flat shove just fires the ball into the lip of the next pad, where
+         it loses everything it just gained - so send it up as well as along */
+      if (ball.vel.y < lift) ball.vel.y = lift;
+      if (this.world.time - (ball.userData.lastBoost || -9) > 0.25) {
+        ball.userData.lastBoost = this.world.time;
+        this.emit({ type: 'boost', point: vClone(ball.pos), body: ball });
+      }
+    }
+  }
+
+  /* the cup */
+  if (this.def.hole && !this.holed) {
+    var hx = this.def.hole.x, hz = this.def.hole.z || 0;
+    var hr = this.def.hole.radius || 3;
+    var hv = this.def.hole.maxSpeed || 30;
+    for (i = 0; i < this.projectiles.length; i++) {
+      var pb = this.projectiles[i];
+      if (pb.dead) continue;
+      var dx = pb.pos.x - hx, dz = pb.pos.z - hz;
+      if (dx * dx + dz * dz > hr * hr) continue;
+      if (pb.pos.y > 2.2 || vLen(pb.vel) > hv) continue;
+      this.holed = true;
+      pb.dead = true;
+      this.emit({ type: 'holed', point: vClone(pb.pos), body: pb });
     }
   }
 
@@ -2202,10 +2273,18 @@ Game.prototype.score = function () {
   if (this.mode === 'distance') {
     s = { score: Math.round(this.bestDistance * DISTANCE_POINTS), popped: 0, toppled: 0 };
     s.distance = this.bestDistance;
+  } else if (this.mode === 'hole') {
+    s = {
+      score: Math.round(this.bestDistance * 12) + (this.holed ? HOLE_BONUS : 0),
+      popped: this.holed ? 1 : 0, toppled: 0
+    };
+    s.distance = this.bestDistance;
+    s.holed = this.holed;
   } else {
     s = scoreLevel(this.state);
   }
-  s.ammoBonus = (!this.def.endless && this.mode !== 'distance' && this.targetsLeft() === 0)
+  s.ammoBonus = (!this.def.endless && this.mode !== 'distance' &&
+    (this.mode === 'hole' ? this.holed : this.targetsLeft() === 0))
     ? this.ammo.length * 1500 : 0;
   s.total = s.score + s.ammoBonus;
   s.stars = starsFor(s.total, this.def.par);
@@ -2213,6 +2292,7 @@ Game.prototype.score = function () {
 };
 
 Game.prototype.isWon = function () {
+  if (this.mode === 'hole') return this.holed;
   if (this.mode === 'distance') return this.bestDistance >= (this.def.targetDistance || 1e9);
   return this.targetsLeft() === 0;
 };
@@ -2233,6 +2313,7 @@ if (typeof module !== 'undefined' && module.exports) {
     thingById: thingById, launchVelocity: launchVelocity,
     predictPath: predictPath, SLING: SLING, GNOME_RADIUS: GNOME_RADIUS,
     Game: Game, seedRandom: seedRandom, rand: rand, TARGET_RAIL: TARGET_RAIL,
+    DISTANCE_POINTS: DISTANCE_POINTS, HOLE_BONUS: HOLE_BONUS,
     targetIsDown: targetIsDown, skittleIsDown: skittleIsDown, SKITTLE: SKITTLE,
     MIN_SPEED: MIN_SPEED, MAX_SPEED: MAX_SPEED
   };
@@ -2519,7 +2600,7 @@ function sceneryMesh(body) {
   } else if (kind === 'lane') {
     tex = laneTexture().clone();
     tex.repeat.set(Math.max(1, Math.round(w / 3)), 1);
-  } else if (kind === 'slope' || kind === 'kicker') {
+  } else if (kind === 'slope' || kind === 'kicker' || kind === 'green') {
     tex = turfTexture().clone();
     tex.repeat.set(Math.max(1, Math.round(w / 3)), Math.max(1, Math.round(d / 3)));
   } else {
@@ -2678,9 +2759,9 @@ function buildScene() {
   /* ground */
   var gtex = grassTexture().clone();
   gtex.needsUpdate = true;
-  gtex.repeat.set(160, 160);
+  gtex.repeat.set(1400, 1400);
   var ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(1600, 1600),
+    new THREE.PlaneGeometry(14000, 14000),
     lambert({ map: gtex })
   );
   ground.rotation.x = -Math.PI / 2;
@@ -3036,29 +3117,60 @@ var decorGroup = null;
 function buildDecor() {
   if (!decorGroup) { decorGroup = new THREE.Group(); scene.add(decorGroup); }
   while (decorGroup.children.length) decorGroup.remove(decorGroup.children[0]);
-  if (!game || game.mode !== 'distance') return;
+  if (!game) return;
 
-  /* trees down both sides, so the run-out is not an empty green desert */
-  for (var f = 70; f <= 400; f += 26) {
-    var jitter = ((f * 37) % 11) - 5;
-    decorGroup.add(makeTree(f + jitter, 15 + ((f * 13) % 9), 1.0 + ((f * 7) % 5) * 0.12));
-    decorGroup.add(makeTree(f - jitter, -16 - ((f * 17) % 9), 1.0 + ((f * 11) % 5) * 0.12));
-  }
-
-  /* marker posts down the range, so the distance reads at a glance */
   var postMat = lambert({ color: 0xf2f2f2 });
   var flagMat = lambert({ color: 0xe8443a });
-  for (var d = 50; d <= 350; d += 50) {
-    var x = SLING.x + d;
+  var i, x;
+
+  if (game.def.hole) {
+    /* the cup, and a flag you can see from the tee */
+    var h = game.def.hole;
+    var cup = new THREE.Mesh(
+      new THREE.CylinderGeometry(h.radius * 0.5, h.radius * 0.5, 0.5, 20),
+      lambert({ color: 0x14181c })
+    );
+    cup.position.set(h.x, 0.58, h.z || 0);
+    decorGroup.add(cup);
+    var rim = new THREE.Mesh(
+      new THREE.CylinderGeometry(h.radius, h.radius, 0.08, 24),
+      lambert({ color: 0xf7f7f0 })
+    );
+    rim.position.set(h.x, 0.66, h.z || 0);
+    decorGroup.add(rim);
+    var stick = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 6, 6), postMat);
+    stick.position.set(h.x, 3.6, h.z || 0);
+    stick.castShadow = true;
+    decorGroup.add(stick);
+    var flag = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.3, 2.4), flagMat);
+    flag.position.set(h.x, 6.0, (h.z || 0) + 1.3);
+    decorGroup.add(flag);
+  }
+
+  if (game.mode !== 'distance' && game.mode !== 'hole') return;
+
+  /* marker posts, spaced to suit how long the course is */
+  var far = (game.def.bounds || 400) - 20;
+  var step = far > 2000 ? 250 : 50;
+  for (var d = step; d <= far; d += step) {
+    x = SLING.x + d;
     for (var side = -1; side <= 1; side += 2) {
       var post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 4.2, 6), postMat);
       post.position.set(x, 2.1, side * 9);
-      post.castShadow = true;
       decorGroup.add(post);
-      var flag = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 1.6), flagMat);
-      flag.position.set(x, 3.7, side * 9.9);
-      decorGroup.add(flag);
+      var mark = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 1.6), flagMat);
+      mark.position.set(x, 3.7, side * 9.9);
+      decorGroup.add(mark);
     }
+  }
+
+  /* trees, but only down the near stretch - a five kilometre avenue of them
+     would be thousands of objects for scenery nobody sees at 300 m/s */
+  var treeEnd = Math.min(620, far);
+  for (var f = 70; f <= treeEnd; f += 26) {
+    var jitter = ((f * 37) % 11) - 5;
+    decorGroup.add(makeTree(f + jitter, 15 + ((f * 13) % 9), 1.0 + ((f * 7) % 5) * 0.12));
+    decorGroup.add(makeTree(f - jitter, -16 - ((f * 17) % 9), 1.0 + ((f * 11) % 5) * 0.12));
   }
 }
 
@@ -3146,6 +3258,10 @@ function drainEvents() {
     } else if (e.type === 'boost') {
       burst(e.point, 0xffd23f, 10, 4, 0.4);
       tone(420, 0.09, 'square', 0.09, 900);
+    } else if (e.type === 'holed') {
+      burst(e.point, 0xffd23f, 60, 9, 1.4);
+      burst(e.point, 0xffffff, 30, 6, 1.2);
+      sfx.win();
     } else if (e.type === 'sweep') {
       burst(e.point, 0xf0f0ea, 10, 3, 0.5);
     } else if (e.type === 'retire') {
@@ -3165,9 +3281,12 @@ function playSpan() {
   if (!game) return fallback;
   if (!game.state.blocks.length) {
     var span = game.def.view || 46;
+    var look = game.def.hole
+      ? new THREE.Vector3(game.def.hole.x, 3, game.def.hole.z || 0)
+      : new THREE.Vector3(SLING.x + span * 0.45, 4, 0);
     return {
-      centre: new THREE.Vector3(SLING.x + span * 0.45, 4, 0),
-      midX: SLING.x + span / 2, farX: SLING.x + span, top: 8, need: span
+      centre: look, midX: SLING.x + span / 2,
+      farX: SLING.x + span, top: 8, need: span
     };
   }
   var sx = 0, sy = 0, n = 0, farX = -1e9, top = 0;
@@ -3206,9 +3325,16 @@ function updateCamera(dt) {
   var fit = Math.max(1, Math.min(3.0, 1.6 / camera.aspect));
 
   if (game && game.flying && camMode !== 2) {
+    /* a ball on the treadmills can be doing 300 m/s, so hang further back and
+       chase harder or it is gone before the camera has turned its head */
     var p = game.flying.pos;
-    wantPos = new THREE.Vector3(p.x - 6, p.y + 5, p.z + dist * 0.56 * zoom * fit);
-    wantAim = new THREE.Vector3(p.x + 4, p.y, p.z);
+    var pace = Math.abs(game.flying.vel.x);
+    wantPos = new THREE.Vector3(
+      p.x - 6 - pace * 0.05,
+      p.y + 5 + pace * 0.04,
+      p.z + (dist * 0.56 + pace * 0.14) * zoom * fit
+    );
+    wantAim = new THREE.Vector3(p.x + 4 + pace * 0.25, p.y, p.z);
   } else if (camMode === 1) {
     /* over the shoulder of the slingshot */
     wantPos = new THREE.Vector3(SLING.x - 13 * fit, SLING.y + 7, SLING.z + 7 * zoom * fit);
@@ -3223,7 +3349,9 @@ function updateCamera(dt) {
     wantAim = new THREE.Vector3(mid, 5, 0);
   }
 
-  var rate = 1 - Math.exp(-dt * 3.2);
+  var chase = 3.2;
+  if (game && game.flying) chase += Math.min(60, Math.abs(game.flying.vel.x) * 0.22);
+  var rate = 1 - Math.exp(-dt * chase);
   camPos.lerp(wantPos, rate);
   camAim.lerp(wantAim, rate);
 
@@ -3315,6 +3443,7 @@ function frame(now) {
     }
   }
 
+  if (skyMesh) skyMesh.position.copy(camera.position);
   updateParticles(dt);
   spinNextAmmo(now);
   updateSling();
@@ -3468,7 +3597,12 @@ function updateHud() {
   ui.hudLevel.textContent = label + (setPos + 1) + '/' + setLevels.length + ' — ' + game.def.name;
   var sc = game.score();
   ui.hudScore.textContent = (totalScore + sc.total).toLocaleString();
-  if (game.mode === 'distance') {
+  if (game.mode === 'hole') {
+    ui.hudGnomes.textContent = game.holed
+      ? 'IN THE HOLE!'
+      : 'Best ' + game.bestDistance.toFixed(0) + ' m  ·  cup at ' +
+        (game.def.hole.x - SLING.x).toFixed(0) + ' m';
+  } else if (game.mode === 'distance') {
     var target = game.def.targetDistance || 0;
     ui.hudGnomes.textContent = 'Best drive ' + game.bestDistance.toFixed(0) + ' m' +
       (target ? '  ·  beat ' + target + ' m' : '');
@@ -3532,18 +3666,21 @@ function showResult(won, sc) {
   var last = setPos === setLevels.length - 1;
   var tots = currentSet === 'tots';
   var range = game.mode === 'distance';
+  var cup = game.mode === 'hole';
   var title = won
     ? (last ? (tots ? 'You knocked them ALL down!' : 'That is the lot!')
-            : (range ? 'What a drive!' : (tots ? 'Crash! All gone!' : 'Tower down!')))
-    : (range ? 'Out of balls' : 'Out of ammo');
+            : (cup ? 'HOLE IN ONE!' : range ? 'What a drive!'
+              : (tots ? 'Crash! All gone!' : 'Tower down!')))
+    : (cup ? 'Not in the cup' : range ? 'Out of balls' : 'Out of ammo');
   var pins = 0, gnomes = 0;
   for (var ti = 0; ti < game.state.targets.length; ti++) {
     if (game.state.targets[ti].tag === 'skittle') pins++; else gnomes++;
   }
   var targetWord = (pins && gnomes) ? 'Targets cleared'
     : (pins ? 'Pins knocked down' : 'Gnomes toppled');
-  var tallyLines = range
+  var tallyLines = (range || cup)
     ? 'Best drive: <b>' + sc.distance.toFixed(1) + ' m</b><br>' +
+      (cup ? 'Holed: <b>' + (sc.holed ? 'yes' : 'not yet') + '</b><br>' : '') +
       (game.def.targetDistance ? 'To beat: <b>' + game.def.targetDistance + ' m</b><br>' : '')
     : targetWord + ': <b>' + sc.popped + '/' + game.state.targets.length + '</b><br>' +
       'Blocks knocked over: <b>' + sc.toppled + '</b><br>';
