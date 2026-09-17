@@ -2325,6 +2325,8 @@ if (typeof module !== 'undefined' && module.exports) {
    ====================================================================== */
 
 var FIXED_STEP = 1 / 120;
+var BASE_FOV = 52;
+var WIDE_SPAN_ON_NARROW = 72;   /* metres of course a phone tries to frame */
 var MAX_DRAG = 260;          /* pixels for a full-power pull */
 
 var renderer, scene, camera, sun, skyMesh;
@@ -2723,7 +2725,7 @@ function buildScene() {
   scene.background = new THREE.Color(0x9fd7f2);
   scene.fog = new THREE.Fog(0xbfe4f5, 120, 460);
 
-  camera = new THREE.PerspectiveCamera(52, 1, 0.1, 500);
+  camera = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, 4000);
   camera.position.set(SLING.x + 4, 10, 34);
 
   var hemi = new THREE.HemisphereLight(0xdff1ff, 0x5b7c3a, 0.85);
@@ -3316,13 +3318,20 @@ function updateCamera(dt) {
   var wantPos, wantAim;
   var span = playSpan();
   var centre = span.centre;
-  var dist = span.need * 0.95;
-  var high = 4 + span.need * 0.18;
 
-  /* A tall phone screen has a much narrower horizontal field of view, which
-     would shove the slingshot off the left edge - so back the camera off
-     until the sling and the tower both fit again. */
-  var fit = Math.max(1, Math.min(3.0, 1.6 / camera.aspect));
+  /* How much of the world this lens covers sideways, against a comfortable
+     desktop frame. Whatever the wider fov could not recover, the camera makes
+     up by backing off - but only so far. */
+  var tanH = Math.tan(camera.fov * Math.PI / 360) * camera.aspect;
+  var fit = Math.max(1, Math.min(2.2, 0.78 / tanH));
+
+  /* On a narrow screen there is no point framing a kilometre of course: it
+     just renders everything too small to make out. Show the launch end at a
+     size you can read, and let the chase camera do the travelling. */
+  var need = span.need;
+  if (fit > 1.25) need = Math.min(need, WIDE_SPAN_ON_NARROW);
+  var dist = need * 0.95;
+  var high = 4 + need * 0.18;
 
   if (game && game.flying && camMode !== 2) {
     /* a ball on the treadmills can be doing 300 m/s, so hang further back and
@@ -3344,7 +3353,7 @@ function updateCamera(dt) {
     wantPos = new THREE.Vector3(centre.x - 6, centre.y + 7, dist * 0.8 * zoom * fit);
     wantAim = centre;
   } else {
-    var mid = span.midX;
+    var mid = SLING.x + need / 2;
     wantPos = new THREE.Vector3(mid - 6 / fit, high * Math.min(1.5, fit), dist * zoom * fit);
     wantAim = new THREE.Vector3(mid, 5, 0);
   }
@@ -3364,6 +3373,15 @@ function updateCamera(dt) {
     if (shake < 0.01) shake = 0;
   }
   camera.lookAt(camAim);
+
+  /* Fog was fixed at 120-460, so on the long levels the camera sat past its
+     far plane and the whole scene rendered as flat sky. Tie it to how far the
+     camera actually is, and whatever it is looking at stays clear. */
+  if (scene.fog) {
+    var look = camera.position.distanceTo(camAim);
+    scene.fog.near = Math.max(60, look * 1.15);
+    scene.fog.far = Math.max(320, look * 4);
+  }
 }
 
 function updateSling() {
@@ -3570,6 +3588,11 @@ function resize() {
   var w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h);
   camera.aspect = w / h;
+  /* A tall screen sees a much narrower slice of the world. Widening the lens
+     recovers some of it without backing the camera off, which is what was
+     leaving everything a speck in the distance. */
+  camera.fov = camera.aspect >= 1.2 ? BASE_FOV
+    : Math.min(70, BASE_FOV + (1.2 - camera.aspect) * 22);
   camera.updateProjectionMatrix();
 }
 
