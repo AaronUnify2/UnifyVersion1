@@ -854,6 +854,13 @@ World.prototype.collideBoxBox = function (a, b) {
 
 var LINK_MARGIN = 0.08;
 
+/* A sleeping body is immovable to the solver, so anything it is touching must
+   be awake before the impact lands, not a step after it. Fast movers reach
+   further ahead of themselves so the whole tower is awake when they arrive. */
+function linkReach(b) {
+  return LINK_MARGIN + Math.min(1.4, vLen(b.vel) * 0.035);
+}
+
 World.prototype.broadphase = function () {
   var bs = this.bodies, n = bs.length, i, j;
   for (i = 0; i < n; i++) {
@@ -870,11 +877,12 @@ World.prototype.broadphase = function () {
       if (b.dead) continue;
       if (a.isStatic && b.isStatic) continue;
       var A = a.aabb, B = b.aabb;
-      /* a slightly generous test first, to record what is resting on what -
-         this graph is what tells a sleeping tower its support has gone */
-      if (A.maxx < B.minx - LINK_MARGIN || A.minx > B.maxx + LINK_MARGIN) continue;
-      if (A.maxy < B.miny - LINK_MARGIN || A.miny > B.maxy + LINK_MARGIN) continue;
-      if (A.maxz < B.minz - LINK_MARGIN || A.minz > B.maxz + LINK_MARGIN) continue;
+      /* a generous test first, to record what is resting on (or bearing down
+         on) what - this graph is what wakes a tower before it is hit */
+      var reach = linkReach(a) + linkReach(b);
+      if (A.maxx < B.minx - reach || A.minx > B.maxx + reach) continue;
+      if (A.maxy < B.miny - reach || A.miny > B.maxy + reach) continue;
+      if (A.maxz < B.minz - reach || A.minz > B.maxz + reach) continue;
       if (!a.isStatic && !b.isStatic) { a.links.push(b); b.links.push(a); }
       /* neither can move, so there is nothing to solve between them */
       if ((a.isStatic || a.sleeping) && (b.isStatic || b.sleeping)) continue;
@@ -1253,37 +1261,42 @@ var MATERIALS = {
 var THINGS = [
   {
     id: 'melon', name: 'Watermelon', icon: '🍉', shape: 'sphere', radius: 0.62,
-    mass: 9, restitution: 0.18, friction: 0.5, effect: 'splat',
+    mass: 9, restitution: 0.18, friction: 0.5, effect: 'splat', punch: 2.8,
     blurb: 'All-rounder. Bursts on impact.'
   },
   {
     id: 'bowling', name: 'Bowling Ball', icon: '🎳', shape: 'sphere', radius: 0.5,
-    mass: 26, restitution: 0.14, friction: 0.35, effect: 'none',
+    mass: 26, restitution: 0.14, friction: 0.35, effect: 'none', punch: 1.0,
     blurb: 'Heavy and dense. Punches straight through.'
   },
   {
     id: 'duck', name: 'Rubber Duck', icon: '🦆', shape: 'sphere', radius: 0.55,
-    mass: 3.2, restitution: 0.78, friction: 0.3, effect: 'none',
+    mass: 3.2, restitution: 0.78, friction: 0.3, effect: 'none', punch: 4.0,
     blurb: 'Light and mad bouncy. Goes everywhere.'
   },
   {
     id: 'anvil', name: 'Anvil', icon: '🔨', shape: 'box', half: { x: 0.75, y: 0.42, z: 0.42 },
-    mass: 70, restitution: 0.02, friction: 0.8, effect: 'quake',
+    mass: 70, restitution: 0.02, friction: 0.8, effect: 'quake', punch: 0.7,
     blurb: 'Absurdly heavy, zero bounce. Fire it flat and low.'
   },
   {
     id: 'tnt', name: 'TNT Barrel', icon: '🧨', shape: 'box', half: { x: 0.5, y: 0.6, z: 0.5 },
-    mass: 8, restitution: 0.1, friction: 0.5, effect: 'explode',
+    mass: 8, restitution: 0.1, friction: 0.5, effect: 'explode', punch: 1.0,
     blurb: 'Detonates on the first solid hit.'
   },
   {
     id: 'beachball', name: 'Beach Ball', icon: '🏐', shape: 'sphere', radius: 1.25,
-    mass: 2.2, restitution: 0.72, friction: 0.4, effect: 'none',
+    mass: 2.2, restitution: 0.72, friction: 0.4, effect: 'none', punch: 6.0,
     blurb: 'Huge, feather light. Great for sweeping ledges.'
   },
   {
+    id: 'golfball', name: 'Golf Ball', icon: '⛳', shape: 'sphere', radius: 0.34,
+    mass: 4, restitution: 0.62, friction: 0.16, effect: 'none', punch: 2.0,
+    blurb: 'Small, hard and it runs forever. Made for the range.'
+  },
+  {
     id: 'gnome', name: 'Garden Gnome', icon: '🧙', shape: 'sphere', radius: 0.48,
-    mass: 12, restitution: 0.25, friction: 0.55, effect: 'shatter',
+    mass: 12, restitution: 0.25, friction: 0.55, effect: 'shatter', punch: 1.8,
     blurb: 'Ceramic. Shatters into shrapnel on impact.'
   }
 ];
@@ -1348,8 +1361,11 @@ var LEVELS = [
       p.push(block(x + 1.2, 2.4, 0, 0.7, 4.8, 0.7, 'ice'));
       /* a barrel of TNT standing between them */
       p.push(block(x, 1.0, 0, 1.1, 2.0, 1.1, 'tnt'));
-      /* stone lintel across the top */
-      p.push(block(x, 5.25, 0, 9.4, 0.9, 3.4, 'stone'));
+      /* stone lintel across the top - deliberately crackable, or it soaks up
+         every shot that comes in and the level goes nowhere */
+      var lintel = block(x, 5.25, 0, 9.4, 0.9, 3.4, 'stone');
+      lintel.hp = 85;
+      p.push(lintel);
       /* upper deck */
       p.push(block(x - 2.0, 6.65, 0, 0.9, 1.9, 2.4, 'wood'));
       p.push(block(x + 2.0, 6.65, 0, 0.9, 1.9, 2.4, 'wood'));
@@ -1404,6 +1420,80 @@ var LEVELS = [
           { x: x + 2.4, y: 9.18, z: 0 },
           { x: x - 2.9, y: 5.98, z: 1.2 },
           { x: x + 2.9, y: 5.98, z: -1.2 }
+        ]
+      };
+    }
+  },
+
+  {
+    set: 'main',
+    mode: 'distance',
+    name: 'The Driving Range',
+    hint: 'No gnomes here. Land it on the slope, hit the treadmills, see how far it runs.',
+    ammo: ['golfball', 'golfball', 'bowling', 'golfball', 'beachball', 'golfball'],
+    par: 11000,
+    targetDistance: 150,
+    groundFriction: 0.14,
+    projectileLife: 15,
+    settleTimeout: 17,
+    bounds: 430,
+    view: 54,
+    build: function () {
+      var p = [];
+      /* the big downslope: land on this and it gathers speed */
+      p.push(slab(16, 2.6, 0, 16, 1.4, 14, { tilt: -0.26, kind: 'slope', mat: 'stone' }));
+      /* a run-out wedge so the drop back to the grass is not a cliff */
+      p.push(slab(26.5, 0.45, 0, 6, 0.9, 14, { tilt: -0.12, kind: 'slope', mat: 'stone' }));
+      /* treadmills, each one a little quicker than the last */
+      var pads = [[36, 34], [58, 39], [82, 44], [110, 49], [142, 54]];
+      for (var i = 0; i < pads.length; i++) {
+        p.push(slab(pads[i][0], 0.22, 0, 8, 0.44, 11, {
+          kind: 'boost', boost: pads[i][1], mat: 'stone', friction: 0.04
+        }));
+      }
+      /* a kicker at the far end to send a fast ball soaring */
+      p.push(slab(176, 1.3, 0, 9, 1.0, 11, { tilt: 0.34, kind: 'kicker', mat: 'stone' }));
+      return { pieces: p, targets: [] };
+    }
+  },
+  {
+    set: 'main',
+    mode: 'targets',
+    name: 'Ten Pin Alley',
+    hint: 'Keep it low. Land it early and let the lane carry it all the way down.',
+    ammo: ['bowling', 'bowling', 'bowling', 'melon', 'bowling', 'bowling', 'anvil'],
+    par: 9000,
+    projectileLife: 10,
+    settleTimeout: 11,
+    bounds: 120,
+    view: 66,
+    groundFriction: 0.5,
+    build: function () {
+      var p = [], i;
+      /* the lane: long, slick, and raised just off the grass */
+      for (i = 0; i < 6; i++) {
+        p.push(slab(-2 + i * 9, 0.2, 0, 9, 0.4, 11, {
+          kind: 'lane', mat: 'stone', friction: 0.03, restitution: 0.06
+        }));
+      }
+      /* low bumpers so a slightly wayward ball still gets there */
+      p.push(slab(20, 0.6, -5.9, 54, 1.2, 0.8, { kind: 'bumper', mat: 'wood' }));
+      p.push(slab(20, 0.6, 5.9, 54, 1.2, 0.8, { kind: 'bumper', mat: 'wood' }));
+      /* back wall, so the pins have something to rattle off */
+      p.push(slab(45, 1.6, 0, 1.0, 3.2, 12, { kind: 'wall', mat: 'stone' }));
+      return {
+        pieces: p,
+        targets: [
+          { kind: 'skittle', x: 34.0, y: 0.4, z: 0 },
+          { kind: 'skittle', x: 35.6, y: 0.4, z: -0.95 },
+          { kind: 'skittle', x: 35.6, y: 0.4, z: 0.95 },
+          { kind: 'skittle', x: 37.2, y: 0.4, z: -1.9 },
+          { kind: 'skittle', x: 37.2, y: 0.4, z: 0 },
+          { kind: 'skittle', x: 37.2, y: 0.4, z: 1.9 },
+          { kind: 'skittle', x: 38.8, y: 0.4, z: -2.85 },
+          { kind: 'skittle', x: 38.8, y: 0.4, z: -0.95 },
+          { kind: 'skittle', x: 38.8, y: 0.4, z: 0.95 },
+          { kind: 'skittle', x: 38.8, y: 0.4, z: 2.85 }
         ]
       };
     }
@@ -1505,55 +1595,97 @@ function block(x, y, z, w, h, d, mat, tint) {
   return { x: x, y: y, z: z, w: w, h: h, d: d, mat: mat, tint: tint };
 }
 
+/* fixed scenery: ramps, decks and treadmills that never move */
+function slab(x, y, z, w, h, d, opts) {
+  opts = opts || {};
+  return {
+    x: x, y: y, z: z, w: w, h: h, d: d,
+    mat: opts.mat || 'stone',
+    fixed: true,
+    tilt: opts.tilt || 0,
+    kind: opts.kind || 'deck',
+    tint: opts.tint,
+    boost: opts.boost || 0,
+    friction: opts.friction,
+    restitution: opts.restitution
+  };
+}
+
 /* the painted colours used by the toddler levels */
 var TOY_COLOURS = [0xff6b5a, 0xffc93f, 0x4fb3f7, 0x7bd66b, 0xb98cf0, 0xff9f43];
 function toy(i) { return TOY_COLOURS[i % TOY_COLOURS.length]; }
 
 var GNOME_RADIUS = 0.48;
+var SKITTLE = { w: 1.1, h: 3.4 };
 
 /* Build one level's bodies into a world. Returns bookkeeping for the game. */
 function buildLevel(world, index) {
   var def = LEVELS[index];
   var data = def.build();
-  var blocks = [], gnomes = [], i;
+  var blocks = [], targets = [], scenery = [], boosters = [], i;
 
   for (i = 0; i < data.pieces.length; i++) {
     var pc = data.pieces[i];
-    var m = MATERIALS[pc.mat];
+    var m = MATERIALS[pc.mat] || MATERIALS.stone;
     var volume = pc.w * pc.h * pc.d;
     var body = new Body({
       type: 'box',
       half: vec(pc.w / 2, pc.h / 2, pc.d / 2),
       pos: vec(pc.x, pc.y, pc.z),
+      quat: pc.tilt ? qFromAxisAngle(vec(0, 0, 1), pc.tilt) : null,
       mass: Math.max(1.2, volume * m.density),
-      friction: m.friction,
-      restitution: m.restitution,
-      hp: m.hp,
+      isStatic: !!pc.fixed,
+      friction: pc.friction !== undefined ? pc.friction : m.friction,
+      restitution: pc.restitution !== undefined ? pc.restitution : m.restitution,
+      hp: pc.fixed ? Infinity : (pc.hp !== undefined ? pc.hp : m.hp),
       material: m,
-      tag: 'block',
-      userData: { tint: pc.tint }
+      tag: pc.fixed ? 'scenery' : 'block',
+      userData: { tint: pc.tint, kind: pc.kind || null, boost: pc.boost || 0 }
     });
     world.add(body);
-    blocks.push(body);
+    if (pc.fixed) {
+      scenery.push(body);
+      if (pc.boost) boosters.push(body);
+    } else {
+      blocks.push(body);
+    }
   }
 
-  for (i = 0; i < data.gnomes.length; i++) {
-    var g = data.gnomes[i];
-    var gb = new Body({
-      type: 'sphere',
-      radius: GNOME_RADIUS,
-      pos: vec(g.x, g.y, g.z),
-      mass: 3.0,
-      friction: 0.5,
-      restitution: 0.2,
-      tag: 'gnome'
-    });
-    gb.popSpeed = def.popSpeed || GNOME_POP_SPEED;
-    world.add(gb);
-    gnomes.push(gb);
+  var list = data.targets || data.gnomes || [];
+  for (i = 0; i < list.length; i++) {
+    var t = list[i], tb;
+    if (t.kind === 'skittle') {
+      tb = new Body({
+        type: 'box',
+        half: vec(SKITTLE.w / 2, SKITTLE.h / 2, SKITTLE.w / 2),
+        pos: vec(t.x, (t.y !== undefined ? t.y : 0) + SKITTLE.h / 2, t.z),
+        mass: 6,
+        friction: 0.45,
+        restitution: 0.3,
+        tag: 'skittle'
+      });
+    } else {
+      tb = new Body({
+        type: 'sphere',
+        radius: GNOME_RADIUS,
+        pos: vec(t.x, t.y, t.z),
+        mass: 3.0,
+        friction: 0.5,
+        restitution: 0.2,
+        tag: 'gnome'
+      });
+      tb.popSpeed = def.popSpeed || GNOME_POP_SPEED;
+    }
+    world.add(tb);
+    targets.push(tb);
   }
 
-  return { def: def, blocks: blocks, gnomes: gnomes };
+  if (def.groundFriction !== undefined) world.groundFriction = def.groundFriction;
+
+  return {
+    def: def, blocks: blocks, targets: targets,
+    scenery: scenery, boosters: boosters
+  };
 }
 
 /* ---------- scoring ---------- */
@@ -1570,6 +1702,21 @@ function gnomeIsPopped(g) {
   return false;
 }
 
+/* A skittle does not pop, it goes over - the same call a bowling alley makes. */
+function skittleIsDown(p) {
+  if (p.dead) return true;
+  var up = qRotate(p.quat, vec(0, 1, 0));
+  if (up.y < 0.82) return true;                    /* leaning past about 35 degrees */
+  var dx = p.pos.x - p.startPos.x, dz = p.pos.z - p.startPos.z;
+  if (dx * dx + dz * dz > 0.8 * 0.8) return true;  /* or shunted off its spot */
+  if (p.pos.y < p.startPos.y - 0.6) return true;
+  return false;
+}
+
+function targetIsDown(t) {
+  return t.tag === 'skittle' ? skittleIsDown(t) : gnomeIsPopped(t);
+}
+
 function blockIsToppled(b) {
   if (b.dead) return true;
   if (b.startPos.y - b.pos.y > TOPPLE_DROP) return true;
@@ -1582,8 +1729,11 @@ function blockIsToppled(b) {
 
 function scoreLevel(state) {
   var score = 0, i, popped = 0, toppled = 0;
-  for (i = 0; i < state.gnomes.length; i++) {
-    if (gnomeIsPopped(state.gnomes[i])) { score += 1200; popped++; }
+  for (i = 0; i < state.targets.length; i++) {
+    if (targetIsDown(state.targets[i])) {
+      score += (state.targets[i].tag === 'skittle') ? 900 : 1200;
+      popped++;
+    }
   }
   for (i = 0; i < state.blocks.length; i++) {
     var b = state.blocks[i];
@@ -1648,7 +1798,11 @@ var SPLAT_SPEED = 6;
 var TNT_TRIGGER_SPEED = 5;
 var BLAST_RADIUS = 7.5;
 var BLAST_FORCE = 26;
+var BLAST_DAMAGE = 130;
+var SPLAT_RADIUS = 4.2;
+var SPLAT_FORCE = 11;
 var SETTLE_TIMEOUT = 6;
+var DISTANCE_POINTS = 60;   /* score per metre on the driving range */
 var PROJECTILE_LIFE = 4;      /* seconds before a spent thing is taken off the field */
 
 function Game(levelIndex) {
@@ -1663,6 +1817,8 @@ function Game(levelIndex) {
   this.flying = null;
   this.sinceShot = 0;
   this.pendingBlasts = [];
+  this.bestDistance = 0;          /* for the driving range */
+  this.mode = this.def.mode || 'targets';
   var self = this;
   this.world.onImpact = function (a, b, speed, point) { self.handleImpact(a, b, speed, point); };
 }
@@ -1700,7 +1856,12 @@ Game.prototype.handleImpact = function (a, b, speed, point) {
         this.pendingBlasts.push(vClone(body.pos));
         this.emit({ type: 'explode', point: vClone(body.pos), body: body });
       } else if ((thing.effect === 'splat' || thing.effect === 'shatter') && speed > SPLAT_SPEED) {
+        /* A melon gets one hit and is gone, where a bowling ball carries on
+           bouncing through the structure. Bursting makes that one hit count:
+           it sprays its energy over everything nearby instead. */
         body.dead = true;
+        this.areaDamage(body.pos, SPLAT_RADIUS, energy * DAMAGE_SCALE * (thing.punch || 1) * 2.4);
+        this.world.explode(vClone(body.pos), SPLAT_RADIUS, SPLAT_FORCE);
         this.emit({ type: thing.effect, point: vClone(body.pos), body: body, thing: thing });
       } else if (thing.effect === 'quake' && speed > 12) {
         this.emit({ type: 'quake', point: vClone(body.pos), speed: speed });
@@ -1709,7 +1870,11 @@ Game.prototype.handleImpact = function (a, b, speed, point) {
     }
 
     if (body.tag === 'block' && isFinite(body.hp)) {
-      body.damage += energy * DAMAGE_SCALE;
+      /* a melon is never going to out-muscle an anvil, so let it out-splatter
+         one instead: light ammo does more damage per unit of energy */
+      var punch = (other.tag === 'ammo' && other.userData.thing && other.userData.thing.punch)
+        ? other.userData.thing.punch : 1;
+      body.damage += energy * DAMAGE_SCALE * punch;
       if (body.damage >= body.hp) {
         body.dead = true;
         this.emit({ type: 'break', point: vClone(body.pos), body: body });
@@ -1717,6 +1882,27 @@ Game.prototype.handleImpact = function (a, b, speed, point) {
           this.pendingBlasts.push(vClone(body.pos));
           this.emit({ type: 'explode', point: vClone(body.pos), body: body });
         }
+      }
+    }
+  }
+};
+
+/* spread damage around a burst, falling off with distance */
+Game.prototype.areaDamage = function (point, radius, amount) {
+  var bs = this.world.bodies;
+  for (var i = 0; i < bs.length; i++) {
+    var b = bs[i];
+    if (b.dead || b.tag !== 'block' || !isFinite(b.hp)) continue;
+    var d = vLen(vSub(b.pos, point));
+    if (d > radius) continue;
+    var falloff = 1 - d / radius;
+    b.damage += amount * falloff * falloff;
+    if (b.damage >= b.hp) {
+      b.dead = true;
+      this.emit({ type: 'break', point: vClone(b.pos), body: b });
+      if (b.material && b.material.explosive) {
+        this.pendingBlasts.push(vClone(b.pos));
+        this.emit({ type: 'explode', point: vClone(b.pos), body: b });
       }
     }
   }
@@ -1769,6 +1955,7 @@ Game.prototype.step = function (dt) {
 
   var i;
   for (i = 0; i < this.pendingBlasts.length; i++) {
+    this.areaDamage(this.pendingBlasts[i], BLAST_RADIUS, BLAST_DAMAGE);
     this.world.explode(this.pendingBlasts[i], BLAST_RADIUS, BLAST_FORCE);
   }
   this.pendingBlasts.length = 0;
@@ -1783,14 +1970,48 @@ Game.prototype.step = function (dt) {
     if (this.flying === gone) this.flying = null;
   }
 
-  /* a gnome that has fallen a long way counts as gone too */
-  for (i = 0; i < this.state.gnomes.length; i++) {
-    var g = this.state.gnomes[i];
+  /* a gnome that has fallen a long way counts as gone too; skittles just lie
+     where they fall, the way knocked-over skittles do */
+  for (i = 0; i < this.state.targets.length; i++) {
+    var g = this.state.targets[i];
+    if (g.tag !== 'gnome') continue;
     if (!g.dead && gnomeIsPopped(g)) {
       g.dead = true;
       this.emit({ type: 'pop', point: vClone(g.pos), body: g });
       this.world.remove(g);
     }
+  }
+
+  /* treadmills: anything crossing one is shoved along */
+  var pads = this.state.boosters;
+  for (i = 0; i < pads.length; i++) {
+    var pad = pads[i];
+    var speed = pad.userData.boost;
+    for (var k = 0; k < this.projectiles.length; k++) {
+      var ball = this.projectiles[k];
+      if (ball.dead) continue;
+      var r = ball.type === 'sphere' ? ball.radius : ball.half.y;
+      if (Math.abs(ball.pos.x - pad.pos.x) > pad.half.x + r) continue;
+      if (Math.abs(ball.pos.z - pad.pos.z) > pad.half.z + r) continue;
+      var over = ball.pos.y - (pad.pos.y + pad.half.y);
+      if (over < -r || over > r + 0.6) continue;
+      if (ball.vel.x < speed) {
+        ball.wake();
+        ball.vel.x = speed;
+        if (this.world.time - (ball.userData.lastBoost || -9) > 0.25) {
+          ball.userData.lastBoost = this.world.time;
+          this.emit({ type: 'boost', point: vClone(ball.pos), body: ball });
+        }
+      }
+    }
+  }
+
+  /* how far the best shot has carried */
+  for (i = 0; i < this.projectiles.length; i++) {
+    var pr = this.projectiles[i];
+    if (pr.dead) continue;
+    var reach = pr.pos.x - SLING.x;
+    if (reach > this.bestDistance) this.bestDistance = reach;
   }
 
   /* Spent ammo is retired a few seconds after launch. A bowling ball will
@@ -1799,9 +2020,10 @@ Game.prototype.step = function (dt) {
   for (i = 0; i < this.projectiles.length; i++) {
     var p = this.projectiles[i];
     if (p.dead) continue;
-    var offMap = p.pos.x > 90 || p.pos.x < -60 || Math.abs(p.pos.z) > 45 || p.pos.y < -12;
+    var far = this.def.bounds || 90;
+    var offMap = p.pos.x > far || p.pos.x < -60 || Math.abs(p.pos.z) > 45 || p.pos.y < -12;
     if (offMap) { p.dead = true; continue; }
-    if (this.world.time - (p.userData.born || 0) > PROJECTILE_LIFE) {
+    if (this.world.time - (p.userData.born || 0) > (this.def.projectileLife || PROJECTILE_LIFE)) {
       p.dead = true;
       this.emit({ type: 'retire', point: vClone(p.pos), body: p, thing: p.userData.thing });
     }
@@ -1810,28 +2032,38 @@ Game.prototype.step = function (dt) {
 };
 
 Game.prototype.isSettled = function () {
-  if (this.sinceShot > SETTLE_TIMEOUT) return true;
+  if (this.sinceShot > (this.def.settleTimeout || SETTLE_TIMEOUT)) return true;
   if (this.sinceShot < 0.6) return false;
   return this.world.allAsleep();
 };
 
-Game.prototype.gnomesLeft = function () {
+Game.prototype.targetsLeft = function () {
   var n = 0;
-  for (var i = 0; i < this.state.gnomes.length; i++) {
-    if (!gnomeIsPopped(this.state.gnomes[i])) n++;
+  for (var i = 0; i < this.state.targets.length; i++) {
+    if (!targetIsDown(this.state.targets[i])) n++;
   }
   return n;
 };
 
 Game.prototype.score = function () {
-  var s = scoreLevel(this.state);
-  s.ammoBonus = (!this.def.endless && this.gnomesLeft() === 0) ? this.ammo.length * 1500 : 0;
+  var s;
+  if (this.mode === 'distance') {
+    s = { score: Math.round(this.bestDistance * DISTANCE_POINTS), popped: 0, toppled: 0 };
+    s.distance = this.bestDistance;
+  } else {
+    s = scoreLevel(this.state);
+  }
+  s.ammoBonus = (!this.def.endless && this.mode !== 'distance' && this.targetsLeft() === 0)
+    ? this.ammo.length * 1500 : 0;
   s.total = s.score + s.ammoBonus;
   s.stars = starsFor(s.total, this.def.par);
   return s;
 };
 
-Game.prototype.isWon = function () { return this.gnomesLeft() === 0; };
+Game.prototype.isWon = function () {
+  if (this.mode === 'distance') return this.bestDistance >= (this.def.targetDistance || 1e9);
+  return this.targetsLeft() === 0;
+};
 Game.prototype.isLost = function () {
   if (this.def.endless) return false;
   return !this.isWon() && this.ammo.length === 0 && this.isSettled();
@@ -1849,6 +2081,7 @@ if (typeof module !== 'undefined' && module.exports) {
     thingById: thingById, launchVelocity: launchVelocity,
     predictPath: predictPath, SLING: SLING, GNOME_RADIUS: GNOME_RADIUS,
     Game: Game, seedRandom: seedRandom, rand: rand,
+    targetIsDown: targetIsDown, skittleIsDown: skittleIsDown, SKITTLE: SKITTLE,
     MIN_SPEED: MIN_SPEED, MAX_SPEED: MAX_SPEED
   };
 }
@@ -2033,6 +2266,64 @@ function toyTexture() {
   });
 }
 
+/* a treadmill: chevrons pointing the way it shoves you */
+function boostTexture() {
+  return canvasTexture('boost', 128, function (g, w, h) {
+    g.fillStyle = '#2b3440'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#ffd23f'; g.lineWidth = 9; g.lineCap = 'round';
+    for (var i = 0; i < 3; i++) {
+      var x = 18 + i * 40;
+      g.beginPath();
+      g.moveTo(x, h * 0.22); g.lineTo(x + 26, h * 0.5); g.lineTo(x, h * 0.78);
+      g.stroke();
+    }
+  });
+}
+/* polished boards for the bowling lane */
+function laneTexture() {
+  return canvasTexture('lane', 128, function (g, w, h) {
+    g.fillStyle = '#e8c88c'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(150,110,60,0.5)'; g.lineWidth = 1.5;
+    for (var i = 0; i <= 8; i++) {
+      g.beginPath(); g.moveTo(0, i * (h / 8)); g.lineTo(w, i * (h / 8)); g.stroke();
+    }
+    g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(0, 0, w, 6);
+    g.fillStyle = 'rgba(120,80,40,0.16)'; noise(g, w, h, 60, 0.4, 3);
+  });
+}
+/* short turf for the ramps */
+function turfTexture() {
+  return canvasTexture('turf', 128, function (g, w, h) {
+    g.fillStyle = '#5ba33f'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#4c8f34'; noise(g, w, h, 500, 0.5, 2.2);
+    g.fillStyle = '#74bb52'; noise(g, w, h, 320, 0.4, 2);
+  });
+}
+/* a bowling pin: white with its two red bands */
+function pinTexture() {
+  return canvasTexture('pin', 64, function (g, w, h) {
+    g.fillStyle = '#f7f7f4'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#d63b34';
+    g.fillRect(0, h * 0.20, w, h * 0.06);
+    g.fillRect(0, h * 0.31, w, h * 0.06);
+    g.fillStyle = 'rgba(0,0,0,0.05)'; noise(g, w, h, 20, 0.3, 2);
+  });
+}
+/* a golf ball's dimples */
+function golfTexture() {
+  return canvasTexture('golf', 128, function (g, w, h) {
+    g.fillStyle = '#fbfbf7'; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(160,170,175,0.55)';
+    for (var y = 0; y < 8; y++) {
+      for (var x = 0; x < 8; x++) {
+        g.beginPath();
+        g.arc(x * 16 + (y % 2 ? 12 : 4), y * 16 + 8, 4.6, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  });
+}
+
 function materialTexture(name) {
   if (name === 'toy') return toyTexture();
   if (name === 'wood') return woodTexture();
@@ -2059,6 +2350,53 @@ function blockMesh(body) {
   var mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lambert(opts));
   mesh.castShadow = true; mesh.receiveShadow = true;
   return mesh;
+}
+
+/* ramps, decks, treadmills and lane boards */
+function sceneryMesh(body) {
+  var kind = (body.userData && body.userData.kind) || 'deck';
+  var w = body.half.x * 2, h = body.half.y * 2, d = body.half.z * 2;
+  var tex, opts;
+  if (kind === 'boost') {
+    tex = boostTexture().clone();
+    tex.repeat.set(Math.max(1, Math.round(w / 3)), 1);
+  } else if (kind === 'lane') {
+    tex = laneTexture().clone();
+    tex.repeat.set(Math.max(1, Math.round(w / 3)), 1);
+  } else if (kind === 'slope' || kind === 'kicker') {
+    tex = turfTexture().clone();
+    tex.repeat.set(Math.max(1, Math.round(w / 3)), Math.max(1, Math.round(d / 3)));
+  } else {
+    tex = materialTexture(body.material ? body.material.name : 'stone').clone();
+    tex.repeat.set(Math.max(1, Math.round(w / 2)), Math.max(1, Math.round(h / 2)));
+  }
+  tex.needsUpdate = true;
+  opts = { map: tex };
+  var mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lambert(opts));
+  mesh.castShadow = kind !== 'boost' && kind !== 'lane';
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+/* a proper ten pin silhouette, turned from a profile */
+function skittleMesh() {
+  var g = new THREE.Group();
+  var profile = [
+    [0.22, 0.00], [0.26, 0.04], [0.28, 0.11], [0.26, 0.20], [0.22, 0.32],
+    [0.185, 0.44], [0.172, 0.53], [0.188, 0.62], [0.205, 0.71], [0.19, 0.81],
+    [0.145, 0.90], [0.08, 0.97], [0.0, 1.0]
+  ];
+  var pts = [];
+  for (var i = 0; i < profile.length; i++) {
+    pts.push(new THREE.Vector2(profile[i][0] * 1.96, profile[i][1] * SKITTLE.h - SKITTLE.h / 2));
+  }
+  var geo = THREE.LatheGeometry
+    ? new THREE.LatheGeometry(pts, 20)
+    : new THREE.CylinderGeometry(0.4, 0.55, SKITTLE.h, 16);
+  var body = new THREE.Mesh(geo, lambert({ map: pinTexture() }));
+  body.castShadow = true; body.receiveShadow = true;
+  g.add(body);
+  return g;
 }
 
 function gnomeMesh() {
@@ -2128,6 +2466,9 @@ function thingMesh(thing) {
   } else if (thing.id === 'beachball') {
     m = new THREE.Mesh(new THREE.SphereGeometry(thing.radius, 22, 16), lambert({ map: beachTexture() }));
     g.add(m);
+  } else if (thing.id === 'golfball') {
+    m = new THREE.Mesh(new THREE.SphereGeometry(thing.radius, 18, 14), lambert({ map: golfTexture() }));
+    g.add(m);
   } else if (thing.id === 'gnome') {
     g.add(gnomeMesh());
   } else {
@@ -2142,7 +2483,7 @@ function thingMesh(thing) {
 function buildScene() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x9fd7f2);
-  scene.fog = new THREE.Fog(0xbfe4f5, 70, 240);
+  scene.fog = new THREE.Fog(0xbfe4f5, 120, 460);
 
   camera = new THREE.PerspectiveCamera(52, 1, 0.1, 500);
   camera.position.set(SLING.x + 4, 10, 34);
@@ -2180,9 +2521,9 @@ function buildScene() {
   /* ground */
   var gtex = grassTexture().clone();
   gtex.needsUpdate = true;
-  gtex.repeat.set(60, 60);
+  gtex.repeat.set(160, 160);
   var ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(600, 600),
+    new THREE.PlaneGeometry(1600, 1600),
     lambert({ map: gtex })
   );
   ground.rotation.x = -Math.PI / 2;
@@ -2203,29 +2544,38 @@ function isSmallScreen() {
   return Math.min(window.innerWidth, window.innerHeight) < 640;
 }
 
-function addScenery() {
-  var group = new THREE.Group();
-  var trunkMat = lambert({ color: 0x7a5230 });
-  var leafMats = [lambert({ color: 0x3f8f3a }), lambert({ color: 0x4fa348 }), lambert({ color: 0x357a33 })];
-  var rockMat = lambert({ color: 0x9a9a92 });
+var trunkMat = null, leafMats = null, rockMat = null;
+function sceneryMaterials() {
+  if (trunkMat) return;
+  trunkMat = lambert({ color: 0x7a5230 });
+  leafMats = [lambert({ color: 0x3f8f3a }), lambert({ color: 0x4fa348 }), lambert({ color: 0x357a33 })];
+  rockMat = lambert({ color: 0x9a9a92 });
+}
 
-  function tree(x, z, s) {
-    var t = new THREE.Group();
-    var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * s, 0.3 * s, 2.2 * s, 7), trunkMat);
-    trunk.position.y = 1.1 * s;
-    t.add(trunk);
-    for (var i = 0; i < 3; i++) {
-      var cone = new THREE.Mesh(
-        new THREE.ConeGeometry((1.5 - i * 0.32) * s, (1.7 - i * 0.2) * s, 8),
-        leafMats[i % leafMats.length]
-      );
-      cone.position.y = (2.2 + i * 0.95) * s;
-      t.add(cone);
-    }
-    t.position.set(x, 0, z);
-    t.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    group.add(t);
+function makeTree(x, z, s) {
+  sceneryMaterials();
+  var t = new THREE.Group();
+  var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * s, 0.3 * s, 2.2 * s, 7), trunkMat);
+  trunk.position.y = 1.1 * s;
+  t.add(trunk);
+  for (var i = 0; i < 3; i++) {
+    var cone = new THREE.Mesh(
+      new THREE.ConeGeometry((1.5 - i * 0.32) * s, (1.7 - i * 0.2) * s, 8),
+      leafMats[i % leafMats.length]
+    );
+    cone.position.y = (2.2 + i * 0.95) * s;
+    t.add(cone);
   }
+  t.position.set(x, 0, z);
+  t.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return t;
+}
+
+function addScenery() {
+  sceneryMaterials();
+  var group = new THREE.Group();
+
+  function tree(x, z, s) { group.add(makeTree(x, z, s)); }
   function rock(x, z, s) {
     var r = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
     r.position.set(x, s * 0.55, z);
@@ -2504,12 +2854,17 @@ function startLevel(index) {
   game = new Game(index);
   clearMeshes();
   var i;
+  for (i = 0; i < game.state.scenery.length; i++) {
+    attachMesh(game.state.scenery[i], sceneryMesh(game.state.scenery[i]));
+  }
   for (i = 0; i < game.state.blocks.length; i++) {
     attachMesh(game.state.blocks[i], blockMesh(game.state.blocks[i]));
   }
-  for (i = 0; i < game.state.gnomes.length; i++) {
-    attachMesh(game.state.gnomes[i], gnomeMesh());
+  for (i = 0; i < game.state.targets.length; i++) {
+    var t = game.state.targets[i];
+    attachMesh(t, t.tag === 'skittle' ? skittleMesh() : gnomeMesh());
   }
+  buildDecor();
   selectedAmmo = game.ammo.length ? game.ammo[0] : null;
   aimPitch = 28; aimYaw = 0; aimPower = 0;
   phase = 'aim';
@@ -2518,6 +2873,36 @@ function startLevel(index) {
   updateHud();
   setOverlay(null);
   syncMeshes();
+}
+
+var decorGroup = null;
+function buildDecor() {
+  if (!decorGroup) { decorGroup = new THREE.Group(); scene.add(decorGroup); }
+  while (decorGroup.children.length) decorGroup.remove(decorGroup.children[0]);
+  if (!game || game.mode !== 'distance') return;
+
+  /* trees down both sides, so the run-out is not an empty green desert */
+  for (var f = 70; f <= 400; f += 26) {
+    var jitter = ((f * 37) % 11) - 5;
+    decorGroup.add(makeTree(f + jitter, 15 + ((f * 13) % 9), 1.0 + ((f * 7) % 5) * 0.12));
+    decorGroup.add(makeTree(f - jitter, -16 - ((f * 17) % 9), 1.0 + ((f * 11) % 5) * 0.12));
+  }
+
+  /* marker posts down the range, so the distance reads at a glance */
+  var postMat = lambert({ color: 0xf2f2f2 });
+  var flagMat = lambert({ color: 0xe8443a });
+  for (var d = 50; d <= 350; d += 50) {
+    var x = SLING.x + d;
+    for (var side = -1; side <= 1; side += 2) {
+      var post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 4.2, 6), postMat);
+      post.position.set(x, 2.1, side * 9);
+      post.castShadow = true;
+      decorGroup.add(post);
+      var flag = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 1.6), flagMat);
+      flag.position.set(x, 3.7, side * 9.9);
+      decorGroup.add(flag);
+    }
+  }
 }
 
 /* the heap of unused ammo sitting beside the sling */
@@ -2601,6 +2986,9 @@ function drainEvents() {
       burst(e.point, 0x8a6a45, 22, 5, 0.8);
       shake = Math.min(2.0, shake + 0.8);
       sfx.thud(14);
+    } else if (e.type === 'boost') {
+      burst(e.point, 0xffd23f, 10, 4, 0.4);
+      tone(420, 0.09, 'square', 0.09, 900);
     } else if (e.type === 'retire') {
       burst(e.point, 0xdfe8ef, 12, 3, 0.55);
     } else if (e.type === 'launch') {
@@ -2615,7 +3003,14 @@ function drainEvents() {
    camera works this out rather than sitting at a fixed distance. */
 function playSpan() {
   var fallback = { centre: new THREE.Vector3(14, 4, 0), farX: 20, top: 10, need: 40 };
-  if (!game || !game.state.blocks.length) return fallback;
+  if (!game) return fallback;
+  if (!game.state.blocks.length) {
+    var span = game.def.view || 46;
+    return {
+      centre: new THREE.Vector3(SLING.x + span * 0.45, 4, 0),
+      farX: SLING.x + span, top: 8, need: span
+    };
+  }
   var sx = 0, sy = 0, n = 0, farX = -1e9, top = 0;
   for (var i = 0; i < game.state.blocks.length; i++) {
     var b = game.state.blocks[i];
@@ -2625,6 +3020,7 @@ function playSpan() {
   }
   var centre = new THREE.Vector3(sx / n, sy / n + 1.5, 0);
   var need = Math.max((farX + 5) - SLING.x, top * 2.2, 22);
+  if (game.def.view) { need = game.def.view; centre.set(SLING.x + need * 0.45, 4, 0); }
   return { centre: centre, farX: farX, top: top, need: need };
 }
 
@@ -2913,10 +3309,17 @@ function updateHud() {
   ui.hudLevel.textContent = label + (setPos + 1) + '/' + setLevels.length + ' — ' + game.def.name;
   var sc = game.score();
   ui.hudScore.textContent = (totalScore + sc.total).toLocaleString();
-  var left = game.gnomesLeft(), total = game.state.gnomes.length;
-  var dots = '';
-  for (var i = 0; i < total; i++) dots += (i < left ? '🧙' : '💥');
-  ui.hudGnomes.textContent = dots;
+  if (game.mode === 'distance') {
+    var target = game.def.targetDistance || 0;
+    ui.hudGnomes.textContent = 'Best drive ' + game.bestDistance.toFixed(0) + ' m' +
+      (target ? '  ·  beat ' + target + ' m' : '');
+  } else {
+    var left = game.targetsLeft(), total = game.state.targets.length;
+    var pin = game.state.targets.length && game.state.targets[0].tag === 'skittle';
+    var dots = '';
+    for (var i = 0; i < total; i++) dots += (i < left ? (pin ? '🎳' : '🧙') : '💥');
+    ui.hudGnomes.textContent = dots;
+  }
   ui.hudHint.textContent = game.def.hint;
 
   updateReadout();
@@ -2968,14 +3371,20 @@ function starRow(n) {
 function showResult(won, sc) {
   var last = setPos === setLevels.length - 1;
   var tots = currentSet === 'tots';
+  var range = game.mode === 'distance';
   var title = won
-    ? (last ? (tots ? 'You knocked them ALL down!' : 'Every tower flattened!')
-            : (tots ? 'Crash! All gone!' : 'Tower down!'))
-    : 'Out of ammo';
-  var body = '<h2>' + title + '</h2>' + '<div class="stars">' + starRow(won ? sc.stars : 0) + '</div>' +
-    '<p class="tally">' +
-    'Gnomes toppled: <b>' + sc.popped + '/' + game.state.gnomes.length + '</b><br>' +
-    'Blocks knocked over: <b>' + sc.toppled + '</b><br>' +
+    ? (last ? (tots ? 'You knocked them ALL down!' : 'That is the lot!')
+            : (range ? 'What a drive!' : (tots ? 'Crash! All gone!' : 'Tower down!')))
+    : (range ? 'Out of balls' : 'Out of ammo');
+  var targetWord = (game.state.targets.length && game.state.targets[0].tag === 'skittle')
+    ? 'Pins knocked down' : 'Gnomes toppled';
+  var tallyLines = range
+    ? 'Best drive: <b>' + sc.distance.toFixed(1) + ' m</b><br>' +
+      (game.def.targetDistance ? 'To beat: <b>' + game.def.targetDistance + ' m</b><br>' : '')
+    : targetWord + ': <b>' + sc.popped + '/' + game.state.targets.length + '</b><br>' +
+      'Blocks knocked over: <b>' + sc.toppled + '</b><br>';
+  var body = '<h2>' + title + '</h2>' + '<div class="stars">' + starRow(sc.stars) + '</div>' +
+    '<p class="tally">' + tallyLines +
     (sc.ammoBonus ? 'Ammo left over: <b>+' + sc.ammoBonus.toLocaleString() + '</b><br>' : '') +
     'Level score: <b>' + sc.total.toLocaleString() + '</b></p>';
 
@@ -3009,8 +3418,8 @@ function showResult(won, sc) {
 function showTitle() {
   setOverlay(
     '<h2>Sling Things</h2>' +
-    '<p class="blurb">Load the slingshot, drag back, and let fly. ' +
-    'Knock every garden gnome off the tower before you run out of things to throw.</p>' +
+    '<p class="blurb">Load the slingshot, drag back, and let fly. Three towers of ' +
+    'garden gnomes to flatten, then a driving range and a bowling alley.</p>' +
     '<ul class="keys">' +
     '<li><b>Drag</b> on the scene to pull the sling — back for power, down for a higher lob</li>' +
     '<li><b>Aim slider</b> (or ← →) swings the shot left and right</li>' +
@@ -3062,7 +3471,7 @@ function boot() {
   setPos = 0;
   game = new Game(0);
   for (var i = 0; i < game.state.blocks.length; i++) attachMesh(game.state.blocks[i], blockMesh(game.state.blocks[i]));
-  for (i = 0; i < game.state.gnomes.length; i++) attachMesh(game.state.gnomes[i], gnomeMesh());
+  for (i = 0; i < game.state.targets.length; i++) attachMesh(game.state.targets[i], gnomeMesh());
   selectedAmmo = game.ammo[0];
   refreshPile();
   updateHud();
