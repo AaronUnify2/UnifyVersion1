@@ -1446,6 +1446,11 @@ var LEVELS = [
           kind: 'boost', mult: pads[i][1], mat: 'stone', friction: 0.04
         }));
       }
+      /* rolling ground between the early belts: a ball coming over a crest at
+         speed gets air, which is where the drive starts to feel alive. The
+         belts themselves sit on flat stretches so the chain still works. */
+      ridges(p, 60, 200, 70, 3.0);
+      ridges(p, 250, 670, 70, 3.4);
       return { pieces: p, targets: [] };
     }
   },
@@ -1550,6 +1555,54 @@ var LEVELS = [
       pins.push({ x: x - 4.6, y: 0.5, z: 0.9 });
       pins.push({ x: x + 4.6, y: 0.5, z: -0.9 });
       return { pieces: p, targets: pins };
+    }
+  },
+{
+    set: 'main',
+    mode: 'distance',
+    name: 'Spring Loaded',
+    hint: 'Springboards throw it skyward and the floating belts fling it about. Some run backwards.',
+    ammo: ['golfball', 'golfball', 'beachball', 'golfball', 'duck', 'golfball'],
+    par: 7000,
+    points: 40,
+    targetDistance: 200,
+    groundFriction: 0.16,
+    projectileLife: 30,
+    settleTimeout: 32,
+    bounds: 1400,
+    view: 76,
+    build: function () {
+      var p = [];
+      p.push(slab(16, 2.6, 0, 16, 1.4, 14, { tilt: -0.26, kind: 'slope', mat: 'stone' }));
+
+      /* springboards on the deck: land on one and you go straight up */
+      var springs = [[46, 34], [150, 40], [300, 44], [520, 48], [820, 52]];
+      for (var i = 0; i < springs.length; i++) {
+        p.push(slab(springs[i][0], 0.3, 0, 16, 1.0, 16, {
+          kind: 'bounce', bounce: springs[i][1], mat: 'stone', restitution: 0.1
+        }));
+      }
+
+      /* Belts hanging in the air. Land on a forward one and you are thrown
+         miles; land on a backward one and you are sent home to try again. */
+      /* All the belts hang in the same band of sky, forwards and backwards
+         alternating. Which one a hop happens to land on is the whole game. */
+      /* All the belts hang at the same height, forwards and backwards
+         alternating, because a ball thrown off one rides level to the next.
+         Stagger them and it simply sails underneath the ones above. Which
+         belt a hop lands on is the whole game. */
+      var decks = [
+        [110, 15, 62], [178, 15, -36], [246, 15, 84], [330, 15, -42],
+        [420, 15, 98], [520, 15, -48], [630, 15, 112], [760, 15, 128],
+        [910, 15, 144]
+      ];
+      for (i = 0; i < decks.length; i++) {
+        p.push(slab(decks[i][0], decks[i][1], 0, 50, 1.2, 18, {
+          kind: decks[i][2] > 0 ? 'boost' : 'boostback',
+          boost: decks[i][2], mat: 'stone', friction: 0.05
+        }));
+      }
+      return { pieces: p, targets: [] };
     }
   },
 {
@@ -1734,10 +1787,26 @@ function slab(x, y, z, w, h, d, opts) {
     tint: opts.tint,
     boost: opts.boost || 0,
     mult: opts.mult || 0,
+    bounce: opts.bounce || 0,
     lift: opts.lift,
     friction: opts.friction,
     restitution: opts.restitution
   };
+}
+
+/* A run of rolling ground, built as pairs of tilted slabs. Not a real
+   heightfield, but a ball coming over a crest at speed launches exactly as it
+   should, which is the whole point of putting hills under a drive. */
+function ridges(p, fromX, toX, period, height) {
+  var halfP = period / 2;
+  var tilt = Math.atan2(height, halfP);
+  var midY = height / 2 - 0.6 * Math.cos(tilt);
+  for (var x = fromX; x + period <= toX; x += period) {
+    p.push(slab(x + halfP / 2, midY, 0, halfP, 1.2, 30,
+      { tilt: tilt, kind: 'slope', mat: 'stone', friction: 0.06 }));
+    p.push(slab(x + halfP * 1.5, midY, 0, halfP, 1.2, 30,
+      { tilt: -tilt, kind: 'slope', mat: 'stone', friction: 0.06 }));
+  }
 }
 
 /* the painted colours used by the toddler levels */
@@ -1773,13 +1842,14 @@ function buildLevel(world, index) {
       tag: pc.fixed ? 'scenery' : 'block',
       userData: {
         tint: pc.tint, kind: pc.kind || null,
-        boost: pc.boost || 0, mult: pc.mult || 0, lift: pc.lift
+        boost: pc.boost || 0, mult: pc.mult || 0,
+        bounce: pc.bounce || 0, lift: pc.lift
       }
     });
     world.add(body);
     if (pc.fixed) {
       scenery.push(body);
-      if (pc.boost || pc.mult) boosters.push(body);
+      if (pc.boost || pc.mult || pc.bounce) boosters.push(body);
     } else {
       blocks.push(body);
     }
@@ -2115,6 +2185,13 @@ Game.prototype.railTargets = function () {
 };
 
 Game.prototype.step = function (dt) {
+  /* The solver has already turned a landing into a bounce by the time the pads
+     below get a look, so a springboard would never see anything coming down.
+     Remember the approach speed first. */
+  for (var pi = 0; pi < this.projectiles.length; pi++) {
+    var pp = this.projectiles[pi];
+    if (!pp.dead) pp.userData.fallSpeed = pp.vel.y;
+  }
   this.world.step(dt);
   this.railTargets();
   this.sinceShot += dt;
@@ -2168,8 +2245,18 @@ Game.prototype.step = function (dt) {
       if (over < -r || over > r + 0.6) continue;
 
       var lift = pad.userData.lift || BOOST_LIFT;
-      var kicked = false;
-      if (pad.userData.mult) {
+      var kicked = false, sprung = false;
+      if (pad.userData.bounce) {
+        /* A springboard only fires at something coming down on it, or a ball
+           sitting on one would pogo forever. */
+        var coming = Math.min(ball.vel.y, ball.userData.fallSpeed || 0);
+        if (coming < -2 && this.world.time - (ball.userData.lastSpring || -9) > 0.3) {
+          ball.userData.lastSpring = this.world.time;
+          ball.vel.y = pad.userData.bounce;
+          kicked = true;
+          sprung = true;
+        }
+      } else if (pad.userData.mult) {
         /* A multiplier keeps whatever pace the shot arrived with, so a long
            drive stays a test of the shot rather than of the pad's setting.
            Only once per pad, or it would wind up forever. */
@@ -2179,18 +2266,25 @@ Game.prototype.step = function (dt) {
           ball.vel.x = Math.min(MAX_BOOST_SPEED, ball.vel.x * pad.userData.mult);
           kicked = true;
         }
-      } else if (ball.vel.x < pad.userData.boost) {
+      } else if (pad.userData.boost > 0 ? ball.vel.x < pad.userData.boost
+                                        : ball.vel.x > pad.userData.boost) {
+        /* a negative belt runs the other way, and will happily fire a ball
+           back the way it came */
         ball.vel.x = pad.userData.boost;
         kicked = true;
       }
       if (!kicked) continue;
       ball.wake();
       /* a flat shove just fires the ball into the lip of the next pad, where
-         it loses everything it just gained - so send it up as well as along */
-      if (ball.vel.y < lift) ball.vel.y = lift;
-      if (this.world.time - (ball.userData.lastBoost || -9) > 0.25) {
+         it loses everything it just gained - so send it up as well as along.
+         A springboard has already done the lifting. */
+      if (!sprung && ball.vel.y < lift) ball.vel.y = lift;
+      if (this.world.time - (ball.userData.lastBoost || -9) > 0.2) {
         ball.userData.lastBoost = this.world.time;
-        this.emit({ type: 'boost', point: vClone(ball.pos), body: ball });
+        this.emit({
+          type: sprung ? 'spring' : 'boost',
+          point: vClone(ball.pos), body: ball
+        });
       }
     }
   }
@@ -2271,7 +2365,10 @@ Game.prototype.targetsLeft = function () {
 Game.prototype.score = function () {
   var s;
   if (this.mode === 'distance') {
-    s = { score: Math.round(this.bestDistance * DISTANCE_POINTS), popped: 0, toppled: 0 };
+    s = {
+      score: Math.round(this.bestDistance * (this.def.points || DISTANCE_POINTS)),
+      popped: 0, toppled: 0
+    };
     s.distance = this.bestDistance;
   } else if (this.mode === 'hole') {
     s = {
@@ -2563,6 +2660,33 @@ function golfTexture() {
   });
 }
 
+/* a springboard: chevrons pointing up */
+function bounceTexture() {
+  return canvasTexture('bounce', 128, function (g, w, h) {
+    g.fillStyle = '#2f2438'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#ff8c42'; g.lineWidth = 9; g.lineCap = 'round';
+    for (var i = 0; i < 3; i++) {
+      var y = 96 - i * 32;
+      g.beginPath();
+      g.moveTo(w * 0.22, y); g.lineTo(w * 0.5, y - 22); g.lineTo(w * 0.78, y);
+      g.stroke();
+    }
+  });
+}
+/* the same treadmill, running the other way */
+function boostBackTexture() {
+  return canvasTexture('boostback', 128, function (g, w, h) {
+    g.fillStyle = '#2b3440'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#7fd4ff'; g.lineWidth = 9; g.lineCap = 'round';
+    for (var i = 0; i < 3; i++) {
+      var x = 110 - i * 40;
+      g.beginPath();
+      g.moveTo(x, h * 0.22); g.lineTo(x - 26, h * 0.5); g.lineTo(x, h * 0.78);
+      g.stroke();
+    }
+  });
+}
+
 function materialTexture(name) {
   if (name === 'toy') return toyTexture();
   if (name === 'wood') return woodTexture();
@@ -2599,6 +2723,12 @@ function sceneryMesh(body) {
   if (kind === 'boost') {
     tex = boostTexture().clone();
     tex.repeat.set(Math.max(1, Math.round(w / 3)), 1);
+  } else if (kind === 'boostback') {
+    tex = boostBackTexture().clone();
+    tex.repeat.set(Math.max(1, Math.round(w / 3)), 1);
+  } else if (kind === 'bounce') {
+    tex = bounceTexture().clone();
+    tex.repeat.set(Math.max(1, Math.round(w / 4)), 1);
   } else if (kind === 'lane') {
     tex = laneTexture().clone();
     tex.repeat.set(Math.max(1, Math.round(w / 3)), 1);
@@ -2612,7 +2742,7 @@ function sceneryMesh(body) {
   tex.needsUpdate = true;
   opts = { map: tex };
   var mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lambert(opts));
-  mesh.castShadow = kind !== 'boost' && kind !== 'lane';
+  mesh.castShadow = kind !== 'boost' && kind !== 'boostback' && kind !== 'lane';
   mesh.receiveShadow = true;
   return mesh;
 }
@@ -3260,6 +3390,9 @@ function drainEvents() {
     } else if (e.type === 'boost') {
       burst(e.point, 0xffd23f, 10, 4, 0.4);
       tone(420, 0.09, 'square', 0.09, 900);
+    } else if (e.type === 'spring') {
+      burst(e.point, 0xff8c42, 22, 6, 0.7);
+      tone(280, 0.14, 'square', 0.12, 1200);
     } else if (e.type === 'holed') {
       burst(e.point, 0xffd23f, 60, 9, 1.4);
       burst(e.point, 0xffffff, 30, 6, 1.2);
