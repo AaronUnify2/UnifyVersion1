@@ -1440,17 +1440,23 @@ var LEVELS = [
          the whole chain decided by whether you reached the first pad; this way
          the pace you arrive with carries all the way down the course, and a
          drive that is merely good runs out of road long before the last one. */
-      var pads = [[40, 1.9], [220, 1.9], [700, 1.8], [1500, 1.7], [2600, 1.6], [4000, 1.5]];
+      /* Wound up a little to match the taller hills, which take a real bite
+         out of a drive before it ever reaches the long flat, and made long
+         rather than short: a ball launched off a crest clears a narrow pad
+         entirely, and losing one belt loses every belt after it. */
+      var pads = [[40, 2.2], [220, 2.2], [700, 2.0], [1500, 1.8], [2600, 1.7], [4000, 1.5]];
       for (var i = 0; i < pads.length; i++) {
-        p.push(slab(pads[i][0], -0.18, 0, 11, 0.4, 11, {
+        p.push(slab(pads[i][0], -0.18, 0, 44, 0.4, 11, {
           kind: 'boost', mult: pads[i][1], mat: 'stone', friction: 0.04
         }));
       }
-      /* rolling ground between the early belts: a ball coming over a crest at
-         speed gets air, which is where the drive starts to feel alive. The
+      /* Rolling ground between the early belts, and properly rolling: these
+         are hills to be carried, not humps to be bumped over. A drive that
+         arrives with pace flies the crests and keeps nearly all of it; one
+         that arrives short grinds up the first slope and dies there. The
          belts themselves sit on flat stretches so the chain still works. */
-      ridges(p, 60, 200, 70, 3.0);
-      ridges(p, 250, 670, 70, 3.4);
+      ridges(p, 60, 200, 70, 6.5);
+      ridges(p, 250, 670, 70, 7.5);
       return { pieces: p, targets: [] };
     }
   },
@@ -1576,30 +1582,47 @@ var LEVELS = [
       p.push(slab(16, 2.6, 0, 16, 1.4, 14, { tilt: -0.26, kind: 'slope', mat: 'stone' }));
 
       /* springboards on the deck: land on one and you go straight up */
+      /* Sunk flush with the deck, like the belts. Sitting proud of the
+         ground they were a step the ball slammed into instead of a pad it
+         could roll onto. */
       var springs = [[46, 34], [150, 40], [300, 44], [520, 48], [820, 52]];
       for (var i = 0; i < springs.length; i++) {
-        p.push(slab(springs[i][0], 0.3, 0, 16, 1.0, 16, {
+        p.push(slab(springs[i][0], -0.18, 0, 18, 0.4, 16, {
           kind: 'bounce', bounce: springs[i][1], mat: 'stone', restitution: 0.1
         }));
       }
 
-      /* Belts hanging in the air. Land on a forward one and you are thrown
-         miles; land on a backward one and you are sent home to try again. */
-      /* All the belts hang in the same band of sky, forwards and backwards
-         alternating. Which one a hop happens to land on is the whole game. */
-      /* All the belts hang at the same height, forwards and backwards
-         alternating, because a ball thrown off one rides level to the next.
-         Stagger them and it simply sails underneath the ones above. Which
-         belt a hop lands on is the whole game. */
+      /* Belts hanging in the air, forwards and backwards alternating. Which
+         one a hop happens to land on is the whole game.
+
+         Every belt is pitched nose-up, by an angle that wanders from belt to
+         belt. That one tilt does both jobs: a forward belt runs the ball up
+         its raised end and throws it skyward, and a backward belt walks it
+         down its low end and drops it. It also keeps the leading edges out of
+         the way - a tilted belt's entry lip sits metres below its own middle,
+         so a ball arriving off the belt behind comes down onto the deck
+         instead of slamming into the lip.
+
+         The forward belts climb away into the sky and are long enough to be
+         hard to miss. The backward ones are short, and hang low in the gaps
+         between them: a ball thrown properly upwards sails straight over one,
+         and only a flat, scuttling hop drops onto it and gets sent home.
+
+         Heights can vary again now. They had to match while the belts were
+         flat, because a ball thrown level off a low one sailed underneath
+         everything above it; a ball thrown upwards has no such trouble.
+         Nothing hangs directly over a springboard, or a ball would be fired
+         straight into the underside of a deck. */
       var decks = [
-        [110, 15, 62], [178, 15, -36], [246, 15, 84], [330, 15, -42],
-        [420, 15, 98], [520, 15, -48], [630, 15, 112], [760, 15, 128],
-        [910, 15, 144]
+        [110, 15, 62, 50], [178, 11, -36, 24], [246, 17, 84, 50],
+        [330, 12, -42, 24], [420, 19, 98, 50], [570, 13, -48, 24],
+        [630, 21, 112, 50], [760, 24, 128, 50], [910, 27, 144, 50]
       ];
       for (i = 0; i < decks.length; i++) {
-        p.push(slab(decks[i][0], decks[i][1], 0, 50, 1.2, 18, {
+        var lean = 0.10 + ((i * 7) % 5) * 0.035;   /* 0.10 to 0.24 radians */
+        p.push(slab(decks[i][0], decks[i][1], 0, decks[i][3], 1.2, 18, {
           kind: decks[i][2] > 0 ? 'boost' : 'boostback',
-          boost: decks[i][2], mat: 'stone', friction: 0.05
+          boost: decks[i][2], tilt: lean, mat: 'stone', friction: 0.05
         }));
       }
       return { pieces: p, targets: [] };
@@ -2239,18 +2262,29 @@ Game.prototype.step = function (dt) {
       var ball = this.projectiles[k];
       if (ball.dead) continue;
       var r = ball.type === 'sphere' ? ball.radius : ball.half.y;
-      if (Math.abs(ball.pos.x - pad.pos.x) > pad.half.x + r) continue;
-      if (Math.abs(ball.pos.z - pad.pos.z) > pad.half.z + r) continue;
-      var over = ball.pos.y - (pad.pos.y + pad.half.y);
+      /* Measured in the pad's own frame, so a tilted belt is judged against
+         its own surface rather than against the world's horizon - the ends of
+         a long ramp are metres away from level. */
+      var rel = qRotate(qConj(pad.quat), vSub(ball.pos, pad.pos));
+      if (Math.abs(rel.x) > pad.half.x + r) continue;
+      if (Math.abs(rel.z) > pad.half.z + r) continue;
+      var over = rel.y - pad.half.y;
       if (over < -r || over > r + 0.6) continue;
 
-      var lift = pad.userData.lift || BOOST_LIFT;
+      /* How steeply the pad climbs as x increases: rise over run of its own
+         top face. Flat pads give 0. */
+      var padUp = qRotate(pad.quat, vec(0, 1, 0));
+      var slope = Math.abs(padUp.y) > 1e-6 ? -padUp.x / padUp.y : 0;
       var kicked = false, sprung = false;
       if (pad.userData.bounce) {
-        /* A springboard only fires at something coming down on it, or a ball
-           sitting on one would pogo forever. */
+        /* A springboard fires at anything that arrives with some life in it:
+           something dropping onto it, or something rolling across it at a
+           decent clip. It will not fire at a ball that has come to rest on
+           one, or a ball sitting there would pogo forever. */
         var coming = Math.min(ball.vel.y, ball.userData.fallSpeed || 0);
-        if (coming < -2 && this.world.time - (ball.userData.lastSpring || -9) > 0.3) {
+        var rolling = Math.abs(ball.vel.x) > 10;
+        if ((coming < -2 || rolling) &&
+            this.world.time - (ball.userData.lastSpring || -9) > 0.3) {
           ball.userData.lastSpring = this.world.time;
           ball.vel.y = pad.userData.bounce;
           kicked = true;
@@ -2275,10 +2309,21 @@ Game.prototype.step = function (dt) {
       }
       if (!kicked) continue;
       ball.wake();
-      /* a flat shove just fires the ball into the lip of the next pad, where
-         it loses everything it just gained - so send it up as well as along.
-         A springboard has already done the lifting. */
-      if (!sprung && ball.vel.y < lift) ball.vel.y = lift;
+      /* A springboard has already done the lifting. Otherwise: a tilted belt
+         hands the ball off along its own surface, which sends it up if the
+         belt is climbing and down if it is running the ball back down the
+         slope. A flat belt gets a fixed nudge, because a flat shove just
+         fires the ball into the lip of the next pad, where it loses
+         everything it just gained. */
+      if (!sprung) {
+        if (slope) {
+          ball.vel.y = ball.vel.x * slope;
+        } else {
+          var lift = pad.userData.lift !== undefined && pad.userData.lift !== null
+            ? pad.userData.lift : BOOST_LIFT;
+          if (ball.vel.y < lift) ball.vel.y = lift;
+        }
+      }
       if (this.world.time - (ball.userData.lastBoost || -9) > 0.2) {
         ball.userData.lastBoost = this.world.time;
         this.emit({
