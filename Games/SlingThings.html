@@ -1305,7 +1305,10 @@ var LEVELS = [
     set: 'main',
     name: 'Wonky Watchtower',
     hint: 'Pull back from the sling and let go. Aim for the legs.',
-    ammo: ['melon', 'melon', 'bowling', 'duck', 'melon'],
+    ammo: ['duck', 'beachball', 'melon', 'bowling', 'melon'],
+    /* The duck first and the beach ball second on purpose: they are the
+       two lightest things in the pile, and one shot each teaches what
+       weight does to a shot before the level asks anything of you. */
     par: 5000,
     build: function () {
       var x = 16, p = [];
@@ -1420,51 +1423,62 @@ var LEVELS = [
   },
 {
     set: 'main',
-    mode: 'distance',
+    mode: 'hole',
     name: 'The Driving Range',
-    hint: 'Land on the slope and chain the treadmills. Miss one and the drive dies there.',
+    hint: 'Chain the treadmills over the hills to the green. There is a cup at the far end - the drive is only half of it.',
     ammo: ['golfball', 'golfball', 'bowling', 'golfball', 'beachball', 'golfball'],
-    par: 22000,
-    targetDistance: 1000,
+    par: 18000,
+    hole: { x: 986, z: 0, radius: 3.6, maxSpeed: 32 },
     groundFriction: 0.07,
-    projectileLife: 48,
-    settleTimeout: 50,
-    bounds: 5200,
+    projectileLife: 40,
+    settleTimeout: 42,
+    bounds: 1200,
     view: 58,
     build: function () {
-      var p = [];
+      var p = [], H = 986;
       /* the big downslope: land on this and it gathers speed */
       p.push(slab(16, 2.6, 0, 16, 1.4, 14, { tilt: -0.26, kind: 'slope', mat: 'stone' }));
       p.push(slab(26.5, 0.45, 0, 6, 0.9, 14, { tilt: -0.12, kind: 'slope', mat: 'stone' }));
-      /* Treadmills that multiply rather than set a speed. A fixed speed makes
-         the whole chain decided by whether you reached the first pad; this way
-         the pace you arrive with carries all the way down the course, and a
-         drive that is merely good runs out of road long before the last one. */
-      /* Wound up a little to match the taller hills, which take a real bite
-         out of a drive before it ever reaches the long flat, and made long
-         rather than short: a ball launched off a crest clears a narrow pad
-         entirely, and losing one belt loses every belt after it. */
-      var pads = [[40, 2.2], [234, 2.2], [570, 1.9], [700, 2.0], [1500, 1.8],
-                  [2600, 1.7], [4000, 1.5]];
+      /* Treadmills that multiply rather than set a speed, so the pace you
+         arrive with carries all the way down the course. Wound down from what
+         they were when this was a five kilometre distance level: there is a
+         cup at the end of it now, and a chain that can fling a ball two
+         hundred metres a second can never be putted with. */
+      var pads = [[40, 2.2], [234, 2.2], [570, 1.9], [700, 1.5]];
       for (var i = 0; i < pads.length; i++) {
         p.push(slab(pads[i][0], -0.18, 0, 44, 0.4, 11, {
           kind: 'boost', mult: pads[i][1], mat: 'stone', friction: 0.04
         }));
       }
-      /* Rolling ground between the early belts, and properly rolling: these
-         are hills to be carried, not humps to be bumped over. A drive that
-         arrives with pace flies the crests and keeps nearly all of it; one
-         that arrives short grinds up the first slope and dies there. The
-         belts themselves sit on flat stretches so the chain still works. */
-      /* Each run of hills gets a clear bay at each end, because a belt with a
-         hillside lying over its leading edge is a lip, not a treadmill. */
+      /* Rolling ground between the belts, and properly rolling: these are
+         hills to be carried, not humps to be bumped over. Each run leaves a
+         clear bay at each end, because a belt with a hillside lying over its
+         leading edge is a lip, not a treadmill. */
       ridges(p, 68, 208, 70, 6.5);
-      /* The hills used to run unbroken from 250 to 670, which is where most
-         drives quietly died: survive them and the next belt was still thirty
-         metres away. There is a flat bay at 570 now with a belt in it, and
-         one last hill between that and the belt at 700. */
       ridges(p, 260, 540, 70, 7.5);
       ridges(p, 600, 670, 70, 7.5);
+      /* the long rough run in to the green, which is where the drive stops
+         being about power and starts being about judgement */
+      p.push(slab((722 + H - 40) / 2, -0.6, 0, H - 40 - 722, 1.2, 26, {
+        kind: 'green', mat: 'stone', friction: 0.45
+      }));
+      /* a rise onto the green, then a shallow valley with the cup at the
+         bottom of it, cut long so the pieces overlap rather than leaving a
+         slot at the join */
+      p.push(slab(H - 27.9, 1.08, 0, 24.6, 1.0, 26, {
+        tilt: 0.125, kind: 'green', mat: 'stone', friction: 0.05
+      }));
+      p.push(slab(H - 8.1, 1.3, 0, 16.4, 1.0, 26, {
+        tilt: -0.1503, kind: 'green', mat: 'stone', friction: 0.02
+      }));
+      p.push(slab(H + 8.1, 1.3, 0, 16.4, 1.0, 26, {
+        tilt: 0.1503, kind: 'green', mat: 'stone', friction: 0.02
+      }));
+      /* a back wall, so an overcooked drive drops back into the valley, and
+         one rail on the far side only - the near one would stand between the
+         camera and the cup */
+      p.push(slab(H + 17, 7.0, 0, 1.2, 14.0, 28, { kind: 'wall', mat: 'stone' }));
+      p.push(slab(H - 40, 3.2, -13.6, 120, 2.6, 1.2, { kind: 'wall', mat: 'wood' }));
       return { pieces: p, targets: [] };
     }
   },
@@ -1660,13 +1674,14 @@ var LEVELS = [
       }));
       /* the green: a ramp onto a plateau, then a shallow valley with the cup
          at the bottom, so anything that reaches it feeds in */
-      p.push(slab(H - 27.9, 1.0, 0, 24.6, 1.0, 26, { tilt: 0.125, kind: 'green', mat: 'stone', friction: 0.02 }));
+      p.push(slab(H - 27.9, 1.08, 0, 24.6, 1.0, 26, { tilt: 0.125, kind: 'green', mat: 'stone', friction: 0.02 }));
       p.push(slab(H - 8.1, 1.3, 0, 16.4, 1.0, 26, { tilt: -0.1503, kind: 'green', mat: 'stone', friction: 0.02 }));
       p.push(slab(H + 8.1, 1.3, 0, 16.4, 1.0, 26, { tilt: 0.1503, kind: 'green', mat: 'stone', friction: 0.02 }));
       /* a back wall, so an overcooked drive drops back into the valley */
       p.push(slab(H + 17, 5.8, 0, 1.2, 5.6, 28, { kind: 'wall', mat: 'stone' }));
+      /* Only the far rail. The near one stood between the camera and the cup
+         and you were putting at a fence. */
       p.push(slab(H - 6, 3.2, -13.6, 52, 2.6, 1.2, { kind: 'wall', mat: 'wood' }));
-      p.push(slab(H - 6, 3.2, 13.6, 52, 2.6, 1.2, { kind: 'wall', mat: 'wood' }));
       return { pieces: p, targets: [] };
     }
   },
@@ -1789,7 +1804,7 @@ var LEVELS = [
     hint: 'The green is up in the clouds. Hard enough to climb the ramp, soft enough to stop on it.',
     ammo: ['golfball', 'golfball', 'golfball', 'golfball', 'golfball', 'golfball'],
     par: 17600,
-    hole: { x: 572, y: 19.8, z: 0, radius: 3.4, maxSpeed: 30 },
+    hole: { x: 572, y: 19.8, z: 0, radius: 2.8, maxSpeed: 24 },
     groundFriction: 0.1,
     projectileLife: 34,
     settleTimeout: 36,
@@ -1822,8 +1837,15 @@ var LEVELS = [
 
       /* The climb. No belt on this one - it is plain hillside, so getting to
          the top costs speed, and how much you have left is the whole shot. */
-      p.push(slab(340, 9.31, 0, 140, 1.2, 20, {
-        tilt: 0.1419, kind: 'slope', mat: 'stone', friction: 0.04
+      /* Pitched a shade steeper than the arithmetic asks for, which leaves
+         the foot on the ground and puts the crest 25cm above the fairway it
+         runs into. The fairway overlaps the ramp's last metre and a half, and
+         at the height the sums give, its edge stood 18cm proud of the ramp
+         there - a lip that stopped every approach dead unless it happened to
+         bounce over. Now the ball crests the ramp and steps down onto the
+         fairway, which costs it nothing. */
+      p.push(slab(340, 9.4315, 0, 140, 1.2, 20, {
+        tilt: 0.1436, kind: 'slope', mat: 'stone', friction: 0.04
       }));
 
       /* the mesa under the green, so it reads as a clifftop and not a cloud */
@@ -1840,7 +1862,7 @@ var LEVELS = [
          bottom of it. Each piece is cut a little long so it overlaps the next
          rather than leaving a slot at the join - the cup sits on one of those
          joins, and a ball can wedge in a slot it cannot fall through. */
-      p.push(slab(H - 27.9, G + 1.0, 0, 24.6, 1.0, 26, {
+      p.push(slab(H - 27.9, G + 1.08, 0, 24.6, 1.0, 26, {
         tilt: 0.125, kind: 'green', mat: 'stone', friction: 0.3
       }));
       p.push(slab(H - 8.1, G + 1.294, 0, 16.4, 1.0, 26, {
@@ -1851,8 +1873,9 @@ var LEVELS = [
       }));
       /* a back wall, so an overcooked approach drops back into the valley */
       p.push(slab(H + 17, G + 4.5, 0, 1.2, 5.6, 28, { kind: 'wall', mat: 'stone' }));
+      /* the far rail only - the near one stood between the camera and the
+         cup, the same fence that was in the way down on the low green */
       p.push(slab(500, G + 2.0, -13.6, 190, 2.6, 1.2, { kind: 'wall', mat: 'wood' }));
-      p.push(slab(500, G + 2.0, 13.6, 190, 2.6, 1.2, { kind: 'wall', mat: 'wood' }));
       return { pieces: p, targets: [] };
     }
   },
@@ -1886,12 +1909,20 @@ var LEVELS = [
       /* The flippers. The forward one hangs where a lobbed ball comes down
          and fires it flat into the tower's upper works; the backward one
          hangs just past the tower, so anything that sails over the top is
-         turned round and dropped back through it. Two passes a shot. */
+         turned round and dropped back through it. Two passes a shot.
+
+         Both of them rock, the backward one by ten degrees either way and the
+         forward one by rather less. A belt held at a fixed angle hands every
+         ball off along exactly the same line, and the table turns into one
+         shot repeated; a belt that is rocking never gives you the same angle
+         twice. They rock at different rates so they never fall into step. */
       p.push(slab(130, 10.5, 0, 44, 1.2, 16, {
-        kind: 'boost', boost: 46, tilt: 0.16, mat: 'stone', friction: 0.05
+        kind: 'boost', boost: 46, tilt: 0.16, sway: 0.12, swayRate: 1.1,
+        mat: 'stone', friction: 0.05
       }));
       p.push(slab(200, 13.0, 0, 30, 1.2, 16, {
-        kind: 'boostback', boost: -40, tilt: 0.13, mat: 'stone', friction: 0.05
+        kind: 'boostback', boost: -40, tilt: 0.13, sway: 0.175, swayRate: 0.8,
+        mat: 'stone', friction: 0.05
       }));
 
       /* a belt on the floor at the back that rolls escapees home, and a wall
@@ -2043,6 +2074,10 @@ function slab(x, y, z, w, h, d, opts) {
     mat: opts.mat || 'stone',
     fixed: true,
     tilt: opts.tilt || 0,
+    /* a belt that rocks about its own tilt, so it never hands the ball off
+       at quite the same angle twice */
+    sway: opts.sway || 0,
+    swayRate: opts.swayRate || 0.7,
     kind: opts.kind || 'deck',
     tint: opts.tint,
     boost: opts.boost || 0,
@@ -2064,10 +2099,15 @@ function ridges(p, fromX, toX, period, height) {
   var halfP = period / 2;
   var tilt = Math.atan2(height, halfP);
   var midY = height / 2 - 0.6 * Math.cos(tilt);
+  /* Cut a little long. Tilting a slab shortens the ground it covers, so slabs
+     cut to exactly half a period leave a gap at every crest and every valley
+     floor - small enough that nothing in the ammo pile can fall through one,
+     big enough to be a hole in the hillside. */
+  var len = halfP / Math.cos(tilt) + 0.4;
   for (var x = fromX; x + period <= toX; x += period) {
-    p.push(slab(x + halfP / 2, midY, 0, halfP, 1.2, 30,
+    p.push(slab(x + halfP / 2, midY, 0, len, 1.2, 30,
       { tilt: tilt, kind: 'slope', hill: true, mat: 'stone', friction: 0.06 }));
-    p.push(slab(x + halfP * 1.5, midY, 0, halfP, 1.2, 30,
+    p.push(slab(x + halfP * 1.5, midY, 0, len, 1.2, 30,
       { tilt: -tilt, kind: 'slope', hill: true, mat: 'stone', friction: 0.06 }));
   }
 }
@@ -2106,7 +2146,9 @@ function buildLevel(world, index) {
       userData: {
         tint: pc.tint, kind: pc.kind || null,
         boost: pc.boost || 0, mult: pc.mult || 0,
-        bounce: pc.bounce || 0, lift: pc.lift, hill: !!pc.hill
+        bounce: pc.bounce || 0, lift: pc.lift, hill: !!pc.hill,
+        tilt: pc.tilt || 0, sway: pc.sway || 0, swayRate: pc.swayRate || 0.7,
+        swayPhase: pc.sway ? (pc.x % 6.283) : 0
       }
     });
     world.add(body);
@@ -2278,7 +2320,11 @@ var TARGET_RAIL = 0.3;
 var TARGET_RAIL_DAMP = 0.72;
 
 var BOOST_LIFT = 5.5;
-var MAX_BOOST_SPEED = 360;   /* a ceiling, so nothing outruns the solver */      /* treadmills hop the ball to the next one */
+var MAX_BOOST_SPEED = 360;   /* a ceiling, so nothing outruns the solver */
+/* how long a ball must be clear of a forward belt before that belt will
+   pick it up again - long enough that riding across one counts as a
+   single go, short enough that coming back round always works */
+var PAD_REARM = 1.5;      /* treadmills hop the ball to the next one */
 var SPLAT_RADIUS = 4.2;
 var SPLAT_FORCE = 11;
 var SETTLE_TIMEOUT = 6;
@@ -2494,8 +2540,21 @@ Game.prototype.step = function (dt) {
     }
   }
 
-  /* treadmills: anything crossing one is shoved along */
+  /* belts that rock. A swaying belt is still a static body - nothing pushes
+     it - so all that changes is the angle it presents, and with it the angle
+     it throws the ball off at. That is the whole point: a fixed belt hands
+     every ball off identically and the level becomes one shot repeated. */
   var pads = this.state.boosters;
+  for (i = 0; i < pads.length; i++) {
+    var sw = pads[i].userData;
+    if (!sw.sway) continue;
+    var angle = sw.tilt + sw.sway *
+      Math.sin(this.world.time * sw.swayRate + sw.swayPhase);
+    pads[i].quat = qFromAxisAngle(vec(0, 0, 1), angle);
+    pads[i].updateAABB();
+  }
+
+  /* treadmills: anything crossing one is shoved along */
   for (i = 0; i < pads.length; i++) {
     var pad = pads[i];
     for (var k = 0; k < this.projectiles.length; k++) {
@@ -2515,6 +2574,25 @@ Game.prototype.step = function (dt) {
          top face. Flat pads give 0. */
       var padUp = qRotate(pad.quat, vec(0, 1, 0));
       var slope = Math.abs(padUp.y) > 1e-6 ? -padUp.x / padUp.y : 0;
+      /* When this ball was last over this pad, and which pads it has already
+         spent. A belt running the wrong way gets one go at a ball and no
+         more - being batted home twice by the same belt is not a twist, it is
+         a punishment. A forward belt gets to work every time the ball comes
+         back to it, which is the opposite rule and the kinder one. */
+      if (!ball.userData.padSeen) ball.userData.padSeen = {};
+      if (!ball.userData.padSpent) ball.userData.padSpent = {};
+      if (!ball.userData.padKick) ball.userData.padKick = {};
+      var seen = ball.userData.padSeen, spent = ball.userData.padSpent;
+      var kick = ball.userData.padKick;
+      var away = this.world.time - (seen[pad.id] !== undefined ? seen[pad.id] : -99);
+      seen[pad.id] = this.world.time;
+      /* Still mid-ride on this pad, as opposed to merely passing over it
+         again: measured from the last time the pad actually drove the ball,
+         not from the last time it saw it, or a spent belt would re-arm itself
+         one step after the ball came back within reach. */
+      var riding = this.world.time -
+        (kick[pad.id] !== undefined ? kick[pad.id] : -99) < 0.2;
+
       var kicked = false, sprung = false;
       if (pad.userData.bounce) {
         /* A springboard fires at anything that arrives with some life in it:
@@ -2533,17 +2611,26 @@ Game.prototype.step = function (dt) {
       } else if (pad.userData.mult) {
         /* A multiplier keeps whatever pace the shot arrived with, so a long
            drive stays a test of the shot rather than of the pad's setting.
-           Only once per pad, or it would wind up forever. */
-        if (!ball.userData.usedPads) ball.userData.usedPads = {};
-        if (!ball.userData.usedPads[pad.id] && ball.vel.x > 1) {
-          ball.userData.usedPads[pad.id] = true;
+           Once per visit - it re-arms as soon as the ball has been off it
+           long enough to have gone somewhere - because firing every step
+           would wind a ball up to the speed ceiling in half a second. */
+        if (away > PAD_REARM && ball.vel.x > 1) {
           ball.vel.x = Math.min(MAX_BOOST_SPEED, ball.vel.x * pad.userData.mult);
           kicked = true;
         }
-      } else if (pad.userData.boost > 0 ? ball.vel.x < pad.userData.boost
-                                        : ball.vel.x > pad.userData.boost) {
-        /* a negative belt runs the other way, and will happily fire a ball
-           back the way it came */
+      } else if (pad.userData.boost < 0) {
+        /* A belt running the wrong way gets one visit from each ball. While
+           the ball is on it, it drives it the whole way across, the same as
+           any belt; once the ball has left, that belt is done with it for
+           good. It will still send you home - what it will not do is catch
+           you again on the way back and send you home twice. */
+        if ((!spent[pad.id] || riding) && ball.vel.x > pad.userData.boost) {
+          spent[pad.id] = true;
+          kick[pad.id] = this.world.time;
+          ball.vel.x = pad.userData.boost;
+          kicked = true;
+        }
+      } else if (ball.vel.x < pad.userData.boost) {
         ball.vel.x = pad.userData.boost;
         kicked = true;
       }
