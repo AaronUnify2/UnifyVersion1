@@ -9,11 +9,18 @@ everywhere.
 Tick a term when you've confirmed it is current. Strike it out and write the
 replacement when it isn't. Terms are ordered by how badly a stale one hurts.
 
-**⚠️ = appears only in the customer service flowcharts.** Those are roughly
-four months behind the FAQ content, so anything that lives *only* there has had
-no recent eyes on it. That flag is the whole point of this list.
-
 Counts are `flowcharts / FAQ`. Where the two sources disagree, **the FAQ wins.**
+
+### Two different reasons a term is flowchart-only
+
+An early version of this list flagged every flowchart-only term as a staleness
+risk. That was wrong, and the distinction matters:
+
+- **🔒 internal by design** — the term *should* only appear in internal
+  content. Eli, TechOne and ECM are staff tools; the FAQ is public, so their
+  absence there is correct, not a warning. These carry no extra risk.
+- **⚠️ unreviewed** — the term could reasonably have appeared in public content
+  but didn't, so it has had no recent eyes on it. These are the real risk.
 
 ---
 
@@ -21,6 +28,8 @@ Counts are `flowcharts / FAQ`. Where the two sources disagree, **the FAQ wins.**
 
 - [x] ~~Merit~~ → **CRM** · 67/1 · also changes the lodgement workflow (SMS request ID)
 - [x] ~~Cleanaway Live Collections~~ → **Echo** · 1/0 · name only, does **not** affect the other 26 uses of "Cleanaway"
+- [x] **Eli** — confirmed current, no change. Internal-only by design.
+- [x] **Solar panel disposal** — now accepted at **Warwick waste facility only, indefinitely**. Supersedes the "Pratten, Warwick and Stanthorpe until 1 July 2026" wording, which has expired.
 
 ---
 
@@ -29,24 +38,24 @@ Counts are `flowcharts / FAQ`. Where the two sources disagree, **the FAQ wins.**
 Highest risk. These get replaced, and the name is written into hundreds of
 places.
 
-- [ ] **Eli** *(intranet)* · 90/0 ⚠️ — by far the most-referenced term in the corpus
-- [ ] **Intramaps** *(internal mapping)* · 24/0 ⚠️
+- [x] **Eli** *(intranet)* · 90/0 🔒 — confirmed current. Most-referenced term in the corpus.
+- [ ] **Intramaps** *(internal mapping)* · 24/0 🔒
 - [ ] **Online Mapping** *(public mapping)* · 8/12 — confirm this is still the customer-facing name
-- [ ] **TechOne** *(property/rates)* · 12/0 ⚠️
+- [ ] **TechOne** *(property/rates)* · 12/0 🔒
 - [ ] **eProperty** *(customer self-service portal)* · 5/6
-- [ ] **Aqualas** *(water)* · 7/0 ⚠️
-- [ ] **My SDRC Water** *(customer-facing name for Aqualas)* · 6/0 ⚠️
-- [ ] **BPOINT** *(payments)* · 7/0 ⚠️
-- [ ] **ECM** *(records)* · 5/0 ⚠️
-- [ ] **Payreq** *(rates notices)* · 3/0 ⚠️
-- [ ] **XLOne** *(reporting, used in payment agreements)* · 1/0 ⚠️
-- [ ] **Environment & Regulatory Module** · 5/0 ⚠️
+- [ ] **Aqualas** *(water)* · 7/0 🔒
+- [ ] **My SDRC Water** *(customer-facing name for Aqualas)* · 6/0 🔒
+- [ ] **BPOINT** *(payments)* · 7/0 🔒
+- [ ] **ECM** *(records)* · 5/0 🔒
+- [ ] **Payreq** *(rates notices)* · 3/0 🔒
+- [ ] **XLOne** *(reporting, used in payment agreements)* · 1/0 🔒
+- [ ] **Environment & Regulatory Module** · 5/0 🔒
 - [ ] **Recycle Mate** · 9/5
 - [ ] **Go Paperless** · 3/0 ⚠️
 - [ ] **Application Tracking Tool** · 0/3
 - [ ] **QDBR** / Queensland Dog Breeder Register · 3/4
 - [ ] **Queensland Pool Safety Register** · 2/1
-- [ ] **The Pulse** *(staff directory)* · 1/0 ⚠️
+- [ ] **The Pulse** *(staff directory)* · 1/0 🔒
 - [ ] **Ecobatt** *(battery recycling partner)* · 2/1
 - [ ] **drumMUSTER** *(agvet container scheme)*
 
@@ -148,7 +157,7 @@ section reference rather than a dead name.
 
 - [ ] **Warwick Waste Management Facility** *(the only site accepting pet burial)*
 - [ ] **Stanthorpe Waste Management Facility** *(trickle tape stockpile)*
-- [ ] **Pratten** *(storm-damaged solar panels)*
+- [ ] **Pratten** — no longer takes storm-damaged solar panels; confirm what it does still accept
 - [ ] **Reuse Shop** · 2/2
 - [ ] **Washpool Camping Reserve** · 0/7
 - [ ] **Connolly Dam Camping Ground** · 0/7
@@ -162,7 +171,7 @@ section reference rather than a dead name.
 
 Not names, but time-bound statements that will expire:
 
-- [ ] Storm-damaged **solar panels accepted until 1 July 2026** — already past
+- [x] ~~Storm-damaged solar panels accepted until 1 July 2026 at Pratten, Warwick and Stanthorpe~~ → **Warwick waste facility only, no end date**
 - [ ] `lastReviewed` stamps reading **August 2026** across all 14 FAQ tabs
 - [ ] Dog breeder rule anchored to **26 May 2017** — still the correct date?
 - [ ] **60 days** to object to a state valuation; **28 days** to register a litter
