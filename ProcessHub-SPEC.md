@@ -278,12 +278,44 @@ If `stepperFrom` is null, the literal `stepper` array is used.
 }
 ```
 
-- `type` — `text` | `money` | `url` | `phone` | `email` | `time` | `date`
+- `type` — `text` | `money` | `url` | `phone` | `email` | `time` | `date` | `system`
 - `status` — `current` | `pending` | `stale`
 - `internal` — `true` redacts or omits the value from public exports. This is
   the lever for internal system names, extension numbers and intranet URLs.
 - `lastVerified` drives a staleness report: *"31 variables not verified in
   12 months, 14 of them Planning's."*
+
+### 6.5 System names are variables
+
+Business systems get renamed and replaced, and the name is written into
+hundreds of places. Merit has just been retired in favour of the CRM, and the
+existing content references it **72 times**. Every internal system name is
+therefore a variable of `type: "system"`, with `internal: true`.
+
+Current counts in `CustomerService.html`:
+
+| Variable | Value | References |
+|---|---|---|
+| `var_sys_intranet` | Eli | 125 |
+| `var_sys_requests` | CRM *(was Merit)* | 72 |
+| `var_sys_mapping` | Intramaps | 26 |
+| `var_sys_property` | TechOne | 12 |
+| `var_sys_payments` | BPOINT | 10 |
+| `var_sys_eproperty` | eProperty | 10 |
+| `var_sys_water` | Aqualas | 9 |
+| `var_sys_records` | ECM | 5 |
+| `var_sys_notices` | Payreq | 3 |
+
+Done this way, the next system replacement is one edit instead of a
+find-and-replace across the corpus — and the app can show exactly which
+processes and steps are affected before you change it.
+
+**Customer-facing vs internal names.** Some systems have two names: Aqualas is
+"My SDRC Water" to customers, Intramaps is "Online Mapping". Where both exist,
+hold two variables and use the public one in FAQ content. Worth noting that
+`Intramaps` currently appears by its internal name in **11 published FAQ
+answers** — not necessarily wrong, but today that is an 11-place edit if the
+wording is ever revisited, and a one-place edit once it is a variable.
 
 ---
 
@@ -442,21 +474,85 @@ migrate CustomerService process by process — this is a rewrite, not a parse,
 and at ~20–30 minutes per node it is 40–55 hours of work. The app is roughly
 20% of total effort; migration is the rest.
 
+### 11.1 Terminology migration
+
+Content written over the last 12 months carries retired terminology. Migration
+converts these to variables rather than find-and-replacing them, so the next
+change is a single edit.
+
+| Retired | Current | Occurrences |
+|---|---|---|
+| Merit | CRM | 72 |
+
+Migration rule: wherever a node body says "Lodge Merit", "Merit #",
+"Merit Req ID" or similar, the system name becomes
+`<span class="faq-var" data-var="var_sys_requests">CRM</span>` and the
+surrounding phrasing is updated to match how the CRM actually works. The
+phrasing rewrite is a content decision, not a mechanical substitution — the
+reference identifier, request numbering and lodgement steps may all differ.
+
+Flagged for confirmation during migration: whether the CRM keeps an equivalent
+of the Merit request number given to customers, and whether the keyword-driven
+lodgement flow still applies. Until confirmed, affected processes carry an
+`issue` so they surface in the register rather than going out wrong.
+
 ---
 
-## 12. Open questions
+## 12. Decisions
 
-1. **App and repo name.** "Process Hub" is a placeholder.
-2. **Do public FAQ answers and internal scripts share text?** Recommendation:
-   no. `faq.a` is authored separately in public register; the internal version
-   lives in `step.script` or an article. Same facts via variables, different
-   words.
-3. **Can an FAQ answer transclude part of an article?** Recommendation: not in
-   v1. Cross-link instead.
-4. **Does a step need its own `status`?** Probably not — process-level status
-   plus the issues register may be enough.
-5. **Seeding the taxonomy.** Build it from the current 22 sections, or draw it
-   from the real org chart?
-6. **First exemplar set.** Which 15–25 processes get done properly before the
-   consultants arrive? Suggest spanning 4–5 departments to demonstrate the
-   handoff reporting.
+Resolved during design. Recorded so they are not relitigated.
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | App and repo name | "Process Hub" stands as a working title. |
+| 2 | Do public FAQ answers and internal scripts share text? | No shared text and no rule against it either. Copy a convenient phrase across when it genuinely fits; do not build transclusion or enforce divergence. |
+| 3 | Can an FAQ answer transclude part of an article? | No. Cross-link instead. |
+| 4 | Does a step need its own `status`? | No. Process-level `status` plus the issues register is enough. |
+| 5 | Seeding the taxonomy | Build from the current 22 sections, fully editable afterwards. The existing categories are acknowledged as rough and are a starting point, not a structure to preserve. |
+| 6 | First exemplar set | Building, Revenue, Waste and Planning. See §13. |
+
+---
+
+## 13. Exemplar set
+
+Four departments, drawn from the richest existing content. 46 candidate
+processes exist across these four; the ~24 below are the most complete and
+carry the most structure (numbered procedures, checklists, scripts, reference
+links and background articles already present).
+
+**Lead with `PlanSTA` — Short-Term Accommodation.** At 5.1KB it is the richest
+node in the corpus, and it crosses **four departments in a single process**:
+Planning approval → Building reclassification (Class 1a → 1b) → Local Laws
+permit → Revenue rates category change. The content itself notes that customers
+are routinely blindsided by the building reclassification. A map showing four
+handoffs and a customer surprise at the end is the single best demonstration of
+why this work matters.
+
+### Planning (7)
+`PlanSTA` · `PlanHomeBiz` · `PlanSubdivide` · `PlanObjection` ·
+`PlanPreLodge` · `PlanSecondDwelling` · `PlanProcess`
+
+### Building (8)
+`BuildingNew` · `BuildingPlans` · `BuildingOverwhelmed` · `BuildingCosts` ·
+`BuildingTempHome` · `BuildingExtensions` · `BuildingInspec` · `PlumbOSSF`
+
+### Waste (5)
+`WasteFacilities` · `WasteTradePollution` · `WasteDumping` ·
+`WasteNewService` · `WasteRecycleMate`
+
+### Revenue (4)
+`RatesSale` · `RatesAdmin` · `RatesBalPay` · `RatesPayAgree`
+
+Four of these — `RatesAdmin`, `RatesBalPay`, `RatesPayAgree` and the waste
+nodes — reference Merit heavily and will need the terminology pass in §11.1
+before they are shown to anyone.
+
+---
+
+## 14. Remaining open questions
+
+1. Does the CRM issue a customer-facing reference number equivalent to the
+   Merit request ID? Affects the `completionTrigger` and `script` on every
+   lodgement step.
+2. Are there other retired systems or terms besides Merit in the current
+   content?
