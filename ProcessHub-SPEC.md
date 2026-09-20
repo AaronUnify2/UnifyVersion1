@@ -294,28 +294,61 @@ therefore a variable of `type: "system"`, with `internal: true`.
 
 Current counts in `CustomerService.html`:
 
-| Variable | Value | References |
-|---|---|---|
-| `var_sys_intranet` | Eli | 125 |
-| `var_sys_requests` | CRM *(was Merit)* | 72 |
-| `var_sys_mapping` | Intramaps | 26 |
-| `var_sys_property` | TechOne | 12 |
-| `var_sys_payments` | BPOINT | 10 |
-| `var_sys_eproperty` | eProperty | 10 |
-| `var_sys_water` | Aqualas | 9 |
-| `var_sys_records` | ECM | 5 |
-| `var_sys_notices` | Payreq | 3 |
+| Variable | Value | Audience | References |
+|---|---|---|---|
+| `var_sys_intranet` | Eli | internal | 125 |
+| `var_sys_requests` | CRM *(was Merit)* | internal | 72 |
+| `var_sys_mapping_internal` | Intramaps | internal | 26 |
+| `var_sys_property` | TechOne | internal | 12 |
+| `var_sys_payments` | BPOINT | internal | 10 |
+| `var_sys_eproperty` | eProperty | public | 10 |
+| `var_sys_water` | Aqualas | internal | 9 |
+| `var_sys_records` | ECM | internal | 5 |
+| `var_sys_notices` | Payreq | internal | 3 |
+| `var_sys_collections` | Echo *(was Cleanaway Live Collections)* | internal | 1 |
+| `var_sys_mapping_public` | Online Mapping | public | — |
 
 Done this way, the next system replacement is one edit instead of a
 find-and-replace across the corpus — and the app can show exactly which
 processes and steps are affected before you change it.
 
-**Customer-facing vs internal names.** Some systems have two names: Aqualas is
-"My SDRC Water" to customers, Intramaps is "Online Mapping". Where both exist,
-hold two variables and use the public one in FAQ content. Worth noting that
-`Intramaps` currently appears by its internal name in **11 published FAQ
-answers** — not necessarily wrong, but today that is an 11-place edit if the
-wording is ever revisited, and a one-place edit once it is a variable.
+### 6.6 Three things that are not the same, and must not share a variable
+
+Naming collisions are the trap. A single blanket rename would corrupt content
+in all three cases below.
+
+**Internal system vs public system.** Intramaps and Online Mapping are
+**two different systems**, not two names for one. Intramaps is internal and
+shows customer information; Online Mapping is public and carries only publicly
+available data. Two separate variables, and an officer instruction to check
+Intramaps must never be rewritten into public copy. Aqualas / "My SDRC Water"
+is the opposite case — one system with an internal and a customer-facing name,
+so two variables that deliberately resolve to the same thing.
+
+*(Noted for the record: `Intramaps` appears 11 times in published FAQ answers,
+but every occurrence is inside the vendor URL path —
+`…/spatial/intramaps/?…&project=Online%20Mapping` — and the visible link text
+reads "Online Mapping" in all of them. The public copy is correct as it
+stands.)*
+
+**Contractor vs system vs form.** "Cleanaway" appears 27 times in the current
+content and means three different things:
+
+| Term | Count | What it is | Status |
+|---|---|---|---|
+| Cleanaway Live Collection | 1 | The system | Renamed to **Echo** |
+| Cleanaway Request | 10 | The form | Unchanged |
+| Cleanaway | 16 | The contractor | Unchanged |
+
+Only one of the 27 changes. Forms and organisations therefore get their own
+variable types rather than being lumped in with systems:
+
+- `type: "system"` — software (Echo, CRM, TechOne)
+- `type: "form"` — named forms (Cleanaway Request, DA Form 2, Form 21)
+- `type: "org"` — external organisations and contractors (Cleanaway, QBCC)
+
+A form frequently outlives the system that serves it, and an organisation
+outlives both.
 
 ---
 
@@ -480,21 +513,33 @@ Content written over the last 12 months carries retired terminology. Migration
 converts these to variables rather than find-and-replacing them, so the next
 change is a single edit.
 
-| Retired | Current | Occurrences |
-|---|---|---|
-| Merit | CRM | 72 |
+| Retired | Current | Occurrences | Scope of change |
+|---|---|---|---|
+| Merit | CRM | 72 | System name **and** workflow |
+| Cleanaway Live Collections | Echo | 1 | System name only |
 
-Migration rule: wherever a node body says "Lodge Merit", "Merit #",
-"Merit Req ID" or similar, the system name becomes
-`<span class="faq-var" data-var="var_sys_requests">CRM</span>` and the
-surrounding phrasing is updated to match how the CRM actually works. The
-phrasing rewrite is a content decision, not a mechanical substitution — the
-reference identifier, request numbering and lodgement steps may all differ.
+**Merit → CRM.** Wherever a node body says "Lodge Merit", "Merit #" or
+"Merit Req ID", the system name becomes
+`<span class="faq-var" data-var="var_sys_requests">CRM</span>`. The surrounding
+phrasing is then rewritten, because the workflow changed too:
 
-Flagged for confirmation during migration: whether the CRM keeps an equivalent
-of the Merit request number given to customers, and whether the keyword-driven
-lodgement flow still applies. Until confirmed, affected processes carry an
-`issue` so they surface in the register rather than going out wrong.
+> The CRM issues a **request ID** and offers to send it to the customer by SMS
+> or email. **SMS is the default.**
+
+So a lodgement step's `completionTrigger` becomes *"Request logged in the CRM
+and the request ID sent to the customer by SMS"*, and its `script` covers
+confirming the customer's mobile number rather than reading out a reference.
+Any step that captures contact details now needs the mobile number treated as
+required, not optional — that is a real change to the entry steps, not a
+rename.
+
+Still to confirm: whether the keyword-driven lodgement flow carried over from
+Merit. Until answered, affected processes carry an `issue` so they surface in
+the register rather than going out wrong.
+
+**Cleanaway Live Collections → Echo.** A single reference, and a name change
+only. Critically, this must **not** be applied to the other 26 uses of
+"Cleanaway" — see §6.6.
 
 ---
 
@@ -551,8 +596,12 @@ before they are shown to anyone.
 
 ## 14. Remaining open questions
 
-1. Does the CRM issue a customer-facing reference number equivalent to the
-   Merit request ID? Affects the `completionTrigger` and `script` on every
+1. Does the keyword-driven lodgement flow carry over from Merit to the CRM, or
+   does the CRM categorise requests differently? Affects the `sop` on every
    lodgement step.
-2. Are there other retired systems or terms besides Merit in the current
-   content?
+2. Are there further retired systems or terms beyond Merit and Cleanaway Live
+   Collections? Two have surfaced in conversation rather than by audit, which
+   suggests there are more.
+3. Does the SMS default change anything upstream — is a mobile number now
+   mandatory at the entry step, and what is the fallback when a customer has
+   no mobile?
