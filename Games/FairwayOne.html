@@ -1,0 +1,1539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="Fairway One - a single hole of 3D golf, played with a gamepad, a keyboard or a thumb.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fairway One">
+<title>Fairway One</title>
+<style>
+  :root {
+    --panel: rgba(12, 24, 20, 0.74);
+    --panel-soft: rgba(12, 24, 20, 0.5);
+    --edge: rgba(255, 255, 255, 0.16);
+    --accent: #ffd23f;
+    --text: #f2f7f3;
+    --muted: #9fb4a6;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #7fb9dc;
+    font-family: ui-rounded, "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    color: var(--text);
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    border-radius: 14px;
+    padding: 9px 13px;
+    backdrop-filter: blur(6px);
+  }
+
+  #hud {
+    position: fixed; inset: 0;
+    padding: calc(10px + env(safe-area-inset-top)) 14px 14px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    pointer-events: none; gap: 10px;
+  }
+  #left { display: flex; flex-direction: column; gap: 8px; }
+  #right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+
+  .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--muted); }
+  .big { font-size: clamp(20px, 4vw, 30px); font-weight: 700; line-height: 1.05; }
+  .mid { font-size: clamp(13px, 2.3vw, 17px); font-weight: 600; }
+  #dist { color: var(--accent); }
+
+  .tools { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; pointer-events: auto; }
+  .tools button {
+    font: inherit; font-size: 11px; color: var(--text);
+    background: var(--panel-soft); border: 1px solid var(--edge);
+    border-radius: 999px; padding: 6px 12px; cursor: pointer; white-space: nowrap;
+  }
+  .tools button[hidden] { display: none; }
+  #fullBtn { background: rgba(255, 210, 63, 0.18); border-color: rgba(255, 210, 63, 0.5); }
+
+  /* the swing meter, up the left of the screen where it does not cover the shot */
+  #meterWrap {
+    position: fixed; left: 16px; bottom: 96px;
+    width: 26px; height: 190px;
+    border-radius: 14px; border: 1px solid var(--edge);
+    background: var(--panel); overflow: hidden;
+    display: none; pointer-events: none;
+  }
+  #meterWrap.show { display: block; }
+  #meterFill { position: absolute; left: 0; right: 0; bottom: 0; height: 0%; background: #7fd66b; }
+  #meterWrap::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0;
+    height: 2px; background: var(--accent);
+  }
+
+  #msg {
+    position: fixed; left: 50%; top: 18%; transform: translateX(-50%);
+    font-size: clamp(15px, 3vw, 22px); font-weight: 700;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+    pointer-events: none; text-align: center;
+  }
+  #prompt {
+    position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    font-size: clamp(11px, 2.2vw, 14px); color: var(--text);
+    background: var(--panel-soft); border: 1px solid var(--edge);
+    border-radius: 999px; padding: 7px 16px; white-space: nowrap;
+    pointer-events: none;
+  }
+
+  /* thumb controls, for playing it on a phone */
+  #touch {
+    position: fixed; right: 14px; bottom: calc(56px + env(safe-area-inset-bottom));
+    display: flex; gap: 8px; align-items: center; pointer-events: auto;
+  }
+  #touch button {
+    font: inherit; font-weight: 700; color: #0c1814;
+    background: var(--accent); border: none; border-radius: 999px;
+    padding: 14px 22px; font-size: 15px; cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  }
+  #touch .small {
+    background: var(--panel); color: var(--text); border: 1px solid var(--edge);
+    padding: 12px 14px; font-size: 13px; font-weight: 600;
+  }
+
+  #card {
+    position: fixed; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(6, 14, 11, 0.55); backdrop-filter: blur(3px);
+  }
+  #card.show { display: flex; }
+  #cardInner {
+    background: var(--panel); border: 1px solid var(--edge);
+    border-radius: 20px; padding: 26px 34px; text-align: center;
+    max-width: 82vw;
+  }
+  #cardTitle { font-size: clamp(26px, 6vw, 42px); font-weight: 800; color: var(--accent); }
+  #cardBody { margin-top: 10px; font-size: clamp(13px, 2.6vw, 17px); line-height: 1.6; }
+  .soft { color: var(--muted); }
+
+  @media (max-width: 560px) {
+    #meterWrap { height: 150px; bottom: 120px; }
+    #touch button { padding: 12px 18px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+
+<div id="hud">
+  <div id="left">
+    <div class="panel">
+      <div class="label">To the pin</div>
+      <div class="big" id="dist">—</div>
+      <div class="mid" id="lie">—</div>
+    </div>
+    <div class="panel">
+      <div class="label">Wind</div>
+      <div class="mid" id="wind">—</div>
+    </div>
+  </div>
+  <div id="right">
+    <div class="panel" style="text-align:right">
+      <div class="label">Club</div>
+      <div class="big" id="club">—</div>
+      <div class="mid" id="shots">—</div>
+    </div>
+    <div class="tools">
+      <button id="fullBtn" type="button" hidden>Full screen</button>
+      <button id="resetBtn" type="button">New hole</button>
+    </div>
+  </div>
+</div>
+
+<div id="meterWrap"><div id="meterFill"></div></div>
+<div id="msg"></div>
+<div id="prompt"></div>
+
+<div id="touch">
+  <button class="small" id="clubDownBtn" type="button">&lt;</button>
+  <button class="small" id="clubUpBtn" type="button">&gt;</button>
+  <button class="small" id="cancelBtn" type="button">Back</button>
+  <button id="hitBtn" type="button">Swing</button>
+</div>
+
+<div id="card"><div id="cardInner">
+  <div id="cardTitle"></div>
+  <div id="cardBody"></div>
+</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ====================== FAIRWAY ONE CORE START ====================== */
+/* One hole of golf: the ground, the ball and the rules. Nothing in here
+   knows about three.js or the DOM, so it can be run and checked headlessly -
+   which matters, because a golf ball's flight is the whole game and it is
+   very easy to make one that looks plausible and carries 600 metres. */
+
+/* ---------------------------------------------------------------- the hole */
+
+/* The centreline, tee to pin. Everything about the hole - where the fairway
+   is, which way it doglegs, how far you have left - is measured against it. */
+var SPINE = [
+  { x: 0, z: 0 },
+  { x: 120, z: 0 },
+  { x: 215, z: 42 },
+  { x: 272, z: 62 }
+];
+var TEE = { x: 0, z: 0 };
+var PIN = { x: 272, z: 62 };
+var PAR = 4;
+
+var FAIRWAY_HALF = 21;     /* how wide the cut fairway is either side */
+var GREEN_RADIUS = 16;
+var CUP_RADIUS = 0.108;    /* a real hole is 108mm across */
+
+var BUNKERS = [
+  { x: 246, z: 46, r: 11 },
+  { x: 288, z: 79, r: 9 },
+  { x: 150, z: -14, r: 8 }
+];
+/* the pond on the inside of the dogleg, which is the whole question off the tee */
+var POND = { x: 186, z: 22, rx: 34, rz: 26 };
+var WATER_LEVEL = -1.4;
+
+/* ------------------------------------------------------------ the ground */
+
+/* Distance from a point to the centreline, and how far along it that point
+   is. Used for the fairway cut, for the 'yards to the pin' readout, and for
+   dropping a ball back in play after a splash. */
+function alongSpine(x, z) {
+  var best = { dist: 1e9, travel: 0, t: 0, seg: 0 };
+  var run = 0;
+  for (var i = 0; i < SPINE.length - 1; i++) {
+    var a = SPINE[i], b = SPINE[i + 1];
+    var dx = b.x - a.x, dz = b.z - a.z;
+    var len2 = dx * dx + dz * dz;
+    var t = len2 ? ((x - a.x) * dx + (z - a.z) * dz) / len2 : 0;
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+    var px = a.x + dx * t, pz = a.z + dz * t;
+    var d = Math.sqrt((x - px) * (x - px) + (z - pz) * (z - pz));
+    if (d < best.dist) {
+      best.dist = d;
+      best.travel = run + Math.sqrt(len2) * t;
+      best.t = t;
+      best.seg = i;
+      best.px = px;
+      best.pz = pz;
+    }
+    run += Math.sqrt(len2);
+  }
+  return best;
+}
+
+function spineLength() {
+  var run = 0;
+  for (var i = 0; i < SPINE.length - 1; i++) {
+    run += Math.hypot(SPINE[i + 1].x - SPINE[i].x, SPINE[i + 1].z - SPINE[i].z);
+  }
+  return run;
+}
+
+/* A smooth 1 -> 0 ramp, used for blending every feature into the ground so
+   nothing on this course has an edge a ball can catch on. */
+function falloff(d, inner, outer) {
+  if (d <= inner) return 1;
+  if (d >= outer) return 0;
+  var t = (d - inner) / (outer - inner);
+  return 1 - t * t * (3 - 2 * t);
+}
+
+function pondDepth(x, z) {
+  var dx = (x - POND.x) / POND.rx, dz = (z - POND.z) / POND.rz;
+  var d = Math.sqrt(dx * dx + dz * dz);
+  return falloff(d, 0.45, 1.05);
+}
+
+function bunkerDepth(x, z) {
+  var deepest = 0;
+  for (var i = 0; i < BUNKERS.length; i++) {
+    var b = BUNKERS[i];
+    var d = Math.hypot(x - b.x, z - b.z) / b.r;
+    var f = falloff(d, 0.3, 1.0);
+    if (f > deepest) deepest = f;
+  }
+  return deepest;
+}
+
+/* The height of the ground anywhere on the course. One function, used by the
+   renderer to build the mesh and by the physics to bounce the ball off it, so
+   the two can never disagree about where the ground is. */
+function heightAt(x, z) {
+  /* rolling country underneath everything */
+  var h = 2.1 * Math.sin(x * 0.0125) * Math.cos(z * 0.019)
+        + 1.3 * Math.sin(x * 0.031 + 1.7)
+        + 0.9 * Math.cos(z * 0.043 - 0.6);
+
+  /* the fairway is mown into that, flatter than the country around it */
+  var s = alongSpine(x, z);
+  var cut = falloff(s.dist, FAIRWAY_HALF, FAIRWAY_HALF + 26);
+  h *= (1 - 0.55 * cut);
+
+  /* the green: a shelf, tilted back to front so putts run downhill toward
+     the player, with a saucer around the cup so a good putt falls in */
+  var gd = Math.hypot(x - PIN.x, z - PIN.z);
+  var onGreen = falloff(gd, GREEN_RADIUS * 0.72, GREEN_RADIUS + 5);
+  if (onGreen > 0) {
+    var shelf = 3.4 + (x - PIN.x) * 0.020 + (z - PIN.z) * 0.012;
+    h = h * (1 - onGreen) + shelf * onGreen;
+    /* a shallow saucer around the cup, so a putt on a decent line that is
+       running out of steam still falls in rather than sliding by */
+    h -= 0.55 * falloff(gd, 0, GREEN_RADIUS * 0.60) * onGreen;
+  }
+
+  /* bunkers are dug out of whatever is there, ponds rather deeper */
+  h -= 2.3 * bunkerDepth(x, z);
+  h -= 6.5 * pondDepth(x, z);
+
+  /* and a flat tee to stand on */
+  var td = Math.hypot(x - TEE.x, z - TEE.z);
+  var tee = falloff(td, 6, 13);
+  h = h * (1 - tee) + 0.8 * tee;
+  return h;
+}
+
+/* The way the ground leans, worked out from the height either side. This is
+   what makes a putt break and a ball trickle off a slope. */
+function normalAt(x, z) {
+  var e = 0.6;
+  var hx = heightAt(x + e, z) - heightAt(x - e, z);
+  var hz = heightAt(x, z + e) - heightAt(x, z - e);
+  var nx = -hx / (2 * e), nz = -hz / (2 * e);
+  var len = Math.sqrt(nx * nx + 1 + nz * nz);
+  return { x: nx / len, y: 1 / len, z: nz / len };
+}
+
+/* ---------------------------------------------------------------- lies */
+
+/* Every lie, and what it does to a ball.
+
+   roll   how hard it slows a ball already on the ground, as a fraction of g
+   bounce how much of the bounce it gives back
+   skid   how much of the ball's speed ALONG the ground survives an impact -
+          this is the number that decides how far a drive runs out, far more
+          than rolling friction does. A drive lands at thirty metres a second
+          and runs about twenty; that is three or four hard bounces each
+          keeping a third, not a long gentle roll.
+   grab   how much of a swing actually reaches the ball out of that lie */
+var SURFACES = {
+  tee:     { name: 'Tee',        roll: 0.10, bounce: 0.32, skid: 0.35, grab: 1.00 },
+  fairway: { name: 'Fairway',    roll: 0.09, bounce: 0.32, skid: 0.35, grab: 1.00 },
+  green:   { name: 'Green',      roll: 0.050, bounce: 0.26, skid: 0.34, grab: 1.00 },
+  rough:   { name: 'Rough',      roll: 0.45, bounce: 0.14, skid: 0.18, grab: 0.78 },
+  deep:    { name: 'Deep rough', roll: 1.00, bounce: 0.07, skid: 0.08, grab: 0.52 },
+  bunker:  { name: 'Bunker',     roll: 1.80, bounce: 0.04, skid: 0.05, grab: 0.42 },
+  water:   { name: 'Water',      roll: 3.00, bounce: 0.00, skid: 0.00, grab: 0.00 }
+};
+
+/* What you are standing on. The grab figure is how much of a swing actually
+   reaches the ball - out of the sand or the deep stuff you get less of it,
+   which is the whole reason to keep the ball on the short grass. */
+function surfaceAt(x, z) {
+  if (pondDepth(x, z) > 0.55) return 'water';
+  if (bunkerDepth(x, z) > 0.45) return 'bunker';
+  if (Math.hypot(x - PIN.x, z - PIN.z) < GREEN_RADIUS) return 'green';
+  if (Math.hypot(x - TEE.x, z - TEE.z) < 7) return 'tee';
+  var s = alongSpine(x, z);
+  if (s.dist < FAIRWAY_HALF) return 'fairway';
+  if (s.dist < FAIRWAY_HALF + 30) return 'rough';
+  return 'deep';
+}
+
+/* ---------------------------------------------------------------- clubs */
+
+/* Launch speed in metres per second and loft in degrees. The carries these
+   give are checked in the tests, because a club table is the easiest thing in
+   a golf game to get quietly and badly wrong. */
+var CLUBS = [
+  { id: 'driver', name: 'Driver',  speed: 56, loft: 11, curve: 1.00, spin: 1.00 },
+  { id: 'wood',   name: '3 Wood',  speed: 49.3, loft: 14, curve: 0.85, spin: 1.15 },
+  { id: 'iron5',  name: '5 Iron',  speed: 40.5, loft: 21, curve: 0.70, spin: 1.45 },
+  { id: 'iron8',  name: '8 Iron',  speed: 34, loft: 30, curve: 0.55, spin: 1.80 },
+  { id: 'wedge',  name: 'Wedge',   speed: 29.4, loft: 46, curve: 0.40, spin: 2.30 },
+  { id: 'putter', name: 'Putter',  speed: 4.6, loft: 0, curve: 0.10, spin: 0 }
+];
+function clubById(id) {
+  for (var i = 0; i < CLUBS.length; i++) if (CLUBS[i].id === id) return CLUBS[i];
+  return CLUBS[0];
+}
+
+/* what a sensible player would reach for, given the distance left and the lie */
+function suggestClub(distance, surface) {
+  if (surface === 'green' && distance < GREEN_RADIUS) return 'putter';
+  if (surface === 'bunker') return distance > 90 ? 'iron8' : 'wedge';
+  var reach = [
+    ['wedge', 82], ['iron8', 128], ['iron5', 160], ['wood', 198], ['driver', 1e9]
+  ];
+  for (var i = 0; i < reach.length; i++) if (distance <= reach[i][1]) return reach[i][0];
+  return 'driver';
+}
+
+/* ------------------------------------------------------------- the flight */
+
+var GRAVITY = 9.81;
+/* Quadratic drag, and a lift term standing in for backspin. The lift is what
+   makes a golf ball a golf ball: without it a struck drive falls out of the
+   sky at about 150 metres, and every club carries roughly the same distance
+   because loft stops buying you anything. It has to act ACROSS the line of
+   flight rather than straight up, or it is simply free energy and a 3 wood
+   ends up out-driving the driver, which is what the first version did. */
+var DRAG = 0.0026;
+var LIFT = 0.0042;
+var SPIN_DECAY = 0.11;     /* backspin bleeds off through the flight */
+var BALL_STOP = 0.30;      /* below this it has stopped, in m/s */
+var HOLE_SPEED = 1.9;      /* faster than this over the cup and it lips out */
+var ROLL_SLOPE = 5 / 7;    /* a rolling sphere only gets this much of gravity */
+
+/* What leaves the club face: how hard, how high, and how far off line. */
+function launchVelocity(club, power, aimYaw, face) {
+  var c = typeof club === 'string' ? clubById(club) : club;
+  var speed = c.speed * power;
+  var loft = c.loft * Math.PI / 180;
+  /* a mishit starts the ball offline as well as bending it in the air */
+  var yaw = aimYaw + face * 0.07 * c.curve;
+  var flat = speed * Math.cos(loft);
+  return {
+    x: flat * Math.cos(yaw),
+    y: speed * Math.sin(loft),
+    z: flat * Math.sin(yaw)
+  };
+}
+
+function Ball() {
+  this.pos = { x: TEE.x, y: heightAt(TEE.x, TEE.z), z: TEE.z };
+  this.vel = { x: 0, y: 0, z: 0 };
+  this.bend = 0;          /* sideways bend left in the shot */
+  this.backspin = 0;
+  this.rolling = false;
+  this.moving = false;
+  this.holed = false;
+  this.splash = false;
+  this.peak = 0;
+  this.carry = 0;
+  this.launchedFrom = { x: TEE.x, z: TEE.z };
+}
+
+Ball.prototype.strike = function (club, power, aimYaw, face, windX, windZ) {
+  var c = typeof club === 'string' ? clubById(club) : club;
+  this.vel = launchVelocity(c, power, aimYaw, face);
+  this.bend = face * c.curve;
+  this.backspin = c.spin;
+  this.moving = true;
+  this.holed = false;
+  this.splash = false;
+  this.peak = this.pos.y;
+  this.carry = 0;
+  this.launchedFrom = { x: this.pos.x, z: this.pos.z };
+  this.wind = { x: windX || 0, z: windZ || 0 };
+  /* a putt never leaves the ground; everything else starts in the air */
+  this.rolling = c.loft === 0;
+  this.pos.y = heightAt(this.pos.x, this.pos.z) + (this.rolling ? 0 : 0.02);
+  return this;
+};
+
+/* Through the air: drag against the wind, lift across the line of flight,
+   gravity, and whatever bend was put on it at impact. */
+Ball.prototype.fly = function (dt) {
+  var v = this.vel;
+  var rx = v.x - this.wind.x, ry = v.y, rz = v.z - this.wind.z;
+  var rel = Math.sqrt(rx * rx + ry * ry + rz * rz) || 1e-6;
+  v.x -= DRAG * rel * rx * dt;
+  v.y -= DRAG * rel * ry * dt;
+  v.z -= DRAG * rel * rz * dt;
+
+  /* Lift is perpendicular to the way the ball is actually travelling, in the
+     vertical plane, which is what makes it hold its line on the way up and
+     drop steeply on the way down instead of skating on forever. */
+  var sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) || 1e-6;
+  var flat = Math.sqrt(v.x * v.x + v.z * v.z) || 1e-6;
+  var mag = LIFT * this.backspin * sp * sp;
+  v.x += mag * (-v.y * v.x / flat) / sp * dt;
+  v.y += mag * (flat) / sp * dt;
+  v.z += mag * (-v.y * v.z / flat) / sp * dt;
+  this.backspin *= Math.exp(-SPIN_DECAY * dt);
+
+  v.y -= GRAVITY * dt;
+
+  /* and the shot bends the way it was struck, sideways across the flight */
+  var bend = this.bend * 0.30 * dt;
+  var nx = -v.z / flat, nz = v.x / flat;
+  v.x += nx * bend * flat * 0.06;
+  v.z += nz * bend * flat * 0.06;
+};
+
+/* On the ground: the slope pulls it along, the surface slows it down. A
+   rolling sphere only feels five sevenths of gravity down a slope, the rest
+   goes into spinning it up. */
+Ball.prototype.roll = function (dt) {
+  var p = this.pos, v = this.vel;
+  var n = normalAt(p.x, p.z);
+  var sfc = SURFACES[surfaceAt(p.x, p.z)];
+  v.x += -n.x * GRAVITY * ROLL_SLOPE * dt;
+  v.z += -n.z * GRAVITY * ROLL_SLOPE * dt;
+  var sp = Math.hypot(v.x, v.z);
+  var drop = sfc.roll * GRAVITY * dt;
+  if (sp <= drop) { v.x = 0; v.z = 0; }
+  else { var k = (sp - drop) / sp; v.x *= k; v.z *= k; }
+  v.y = 0;
+  p.x += v.x * dt;
+  p.z += v.z * dt;
+  p.y = heightAt(p.x, p.z);
+};
+
+Ball.prototype.step = function (dt) {
+  if (!this.moving || this.holed) return this;
+  var p = this.pos, v = this.vel;
+
+  if (this.rolling) {
+    this.roll(dt);
+  } else {
+    this.fly(dt);
+    p.x += v.x * dt;
+    p.y += v.y * dt;
+    p.z += v.z * dt;
+    if (p.y > this.peak) this.peak = p.y;
+
+    var ground = heightAt(p.x, p.z);
+    if (p.y <= ground) {
+      if (!this.carry) {
+        this.carry = Math.hypot(p.x - this.launchedFrom.x, p.z - this.launchedFrom.z);
+      }
+      p.y = ground;
+      var lie = surfaceAt(p.x, p.z);
+      if (lie === 'water') { this.moving = false; this.splash = true; return this; }
+      var sfc = SURFACES[lie];
+      var n = normalAt(p.x, p.z);
+      var into = v.x * n.x + v.y * n.y + v.z * n.z;
+      if (into < 0) {
+        v.x -= (1 + sfc.bounce) * into * n.x;
+        v.y -= (1 + sfc.bounce) * into * n.y;
+        v.z -= (1 + sfc.bounce) * into * n.z;
+        /* the turf grabs at whatever is running along it, and heavy backspin
+           checks the ball up rather than letting it release */
+        var skid = sfc.skid * (1 - Math.min(0.5, this.backspin * 0.12));
+        v.x *= skid; v.z *= skid;
+        this.bend *= 0.35;
+        this.backspin *= 0.4;
+      }
+      if (v.y < 1.0) { this.rolling = true; v.y = 0; }
+    }
+  }
+
+  /* the cup. Too quick over it and it horseshoes out, which is golf. */
+  var cd = Math.hypot(p.x - PIN.x, p.z - PIN.z);
+  if (cd < 0.34 && this.rolling) {
+    var sp2 = Math.hypot(v.x, v.z);
+    if (sp2 < HOLE_SPEED) {
+      this.holed = true;
+      this.moving = false;
+      p.x = PIN.x; p.z = PIN.z;
+      p.y = heightAt(PIN.x, PIN.z) - 0.12;
+      return this;
+    }
+    var away = Math.atan2(p.z - PIN.z, p.x - PIN.x);
+    v.x = Math.cos(away) * sp2 * 0.5;
+    v.z = Math.sin(away) * sp2 * 0.5;
+  }
+
+  if (this.rolling && Math.hypot(v.x, v.z) < BALL_STOP) {
+    this.moving = false;
+    v.x = 0; v.y = 0; v.z = 0;
+    if (!this.carry) this.carry = Math.hypot(p.x - this.launchedFrom.x, p.z - this.launchedFrom.z);
+  }
+  return this;
+};
+
+/* Where a shot would actually finish, run through the same physics that will
+   run it for real. The aiming line is not a guess or a parabola drawn to look
+   about right - it is the shot, played ahead of time. */
+function predictShot(fromX, fromZ, clubId, power, aimYaw, face, wind, grab) {
+  var ghost = new Ball();
+  ghost.pos = { x: fromX, y: heightAt(fromX, fromZ), z: fromZ };
+  ghost.strike(clubId, Math.max(0.05, power) * (grab === undefined ? 1 : grab),
+    aimYaw, face, wind ? wind.x : 0, wind ? wind.z : 0);
+  var path = [{ x: ghost.pos.x, y: ghost.pos.y, z: ghost.pos.z }];
+  var dt = 1 / 90, t = 0, land = null;
+  while (ghost.moving && t < 40) {
+    ghost.step(dt); t += dt;
+    if (!land && ghost.carry) land = { x: ghost.pos.x, y: ghost.pos.y, z: ghost.pos.z };
+    if (path.length < 400) path.push({ x: ghost.pos.x, y: ghost.pos.y, z: ghost.pos.z });
+  }
+  return {
+    path: path,
+    land: land || { x: ghost.pos.x, y: ghost.pos.y, z: ghost.pos.z },
+    rest: { x: ghost.pos.x, y: ghost.pos.y, z: ghost.pos.z },
+    carry: ghost.carry,
+    holed: ghost.holed,
+    splash: ghost.splash,
+    lie: surfaceAt(ghost.pos.x, ghost.pos.z)
+  };
+}
+
+/* --------------------------------------------------------------- the round */
+
+function Hole(seed) {
+  this.ball = new Ball();
+  this.strokes = 0;
+  this.penalties = 0;
+  this.done = false;
+  this.history = [];
+  var r = ((seed === undefined ? 7 : seed) * 9301 + 49297) % 233280 / 233280;
+  var dir = r * Math.PI * 2;
+  var strength = 1.5 + r * 4.5;
+  this.wind = { x: Math.cos(dir) * strength, z: Math.sin(dir) * strength };
+}
+
+Hole.prototype.lie = function () { return surfaceAt(this.ball.pos.x, this.ball.pos.z); };
+
+Hole.prototype.toPin = function () {
+  return Math.hypot(this.ball.pos.x - PIN.x, this.ball.pos.z - PIN.z);
+};
+
+/* How much of the swing actually gets to the ball from where it is lying. */
+Hole.prototype.grab = function () { return SURFACES[this.lie()].grab; };
+
+Hole.prototype.swing = function (clubId, power, aimYaw, face) {
+  if (this.done) return null;
+  this.strokes++;
+  var eff = Math.max(0.05, power) * this.grab();
+  this.history.push({
+    from: { x: this.ball.pos.x, z: this.ball.pos.z },
+    club: clubId, power: power, lie: this.lie()
+  });
+  this.ball.strike(clubId, eff, aimYaw, face, this.wind.x, this.wind.z);
+  return this.ball;
+};
+
+/* Run the ball until it comes to rest, and deal with what happened to it.
+   Returns how long it took, so nothing can loop forever if a ball finds a
+   corner of the course that never settles. */
+Hole.prototype.settle = function (dt, maxSeconds) {
+  var t = 0;
+  var limit = maxSeconds || 45;
+  while (this.ball.moving && t < limit) { this.ball.step(dt); t += dt; }
+  this.finishShot();
+  return t;
+};
+
+Hole.prototype.finishShot = function () {
+  var b = this.ball;
+  b.moving = false;
+  if (b.holed) { this.done = true; return 'holed'; }
+  if (b.splash) {
+    /* a stroke back, and dropped where it last crossed dry land on the line
+       it came in on - the same rule a real course plays */
+    this.penalties++;
+    var from = b.launchedFrom;
+    var drop = this.dropPoint(from, b.pos);
+    b.pos.x = drop.x; b.pos.z = drop.z;
+    b.pos.y = heightAt(drop.x, drop.z);
+    b.vel = { x: 0, y: 0, z: 0 };
+    b.splash = false;
+    return 'water';
+  }
+  b.pos.y = heightAt(b.pos.x, b.pos.z);
+  return 'rest';
+};
+
+/* Walk back along the line the ball came in on until the ground is dry and
+   playable, then step a little further back for good measure. */
+Hole.prototype.dropPoint = function (from, wet) {
+  var steps = 240;
+  for (var i = 1; i <= steps; i++) {
+    var t = i / steps;
+    var x = wet.x + (from.x - wet.x) * t;
+    var z = wet.z + (from.z - wet.z) * t;
+    if (surfaceAt(x, z) !== 'water' && pondDepth(x, z) < 0.15) {
+      var back = Math.min(1, t + 0.04);
+      return {
+        x: wet.x + (from.x - wet.x) * back,
+        z: wet.z + (from.z - wet.z) * back
+      };
+    }
+  }
+  return { x: from.x, z: from.z };
+};
+
+Hole.prototype.score = function () {
+  var total = this.strokes + this.penalties;
+  var names = { '-3': 'Albatross', '-2': 'Eagle', '-1': 'Birdie', '0': 'Par',
+                '1': 'Bogey', '2': 'Double bogey', '3': 'Triple bogey' };
+  var rel = total - PAR;
+  return {
+    strokes: this.strokes, penalties: this.penalties, total: total,
+    par: PAR, relative: rel,
+    name: names[String(rel)] || (rel > 0 ? '+' + rel : String(rel))
+  };
+};
+
+/* ---------------------------------------------------------- the swing meter */
+
+/* The swing is one number for how hard and one for how square the face was,
+   whichever way you happen to be playing it. The stick reads them straight
+   off how far back you pulled and how far off line you were coming through;
+   the keyboard runs the old three-press meter. Both land here. */
+function SwingMeter() {
+  this.reset();
+}
+SwingMeter.prototype.reset = function () {
+  this.phase = 'ready';    /* ready -> backswing -> downswing -> struck */
+  this.value = 0;
+  this.dir = 1;
+  this.power = 0;
+  this.face = 0;
+};
+SwingMeter.prototype.tap = function () {
+  if (this.phase === 'ready') { this.phase = 'backswing'; this.value = 0; this.dir = 1; }
+  else if (this.phase === 'backswing') { this.power = this.value; this.phase = 'downswing'; this.dir = -1; }
+  else if (this.phase === 'downswing') {
+    /* struck at the bottom of the swing: how far past the mark you were is
+       how open or shut the face was */
+    this.face = Math.max(-1, Math.min(1, this.value * 2));
+    this.phase = 'struck';
+  }
+  return this.phase;
+};
+SwingMeter.prototype.step = function (dt, rate) {
+  var r = rate || 1.35;
+  if (this.phase === 'backswing') {
+    this.value += this.dir * r * dt;
+    if (this.value >= 1) { this.value = 1; this.dir = -1; }
+    else if (this.value <= 0 && this.dir < 0) { this.value = 0; this.dir = 1; }
+  } else if (this.phase === 'downswing') {
+    this.value -= r * dt;
+    /* let it run past the bottom so a late press is a real miss */
+    if (this.value < -0.5) { this.face = -1; this.phase = 'struck'; }
+  }
+  return this.phase;
+};
+
+/* The stick swing: pull back to load, push through to hit. Returns a struck
+   swing when the stick crosses back through the middle, and nothing until
+   then. */
+function StickSwing() {
+  this.loaded = 0;
+  this.armed = false;
+  this.offset = 0;
+}
+StickSwing.prototype.reset = function () { this.loaded = 0; this.armed = false; this.offset = 0; };
+StickSwing.prototype.update = function (sx, sy) {
+  /* sy is positive when the stick is pulled back toward the player */
+  if (sy > 0.25) {
+    this.armed = true;
+    if (sy > this.loaded) { this.loaded = Math.min(1, sy); this.offset = sx; }
+    return null;
+  }
+  if (this.armed && this.loaded > 0.2 && sy < -0.15) {
+    var hit = {
+      power: Math.min(1, this.loaded * 1.05),
+      /* how far off line the stick was coming through, against how far back
+         it went - a big backswing punishes a small wobble less */
+      face: Math.max(-1, Math.min(1, (sx - this.offset) * 1.6))
+    };
+    this.reset();
+    return hit;
+  }
+  return null;
+};
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    SPINE: SPINE, TEE: TEE, PIN: PIN, PAR: PAR,
+    FAIRWAY_HALF: FAIRWAY_HALF, GREEN_RADIUS: GREEN_RADIUS, CUP_RADIUS: CUP_RADIUS,
+    BUNKERS: BUNKERS, POND: POND, WATER_LEVEL: WATER_LEVEL,
+    heightAt: heightAt, normalAt: normalAt, surfaceAt: surfaceAt,
+    alongSpine: alongSpine, spineLength: spineLength, falloff: falloff,
+    pondDepth: pondDepth, bunkerDepth: bunkerDepth,
+    SURFACES: SURFACES, CLUBS: CLUBS, clubById: clubById, suggestClub: suggestClub,
+    GRAVITY: GRAVITY, DRAG: DRAG, LIFT: LIFT, BALL_STOP: BALL_STOP,
+    SPIN_DECAY: SPIN_DECAY, ROLL_SLOPE: ROLL_SLOPE,
+    HOLE_SPEED: HOLE_SPEED, launchVelocity: launchVelocity,
+    Ball: Ball, Hole: Hole, SwingMeter: SwingMeter, StickSwing: StickSwing,
+    predictShot: predictShot
+  };
+}
+/* ======================= FAIRWAY ONE CORE END ======================= */
+</script>
+<script>
+/* The parts that need a screen: the course you can see, the golfer you walk
+   about, the camera, and whatever you are holding to play it with. */
+
+var scene, camera, renderer, sun;
+var terrain, water, flag, ballMesh, golfer, aimLine, landMark, treesGroup;
+var hole, ui = {};
+var phase = 'walk';        /* walk | aim | swing | flight | holed */
+var clubIndex = 0;
+var aimYaw = 0;
+var camYaw = 0, camPitch = 0.22, camDist = 12;
+var meter = null, stick = null;
+var walkPhase = 0, swingAnim = 0, swingFace = 0;
+var autoWalk = null, message = '', messageUntil = 0;
+var lastTime = 0, predicted = null, predictDirty = true;
+var padIndex = null, padWas = {};
+var soundOn = true, audio = null;
+
+var WALK_SPEED = 9;
+var JOG_TIME = 2.2;        /* how long it takes to get to your ball, whatever the distance */
+
+/* ------------------------------------------------------------- the ground */
+
+/* Grass, sand and water, straight off the height function the physics uses.
+   Built as one mesh with a colour baked into every corner, which is enough to
+   read the hole at a glance - you can see the fairway, the rough beyond it,
+   the bunkers and the water without a single texture. */
+function surfaceColour(x, z, h) {
+  var lie = surfaceAt(x, z);
+  var shade = 0.86 + 0.14 * Math.sin(x * 0.21) * Math.cos(z * 0.19);
+  var c;
+  if (lie === 'green') c = [0.32, 0.72, 0.29];
+  else if (lie === 'fairway' || lie === 'tee') c = [0.38, 0.65, 0.26];
+  else if (lie === 'bunker') c = [0.90, 0.83, 0.62];
+  else if (lie === 'water') c = [0.14, 0.34, 0.42];
+  else if (lie === 'rough') c = [0.27, 0.48, 0.20];
+  else c = [0.21, 0.38, 0.16];
+  /* a hint of relief so the slopes read */
+  var n = normalAt(x, z);
+  var lit = 0.72 + 0.4 * Math.max(0, n.x * 0.4 + n.y * 0.8 + n.z * 0.2);
+  return [c[0] * shade * lit, c[1] * shade * lit, c[2] * shade * lit];
+}
+
+function buildTerrain() {
+  var x0 = -70, x1 = 370, z0 = -130, z1 = 170;
+  var step = 3.0;
+  var nx = Math.round((x1 - x0) / step) + 1;
+  var nz = Math.round((z1 - z0) / step) + 1;
+  var pos = new Float32Array(nx * nz * 3);
+  var nor = new Float32Array(nx * nz * 3);
+  var col = new Float32Array(nx * nz * 3);
+  var i = 0;
+  for (var iz = 0; iz < nz; iz++) {
+    for (var ix = 0; ix < nx; ix++) {
+      var x = x0 + ix * step, z = z0 + iz * step;
+      var h = heightAt(x, z);
+      pos[i * 3] = x; pos[i * 3 + 1] = h; pos[i * 3 + 2] = z;
+      var n = normalAt(x, z);
+      nor[i * 3] = n.x; nor[i * 3 + 1] = n.y; nor[i * 3 + 2] = n.z;
+      var c = surfaceColour(x, z, h);
+      col[i * 3] = c[0]; col[i * 3 + 1] = c[1]; col[i * 3 + 2] = c[2];
+      i++;
+    }
+  }
+  var tri = [];
+  for (var jz = 0; jz < nz - 1; jz++) {
+    for (var jx = 0; jx < nx - 1; jx++) {
+      var a = jz * nx + jx, b = a + 1, c2 = a + nx, d = c2 + 1;
+      tri.push(a, c2, b, b, c2, d);
+    }
+  }
+  var geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(tri);
+  var mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  terrain = new THREE.Mesh(geo, mat);
+  terrain.receiveShadow = true;
+  scene.add(terrain);
+}
+
+function buildWater() {
+  var geo = new THREE.PlaneGeometry(POND.rx * 2.4, POND.rz * 2.4);
+  var mat = new THREE.MeshLambertMaterial({
+    color: 0x2f6f86, transparent: true, opacity: 0.82
+  });
+  water = new THREE.Mesh(geo, mat);
+  water.rotation.x = -Math.PI / 2;
+  water.position.set(POND.x, WATER_LEVEL, POND.z);
+  scene.add(water);
+}
+
+function buildFlag() {
+  flag = new THREE.Group();
+  var base = heightAt(PIN.x, PIN.z);
+  var cup = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.16, 0.16, 0.3, 14),
+    new THREE.MeshLambertMaterial({ color: 0x14181c })
+  );
+  cup.position.set(0, 0.02, 0);
+  flag.add(cup);
+  var pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.035, 0.035, 2.6, 6),
+    new THREE.MeshLambertMaterial({ color: 0xf4f4f0 })
+  );
+  pole.position.set(0, 1.3, 0);
+  flag.add(pole);
+  var cloth = new THREE.Mesh(
+    new THREE.BoxGeometry(0.06, 0.45, 0.8),
+    new THREE.MeshLambertMaterial({ color: 0xe8443a })
+  );
+  cloth.position.set(0, 2.25, 0.42);
+  flag.add(cloth);
+  flag.position.set(PIN.x, base, PIN.z);
+  scene.add(flag);
+}
+
+/* A golf ball is 43mm across, which at two hundred metres is nothing at all.
+   This one is drawn a little over life size and then grown with distance, so
+   it is always at least a few pixels wide however far away it is - otherwise
+   you simply lose the ball, which is realistic and no fun whatsoever. */
+var BALL_R = 0.16;
+function buildBall() {
+  ballMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(BALL_R, 14, 10),
+    new THREE.MeshLambertMaterial({ color: 0xffffff })
+  );
+  ballMesh.castShadow = true;
+  scene.add(ballMesh);
+}
+
+function sizeBall() {
+  var d = camera.position.distanceTo(ballMesh.position);
+  var want = Math.max(1, d * 0.0075 / BALL_R);
+  ballMesh.scale.setScalar(Math.min(9, want));
+}
+
+/* A golfer, out of boxes. Enough of a person to tell which way you are
+   facing and whether you are mid swing, which is all the character has to do. */
+function buildGolfer() {
+  golfer = new THREE.Group();
+  function part(w, h, d, colour, x, y, z) {
+    var m = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshLambertMaterial({ color: colour })
+    );
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    return m;
+  }
+  golfer.legL = part(0.26, 0.85, 0.28, 0x2b3550, 0, -0.42, -0.17);
+  golfer.legR = part(0.26, 0.85, 0.28, 0x2b3550, 0, -0.42, 0.17);
+  golfer.body = new THREE.Group();
+  golfer.torso = part(0.46, 0.75, 0.64, 0xe24d3f, 0, 0.38, 0);
+  golfer.head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.21, 12, 10),
+    new THREE.MeshLambertMaterial({ color: 0xf0c9a0 })
+  );
+  golfer.head.position.set(0, 0.92, 0);
+  golfer.cap = part(0.34, 0.1, 0.36, 0x1d4e89, 0, 1.06, 0);
+  golfer.peak = part(0.22, 0.06, 0.16, 0x1d4e89, 0.2, 1.02, 0);
+  golfer.armL = part(0.18, 0.62, 0.18, 0xe24d3f, 0.06, 0.35, -0.38);
+  golfer.armR = part(0.18, 0.62, 0.18, 0xe24d3f, 0.06, 0.35, 0.38);
+  golfer.club = new THREE.Group();
+  var shaft = part(0.045, 1.15, 0.045, 0xd8d8d8, 0, -0.55, 0);
+  var head = part(0.16, 0.12, 0.3, 0x8f9499, 0.03, -1.12, 0.05);
+  golfer.club.add(shaft); golfer.club.add(head);
+  golfer.club.position.set(0.12, 0.5, 0.36);
+  golfer.body.add(golfer.torso);
+  golfer.body.add(golfer.head);
+  golfer.body.add(golfer.cap);
+  golfer.body.add(golfer.peak);
+  golfer.body.add(golfer.armL);
+  golfer.body.add(golfer.armR);
+  golfer.body.add(golfer.club);
+  golfer.add(golfer.legL);
+  golfer.add(golfer.legR);
+  golfer.add(golfer.body);
+  golfer.userData.pos = { x: TEE.x - 2, z: TEE.z };
+  scene.add(golfer);
+}
+
+/* a few trees, well off the line of play, so the eye has something to judge
+   distance against */
+function buildTrees() {
+  treesGroup = new THREE.Group();
+  for (var i = 0; i < 90; i++) {
+    var a = (i * 2.399) % (Math.PI * 2);
+    var r = 60 + ((i * 37) % 70);
+    var t = (i / 90) * spineLength();
+    var s = spineAt(t);
+    var x = s.x + Math.cos(a) * r, z = s.z + Math.sin(a) * r;
+    var d = alongSpine(x, z).dist;
+    if (d < FAIRWAY_HALF + 34) continue;
+    if (Math.hypot(x - PIN.x, z - PIN.z) < GREEN_RADIUS + 22) continue;
+    var h = heightAt(x, z);
+    if (h < WATER_LEVEL + 1) continue;
+    var scale = 0.8 + ((i * 13) % 7) * 0.12;
+    var trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.4, 3 * scale, 6),
+      new THREE.MeshLambertMaterial({ color: 0x6b4a2f })
+    );
+    trunk.position.set(x, h + 1.5 * scale, z);
+    var top = new THREE.Mesh(
+      new THREE.ConeGeometry(2.4 * scale, 6 * scale, 7),
+      new THREE.MeshLambertMaterial({ color: i % 3 ? 0x2f6b32 : 0x3a7a38 })
+    );
+    top.position.set(x, h + 5.2 * scale, z);
+    top.castShadow = true;
+    treesGroup.add(trunk);
+    treesGroup.add(top);
+  }
+  scene.add(treesGroup);
+}
+
+/* a point a given distance along the centreline, for placing scenery */
+function spineAt(travel) {
+  var run = 0;
+  for (var i = 0; i < SPINE.length - 1; i++) {
+    var a = SPINE[i], b = SPINE[i + 1];
+    var len = Math.hypot(b.x - a.x, b.z - a.z);
+    if (run + len >= travel) {
+      var t = (travel - run) / len;
+      return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+    }
+    run += len;
+  }
+  return SPINE[SPINE.length - 1];
+}
+
+/* the line the shot would take, drawn from the shot itself */
+function buildAimLine() {
+  var pos = new Float32Array(200 * 3);
+  var geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  aimLine = new THREE.Points(geo, new THREE.PointsMaterial({
+    color: 0xfff1a8, size: 0.6, sizeAttenuation: true
+  }));
+  scene.add(aimLine);
+  landMark = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.4, 1.4, 0.12, 18),
+    new THREE.MeshBasicMaterial({ color: 0xfff1a8, transparent: true, opacity: 0.55 })
+  );
+  scene.add(landMark);
+}
+
+function refreshAim() {
+  if (!predictDirty || !aimLine) return;
+  predictDirty = false;
+  var club = CLUBS[clubIndex];
+  var b = hole.ball;
+  predicted = predictShot(b.pos.x, b.pos.z, club.id, aimPower(), aimYaw, 0,
+    hole.wind, hole.grab());
+  var arr = aimLine.geometry.attributes.position.array;
+  var n = Math.min(200, predicted.path.length);
+  for (var i = 0; i < 200; i++) {
+    var p = predicted.path[Math.min(predicted.path.length - 1, Math.floor(i * predicted.path.length / n))];
+    arr[i * 3] = p.x; arr[i * 3 + 1] = p.y + 0.2; arr[i * 3 + 2] = p.z;
+  }
+  aimLine.geometry.attributes.position.needsUpdate = true;
+  landMark.position.set(predicted.land.x, heightAt(predicted.land.x, predicted.land.z) + 0.08,
+    predicted.land.z);
+}
+
+/* the aiming line is drawn for a full swing, which is what the meter is
+   measured against */
+function aimPower() { return 1; }
+
+/* ------------------------------------------------------------------ input */
+
+var keys = {};
+function bindKeys() {
+  window.addEventListener('keydown', function (e) {
+    if (keys[e.code]) return;
+    keys[e.code] = true;
+    onPress(e.code);
+    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].indexOf(e.code) >= 0) e.preventDefault();
+  });
+  window.addEventListener('keyup', function (e) { keys[e.code] = false; });
+}
+
+function onPress(code) {
+  if (code === 'Space' || code === 'Enter') return actionButton();
+  if (code === 'Escape' || code === 'Backspace') return cancelButton();
+  if (code === 'KeyQ') return changeClub(-1);
+  if (code === 'KeyE') return changeClub(1);
+  if (code === 'KeyR') return startHole();
+  if (code === 'KeyM') { soundOn = !soundOn; flash(soundOn ? 'Sound on' : 'Sound off'); }
+}
+
+/* Gamepad, read fresh every frame. An Xbox pad comes through the standard
+   mapping: sticks on axes 0-3, A and B first, then X and Y, then the
+   shoulders. */
+function readPad() {
+  var pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  var pad = null;
+  for (var i = 0; i < pads.length; i++) {
+    if (pads[i] && pads[i].connected && pads[i].buttons.length >= 8) { pad = pads[i]; break; }
+  }
+  if (!pad) { if (padIndex !== null) { padIndex = null; refreshHints(); } return null; }
+  if (padIndex === null) { padIndex = pad.index; refreshHints(); }
+
+  function dead(v) { return Math.abs(v) < 0.22 ? 0 : (v - Math.sign(v) * 0.22) / 0.78; }
+  var st = {
+    lx: dead(pad.axes[0] || 0), ly: dead(pad.axes[1] || 0),
+    rx: dead(pad.axes[2] || 0), ry: dead(pad.axes[3] || 0),
+    a: !!(pad.buttons[0] && pad.buttons[0].pressed),
+    b: !!(pad.buttons[1] && pad.buttons[1].pressed),
+    x: !!(pad.buttons[2] && pad.buttons[2].pressed),
+    y: !!(pad.buttons[3] && pad.buttons[3].pressed),
+    lb: !!(pad.buttons[4] && pad.buttons[4].pressed),
+    rb: !!(pad.buttons[5] && pad.buttons[5].pressed),
+    start: !!(pad.buttons[9] && pad.buttons[9].pressed)
+  };
+  /* edges, so a held button does not fire every frame */
+  st.pressed = {};
+  ['a', 'b', 'x', 'y', 'lb', 'rb', 'start'].forEach(function (k) {
+    st.pressed[k] = st[k] && !padWas[k];
+    padWas[k] = st[k];
+  });
+  return st;
+}
+
+function actionButton() {
+  if (phase === 'walk') {
+    if (nearBall()) address();
+    else flash('Walk to your ball');
+  } else if (phase === 'aim') {
+    beginSwing();
+  } else if (phase === 'swing') {
+    if (meter) {
+      var st = meter.tap();
+      if (st === 'struck') strike(meter.power, meter.face);
+    }
+  } else if (phase === 'holed') {
+    startHole();
+  }
+}
+
+function cancelButton() {
+  if (phase === 'aim' || phase === 'swing') {
+    phase = 'walk';
+    meter = null;
+    if (stick) stick.reset();
+    hideAim();
+  }
+}
+
+function changeClub(d) {
+  if (phase !== 'aim') return;
+  clubIndex = (clubIndex + d + CLUBS.length) % CLUBS.length;
+  predictDirty = true;
+  flash(CLUBS[clubIndex].name);
+}
+
+/* ------------------------------------------------------------ the states */
+
+function nearBall() {
+  var g = golfer.userData.pos, b = hole.ball.pos;
+  return Math.hypot(g.x - b.x, g.z - b.z) < 4.5;
+}
+
+function address() {
+  phase = 'aim';
+  var b = hole.ball.pos;
+  aimYaw = Math.atan2(PIN.z - b.z, PIN.x - b.x);
+  clubIndex = 0;
+  var want = suggestClub(hole.toPin(), hole.lie());
+  for (var i = 0; i < CLUBS.length; i++) if (CLUBS[i].id === want) clubIndex = i;
+  golfer.userData.pos.x = b.x - Math.cos(aimYaw) * 0.1 - Math.sin(aimYaw) * 0.9;
+  golfer.userData.pos.z = b.z - Math.sin(aimYaw) * 0.1 + Math.cos(aimYaw) * 0.9;
+  predictDirty = true;
+  showAim();
+}
+
+function beginSwing() {
+  phase = 'swing';
+  swingAnim = 0;
+  if (padIndex !== null) { stick = stick || new StickSwing(); stick.reset(); meter = null; }
+  else { meter = new SwingMeter(); meter.tap(); stick = null; }
+}
+
+function strike(power, face) {
+  swingFace = face;
+  swingAnim = 0.001;
+  phase = 'flight';
+  hole.swing(CLUBS[clubIndex].id, power, aimYaw, face);
+  hideAim();
+  beep(180 + power * 240, 0.07);
+  flash(CLUBS[clubIndex].name + '  ' + Math.round(power * 100) + '%');
+}
+
+function ballStopped() {
+  var what = hole.finishShot();
+  if (what === 'holed') {
+    phase = 'holed';
+    beep(660, 0.12); setTimeout(function () { beep(880, 0.18); }, 110);
+    showCard();
+    return;
+  }
+  if (what === 'water') { flash('In the water - one shot penalty'); beep(120, 0.25); }
+  else {
+    var msg = SURFACES[hole.lie()].name;
+    if (hole.ball.carry > 5) msg += '  ·  ' + Math.round(hole.ball.carry) + 'm carry';
+    flash(msg);
+  }
+  phase = 'walk';
+  /* wander over to it, unless you would rather walk yourself */
+  autoWalk = {
+    from: { x: golfer.userData.pos.x, z: golfer.userData.pos.z },
+    to: { x: hole.ball.pos.x - Math.cos(aimYaw) * 1.6, z: hole.ball.pos.z - Math.sin(aimYaw) * 1.6 },
+    t: 0
+  };
+}
+
+function startHole() {
+  hole = new Hole(Math.floor(Math.random() * 1000));
+  hole.ball.pos = { x: TEE.x, y: heightAt(TEE.x, TEE.z), z: TEE.z };
+  golfer.userData.pos = { x: TEE.x - 1.4, z: TEE.z + 0.6 };
+  phase = 'walk';
+  clubIndex = 0;
+  aimYaw = Math.atan2(SPINE[2].z - TEE.z, SPINE[2].x - TEE.x);
+  camYaw = aimYaw;
+  autoWalk = null;
+  meter = null;
+  if (stick) stick.reset();
+  hideAim();
+  ui.card.classList.remove('show');
+  flash('Par ' + PAR + '  ·  ' + Math.round(hole.toPin()) + 'm');
+}
+
+function showAim() { aimLine.visible = true; landMark.visible = true; predictDirty = true; }
+function hideAim() { if (aimLine) { aimLine.visible = false; landMark.visible = false; } }
+
+/* ------------------------------------------------------------------- loop */
+
+function update(dt) {
+  var pad = readPad();
+  var mx = 0, my = 0;
+  if (pad) { mx = pad.lx; my = pad.ly; }
+  if (keys.KeyA || keys.ArrowLeft) mx -= 1;
+  if (keys.KeyD || keys.ArrowRight) mx += 1;
+  if (keys.KeyW || keys.ArrowUp) my -= 1;
+  if (keys.KeyS || keys.ArrowDown) my += 1;
+
+  if (pad) {
+    if (pad.pressed.a) actionButton();
+    if (pad.pressed.b) cancelButton();
+    if (pad.pressed.lb) changeClub(-1);
+    if (pad.pressed.rb) changeClub(1);
+    if (pad.pressed.start) startHole();
+    if (pad.pressed.y) { soundOn = !soundOn; flash(soundOn ? 'Sound on' : 'Sound off'); }
+    camYaw += pad.rx * 2.2 * dt;
+    camPitch = Math.max(-0.15, Math.min(0.8, camPitch + pad.ry * 1.2 * dt));
+  }
+
+  if (phase === 'walk') updateWalk(dt, mx, my);
+  else if (phase === 'aim') updateAim(dt, mx, my);
+  else if (phase === 'swing') updateSwing(dt, pad, mx, my);
+  else if (phase === 'flight') updateFlight(dt);
+
+  if (swingAnim > 0) { swingAnim += dt * 2.6; if (swingAnim > 1.6) swingAnim = 0; }
+  poseGolfer(dt);
+  updateCamera(dt);
+  updateHud();
+}
+
+function updateWalk(dt, mx, my) {
+  var moving = Math.hypot(mx, my) > 0.05;
+  if (moving) autoWalk = null;
+  var g = golfer.userData.pos;
+  if (autoWalk) {
+    autoWalk.t = Math.min(1, autoWalk.t + dt / JOG_TIME);
+    var e = autoWalk.t * autoWalk.t * (3 - 2 * autoWalk.t);
+    g.x = autoWalk.from.x + (autoWalk.to.x - autoWalk.from.x) * e;
+    g.z = autoWalk.from.z + (autoWalk.to.z - autoWalk.from.z) * e;
+    walkPhase += dt * 11;
+    golfer.userData.facing = Math.atan2(autoWalk.to.z - autoWalk.from.z, autoWalk.to.x - autoWalk.from.x);
+    if (autoWalk.t >= 1) autoWalk = null;
+  } else if (moving) {
+    /* the stick pushes the golfer the way the camera is looking */
+    var f = camYaw, s = camYaw + Math.PI / 2;
+    var vx = (-my) * Math.cos(f) + mx * Math.cos(s);
+    var vz = (-my) * Math.sin(f) + mx * Math.sin(s);
+    var len = Math.hypot(vx, vz) || 1;
+    g.x += vx / len * WALK_SPEED * dt;
+    g.z += vz / len * WALK_SPEED * dt;
+    golfer.userData.facing = Math.atan2(vz, vx);
+    walkPhase += dt * 9;
+  } else {
+    walkPhase *= Math.pow(0.02, dt);
+  }
+}
+
+function updateAim(dt, mx, my) {
+  aimYaw += mx * 1.1 * dt;
+  if (Math.abs(mx) > 0.02) predictDirty = true;
+  var b = hole.ball.pos;
+  golfer.userData.pos.x = b.x - Math.sin(aimYaw) * 0.9;
+  golfer.userData.pos.z = b.z + Math.cos(aimYaw) * 0.9;
+  golfer.userData.facing = aimYaw;
+  refreshAim();
+}
+
+function updateSwing(dt, pad, mx, my) {
+  golfer.userData.facing = aimYaw;
+  if (stick && pad) {
+    /* pull the stick back to load it, push through to hit */
+    var hit = stick.update(pad.lx, pad.ly);
+    if (hit) strike(hit.power, hit.face);
+  } else if (meter) {
+    meter.step(dt);
+    if (meter.phase === 'struck') strike(meter.power, meter.face);
+  }
+}
+
+function updateFlight(dt) {
+  var steps = Math.max(1, Math.min(8, Math.round(dt / (1 / 240))));
+  for (var i = 0; i < steps; i++) hole.ball.step(1 / 240);
+  if (!hole.ball.moving) ballStopped();
+}
+
+function poseGolfer(dt) {
+  var g = golfer.userData.pos;
+  golfer.position.set(g.x, heightAt(g.x, g.z), g.z);
+  var face = golfer.userData.facing === undefined ? 0 : golfer.userData.facing;
+  golfer.rotation.y = -face + Math.PI / 2;
+  var sw = Math.sin(walkPhase) * Math.min(1, walkPhase > 0 ? 1 : 0);
+  var amp = Math.min(0.7, Math.abs(Math.sin(walkPhase)) > 0 ? 0.7 : 0);
+  golfer.legL.rotation.x = sw * amp;
+  golfer.legR.rotation.x = -sw * amp;
+  golfer.armL.rotation.x = -sw * amp * 0.8;
+  golfer.armR.rotation.x = sw * amp * 0.8;
+
+  /* the swing itself: back, through, and a held finish */
+  var t = swingAnim;
+  var turn = 0;
+  if (phase === 'swing' && meter) turn = -meter.value * 2.1;
+  else if (phase === 'swing' && stick) turn = -stick.loaded * 2.1;
+  else if (t > 0) turn = t < 0.25 ? -2.1 + t * 4 * 2.1 : Math.min(2.4, (t - 0.25) * 3.4);
+  golfer.body.rotation.y = turn * 0.45;
+  golfer.club.rotation.x = turn;
+  golfer.armL.rotation.x += turn * 0.35;
+  golfer.armR.rotation.x += turn * 0.35;
+}
+
+function updateCamera(dt) {
+  var want = new THREE.Vector3(), look = new THREE.Vector3();
+  var b = hole.ball.pos, g = golfer.userData.pos;
+  if (phase === 'flight') {
+    var lead = Math.min(40, Math.hypot(hole.ball.vel.x, hole.ball.vel.z) * 0.8);
+    want.set(b.x - Math.cos(aimYaw) * (16 + lead), b.y + 7 + lead * 0.25,
+      b.z - Math.sin(aimYaw) * (16 + lead));
+    look.set(b.x + Math.cos(aimYaw) * 8, b.y + 1, b.z + Math.sin(aimYaw) * 8);
+  } else if (phase === 'aim' || phase === 'swing') {
+    var back = 7.5;
+    want.set(b.x - Math.cos(aimYaw) * back, heightAt(b.x, b.z) + 3.4,
+      b.z - Math.sin(aimYaw) * back);
+    var far = Math.min(hole.toPin(), 60);
+    look.set(b.x + Math.cos(aimYaw) * far, heightAt(b.x, b.z) + 1.4 + far * 0.03,
+      b.z + Math.sin(aimYaw) * far);
+  } else if (phase === 'holed') {
+    want.set(PIN.x - 9, heightAt(PIN.x, PIN.z) + 6, PIN.z - 5);
+    look.set(PIN.x, heightAt(PIN.x, PIN.z) + 1.2, PIN.z);
+  } else {
+    want.set(g.x - Math.cos(camYaw) * camDist, heightAt(g.x, g.z) + 3 + camPitch * 9,
+      g.z - Math.sin(camYaw) * camDist);
+    look.set(g.x + Math.cos(camYaw) * 6, heightAt(g.x, g.z) + 1.6, g.z + Math.sin(camYaw) * 6);
+  }
+  /* never let the camera sink into a hill */
+  var floor = heightAt(want.x, want.z) + 1.6;
+  if (want.y < floor) want.y = floor;
+  var rate = 1 - Math.exp(-dt * (phase === 'flight' ? 6 : 4));
+  camera.position.lerp(want, rate);
+  if (!camera.userData.look) camera.userData.look = look.clone();
+  camera.userData.look.lerp(look, rate);
+  camera.lookAt(camera.userData.look);
+}
+
+/* -------------------------------------------------------------------- hud */
+
+function flash(text) { message = text; messageUntil = performance.now() + 2400; }
+
+function updateHud() {
+  var left = hole.toPin();
+  ui.dist.textContent = left < 1 ? 'In the hole' : Math.round(left) + ' m';
+  ui.lie.textContent = SURFACES[hole.lie()].name;
+  ui.club.textContent = CLUBS[clubIndex].name;
+  ui.shots.textContent = (hole.strokes + hole.penalties) + ' / par ' + PAR;
+  var wSpeed = Math.hypot(hole.wind.x, hole.wind.z);
+  var wDir = Math.atan2(hole.wind.z, hole.wind.x) - aimYaw;
+  ui.wind.textContent = wSpeed.toFixed(1) + ' m/s ' + windArrow(wDir);
+  ui.msg.textContent = performance.now() < messageUntil ? message : '';
+
+  var show = phase === 'swing';
+  ui.meterWrap.classList.toggle('show', show);
+  if (show) {
+    var v = meter ? Math.max(0, meter.value) : (stick ? stick.loaded : 0);
+    ui.meterFill.style.height = Math.round(Math.min(1, v) * 100) + '%';
+    ui.meterFill.style.background = meter && meter.phase === 'downswing' ? '#ffd23f' : '#7fd66b';
+  }
+  ui.prompt.textContent = promptText();
+}
+
+function windArrow(rel) {
+  var dirs = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
+  var i = Math.round(((rel % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) / (Math.PI / 4)) % 8;
+  return dirs[i];
+}
+
+function promptText() {
+  var pad = padIndex !== null;
+  if (phase === 'walk') {
+    if (nearBall()) return pad ? 'A  address the ball' : 'Space  address the ball';
+    return pad ? 'Left stick  walk to your ball' : 'WASD  walk to your ball';
+  }
+  if (phase === 'aim') {
+    return pad ? 'Left stick  aim   ·   LB / RB  club   ·   A  take your stance'
+               : 'A / D  aim   ·   Q / E  club   ·   Space  take your stance';
+  }
+  if (phase === 'swing') {
+    return pad ? 'Pull the left stick back, then push it through'
+               : 'Space  set the power   ·   Space again at the bottom';
+  }
+  if (phase === 'holed') return pad ? 'A  play it again' : 'Space  play it again';
+  return '';
+}
+
+function refreshHints() { flash(padIndex !== null ? 'Controller connected' : 'Controller disconnected'); }
+
+function showCard() {
+  var s = hole.score();
+  ui.cardTitle.textContent = s.name;
+  ui.cardBody.innerHTML =
+    '<b>' + s.total + '</b> strokes on a par ' + s.par +
+    (s.penalties ? '<br>including ' + s.penalties + ' penalty stroke' + (s.penalties > 1 ? 's' : '') : '') +
+    '<br><span class="soft">' + (padIndex !== null ? 'A' : 'Space') + ' to play it again</span>';
+  ui.card.classList.add('show');
+}
+
+/* ------------------------------------------------------------------ sound */
+
+function beep(freq, len) {
+  if (!soundOn) return;
+  try {
+    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+    var o = audio.createOscillator(), g = audio.createGain();
+    o.frequency.value = freq;
+    o.type = 'triangle';
+    g.gain.setValueAtTime(0.16, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + len);
+    o.connect(g); g.connect(audio.destination);
+    o.start(); o.stop(audio.currentTime + len);
+  } catch (e) { /* no audio here, never mind */ }
+}
+
+/* ------------------------------------------------------------------- boot */
+
+function resize() {
+  var w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.fov = camera.aspect >= 1.2 ? 58 : Math.min(72, 58 + (1.2 - camera.aspect) * 22);
+  camera.updateProjectionMatrix();
+}
+
+function el(id) { return document.getElementById(id); }
+
+function boot() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x8fc7e8);
+  scene.fog = new THREE.Fog(0x9fd0ea, 150, 620);
+  camera = new THREE.PerspectiveCamera(58, 1, 0.5, 2200);
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  el('stage').appendChild(renderer.domElement);
+
+  scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x3d5a2a, 0.85));
+  sun = new THREE.DirectionalLight(0xfff4e0, 0.85);
+  sun.position.set(-120, 180, 60);
+  scene.add(sun);
+
+  buildTerrain();
+  buildWater();
+  buildTrees();
+  buildFlag();
+  buildBall();
+  buildGolfer();
+  buildAimLine();
+
+  ['dist', 'lie', 'club', 'shots', 'wind', 'msg', 'prompt', 'meterWrap',
+    'meterFill', 'card', 'cardTitle', 'cardBody'].forEach(function (k) { ui[k] = el(k); });
+
+  bindKeys();
+  ['hitBtn', 'cancelBtn', 'clubDownBtn', 'clubUpBtn', 'resetBtn', 'fullBtn'].forEach(function (id) {
+    var b = el(id);
+    if (!b) return;
+    b.addEventListener('click', function () {
+      if (id === 'hitBtn') actionButton();
+      else if (id === 'cancelBtn') cancelButton();
+      else if (id === 'clubDownBtn') changeClub(-1);
+      else if (id === 'clubUpBtn') changeClub(1);
+      else if (id === 'resetBtn') startHole();
+      else if (id === 'fullBtn') toggleFullscreen();
+    });
+  });
+  window.addEventListener('gamepadconnected', function () { readPad(); });
+  window.addEventListener('resize', resize);
+  resize();
+  syncFullscreenButton();
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (ev) {
+    document.addEventListener(ev, syncFullscreenButton);
+  });
+
+  startHole();
+  camera.position.set(TEE.x - 14, 8, TEE.z - 6);
+  lastTime = performance.now();
+  requestAnimationFrame(frame);
+}
+
+function frame(now) {
+  var dt = Math.min(0.05, (now - lastTime) / 1000);
+  lastTime = now;
+  update(dt);
+  ballMesh.position.set(hole.ball.pos.x, hole.ball.pos.y + BALL_R, hole.ball.pos.z);
+  ballMesh.visible = !hole.ball.holed;
+  sizeBall();
+  if (water) water.position.y = WATER_LEVEL + Math.sin(now * 0.0012) * 0.06;
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+/* ------------------------------------------------------------ full screen */
+
+function fullscreenElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+function canFullscreen() {
+  var d = document.documentElement;
+  return !!(d.requestFullscreen || d.webkitRequestFullscreen);
+}
+function toggleFullscreen() {
+  var d = document.documentElement;
+  if (fullscreenElement()) {
+    var exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) exit.call(document);
+    return;
+  }
+  var go = d.requestFullscreen || d.webkitRequestFullscreen;
+  if (!go) return;
+  var p = go.call(d);
+  if (p && p.catch) p.catch(function () {});
+}
+function syncFullscreenButton() {
+  var b = el('fullBtn');
+  if (!b) return;
+  if (!canFullscreen()) { b.hidden = true; return; }
+  b.hidden = false;
+  b.textContent = fullscreenElement() ? 'Exit full screen' : 'Full screen';
+  resize();
+  setTimeout(resize, 350);
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+</script>
+</body>
+</html>
