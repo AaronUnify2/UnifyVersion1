@@ -133,6 +133,10 @@
 <div id="hud">
   <div id="left">
     <div class="panel">
+      <div class="label">Hole</div>
+      <div class="mid" id="hole">&mdash;</div>
+    </div>
+    <div class="panel">
       <div class="label">To the pin</div>
       <div class="big" id="dist">—</div>
       <div class="mid" id="lie">—</div>
@@ -150,7 +154,8 @@
     </div>
     <div class="tools">
       <button id="fullBtn" type="button" hidden>Full screen</button>
-      <button id="resetBtn" type="button">New hole</button>
+      <button id="jogBtn" type="button">Go to ball</button>
+      <button id="resetBtn" type="button">Replay hole</button>
     </div>
   </div>
 </div>
@@ -162,6 +167,7 @@
 <div id="touch">
   <button class="small" id="clubDownBtn" type="button">&lt;</button>
   <button class="small" id="clubUpBtn" type="button">&gt;</button>
+  <button class="small" id="jumpBtn" type="button">Jump</button>
   <button class="small" id="cancelBtn" type="button">Back</button>
   <button id="hitBtn" type="button">Swing</button>
 </div>
@@ -181,15 +187,16 @@
 
 /* ------------------------------------------------------------- the course */
 
-/* Everything solid on this course is a box. Flat tops to run along, vertical
-   faces to bounce off, tilted ones for ramps, and one that turns. That is the
-   whole reason it is boxes and not a height field: a height field cannot have
-   a wall in it, because a vertical face is an infinitely steep slope and a
-   ball meeting one either climbs it or falls through. Mini golf is mostly
-   walls. Everything else is thin air - miss the course and you are off it. */
+/* Everything solid on a course here is a box. Flat tops to run along,
+   vertical faces to bounce off, tilted ones for ramps and banks, and some
+   that turn. That is the whole reason it is boxes and not a height field: a
+   height field cannot have a wall in it, because a vertical face is an
+   infinitely steep slope and a ball meeting one either climbs it or falls
+   through. Mini golf is mostly walls. Everything else is thin air - miss the
+   course and you are off it. */
 
 var BALL_RADIUS = 0.21;
-var VOID_Y = -22;          /* below this you have left the course */
+var VOID_Y = -30;          /* below this you have left the course */
 var MAX_STEP = 0.14;       /* how far the ball may move between collision
                               checks, so that a drive at sixty metres a second
                               cannot step straight through a rail */
@@ -205,8 +212,10 @@ function rotZ(p, a) {
   return { x: p.x * c - p.y * s, y: p.x * s + p.y * c, z: p.z };
 }
 
-/* A box. yaw turns it about the upright, tilt leans it - in that order, so a
-   ramp can be pointed any way and then pitched up. */
+/* A box. It is leaned about its own z axis and then turned about the upright,
+   in that order. Either of those two angles can be made to run with the
+   clock: turning gives a sweeping arm, leaning gives a wheel going end over
+   end, which is what a windmill's sails do. */
 function slab(x, y, z, w, h, d, opts) {
   opts = opts || {};
   var sl = {
@@ -215,25 +224,34 @@ function slab(x, y, z, w, h, d, opts) {
     yaw: opts.yaw || 0,
     tilt: opts.tilt || 0,
     kind: opts.kind || 'fairway',
-    spin: opts.spin || 0,        /* radians a second, for the windmill */
+    spin: opts.spin || 0,        /* radians a second about the upright */
+    roll: opts.roll || 0,        /* radians a second end over end */
     phase: opts.phase || 0
   };
   sl.bound = slabBounds(sl);
   return sl;
 }
+function moving(sl) { return !!(sl.spin || sl.roll); }
 
 /* How far a slab reaches along each world axis, once it has been leaned and
-   turned. Six comparisons against this throw out almost every slab on almost
-   every step, which is what makes it cheap enough to play the whole shot
-   through this same physics on every frame to draw the aiming line. */
+   turned - and, if it moves, over every position it will ever be in. Six
+   comparisons against this throw out almost every slab on almost every step,
+   which is what makes it cheap enough to play the whole shot through this
+   same physics on every frame to draw the aiming line. */
 function slabBounds(sl) {
   var h = sl.half;
-  var ct = Math.abs(Math.cos(sl.tilt)), st = Math.abs(Math.sin(sl.tilt));
-  var ex = h.x * ct + h.y * st;
-  var ey = h.x * st + h.y * ct;
-  var ez = h.z;
+  var ex, ey, ez;
+  if (sl.roll) {
+    /* end over end: in its own frame it sweeps a circle in x and y */
+    ex = ey = Math.sqrt(h.x * h.x + h.y * h.y);
+    ez = h.z;
+  } else {
+    var ct = Math.abs(Math.cos(sl.tilt)), st = Math.abs(Math.sin(sl.tilt));
+    ex = h.x * ct + h.y * st;
+    ey = h.x * st + h.y * ct;
+    ez = h.z;
+  }
   if (sl.spin) {
-    /* it turns, so it could be pointing anywhere */
     var r = Math.sqrt(ex * ex + ez * ez);
     return { x: r, y: ey, z: r };
   }
@@ -258,32 +276,52 @@ function deck(x, top, z, w, d, kind, opts) {
     { kind: kind || 'fairway', yaw: opts.yaw });
 }
 
-/* A ramp whose top face runs exactly from (x0,y0) to (x1,y1). Getting this
-   wrong leaves a lip where the ramp meets the deck, and a lip stops a ball
-   dead - which is the single most annoying thing a golf course can do. */
-function ramp(x0, y0, x1, y1, z, d, kind, thick) {
+/* A slope whose top face runs exactly from one point on the ground to
+   another, at any angle across the course. Getting this wrong leaves a lip
+   where the slope meets a deck, and a lip stops a ball dead - which is the
+   single most annoying thing a golf course can do. */
+function slope(x0, z0, y0, x1, z1, y1, width, kind, thick) {
   var t = thick === undefined ? 2.4 : thick;
-  var dx = x1 - x0, dy = y1 - y0;
-  var len = Math.sqrt(dx * dx + dy * dy);
-  var tilt = Math.atan2(dy, dx);
+  var dx = x1 - x0, dz = z1 - z0, dy = y1 - y0;
+  var run = Math.sqrt(dx * dx + dz * dz);
+  var len = Math.sqrt(run * run + dy * dy);
+  var tilt = Math.atan2(dy, run);
+  var yaw = Math.atan2(-dz, dx);
   var st = Math.sin(tilt), ct = Math.cos(tilt);
-  /* the centre sits half a thickness straight down the box's own upright */
-  var mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
-  return slab(mx + (t / 2) * st, my - (t / 2) * ct, z, len, t, d,
-    { tilt: tilt, kind: kind });
+  /* the middle sits half a thickness straight down the box's own upright */
+  return slab((x0 + x1) / 2 + (t / 2) * st * Math.cos(yaw),
+              (y0 + y1) / 2 - (t / 2) * ct,
+              (z0 + z1) / 2 - (t / 2) * st * Math.sin(yaw),
+              len, t, width, { tilt: tilt, yaw: yaw, kind: kind });
+}
+/* the common case: a ramp running straight down the x axis */
+function ramp(x0, y0, x1, y1, z, d, kind, thick) {
+  return slope(x0, z, y0, x1, z, y1, d, kind, thick);
 }
 
-var TEE = { x: 0, y: 12, z: 0 };
-var PIN = { x: 300, y: -4, z: 46 };
-var PAR = 4;
-var CUP_RADIUS = 0.5;
-var GREEN_RADIUS = 17;     /* half the width of the green, which is square */
+/* A square dish: a flat pad with four banks sloping up and out to a rim.
+   Where two banks overlap at a corner the higher one wins, which leaves a
+   ridge running out to each corner - the shape a square hip roof has, upside
+   down. Land anywhere on it and you are fed towards the middle. */
+function bowl(cx, cz, inner, rim, floorY, rimY, kinds) {
+  var i = inner / 2, o = rim / 2;
+  return [
+    deck(cx, floorY, cz, inner, inner, kinds.pad, { thick: 3 }),
+    slope(cx + i, cz, floorY, cx + o, cz, rimY, rim, kinds.east || kinds.bank, 2.2),
+    slope(cx - i, cz, floorY, cx - o, cz, rimY, rim, kinds.west || kinds.bank, 2.2),
+    slope(cx, cz + i, floorY, cx, cz + o, rimY, rim, kinds.south || kinds.bank, 2.2),
+    slope(cx, cz - i, floorY, cx, cz - o, rimY, rim, kinds.north || kinds.bank, 2.2)
+  ];
+}
 
-/* The hole: a high tee, a railed fairway shelf with two pillars and a sand
-   trap cut into it, a ramp bridge down to a wide lower shelf, a turning
-   windmill arm across the approach, and the green sunk flush into the shelf
-   so a putt runs on to it rather than over a lip. */
-function buildCourse() {
+/* ------------------------------------------------------------- the holes */
+
+/* Hole one. A high tee with a chute down to a railed fairway shelf, two
+   stone pillars to thread and a sand trap cut into it as a real hollow, a
+   hill down to a wide lower shelf, a windmill standing across the run up to
+   the green with a doorway through it, and the green laid flush into the
+   shelf so a putt runs onto it rather than over a lip. */
+function buildHoleOne() {
   var c = [];
 
   /* the tee, up on its own block */
@@ -317,22 +355,102 @@ function buildCourse() {
   c.push(deck(327.5, -4, 28, 21, 116, 'fairway'));  /* x 317..338 */
   c.push(deck(300, -4, -0.5, 34, 59, 'fairway'));   /* z -30.. 29 */
   c.push(deck(300, -4, 74.5, 34, 23, 'fairway'));   /* z  63.. 86 */
-  c.push(deck(PIN.x, PIN.y, PIN.z, 34, 34, 'green'));
+  c.push(deck(300, -4, 46, 34, 34, 'green'));
 
   c.push(slab(272, -2.4, -31, 132, 3.2, 2, { kind: 'rail' }));
   c.push(slab(272, -2.4, 87, 132, 3.2, 2, { kind: 'rail' }));
   c.push(slab(339, -2.4, 28, 2, 3.2, 116, { kind: 'rail' }));
 
-  /* the windmill, turning straight across the run up to the green. Its arm
-     clears the deck by a tenth of a metre, so a running ball is stopped and a
-     pitched one sails over. */
-  c.push(slab(272, -1, 36, 3.2, 6, 3.2, { kind: 'stone' }));
-  c.push(slab(272, -2.7, 36, 20, 2.4, 2.4, { kind: 'wood', spin: 0.85 }));
+  /* The windmill. A wall across the run up to the green with a doorway
+     through it, and the sails turning in the doorway - so the sails are the
+     thing you have to time, rather than a decoration turning above one. Go
+     round the wall and you are safe but long; go through and you have to
+     catch the gap. */
+  /* The wall is deliberately low. A tall one is a trap: a ball lying against
+     it cannot be played over it, because even a wedge is still below the top
+     by the time it gets there. */
+  c.push(slab(272, -2.8, 32.85, 2, 2.4, 11.7, { kind: 'stone' }));  /* z 27..38.7 */
+  c.push(slab(272, -2.8, 49.15, 2, 2.4, 11.7, { kind: 'stone' }));  /* z 43.3..55 */
+  c.push(slab(272, -1.1, 41, 2, 1, 4.6, { kind: 'stone' }));        /* over the door */
+  c.push(slab(273.2, 0.8, 41, 3.2, 2.8, 8, { kind: 'stone' }));     /* the mill house */
+  /* One long sail, turning end over end and reaching right down to the deck
+     at the bottom of its swing, so it seals the doorway when it is down and
+     leaves it open when it is up. It is turned a quarter so that it faces
+     you as you play up to it, the way a windmill's sails do - the wheel
+     turns about the line of play rather than across it. A pair of sails
+     rather than a cross: with four arms there was always one down. */
+  c.push(slab(270.2, 2, 41, 12, 4.2, 1.1,
+    { kind: 'wood', yaw: Math.PI / 2, roll: -0.9 }));
 
   return c;
 }
 
-var COURSE = buildCourse();
+/* Hole two. A short hole off a high tower straight down into a dish, with a
+   railed shelf halfway for anyone who does not fancy it. The dish is the
+   point: land anywhere on it and the banks feed you in, which makes an ace a
+   real possibility - but the far bank is sand, so going long is not free. */
+function buildHoleTwo() {
+  var c = [];
+
+  /* the tower you play from */
+  c.push(deck(0, 26, 0, 26, 26, 'tee'));
+
+  /* The shelf to lay up on. Railed on three sides, but deliberately open on
+     the side facing the green: a rail there is a trap, because a ball lying
+     against it cannot be played over it - even a wedge is still below the top
+     of the rail by the time it gets there. */
+  c.push(deck(88, 6, 4, 56, 56, 'fairway'));        /* x 60..116, z -24..32 */
+  c.push(slab(88, 7.6, -25, 56, 3.2, 2, { kind: 'rail' }));
+  c.push(slab(88, 7.6, 33, 56, 3.2, 2, { kind: 'rail' }));
+  c.push(slab(59, 7.6, 4, 2, 3.2, 56, { kind: 'rail' }));
+
+  /* the dish, on its plinth, with the far bank in sand */
+  c.push(deck(172, -8.1, 24, 56, 56, 'stone', { thick: 22 }));
+  var dish = bowl(172, 24, 14, 68, -8, 0,
+    { pad: 'green', bank: 'fairway', east: 'sand' });
+  for (var i = 0; i < dish.length; i++) c.push(dish[i]);
+
+  /* and a pair of standing stones on the near rim, to thread or bounce off */
+  c.push(slab(146, -0.7, 8, 4, 7, 4, { kind: 'stone' }));
+  c.push(slab(146, -0.7, 40, 4, 7, 4, { kind: 'stone' }));
+
+  return c;
+}
+
+var HOLES = [
+  { name: 'The Windmill', build: buildHoleOne, par: 4, greenRadius: 17,
+    tee: { x: 0, y: 12, z: 0 }, pin: { x: 300, y: -4, z: 46 } },
+  { name: 'The Dish', build: buildHoleTwo, par: 3, greenRadius: 27,
+    tee: { x: 0, y: 26, z: 0 }, pin: { x: 172, y: -8, z: 24 } }
+];
+
+/* The one hole that is loaded. TEE and PIN are filled in rather than
+   replaced, so anything holding on to them keeps working across a change. */
+var COURSE = [];
+var TEE = { x: 0, y: 0, z: 0 };
+var PIN = { x: 0, y: 0, z: 0 };
+var PAR = 4;
+var GREEN_RADIUS = 17;
+var CUP_RADIUS = 0.5;
+var HOLE_INDEX = 0;
+
+function loadHole(i) {
+  HOLE_INDEX = ((i % HOLES.length) + HOLES.length) % HOLES.length;
+  var h = HOLES[HOLE_INDEX];
+  var built = h.build();
+  COURSE.length = 0;
+  for (var k = 0; k < built.length; k++) COURSE.push(built[k]);
+  TEE.x = h.tee.x; TEE.y = h.tee.y; TEE.z = h.tee.z;
+  PIN.x = h.pin.x; PIN.y = h.pin.y; PIN.z = h.pin.z;
+  PAR = h.par;
+  GREEN_RADIUS = h.greenRadius;
+  return HOLE_INDEX;
+}
+function currentHole() {
+  return { index: HOLE_INDEX, name: HOLES[HOLE_INDEX].name, par: PAR,
+           count: HOLES.length, tee: TEE, pin: PIN, greenRadius: GREEN_RADIUS };
+}
+loadHole(0);
 
 /* how fast the grass is, how much it gives, how much it grabs at a ball
    skidding along it, and how much of your swing gets to the ball from it */
@@ -342,10 +460,12 @@ var SURFACES = {
   green:   { name: 'Green',    roll: 0.05, bounce: 0.26, skid: 0.34, grab: 1.00 },
   sand:    { name: 'Bunker',   roll: 1.80, bounce: 0.04, skid: 0.05, grab: 0.42 },
   stone:   { name: 'Stone',    roll: 0.06, bounce: 0.45, skid: 0.80, grab: 0.70 },
-  wood:    { name: 'Windmill', roll: 0.08, bounce: 0.50, skid: 0.85, grab: 0.70 },
+  wood:    { name: 'Windmill', roll: 0.08, bounce: 0.22, skid: 0.85, grab: 0.70 },
   rail:    { name: 'Rail',     roll: 0.08, bounce: 0.55, skid: 0.86, grab: 0.70 },
   'void':  { name: 'Off the course', roll: 0.09, bounce: 0, skid: 0, grab: 1.00 }
 };
+
+function gripOf(kind) { return (SURFACES[kind] || SURFACES.fairway).roll; }
 
 /* --------------------------------------------------------- what is solid */
 
@@ -353,12 +473,15 @@ var SURFACES = {
 function slabYaw(sl, time) {
   return sl.yaw + (sl.spin ? sl.spin * (time || 0) + sl.phase : 0);
 }
+function slabTilt(sl, time) {
+  return sl.tilt + (sl.roll ? sl.roll * (time || 0) + sl.phase : 0);
+}
 function toLocal(sl, p, time) {
   var d = { x: p.x - sl.pos.x, y: p.y - sl.pos.y, z: p.z - sl.pos.z };
-  return rotZ(rotY(d, -slabYaw(sl, time)), -sl.tilt);
+  return rotZ(rotY(d, -slabYaw(sl, time)), -slabTilt(sl, time));
 }
 function toWorldDir(sl, n, time) {
-  return rotY(rotZ(n, sl.tilt), slabYaw(sl, time));
+  return rotY(rotZ(n, slabTilt(sl, time)), slabYaw(sl, time));
 }
 function toWorld(sl, l, time) {
   var d = toWorldDir(sl, l, time);
@@ -397,7 +520,7 @@ function slabContact(sl, p, r, time) {
    asking where that bit of the slab will be a moment later, rather than by
    hand, because getting a sign wrong here would fling the ball backwards. */
 function surfaceVelocity(sl, p, time) {
-  if (!sl.spin) return { x: 0, y: 0, z: 0 };
+  if (!moving(sl)) return { x: 0, y: 0, z: 0 };
   var e = 0.001;
   var l = toLocal(sl, p, time);
   var later = toWorld(sl, l, (time || 0) + e);
@@ -405,13 +528,14 @@ function surfaceVelocity(sl, p, time) {
 }
 
 /* Where the top face of one slab sits above or below a column, if the column
-   passes through the slab at all. Solved directly, because for a tilted box
-   the height of the top face is linear in the local across-slab distance. */
+   passes through it at all. Solved directly, because for a tilted box the
+   height of the top face is linear in the local across-slab distance. */
 function slabTopAt(sl, x, z, time) {
   if (Math.abs(x - sl.pos.x) > sl.bound.x || Math.abs(z - sl.pos.z) > sl.bound.z) return null;
   var h = sl.half;
   var f = rotY({ x: x - sl.pos.x, y: 0, z: z - sl.pos.z }, -slabYaw(sl, time));
-  var ct = Math.cos(sl.tilt), st = Math.sin(sl.tilt);
+  var tilt = slabTilt(sl, time);
+  var ct = Math.cos(tilt), st = Math.sin(tilt);
   /* local y is h.y on the top face, so the world height follows at once */
   var y = sl.pos.y + (h.y + f.x * st) / ct;
   var lx = f.x / ct + h.y * st / ct;
@@ -422,15 +546,21 @@ function slabTopAt(sl, x, z, time) {
 
 /* The top of whatever you would be standing on at a spot, and what it is made
    of. Used for standing the golfer up, for the camera, and for telling you
-   your lie. Rails and the windmill arm are not floors. Null over the void. */
+   your lie. Rails and anything that is turning are not floors. Null over the
+   void. */
 function groundUnder(x, z, time) {
   var best = null;
   for (var i = 0; i < COURSE.length; i++) {
     var sl = COURSE[i];
-    if (sl.kind === 'rail' || sl.kind === 'wood') continue;
+    if (sl.kind === 'rail' || moving(sl)) continue;
     var top = slabTopAt(sl, x, z, time);
     if (top === null) continue;
-    if (!best || top.y > best.y) best = top;
+    if (!best) { best = top; continue; }
+    if (top.y > best.y + 1e-6) { best = top; continue; }
+    /* Where two faces meet at exactly the same height - the ridge running out
+       to the corner of a dish, or the edge of a green laid into a shelf - go
+       with whichever grips least, and do it the same way everywhere. */
+    if (top.y > best.y - 1e-6 && gripOf(top.kind) < gripOf(best.kind)) best = top;
   }
   return best;
 }
@@ -449,16 +579,27 @@ function normalAt(x, z, time) {
 }
 /* where the middle of a ball sits when it is lying on the ground there */
 function restHeight(x, z, time) { return heightAt(x, z, time) + BALL_RADIUS; }
-/* Inside the circle the windmill arm sweeps. A ball is not allowed to settle
-   in here: it waits, still, until the arm comes round and knocks it out,
+
+/* Somewhere a turning part of the course will come round to. A ball is not
+   allowed to settle in here: it waits, still, until it is knocked clear,
    which is what you would see happen and so what has to happen. */
-function inSweep(x, z) {
+function inSweep(x, y, z) {
+  var r = BALL_RADIUS;
   for (var i = 0; i < COURSE.length; i++) {
-    var sl = COURSE[i];
-    if (!sl.spin) continue;
-    var dx = x - sl.pos.x, dz = z - sl.pos.z;
-    var reach = sl.half.x + BALL_RADIUS;
-    if (dx * dx + dz * dz < reach * reach) return true;
+    var sl = COURSE[i], h = sl.half;
+    var dx = x - sl.pos.x, dy = y - sl.pos.y, dz = z - sl.pos.z;
+    if (sl.spin) {
+      var reach = h.x + r;
+      if (dx * dx + dz * dz < reach * reach && Math.abs(dy) < h.y + r) return true;
+    } else if (sl.roll) {
+      /* it turns in a plane; the face it can reach is a disc in that plane,
+         and it never reaches further than its own depth across it */
+      var R = Math.sqrt(h.x * h.x + h.y * h.y) + r;
+      var nx = Math.sin(sl.yaw), nz = Math.cos(sl.yaw);
+      var across = dx * nx + dz * nz;
+      var flat = dx * dx + dy * dy + dz * dz - across * across;
+      if (flat < R * R && Math.abs(across) < h.z + r) return true;
+    }
   }
   return false;
 }
@@ -482,14 +623,18 @@ function clubById(id) {
   return CLUBS[0];
 }
 
-/* what a sensible player would reach for, given the distance left and the lie */
-function suggestClub(distance, surface) {
+/* What a sensible player would reach for, given the distance left, the lie,
+   and how far below you the target is - which matters enormously here, where
+   a tee can be thirty metres up. A ball hit downhill is in the air longer and
+   goes further for it, so the club you want is the one for a shorter shot. */
+function suggestClub(distance, surface, drop) {
   if (surface === 'green' && distance < GREEN_RADIUS) return 'putter';
-  if (surface === 'sand') return distance > 90 ? 'iron8' : 'wedge';
+  var plays = Math.max(6, distance - (drop || 0) * 1.2);
+  if (surface === 'sand') return plays > 90 ? 'iron8' : 'wedge';
   var reach = [
     ['wedge', 82], ['iron8', 128], ['iron5', 160], ['wood', 198], ['driver', 1e9]
   ];
-  for (var i = 0; i < reach.length; i++) if (distance <= reach[i][1]) return reach[i][0];
+  for (var i = 0; i < reach.length; i++) if (plays <= reach[i][1]) return reach[i][0];
   return 'driver';
 }
 
@@ -704,15 +849,20 @@ Ball.prototype.clearance = function () {
    that keeps forgetting it is on the ground gets no rolling friction. */
 Ball.prototype.probeGround = function (time) {
   this.grounded = false;
-  var bestY = 0.55;
+  var best = null;
   for (var i = 0; i < COURSE.length; i++) {
     var ct = slabContact(COURSE[i], this.pos, BALL_RADIUS + 0.04, time);
-    if (!ct || ct.n.y <= bestY) continue;
-    bestY = ct.n.y;
-    this.gn = ct.n;
-    this.gkind = ct.slab.kind;
-    this.grounded = true;
+    if (!ct || ct.n.y <= 0.55) continue;
+    if (!best || ct.n.y > best.n.y + 0.02) { best = ct; continue; }
+    /* On the join between two faces, go with whichever grips least - or a
+       ball balanced on the ridge between grass and sand is held fast by the
+       sand while standing on a slope the grass would run it straight down. */
+    if (ct.n.y > best.n.y - 0.02 && gripOf(ct.slab.kind) < gripOf(best.slab.kind)) best = ct;
   }
+  if (!best) return;
+  this.gn = best.n;
+  this.gkind = best.slab.kind;
+  this.grounded = true;
 };
 
 Ball.prototype.step = function (dt, time) {
@@ -761,7 +911,7 @@ Ball.prototype.step = function (dt, time) {
     var slope = Math.sqrt(Math.max(0, 1 - this.gn.y * this.gn.y));
     var held = GRAVITY * slope * ROLL_SLOPE <= sfc.roll * GRAVITY;
     var sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-    if (held && sp < BALL_STOP && !inSweep(p.x, p.z)) {
+    if (held && sp < BALL_STOP && !inSweep(p.x, p.y, p.z)) {
       this.moving = false;
       v.x = 0; v.y = 0; v.z = 0;
       if (!this.carry) this.carry = Math.sqrt(
@@ -1020,11 +1170,12 @@ StickSwing.prototype.update = function (sx, sy, dt) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    TEE: TEE, PIN: PIN, PAR: PAR, GREEN_RADIUS: GREEN_RADIUS,
+    TEE: TEE, PIN: PIN,
     CUP_RADIUS: CUP_RADIUS, BALL_RADIUS: BALL_RADIUS, VOID_Y: VOID_Y,
     MAX_STEP: MAX_STEP, REST_SPEED: REST_SPEED,
-    COURSE: COURSE, buildCourse: buildCourse, slab: slab, deck: deck, ramp: ramp,
-    slabBounds: slabBounds, slabFar: slabFar,
+    COURSE: COURSE, HOLES: HOLES, loadHole: loadHole, currentHole: currentHole,
+    slab: slab, deck: deck, ramp: ramp, slope: slope, bowl: bowl, moving: moving,
+    slabBounds: slabBounds, slabFar: slabFar, slabYaw: slabYaw, slabTilt: slabTilt,
     rotY: rotY, rotZ: rotZ, toLocal: toLocal, toWorld: toWorld,
     toWorldDir: toWorldDir, slabContact: slabContact, slabTopAt: slabTopAt,
     surfaceVelocity: surfaceVelocity, groundUnder: groundUnder,
@@ -1038,6 +1189,10 @@ if (typeof module !== 'undefined' && module.exports) {
     Ball: Ball, Hole: Hole, SwingMeter: SwingMeter, StickSwing: StickSwing,
     predictShot: predictShot
   };
+  /* these two change with the hole, so they are read rather than copied */
+  Object.defineProperty(module.exports, 'PAR', { get: function () { return PAR; } });
+  Object.defineProperty(module.exports, 'GREEN_RADIUS',
+    { get: function () { return GREEN_RADIUS; } });
 }
 /* ======================= FAIRWAY ONE CORE END ======================= */
 </script>
@@ -1060,6 +1215,10 @@ var padIndex = null, padWas = {};
 var soundOn = true, audio = null;
 
 var WALK_SPEED = 9;
+var JUMP_SPEED = 7.9;      /* about a metre and a half up */
+var GOLFER_G = 22;         /* heavier than real gravity, so a hop is snappy */
+var STEP_UP = 0.65;        /* the tallest thing you can walk straight up */
+var round = { played: [], total: 0, par: 0 };
 
 /* The course floats, so half the places you might ask about have no ground at
    all. Everything that puts something on the ground goes through here and
@@ -1102,6 +1261,7 @@ function slabSkin(kind) {
    round, each slab gets a group that does the turning and a box inside it
    that does the leaning: nesting them can only compose one way. */
 function buildCourseMeshes() {
+  if (terrain) { scene.remove(terrain); terrain = null; }
   terrain = new THREE.Group();
   spinners = [];
   for (var i = 0; i < COURSE.length; i++) {
@@ -1116,7 +1276,7 @@ function buildCourseMeshes() {
     m.receiveShadow = true;
     pivot.add(m);
     terrain.add(pivot);
-    if (sl.spin) spinners.push({ pivot: pivot, mesh: m, slab: sl });
+    if (moving(sl)) spinners.push({ pivot: pivot, mesh: m, slab: sl });
   }
   scene.add(terrain);
 }
@@ -1124,40 +1284,34 @@ function buildCourseMeshes() {
 function spinCourse(time) {
   for (var i = 0; i < spinners.length; i++) {
     var s = spinners[i];
-    s.pivot.rotation.y = s.slab.yaw + s.slab.spin * time + s.slab.phase;
+    s.pivot.rotation.y = slabYaw(s.slab, time);
+    s.mesh.rotation.z = slabTilt(s.slab, time);
   }
 }
 
-/* the mill the turning arm belongs to: a roof on the tower and a pair of
-   sails above head height, so it reads as a windmill rather than a pole */
+/* A roof on the mill house, which is the one part of it that is only for
+   looking at - everything else in the mill is a slab the ball can hit. */
 function buildMill() {
-  var hub = null;
-  for (var i = 0; i < COURSE.length; i++) if (COURSE[i].spin) hub = COURSE[i];
-  if (!hub) return;
-  var mill = new THREE.Group();
+  if (millGroup) { scene.remove(millGroup); millGroup = null; }
+  var sail = null;
+  for (var i = 0; i < COURSE.length; i++) if (COURSE[i].roll) sail = COURSE[i];
+  if (!sail) return;
+  var house = null;
+  for (var j = 0; j < COURSE.length; j++) {
+    var sl = COURSE[j];
+    if (sl.kind !== 'stone' || moving(sl)) continue;
+    if (Math.abs(sl.pos.x - sail.pos.x) < 4 && Math.abs(sl.pos.z - sail.pos.z) < 4 &&
+        (!house || sl.pos.y > house.pos.y)) house = sl;
+  }
+  if (!house) return;
+  millGroup = new THREE.Group();
   var roof = new THREE.Mesh(
-    new THREE.ConeGeometry(3.1, 2.4, 4),
+    new THREE.ConeGeometry(4.6, 3, 4),
     new THREE.MeshLambertMaterial({ color: 0xb03c33, flatShading: true }));
   roof.rotation.y = Math.PI / 4;
-  roof.position.set(hub.pos.x, hub.pos.y + 3 + 1.2, hub.pos.z);
-  mill.add(roof);
-  var sails = new THREE.Group();
-  for (var k = 0; k < 4; k++) {
-    var blade = new THREE.Mesh(
-      new THREE.BoxGeometry(0.3, 5.2, 1.1),
-      new THREE.MeshLambertMaterial({ color: 0xf1e7cf, flatShading: true }));
-    blade.position.set(0, 2.6, 0);
-    var arm = new THREE.Group();
-    arm.add(blade);
-    arm.rotation.z = k * Math.PI / 2;
-    sails.add(arm);
-  }
-  sails.position.set(hub.pos.x - 1.9, hub.pos.y + 2.2, hub.pos.z);
-  mill.add(sails);
-  mill.userData.sails = sails;
-  mill.userData.hub = hub;
-  scene.add(mill);
-  millGroup = mill;
+  roof.position.set(house.pos.x, house.pos.y + house.half.y + 1.5, house.pos.z);
+  millGroup.add(roof);
+  scene.add(millGroup);
 }
 
 /* Chunks of the same world floating off in the distance, so the course does
@@ -1199,6 +1353,7 @@ function buildScenery() {
 }
 
 function buildFlag() {
+  if (flag) { scene.remove(flag); flag = null; }
   flag = new THREE.Group();
   var base = heightAt(PIN.x, PIN.z, 0);
   /* The hole is a hole: a dark disc laid flat on the green, exactly as wide
@@ -1370,7 +1525,8 @@ function onPress(code) {
   if (code === 'Escape' || code === 'Backspace') return cancelButton();
   if (code === 'KeyQ') return changeClub(-1);
   if (code === 'KeyE') return changeClub(1);
-  if (code === 'KeyR') return startHole();
+  if (code === 'KeyR') return replayHole();
+  if (code === 'KeyX') return jogToBall();
   if (code === 'KeyM') { soundOn = !soundOn; flash(soundOn ? 'Sound on' : 'Sound off'); }
 }
 
@@ -1409,8 +1565,9 @@ function readPad() {
 
 function actionButton() {
   if (phase === 'walk') {
+    /* at your ball it addresses it; anywhere else it is a jump */
     if (nearBall()) address();
-    else flash('Walk to your ball');
+    else jump();
   } else if (phase === 'aim') {
     beginSwing();
   } else if (phase === 'swing') {
@@ -1419,7 +1576,7 @@ function actionButton() {
       if (st === 'struck') strike(meter.power, meter.face);
     }
   } else if (phase === 'holed') {
-    startHole();
+    nextHole();
   }
 }
 
@@ -1451,7 +1608,7 @@ function address() {
   var b = hole.ball.pos;
   aimYaw = Math.atan2(PIN.z - b.z, PIN.x - b.x);
   clubIndex = 0;
-  var want = suggestClub(hole.toPin(), hole.lie());
+  var want = suggestClub(hole.toPin(), hole.lie(), hole.ball.pos.y - PIN.y);
   for (var i = 0; i < CLUBS.length; i++) if (CLUBS[i].id === want) clubIndex = i;
   golfer.userData.pos.x = b.x - Math.cos(aimYaw) * 0.1 - Math.sin(aimYaw) * 0.9;
   golfer.userData.pos.z = b.z - Math.sin(aimYaw) * 0.1 + Math.cos(aimYaw) * 0.9;
@@ -1480,6 +1637,11 @@ function ballStopped() {
   var what = hole.finishShot();
   if (what === 'holed') {
     phase = 'holed';
+    var sc = hole.score();
+    round.played.push({ hole: currentHole().index, name: currentHole().name,
+      total: sc.total, par: sc.par });
+    round.total += sc.total;
+    round.par += sc.par;
     beep(660, 0.12); setTimeout(function () { beep(880, 0.18); }, 110);
     showCard();
     return;
@@ -1491,31 +1653,60 @@ function ballStopped() {
     flash(msg);
   }
   phase = 'walk';
-  /* wander over to it, unless you would rather walk yourself */
-  var tx = hole.ball.pos.x - Math.cos(aimYaw) * 1.6;
-  var tz = hole.ball.pos.z - Math.sin(aimYaw) * 1.6;
-  if (!walkable(tx, tz)) { tx = hole.ball.pos.x; tz = hole.ball.pos.z; }
-  autoWalk = {
-    from: { x: golfer.userData.pos.x, z: golfer.userData.pos.z },
-    to: { x: tx, z: tz },
-    t: 0
-  };
+  /* You walk to your ball yourself now. It used to jog you over after every
+     shot whether you wanted it or not, which took the game off you. */
 }
 
-function startHole() {
+function startRound() {
+  round = { played: [], total: 0, par: 0 };
+  startHole(0);
+}
+
+/* Lay out a hole and stand the player on its tee. The course itself changes
+   here, so everything drawn from it is thrown away and built again. */
+function startHole(index) {
+  loadHole(index === undefined ? currentHole().index : index);
+  buildCourseMeshes();
+  buildMill();
+  buildFlag();
   hole = new Hole(Math.floor(Math.random() * 1000));
   hole.ball.pos = { x: TEE.x, y: restHeight(TEE.x, TEE.z), z: TEE.z };
   golfer.userData.pos = { x: TEE.x - 1.4, z: TEE.z + 0.6 };
+  golfer.userData.y = solidY(TEE.x - 1.4, TEE.z + 0.6, TEE.y);
+  golfer.userData.vy = 0;
+  golfer.userData.facing = Math.atan2(PIN.z - TEE.z, PIN.x - TEE.x);
   phase = 'walk';
   clubIndex = 0;
   aimYaw = Math.atan2(PIN.z - TEE.z, PIN.x - TEE.x);
   camYaw = aimYaw;
   autoWalk = null;
+  simAccum = 0;
   meter = null;
   if (stick) stick.reset();
   hideAim();
   ui.card.classList.remove('show');
-  flash('Par ' + PAR + '  ·  ' + Math.round(hole.toPin()) + 'm');
+  var h = currentHole();
+  flash(h.name + '  ·  par ' + h.par + '  ·  ' + Math.round(hole.toPin()) + 'm');
+}
+
+/* on to the next one, or round again from the first */
+function nextHole() {
+  var h = currentHole();
+  if (h.index + 1 < h.count) startHole(h.index + 1);
+  else startRound();
+}
+
+/* play this hole again without it counting twice */
+function replayHole() {
+  for (var i = round.played.length - 1; i >= 0; i--) {
+    if (round.played[i].hole === currentHole().index) {
+      round.total -= round.played[i].total;
+      round.par -= round.played[i].par;
+      round.played.splice(i, 1);
+      break;
+    }
+  }
+  startHole();
 }
 
 function showAim() { aimLine.visible = true; landMark.visible = true; predictDirty = true; }
@@ -1535,9 +1726,10 @@ function update(dt) {
   if (pad) {
     if (pad.pressed.a) actionButton();
     if (pad.pressed.b) cancelButton();
+    if (pad.pressed.x) jogToBall();
     if (pad.pressed.lb) changeClub(-1);
     if (pad.pressed.rb) changeClub(1);
-    if (pad.pressed.start) startHole();
+    if (pad.pressed.start) replayHole();
     if (pad.pressed.y) { soundOn = !soundOn; flash(soundOn ? 'Sound on' : 'Sound off'); }
     camYaw += pad.rx * 2.2 * dt;
     camPitch = Math.max(-0.15, Math.min(0.8, camPitch + pad.ry * 1.2 * dt));
@@ -1558,34 +1750,103 @@ function update(dt) {
   updateHud();
 }
 
-function updateWalk(dt, mx, my) {
-  var moving = Math.hypot(mx, my) > 0.05;
-  if (moving) autoWalk = null;
+/* You can walk on to anything within a step of where your feet are, and
+   anywhere at all while you are off the ground. Anything taller than a step
+   you have to jump on to - which is why you could previously stroll up the
+   side of a six metre pillar and stand on top of it. */
+function stepOk(x, z, feet, onGround) {
+  if (!onGround) return true;
+  var floor = solidY(x, z, null);
+  if (floor === null) return false;   /* walk to the edge, not off it */
+  return floor - feet <= STEP_UP;
+}
+
+function jump() {
+  if (phase !== 'walk') return false;
   var g = golfer.userData.pos;
+  var floor = solidY(g.x, g.z, null);
+  if (floor === null || golfer.userData.y > floor + 0.05) return false;
+  golfer.userData.vy = JUMP_SPEED;
+  golfer.userData.y = floor + 0.01;
+  beep(440, 0.07);
+  return true;
+}
+
+/* Jogging over to the ball used to happen on its own after every shot. It is
+   yours to ask for now. */
+function jogToBall() {
+  if (phase !== 'walk') return;
+  var tx = hole.ball.pos.x - Math.cos(aimYaw) * 1.6;
+  var tz = hole.ball.pos.z - Math.sin(aimYaw) * 1.6;
+  if (!walkable(tx, tz)) { tx = hole.ball.pos.x; tz = hole.ball.pos.z; }
+  autoWalk = {
+    from: { x: golfer.userData.pos.x, z: golfer.userData.pos.z },
+    fromY: golfer.userData.y,
+    to: { x: tx, z: tz },
+    toY: solidY(tx, tz, golfer.userData.y),
+    t: 0
+  };
+  flash('On your way');
+}
+
+function updateWalk(dt, mx, my) {
+  var g = golfer.userData.pos;
+  var pushing = Math.hypot(mx, my) > 0.05;
+  if (pushing) autoWalk = null;
+
   if (autoWalk) {
     autoWalk.t = Math.min(1, autoWalk.t + dt / JOG_TIME);
     var e = autoWalk.t * autoWalk.t * (3 - 2 * autoWalk.t);
     g.x = autoWalk.from.x + (autoWalk.to.x - autoWalk.from.x) * e;
     g.z = autoWalk.from.z + (autoWalk.to.z - autoWalk.from.z) * e;
+    var lift = autoWalk.fromY + (autoWalk.toY - autoWalk.fromY) * e;
+    var under = solidY(g.x, g.z, null);
+    golfer.userData.y = under === null ? lift : Math.max(under, lift);
+    golfer.userData.vy = 0;
     walkPhase += dt * 11;
-    golfer.userData.facing = Math.atan2(autoWalk.to.z - autoWalk.from.z, autoWalk.to.x - autoWalk.from.x);
+    golfer.userData.facing = Math.atan2(autoWalk.to.z - autoWalk.from.z,
+      autoWalk.to.x - autoWalk.from.x);
     if (autoWalk.t >= 1) autoWalk = null;
-  } else if (moving) {
+    return;
+  }
+
+  /* gravity first, then where you are allowed to put your feet */
+  var gy = golfer.userData.y, vy = golfer.userData.vy;
+  var floor = solidY(g.x, g.z, null);
+  var onGround = floor !== null && gy <= floor + 0.02 && vy <= 0;
+  if (onGround) { gy = floor; vy = 0; }
+  else {
+    vy -= GOLFER_G * dt;
+    gy += vy * dt;
+    if (floor !== null && vy <= 0 && gy <= floor) { gy = floor; vy = 0; onGround = true; }
+  }
+
+  if (pushing) {
     /* the stick pushes the golfer the way the camera is looking */
-    var f = camYaw, s = camYaw + Math.PI / 2;
-    var vx = (-my) * Math.cos(f) + mx * Math.cos(s);
-    var vz = (-my) * Math.sin(f) + mx * Math.sin(s);
+    var f = camYaw, s2 = camYaw + Math.PI / 2;
+    var vx = (-my) * Math.cos(f) + mx * Math.cos(s2);
+    var vz = (-my) * Math.sin(f) + mx * Math.sin(s2);
     var len = Math.hypot(vx, vz) || 1;
     var nx = g.x + vx / len * WALK_SPEED * dt;
     var nz = g.z + vz / len * WALK_SPEED * dt;
-    /* you may walk to the very edge but not off it */
-    if (walkable(nx, g.z)) g.x = nx;
-    if (walkable(g.x, nz)) g.z = nz;
+    if (stepOk(nx, g.z, gy, onGround)) g.x = nx;
+    if (stepOk(g.x, nz, gy, onGround)) g.z = nz;
     golfer.userData.facing = Math.atan2(vz, vx);
     walkPhase += dt * 9;
   } else {
     walkPhase *= Math.pow(0.02, dt);
   }
+
+  /* jump off the course and you climb back up beside your ball */
+  if (gy < VOID_Y + 8) {
+    var back = walkable(hole.ball.pos.x, hole.ball.pos.z)
+      ? { x: hole.ball.pos.x, z: hole.ball.pos.z } : { x: TEE.x, z: TEE.z };
+    g.x = back.x; g.z = back.z;
+    gy = solidY(g.x, g.z, TEE.y); vy = 0;
+    flash('Climbed back up');
+  }
+  golfer.userData.y = gy;
+  golfer.userData.vy = vy;
 }
 
 function updateAim(dt, mx, my) {
@@ -1598,6 +1859,8 @@ function updateAim(dt, mx, my) {
   if (!walkable(sx, sz)) { sx = b.x; sz = b.z; }
   golfer.userData.pos.x = sx;
   golfer.userData.pos.z = sz;
+  golfer.userData.y = solidY(sx, sz, golfer.userData.y);
+  golfer.userData.vy = 0;
   golfer.userData.facing = aimYaw;
   refreshAim();
 }
@@ -1633,8 +1896,7 @@ function updateFlight(dt) {
 function poseGolfer(dt) {
   var g = golfer.userData.pos;
   /* set down on its soles, not sunk to the hips in the ground */
-  golfer.position.set(g.x,
-    solidY(g.x, g.z, golfer.position.y - GOLFER_LIFT) + GOLFER_LIFT, g.z);
+  golfer.position.set(g.x, golfer.userData.y + GOLFER_LIFT, g.z);
   var face = golfer.userData.facing === undefined ? 0 : golfer.userData.facing;
   /* Walking, you face where you are going. Over the ball you stand side on to
      it, which is a quarter turn off the line you are aiming down - and which
@@ -1680,7 +1942,7 @@ function updateCamera(dt) {
     want.set(PIN.x - 9, PIN.y + 6, PIN.z - 5);
     look.set(PIN.x, PIN.y + 1.2, PIN.z);
   } else {
-    var gh = solidY(g.x, g.z, golfer.position.y);
+    var gh = golfer.userData.y;
     want.set(g.x - Math.cos(camYaw) * camDist, gh + 3 + camPitch * 9,
       g.z - Math.sin(camYaw) * camDist);
     look.set(g.x + Math.cos(camYaw) * 6, gh + 1.6, g.z + Math.sin(camYaw) * 6);
@@ -1701,11 +1963,14 @@ function updateCamera(dt) {
 function flash(text) { message = text; messageUntil = performance.now() + 2400; }
 
 function updateHud() {
+  var h = currentHole();
+  ui.hole.textContent = (h.index + 1) + ' of ' + h.count + '  ·  ' + h.name;
   var left = hole.toPin();
   ui.dist.textContent = left < 1 ? 'In the hole' : Math.round(left) + ' m';
   ui.lie.textContent = SURFACES[hole.lie()].name;
   ui.club.textContent = CLUBS[clubIndex].name;
-  ui.shots.textContent = (hole.strokes + hole.penalties) + ' / par ' + PAR;
+  ui.shots.textContent = (hole.strokes + hole.penalties) + ' / par ' + PAR +
+    (round.played.length ? '   (round ' + round.total + ')' : '');
   var wSpeed = Math.hypot(hole.wind.x, hole.wind.z);
   var wDir = Math.atan2(hole.wind.z, hole.wind.x) - aimYaw;
   ui.wind.textContent = wSpeed.toFixed(1) + ' m/s ' + windArrow(wDir);
@@ -1730,8 +1995,10 @@ function windArrow(rel) {
 function promptText() {
   var pad = padIndex !== null;
   if (phase === 'walk') {
-    if (nearBall()) return pad ? 'A  address the ball' : 'Space  address the ball';
-    return pad ? 'Left stick  walk to your ball' : 'WASD  walk to your ball';
+    if (nearBall()) return pad ? 'A  address the ball   ·   X  go to the ball'
+                               : 'Space  address the ball   ·   X  go to the ball';
+    return pad ? 'Left stick  walk   ·   A  jump   ·   X  go to the ball'
+               : 'WASD  walk   ·   Space  jump   ·   X  go to the ball';
   }
   if (phase === 'aim') {
     return pad ? 'Left stick  aim   ·   LB / RB  club   ·   A  take your stance'
@@ -1741,7 +2008,10 @@ function promptText() {
     return pad ? 'Pull the left stick back, then push it through'
                : 'Space  set the power   ·   Space again at the bottom';
   }
-  if (phase === 'holed') return pad ? 'A  play it again' : 'Space  play it again';
+  if (phase === 'holed') {
+    var more = currentHole().index + 1 < currentHole().count;
+    return (pad ? 'A  ' : 'Space  ') + (more ? 'on to the next hole' : 'play the round again');
+  }
   return '';
 }
 
@@ -1749,11 +2019,23 @@ function refreshHints() { flash(padIndex !== null ? 'Controller connected' : 'Co
 
 function showCard() {
   var s = hole.score();
+  var h = currentHole();
+  var last = h.index + 1 >= h.count;
+  var card = '<b>' + s.total + '</b> strokes on a par ' + s.par +
+    (s.penalties ? '<br>including ' + s.penalties + ' penalty stroke' + (s.penalties > 1 ? 's' : '') : '');
+  if (round.played.length > 1 || last) {
+    card += '<br><br>';
+    for (var i = 0; i < round.played.length; i++) {
+      card += round.played[i].name + '  ' + round.played[i].total + '<br>';
+    }
+    var rel = round.total - round.par;
+    card += '<b>Round ' + round.total + '</b> ' +
+      (rel === 0 ? 'level' : (rel > 0 ? '+' + rel : rel)) + ' to par';
+  }
+  card += '<br><span class="soft">' + (padIndex !== null ? 'A' : 'Space') + ' to ' +
+    (last ? 'play the round again' : 'go on to the next hole') + '</span>';
   ui.cardTitle.textContent = s.name;
-  ui.cardBody.innerHTML =
-    '<b>' + s.total + '</b> strokes on a par ' + s.par +
-    (s.penalties ? '<br>including ' + s.penalties + ' penalty stroke' + (s.penalties > 1 ? 's' : '') : '') +
-    '<br><span class="soft">' + (padIndex !== null ? 'A' : 'Space') + ' to play it again</span>';
+  ui.cardBody.innerHTML = card;
   ui.card.classList.add('show');
 }
 
@@ -1800,18 +2082,16 @@ function boot() {
   scene.add(sun);
 
   buildScenery();
-  buildCourseMeshes();
-  buildMill();
-  buildFlag();
   buildBall();
   buildGolfer();
   buildAimLine();
 
   ['dist', 'lie', 'club', 'shots', 'wind', 'msg', 'prompt', 'meterWrap',
-    'meterFill', 'card', 'cardTitle', 'cardBody'].forEach(function (k) { ui[k] = el(k); });
+    'meterFill', 'card', 'cardTitle', 'cardBody', 'hole'].forEach(function (k) { ui[k] = el(k); });
 
   bindKeys();
-  ['hitBtn', 'cancelBtn', 'clubDownBtn', 'clubUpBtn', 'resetBtn', 'fullBtn'].forEach(function (id) {
+  ['hitBtn', 'cancelBtn', 'clubDownBtn', 'clubUpBtn', 'resetBtn', 'fullBtn',
+    'jogBtn', 'jumpBtn'].forEach(function (id) {
     var b = el(id);
     if (!b) return;
     b.addEventListener('click', function () {
@@ -1819,7 +2099,9 @@ function boot() {
       else if (id === 'cancelBtn') cancelButton();
       else if (id === 'clubDownBtn') changeClub(-1);
       else if (id === 'clubUpBtn') changeClub(1);
-      else if (id === 'resetBtn') startHole();
+      else if (id === 'resetBtn') replayHole();
+      else if (id === 'jogBtn') jogToBall();
+      else if (id === 'jumpBtn') jump();
       else if (id === 'fullBtn') toggleFullscreen();
     });
   });
@@ -1831,7 +2113,7 @@ function boot() {
     document.addEventListener(ev, syncFullscreenButton);
   });
 
-  startHole();
+  startRound();
   camera.position.set(TEE.x - 14, TEE.y + 6, TEE.z - 6);
   lastTime = performance.now();
   requestAnimationFrame(frame);
@@ -1845,10 +2127,6 @@ function frame(now) {
   ballMesh.visible = !hole.ball.holed;
   sizeBall();
   spinCourse(hole.time);
-  /* the sails turn with the arm below them, so what you see is the timing
-     you have to play */
-  if (millGroup) millGroup.userData.sails.rotation.z =
-    -millGroup.userData.hub.spin * hole.time;
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
