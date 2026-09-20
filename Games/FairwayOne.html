@@ -982,20 +982,30 @@ SwingMeter.prototype.step = function (dt, rate) {
 /* The stick swing: pull back to load, push through to hit. Returns a struck
    swing when the stick crosses back through the middle, and nothing until
    then. */
+var STICK_RATE = 1.35;     /* how fast the backswing winds up, per second -
+                              the same rate the keyboard meter climbs at */
 function StickSwing() {
   this.loaded = 0;
   this.armed = false;
   this.offset = 0;
 }
 StickSwing.prototype.reset = function () { this.loaded = 0; this.armed = false; this.offset = 0; };
-StickSwing.prototype.update = function (sx, sy) {
-  /* sy is positive when the stick is pulled back toward the player */
+StickSwing.prototype.update = function (sx, sy, dt) {
+  /* sy is positive when the stick is pulled back toward the player. How far
+     back the stick is only says how far back the swing is ALLOWED to be:
+     it still has to wind up at its own pace, or flicking the stick down for
+     a tenth of a second is a full swing, which is no swing at all. */
+  var h = dt === undefined ? 1 : dt;
   if (sy > 0.25) {
     this.armed = true;
-    if (sy > this.loaded) { this.loaded = Math.min(1, sy); this.offset = sx; }
+    var reach = Math.min(1, sy);
+    var next = Math.min(reach, this.loaded + STICK_RATE * h);
+    if (next > this.loaded) { this.loaded = next; this.offset = sx; }
     return null;
   }
-  if (this.armed && this.loaded > 0.2 && sy < -0.15) {
+  /* and it takes a real push forward to hit it, not the stick springing back
+     through the middle on its own */
+  if (this.armed && this.loaded > 0.2 && sy < -0.28) {
     var hit = {
       power: Math.min(1, this.loaded * 1.05),
       /* how far off line the stick was coming through, against how far back
@@ -1024,7 +1034,7 @@ if (typeof module !== 'undefined' && module.exports) {
     GRAVITY: GRAVITY, DRAG: DRAG, LIFT: LIFT, BALL_STOP: BALL_STOP,
     SPIN_DECAY: SPIN_DECAY, ROLL_SLOPE: ROLL_SLOPE, ROLL_DRAG: ROLL_DRAG,
     SIM_DT: SIM_DT,
-    HOLE_SPEED: HOLE_SPEED, launchVelocity: launchVelocity,
+    HOLE_SPEED: HOLE_SPEED, launchVelocity: launchVelocity, STICK_RATE: STICK_RATE,
     Ball: Ball, Hole: Hole, SwingMeter: SwingMeter, StickSwing: StickSwing,
     predictShot: predictShot
   };
@@ -1191,12 +1201,25 @@ function buildScenery() {
 function buildFlag() {
   flag = new THREE.Group();
   var base = heightAt(PIN.x, PIN.z, 0);
+  /* The hole is a hole: a dark disc laid flat on the green, exactly as wide
+     as the ball has to be inside to drop. It used to be a black post standing
+     seventeen centimetres proud of the green, which read as a bump to bounce
+     off rather than somewhere to aim. */
   var cup = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.16, 0.16, 0.3, 14),
-    new THREE.MeshLambertMaterial({ color: 0x14181c })
+    new THREE.CircleGeometry(CUP_RADIUS, 22),
+    new THREE.MeshBasicMaterial({ color: 0x0a0e10, side: THREE.DoubleSide })
   );
-  cup.position.set(0, 0.02, 0);
+  cup.rotation.x = -Math.PI / 2;
+  cup.position.set(0, 0.014, 0);
   flag.add(cup);
+  /* a pale rim, so you can pick it out from across the green */
+  var rim = new THREE.Mesh(
+    new THREE.CircleGeometry(CUP_RADIUS + 0.09, 24),
+    new THREE.MeshBasicMaterial({ color: 0xeef6e8, side: THREE.DoubleSide })
+  );
+  rim.rotation.x = -Math.PI / 2;
+  rim.position.set(0, 0.008, 0);
+  flag.add(rim);
   var pole = new THREE.Mesh(
     new THREE.CylinderGeometry(0.035, 0.035, 2.6, 6),
     new THREE.MeshLambertMaterial({ color: 0xf4f4f0 })
@@ -1235,6 +1258,14 @@ function sizeBall() {
 
 /* A golfer, out of boxes. Enough of a person to tell which way you are
    facing and whether you are mid swing, which is all the character has to do. */
+/* A golfer, out of boxes. Enough of a person to tell which way you are
+   facing and whether you are mid swing, which is all the character has to do.
+   The figure faces down its own x axis, the arms and legs hang off pivots at
+   the shoulder and hip so they swing from the right end, and the whole thing
+   is built standing on y = 0 so it can be set down on the ground rather than
+   buried to the knees in it. */
+var GOLFER_LIFT = 0.845;   /* how far the middle sits above the soles */
+
 function buildGolfer() {
   golfer = new THREE.Group();
   function part(w, h, d, colour, x, y, z) {
@@ -1246,8 +1277,14 @@ function buildGolfer() {
     m.castShadow = true;
     return m;
   }
-  golfer.legL = part(0.26, 0.85, 0.28, 0x2b3550, 0, -0.42, -0.17);
-  golfer.legR = part(0.26, 0.85, 0.28, 0x2b3550, 0, -0.42, 0.17);
+  function limb(x, y, z, mesh) {
+    var pivot = new THREE.Group();
+    pivot.position.set(x, y, z);
+    pivot.add(mesh);
+    return pivot;
+  }
+  golfer.hipL = limb(0, 0, -0.17, part(0.26, 0.85, 0.28, 0x2b3550, 0, -0.42, 0));
+  golfer.hipR = limb(0, 0, 0.17, part(0.26, 0.85, 0.28, 0x2b3550, 0, -0.42, 0));
   golfer.body = new THREE.Group();
   golfer.torso = part(0.46, 0.75, 0.64, 0xe24d3f, 0, 0.38, 0);
   golfer.head = new THREE.Mesh(
@@ -1257,22 +1294,21 @@ function buildGolfer() {
   golfer.head.position.set(0, 0.92, 0);
   golfer.cap = part(0.34, 0.1, 0.36, 0x1d4e89, 0, 1.06, 0);
   golfer.peak = part(0.22, 0.06, 0.16, 0x1d4e89, 0.2, 1.02, 0);
-  golfer.armL = part(0.18, 0.62, 0.18, 0xe24d3f, 0.06, 0.35, -0.38);
-  golfer.armR = part(0.18, 0.62, 0.18, 0xe24d3f, 0.06, 0.35, 0.38);
+  golfer.shoulderL = limb(0.06, 0.66, -0.38, part(0.18, 0.62, 0.18, 0xe24d3f, 0, -0.31, 0));
+  golfer.shoulderR = limb(0.06, 0.66, 0.38, part(0.18, 0.62, 0.18, 0xe24d3f, 0, -0.31, 0));
   golfer.club = new THREE.Group();
-  var shaft = part(0.045, 1.15, 0.045, 0xd8d8d8, 0, -0.55, 0);
-  var head = part(0.16, 0.12, 0.3, 0x8f9499, 0.03, -1.12, 0.05);
-  golfer.club.add(shaft); golfer.club.add(head);
+  golfer.club.add(part(0.045, 1.15, 0.045, 0xd8d8d8, 0, -0.55, 0));
+  golfer.club.add(part(0.16, 0.12, 0.3, 0x8f9499, 0.03, -1.12, 0.05));
   golfer.club.position.set(0.12, 0.5, 0.36);
   golfer.body.add(golfer.torso);
   golfer.body.add(golfer.head);
   golfer.body.add(golfer.cap);
   golfer.body.add(golfer.peak);
-  golfer.body.add(golfer.armL);
-  golfer.body.add(golfer.armR);
+  golfer.body.add(golfer.shoulderL);
+  golfer.body.add(golfer.shoulderR);
   golfer.body.add(golfer.club);
-  golfer.add(golfer.legL);
-  golfer.add(golfer.legR);
+  golfer.add(golfer.hipL);
+  golfer.add(golfer.hipR);
   golfer.add(golfer.body);
   golfer.userData.pos = { x: TEE.x - 2, z: TEE.z };
   scene.add(golfer);
@@ -1570,7 +1606,7 @@ function updateSwing(dt, pad, mx, my) {
   golfer.userData.facing = aimYaw;
   if (stick && pad) {
     /* pull the stick back to load it, push through to hit */
-    var hit = stick.update(pad.lx, pad.ly);
+    var hit = stick.update(pad.lx, pad.ly, dt);
     if (hit) strike(hit.power, hit.face);
   } else if (meter) {
     meter.step(dt);
@@ -1596,15 +1632,22 @@ function updateFlight(dt) {
 
 function poseGolfer(dt) {
   var g = golfer.userData.pos;
-  golfer.position.set(g.x, solidY(g.x, g.z, golfer.position.y), g.z);
+  /* set down on its soles, not sunk to the hips in the ground */
+  golfer.position.set(g.x,
+    solidY(g.x, g.z, golfer.position.y - GOLFER_LIFT) + GOLFER_LIFT, g.z);
   var face = golfer.userData.facing === undefined ? 0 : golfer.userData.facing;
-  golfer.rotation.y = -face + Math.PI / 2;
-  var sw = Math.sin(walkPhase) * Math.min(1, walkPhase > 0 ? 1 : 0);
-  var amp = Math.min(0.7, Math.abs(Math.sin(walkPhase)) > 0 ? 0.7 : 0);
-  golfer.legL.rotation.x = sw * amp;
-  golfer.legR.rotation.x = -sw * amp;
-  golfer.armL.rotation.x = -sw * amp * 0.8;
-  golfer.armR.rotation.x = sw * amp * 0.8;
+  /* Walking, you face where you are going. Over the ball you stand side on to
+     it, which is a quarter turn off the line you are aiming down - and which
+     is why walking used to look like crabbing. */
+  golfer.rotation.y = -face + (phase === 'walk' ? 0 : Math.PI / 2);
+
+  /* arms and legs swing fore and aft, which for a figure facing down its own
+     x axis is a turn about z */
+  var sw = phase === 'walk' ? Math.sin(walkPhase) * 0.7 : 0;
+  golfer.hipL.rotation.z = sw;
+  golfer.hipR.rotation.z = -sw;
+  golfer.shoulderL.rotation.z = -sw * 0.8;
+  golfer.shoulderR.rotation.z = sw * 0.8;
 
   /* the swing itself: back, through, and a held finish */
   var t = swingAnim;
@@ -1614,8 +1657,8 @@ function poseGolfer(dt) {
   else if (t > 0) turn = t < 0.25 ? -2.1 + t * 4 * 2.1 : Math.min(2.4, (t - 0.25) * 3.4);
   golfer.body.rotation.y = turn * 0.45;
   golfer.club.rotation.x = turn;
-  golfer.armL.rotation.x += turn * 0.35;
-  golfer.armR.rotation.x += turn * 0.35;
+  golfer.shoulderL.rotation.x = turn * 0.35;
+  golfer.shoulderR.rotation.x = turn * 0.35;
 }
 
 function updateCamera(dt) {
