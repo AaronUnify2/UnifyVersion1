@@ -25,7 +25,7 @@
     font-family: ui-rounded, "Avenir Next", "Segoe UI", system-ui, sans-serif;
     color: var(--text);
   }
-  #stage { position: fixed; inset: 0; }
+  #stage { position: fixed; inset: 0; touch-action: none; }
   #stage canvas { display: block; width: 100%; height: 100%; }
 
   .panel {
@@ -91,8 +91,10 @@
 
   /* thumb controls, for playing it on a phone */
   #touch {
-    position: fixed; right: 14px; bottom: calc(56px + env(safe-area-inset-bottom));
-    display: flex; gap: 8px; align-items: center; pointer-events: auto;
+    position: fixed; left: 10px; right: 10px;
+    bottom: calc(56px + env(safe-area-inset-bottom));
+    display: flex; gap: 8px; align-items: center; justify-content: flex-end;
+    flex-wrap: wrap-reverse; pointer-events: auto;
   }
   #touch button {
     font: inherit; font-weight: 700; color: #0c1814;
@@ -100,6 +102,8 @@
     padding: 14px 22px; font-size: 15px; cursor: pointer;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
   }
+  #touch button[hidden] { display: none; }
+  #touch .aim { font-size: 15px; padding: 12px 16px; }
   #touch .small {
     background: var(--panel); color: var(--text); border: 1px solid var(--edge);
     padding: 12px 14px; font-size: 13px; font-weight: 600;
@@ -118,11 +122,22 @@
   }
   #cardTitle { font-size: clamp(26px, 6vw, 42px); font-weight: 800; color: var(--accent); }
   #cardBody { margin-top: 10px; font-size: clamp(13px, 2.6vw, 17px); line-height: 1.6; }
+  #cardBtn {
+    margin-top: 18px; font: inherit; font-weight: 800; color: #0c1814;
+    background: var(--accent); border: none; border-radius: 999px;
+    padding: 16px 34px; font-size: clamp(15px, 3.4vw, 19px); cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  }
   .soft { color: var(--muted); }
 
   @media (max-width: 560px) {
     #meterWrap { height: 150px; bottom: 120px; }
     #touch button { padding: 12px 18px; }
+  }
+  @media (max-width: 430px) {
+    #touch .small { padding: 11px 11px; font-size: 12px; }
+    #touch .aim { padding: 11px 13px; font-size: 13px; }
+    #touch button { padding: 12px 15px; font-size: 14px; }
   }
 </style>
 </head>
@@ -166,16 +181,19 @@
 <div id="prompt"></div>
 
 <div id="touch">
+  <button class="small aim" id="aimLeftBtn" type="button">&#9664;</button>
+  <button class="small aim" id="aimRightBtn" type="button">&#9654;</button>
   <button class="small" id="clubDownBtn" type="button">&lt;</button>
   <button class="small" id="clubUpBtn" type="button">&gt;</button>
   <button class="small" id="jumpBtn" type="button">Jump</button>
   <button class="small" id="cancelBtn" type="button">Back</button>
-  <button id="hitBtn" type="button">Swing</button>
+  <button id="hitBtn" type="button">Go to ball</button>
 </div>
 
 <div id="card"><div id="cardInner">
   <div id="cardTitle"></div>
   <div id="cardBody"></div>
+  <button id="cardBtn" type="button">Next hole</button>
 </div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -227,6 +245,9 @@ function slab(x, y, z, w, h, d, opts) {
     kind: opts.kind || 'fairway',
     spin: opts.spin || 0,        /* radians a second about the upright */
     roll: opts.roll || 0,        /* radians a second end over end */
+    kick: opts.kick || 0,        /* a pad of its own strength, if it wants one */
+    slide: opts.slide || null,   /* how far it shuttles, and about which way */
+    slideRate: opts.slideRate || 0,  /* radians a second of that shuttle */
     belt: opts.belt || 0,        /* metres a second along its own length */
     beltSide: opts.beltSide || 0, /* and across it, for a belt that shoves */
     phase: opts.phase || 0
@@ -234,7 +255,18 @@ function slab(x, y, z, w, h, d, opts) {
   sl.bound = slabBounds(sl);
   return sl;
 }
-function moving(sl) { return !!(sl.spin || sl.roll); }
+function moving(sl) { return !!(sl.spin || sl.roll || sl.slide); }
+
+/* Where a slab is at a given moment. Everything that asks about a slab asks
+   through this, so a platform that shuttles is solid in the right place
+   rather than solid where it was built. */
+function slabPos(sl, time) {
+  if (!sl.slide) return sl.pos;
+  var a = Math.sin(sl.slideRate * (time || 0) + sl.phase);
+  return { x: sl.pos.x + sl.slide.x * a,
+           y: sl.pos.y + sl.slide.y * a,
+           z: sl.pos.z + sl.slide.z * a };
+}
 
 /* How far a slab reaches along each world axis, once it has been leaned and
    turned - and, if it moves, over every position it will ever be in. Six
@@ -263,11 +295,11 @@ function slabBounds(sl) {
 }
 
 /* true when a ball of radius r could not possibly be touching this slab */
-function slabFar(sl, p, r) {
-  var b = sl.bound;
-  return Math.abs(p.x - sl.pos.x) > b.x + r ||
-         Math.abs(p.y - sl.pos.y) > b.y + r ||
-         Math.abs(p.z - sl.pos.z) > b.z + r;
+function slabFar(sl, p, r, time) {
+  var b = sl.bound, c = slabPos(sl, time);
+  return Math.abs(p.x - c.x) > b.x + r ||
+         Math.abs(p.y - c.y) > b.y + r ||
+         Math.abs(p.z - c.z) > b.z + r;
 }
 
 /* A platform described by the surface you land on rather than its middle,
@@ -277,7 +309,7 @@ function deck(x, top, z, w, d, kind, opts) {
   var thick = opts.thick === undefined ? 4 : opts.thick;
   return slab(x, top - thick / 2, z, w, thick, d,
     { kind: kind || 'fairway', yaw: opts.yaw, belt: opts.belt,
-      beltSide: opts.beltSide });
+      beltSide: opts.beltSide, kick: opts.kick });
 }
 
 /* A deck with a rectangular patch of something else let into it - a conveyor,
@@ -571,6 +603,102 @@ function buildHoleFive() {
   return c;
 }
 
+/* A platform that shuttles. Given where it sits at the middle of its run and
+   how far it goes each way, so a lift is written down as the two heights it
+   travels between. */
+function shuttle(sl, slide, seconds, phase) {
+  sl.slide = slide;
+  sl.slideRate = (Math.PI * 2) / seconds;
+  sl.phase = phase || 0;
+  sl.bound = slabBounds(sl);
+  return sl;
+}
+function platform(x, y, z, w, d, kind, slide, seconds, opts) {
+  opts = opts || {};
+  return shuttle(deck(x, y, z, w, d, kind, opts), slide, seconds, opts.phase);
+}
+
+/* Hole six. It goes up. A drive that runs onto the bounce pad is thrown
+   clean up onto the next shelf; one that does not has to grind up the ramp
+   beside it. The last climb is too tall for either, so there is a lift - ride
+   it to the top and chip across to the green, and mind that you do not chip
+   while it is still down there. */
+function buildHoleSix() {
+  var c = [];
+
+  c.push(deck(0, 0, 0, 30, 28, 'tee'));             /* x -15..15 */
+
+  /* the bottom shelf, with the pad set where a drive runs out */
+  push(c, inlay(15, 250, -35, 35, 0, 'fairway',
+    { x0: 210, x1: 234, z0: -20, z1: 20, kind: 'spring', opts: { kick: 16 } }));
+  c.push(slab(132, 1.6, -36, 235, 3.2, 2, { kind: 'rail' }));
+  c.push(slab(132, 1.6, 36, 235, 3.2, 2, { kind: 'rail' }));
+
+  /* the slow way up, for anyone who missed the pad and can still run it */
+  c.push(ramp(250, 0, 264, 6, 0, 70, 'fairway'));
+
+  /* the middle shelf */
+  c.push(deck(332, 6, 0, 136, 70, 'fairway', { thick: 10 }));   /* x 264..400 */
+  c.push(slab(332, 7.6, -36, 136, 3.2, 2, { kind: 'rail' }));
+  c.push(slab(332, 7.6, 36, 136, 3.2, 2, { kind: 'rail' }));
+
+  /* The lift. Its top rides between the middle shelf and the top one, and it
+     is walled on three sides so that what lands on it stays on it - the side
+     facing back down the hole is left open so a ball can roll straight on
+     while it is down. */
+  var run = { x: 0, y: 7, z: 0 };
+  var turn = 11;
+  c.push(platform(422, 13, 0, 44, 44, 'fairway', run, turn, { thick: 6 }));
+  /* Kerbed rather than walled: a ball lying flush against a wall has no shot
+     over it, and a lift with a dead ball on it is a dead hole. Kerbs down
+     the two sides to hold it on, and nothing front or back. The back is open
+     so a ball can roll aboard off the middle shelf while the lift is down;
+     the front is closed by the top shelf itself, and that is only a wall
+     while the lift is low - by the time it is at the top there is nothing
+     in the way at all, which is what makes waiting the whole hole. */
+  c.push(shuttle(slope(422, -20.9, 13, 422, -23.1, 15.2, 48, 'stone', 1), run, turn));
+  c.push(shuttle(slope(422, 20.9, 13, 422, 23.1, 15.2, 48, 'stone', 1), run, turn));
+
+  /* the top shelf, with the green cut into it */
+  push(c, inlay(444, 520, -30, 30, 20, 'fairway',
+    { x0: 470, x1: 500, z0: -15, z1: 15, kind: 'green' }));
+  c.push(slab(482, 21.6, -31, 76, 3.2, 2, { kind: 'rail' }));
+  c.push(slab(482, 21.6, 31, 76, 3.2, 2, { kind: 'rail' }));
+  c.push(slab(521, 21.6, 0, 2, 3.2, 62, { kind: 'rail' }));
+
+  return c;
+}
+
+/* Hole seven. One hole, two holes. Straight ahead is a causeway twenty
+   metres wide over nothing, and a drive down it leaves a putt for three.
+   Round to the right is a fairway seventy metres wide with a bunker in it
+   and no danger at all, and it leaves a wedge. Everything about this hole is
+   decided before you swing. */
+function buildHoleSeven() {
+  var c = [];
+
+  /* the tee is the near end of the causeway, so you are standing on it */
+  c.push(deck(0, 10, 0, 30, 20, 'tee'));            /* x -15..15, z -10..10 */
+  c.push(deck(141.5, 10, 0, 253, 20, 'fairway'));   /* x  15..268 */
+  c.push(slab(141.5, 10.5, -11, 253, 1, 2, { kind: 'rail' }));
+  c.push(slab(141.5, 10.5, 11, 253, 1, 2, { kind: 'rail' }));
+
+  /* the long way: wide, railed, and with one bunker in it to think about */
+  push(c, inlay(40, 268, 26, 96, 10, 'fairway',
+    { x0: 150, x1: 182, z0: 44, z1: 76, kind: 'sand' }));
+  c.push(slab(154, 11.6, 25, 228, 3.2, 2, { kind: 'rail' }));
+  c.push(slab(154, 11.6, 97, 228, 3.2, 2, { kind: 'rail' }));
+
+  /* and the shelf they both arrive at */
+  push(c, inlay(268, 350, -25, 100, 10, 'fairway',
+    { x0: 278, x1: 308, z0: -15, z1: 15, kind: 'green' }));
+  c.push(slab(309, 11.6, -26, 82, 3.2, 2, { kind: 'rail' }));
+  c.push(slab(309, 11.6, 101, 82, 3.2, 2, { kind: 'rail' }));
+  c.push(slab(351, 11.6, 37.5, 2, 3.2, 127, { kind: 'rail' }));
+
+  return c;
+}
+
 var HOLES = [
   { name: 'The Windmill', build: buildHoleOne, par: 4, greenRadius: 17,
     tee: { x: 0, y: 12, z: 0 }, pin: { x: 300, y: -4, z: 46 } },
@@ -581,7 +709,11 @@ var HOLES = [
   { name: 'The Half Pipe', build: buildHoleFour, par: 4, greenRadius: 10,
     tee: { x: 0, y: 14, z: 0 }, pin: { x: 349, y: 0, z: 0 } },
   { name: 'The Island', build: buildHoleFive, par: 3, greenRadius: 13,
-    tee: { x: 0, y: 10, z: 0 }, pin: { x: 152, y: 0, z: 22 } }
+    tee: { x: 0, y: 10, z: 0 }, pin: { x: 152, y: 0, z: 22 } },
+  { name: 'The Ladder', build: buildHoleSix, par: 5, greenRadius: 15,
+    tee: { x: 0, y: 0, z: 0 }, pin: { x: 485, y: 20, z: 0 } },
+  { name: 'The Long Way Round', build: buildHoleSeven, par: 4, greenRadius: 15,
+    tee: { x: 0, y: 10, z: 0 }, pin: { x: 293, y: 10, z: 0 } }
 ];
 
 /* The one hole that is loaded. TEE and PIN are filled in rather than
@@ -615,9 +747,9 @@ loadHole(0);
 /* how fast the grass is, how much it gives, how much it grabs at a ball
    skidding along it, and how much of your swing gets to the ball from it */
 var SURFACES = {
-  tee:     { name: 'Tee',      roll: 0.062, bounce: 0.36, skid: 0.70, grab: 1.00 },
-  fairway: { name: 'Fairway',  roll: 0.062, bounce: 0.36, skid: 0.70, grab: 1.00 },
-  green:   { name: 'Green',    roll: 0.048, bounce: 0.26, skid: 0.50, grab: 1.00 },
+  tee:     { name: 'Tee',      roll: 0.052, bounce: 0.36, skid: 0.70, grab: 1.00 },
+  fairway: { name: 'Fairway',  roll: 0.052, bounce: 0.36, skid: 0.70, grab: 1.00 },
+  green:   { name: 'Green',    roll: 0.034, bounce: 0.26, skid: 0.52, grab: 1.00 },
   sand:    { name: 'Bunker',   roll: 1.80, bounce: 0.04, skid: 0.05, grab: 0.42 },
   stone:   { name: 'Stone',    roll: 0.06, bounce: 0.45, skid: 0.80, grab: 0.70 },
   wood:    { name: 'Windmill', roll: 0.08, bounce: 0.22, skid: 0.85, grab: 0.70 },
@@ -640,21 +772,22 @@ function slabTilt(sl, time) {
   return sl.tilt + (sl.roll ? sl.roll * (time || 0) + sl.phase : 0);
 }
 function toLocal(sl, p, time) {
-  var d = { x: p.x - sl.pos.x, y: p.y - sl.pos.y, z: p.z - sl.pos.z };
+  var c = slabPos(sl, time);
+  var d = { x: p.x - c.x, y: p.y - c.y, z: p.z - c.z };
   return rotZ(rotY(d, -slabYaw(sl, time)), -slabTilt(sl, time));
 }
 function toWorldDir(sl, n, time) {
   return rotY(rotZ(n, slabTilt(sl, time)), slabYaw(sl, time));
 }
 function toWorld(sl, l, time) {
-  var d = toWorldDir(sl, l, time);
-  return { x: sl.pos.x + d.x, y: sl.pos.y + d.y, z: sl.pos.z + d.z };
+  var d = toWorldDir(sl, l, time), c = slabPos(sl, time);
+  return { x: c.x + d.x, y: c.y + d.y, z: c.z + d.z };
 }
 
 /* The closest point on a slab to a ball, and how deep it is in. Null when
    they are not touching. The normal points out of the slab at the ball. */
 function slabContact(sl, p, r, time) {
-  if (slabFar(sl, p, r)) return null;
+  if (slabFar(sl, p, r, time)) return null;
   var l = toLocal(sl, p, time);
   var h = sl.half;
   var cx = Math.max(-h.x, Math.min(h.x, l.x));
@@ -698,13 +831,14 @@ function surfaceVelocity(sl, p, time) {
    passes through it at all. Solved directly, because for a tilted box the
    height of the top face is linear in the local across-slab distance. */
 function slabTopAt(sl, x, z, time) {
-  if (Math.abs(x - sl.pos.x) > sl.bound.x || Math.abs(z - sl.pos.z) > sl.bound.z) return null;
+  var c = slabPos(sl, time);
+  if (Math.abs(x - c.x) > sl.bound.x || Math.abs(z - c.z) > sl.bound.z) return null;
   var h = sl.half;
-  var f = rotY({ x: x - sl.pos.x, y: 0, z: z - sl.pos.z }, -slabYaw(sl, time));
+  var f = rotY({ x: x - c.x, y: 0, z: z - c.z }, -slabYaw(sl, time));
   var tilt = slabTilt(sl, time);
   var ct = Math.cos(tilt), st = Math.sin(tilt);
   /* local y is h.y on the top face, so the world height follows at once */
-  var y = sl.pos.y + (h.y + f.x * st) / ct;
+  var y = c.y + (h.y + f.x * st) / ct;
   var lx = f.x / ct + h.y * st / ct;
   if (Math.abs(lx) > h.x || Math.abs(f.z) > h.z) return null;
   return { y: y, kind: sl.kind, slab: sl,
@@ -719,7 +853,9 @@ function groundUnder(x, z, time) {
   var best = null;
   for (var i = 0; i < COURSE.length; i++) {
     var sl = COURSE[i];
-    if (sl.kind === 'rail' || moving(sl)) continue;
+    /* a platform that only shuttles is still a floor - it is the turning
+       things that cannot be stood on */
+    if (sl.kind === 'rail' || sl.spin || sl.roll) continue;
     var top = slabTopAt(sl, x, z, time);
     if (top === null) continue;
     if (!best) { best = top; continue; }
@@ -754,7 +890,9 @@ function inSweep(x, y, z) {
   var r = BALL_RADIUS;
   for (var i = 0; i < COURSE.length; i++) {
     var sl = COURSE[i], h = sl.half;
-    var dx = x - sl.pos.x, dy = y - sl.pos.y, dz = z - sl.pos.z;
+    if (!sl.spin && !sl.roll) continue;
+    var c = slabPos(sl, 0);
+    var dx = x - c.x, dy = y - c.y, dz = z - c.z;
     if (sl.spin) {
       var reach = h.x + r;
       if (dx * dx + dz * dz < reach * reach && Math.abs(dy) < h.y + r) return true;
@@ -817,13 +955,21 @@ var GRAVITY = 9.81;
 var DRAG = 0.0026;
 var LIFT = 0.0042;
 var SPIN_DECAY = 0.11;     /* backspin bleeds off through the flight */
-var BALL_STOP = 0.30;      /* below this it has stopped, in m/s */
+/* Below this it has stopped. A shade higher than it looks like it should be,
+   because a ball that now runs sixty metres spends a long time creeping the
+   last half of one, and nobody is watching that part. */
+var BALL_STOP = 0.40;
 /* Faster than this over the cup and it lips out. The cup here is half a
    metre across - ten times a real one - so the speed a ball can be going and
    still drop has to scale with it, or soft putts horseshoe out of a bucket. */
 var HOLE_SPEED = 4.2;
-var ROLL_SLOPE = 5 / 7;    /* a rolling sphere only gets this much of gravity */
-var ROLL_DRAG = 0.010;     /* air, felt on the ground as well as in it */
+/* How much of a slope a rolling ball actually feels. A sphere rolling
+   without slipping gets five sevenths and the rest goes into spinning it up,
+   but a golf ball on grass slides as much as it rolls, so it gets more of the
+   hill than the textbook says - and a ball that will not run downhill is no
+   fun to play. */
+var ROLL_SLOPE = 0.86;
+var ROLL_DRAG = 0.007;     /* air, felt on the ground as well as in it */
 /* A shot clock. Almost every shot is done inside ten seconds, but a ball can
    find a corner of a course that keeps it alive - swatted by an arm, back
    down a bank, swatted again, creeping down a ramp - and nobody wants to
@@ -863,6 +1009,7 @@ function Ball() {
   this.grounded = false;
   this.gn = { x: 0, y: 1, z: 0 };
   this.gv = { x: 0, y: 0, z: 0 };   /* and how fast it is running */
+  this.gslab = null;                /* and which slab it actually is */
   this.gkind = 'tee';
   this.padHits = 0;
   this.moving = false;
@@ -877,7 +1024,12 @@ Ball.prototype.strike = function (club, power, aimYaw, face, windX, windZ) {
   var c = typeof club === 'string' ? clubById(club) : club;
   this.vel = launchVelocity(c, power, aimYaw, face);
   this.bend = face * c.curve;
-  this.backspin = c.spin;
+  /* How much check the shot has depends on how hard it was struck, not just
+     on which club it was. A full wedge rips; a nudge out of a bunker with
+     the same club has almost nothing on it, which is why a bunker shot runs
+     and a pitched one stops. The power here already has the lie's grip in
+     it, so a shot out of sand loses its spin for free. */
+  this.backspin = c.spin * Math.min(1, power);
   this.moving = true;
   this.holed = false;
   this.lost = false;
@@ -1005,7 +1157,7 @@ Ball.prototype.respond = function (ct, time) {
     /* the turf grabs at what is skidding along it, and backspin checks a
        lofted shot up rather than letting it release - which is what keeps a
        wedge stopping dead while a drive runs on */
-    var k = sfc.skid * (1 - Math.min(0.62, this.backspin * 0.42));
+    var k = sfc.skid * (1 - Math.min(0.55, this.backspin * 0.30));
     rx = vn * n.x + tx * k;
     ry = vn * n.y + ty * k;
     rz = vn * n.z + tz * k;
@@ -1018,7 +1170,7 @@ Ball.prototype.respond = function (ct, time) {
      gets less, or a ball dropped on one would bounce for ever. */
   if (sfc.kick && n.y > 0.5) {
     this.padHits++;
-    var kick = sfc.kick * Math.pow(0.5, this.padHits - 1);
+    var kick = (sl.kick || sfc.kick) * Math.pow(0.5, this.padHits - 1);
     var outN = rx * n.x + ry * n.y + rz * n.z;
     if (outN < kick) {
       rx += (kick - outN) * n.x;
@@ -1055,10 +1207,13 @@ Ball.prototype.clearance = function () {
   var best = 1e9, p = this.pos;
   for (var i = 0; i < COURSE.length; i++) {
     var sl = COURSE[i], b = sl.bound;
-    var d = Math.abs(p.x - sl.pos.x) - b.x;
-    var dy = Math.abs(p.y - sl.pos.y) - b.y;
+    /* a slab that shuttles could be anywhere along its run, so allow for it */
+    var slack = sl.slide
+      ? Math.abs(sl.slide.x) + Math.abs(sl.slide.y) + Math.abs(sl.slide.z) : 0;
+    var d = Math.abs(p.x - sl.pos.x) - b.x - slack;
+    var dy = Math.abs(p.y - sl.pos.y) - b.y - slack;
     if (dy > d) d = dy;
-    var dz = Math.abs(p.z - sl.pos.z) - b.z;
+    var dz = Math.abs(p.z - sl.pos.z) - b.z - slack;
     if (dz > d) d = dz;
     if (d < best) best = d;
   }
@@ -1070,6 +1225,7 @@ Ball.prototype.clearance = function () {
    that keeps forgetting it is on the ground gets no rolling friction. */
 Ball.prototype.probeGround = function (time) {
   this.grounded = false;
+  this.gslab = null;
   var best = null;
   for (var i = 0; i < COURSE.length; i++) {
     var ct = slabContact(COURSE[i], this.pos, BALL_RADIUS + 0.04, time);
@@ -1083,6 +1239,7 @@ Ball.prototype.probeGround = function (time) {
   if (!best) return;
   this.gn = best.n;
   this.gv = surfaceVelocity(best.slab, this.pos, time);
+  this.gslab = best.slab;
   this.gkind = best.slab.kind;
   this.grounded = true;
   if (!(SURFACES[this.gkind] || {}).kick) this.padHits = 0;
@@ -1107,6 +1264,16 @@ Ball.prototype.parkClear = function (time) {
     this.pos.x = x; this.pos.z = z;
     this.pos.y = restHeight(x, z, time);
   }
+};
+
+/* A ball lying on a platform travels with it between shots. Without this it
+   would be left hanging in the air the moment the platform moved on. */
+Ball.prototype.drift = function (from, to) {
+  if (this.moving || !this.gslab || !this.gslab.slide) return;
+  var a = slabPos(this.gslab, from), b = slabPos(this.gslab, to);
+  this.pos.x += b.x - a.x;
+  this.pos.y += b.y - a.y;
+  this.pos.z += b.z - a.z;
 };
 
 Ball.prototype.settled = function () {
@@ -1166,6 +1333,30 @@ Ball.prototype.step = function (dt, time) {
   }
   this.probeGround(t + dt);
 
+  /* A ball that rolls onto a pad never strikes it - it is in resting contact
+     the whole way across - so nothing in the collision ever fires. Arriving
+     on one at all is what throws you, however you got there. */
+  if (this.grounded && !this.padHits) {
+    var padSfc = SURFACES[this.gkind] || SURFACES.fairway;
+    if (padSfc.kick) {
+      this.padHits = 1;
+      /* arriving on the pad is where the shot came down, whether it struck
+         the pad hard enough to register as a bounce or settled onto it */
+      if (!this.carry) this.carry = Math.sqrt(
+        (p.x - this.launchedFrom.x) * (p.x - this.launchedFrom.x) +
+        (p.z - this.launchedFrom.z) * (p.z - this.launchedFrom.z));
+      var pn = this.gn;
+      var up = (this.gslab && this.gslab.kick) || padSfc.kick;
+      var along = v.x * pn.x + v.y * pn.y + v.z * pn.z;
+      if (along < up) {
+        v.x += (up - along) * pn.x;
+        v.y += (up - along) * pn.y;
+        v.z += (up - along) * pn.z;
+      }
+      this.grounded = false;
+    }
+  }
+
   if (this.age > STALL_AFTER + 4) {
     if (this.grounded) {
       this.parkClear(t + dt);
@@ -1193,7 +1384,12 @@ Ball.prototype.step = function (dt, time) {
       (v.y - this.gv.y) * (v.y - this.gv.y) +
       (v.z - this.gv.z) * (v.z - this.gv.z));
     var lively = (SURFACES[this.gkind] || {}).kick && this.padHits < 6;
-    if (held && sp < BALL_STOP && rel < BALL_STOP && !pinned && !lively) this.settled();
+    /* A platform carries the ball with it; a belt runs away underneath one.
+       So on a platform what counts as still is being still RELATIVE TO IT,
+       and the ball then rides along at rest. */
+    var carried = !!(this.gslab && this.gslab.slide);
+    var still = carried ? rel < BALL_STOP : (sp < BALL_STOP && rel < BALL_STOP);
+    if (held && still && !pinned && !lively) this.settled();
   }
   return this;
 };
@@ -1297,6 +1493,14 @@ Hole.prototype.swing = function (clubId, power, aimYaw, face) {
 /* Run the ball until it comes to rest, and deal with what happened to it.
    Returns how long it took, so nothing can loop forever if a ball finds a
    corner of the course that never settles. */
+/* time passing while nobody is playing a shot - the mill turns, the lift
+   goes up and down, and a ball lying on the lift goes with it */
+Hole.prototype.tick = function (dt) {
+  var from = this.time;
+  this.time += dt;
+  this.ball.drift(from, this.time);
+};
+
 Hole.prototype.settle = function (dt, maxSeconds) {
   var t = 0;
   var h = dt || SIM_DT;
@@ -1309,10 +1513,36 @@ Hole.prototype.settle = function (dt, maxSeconds) {
   return t;
 };
 
+/* A ball can come to rest balanced on top of a wall - the physics is happy
+   to let it, because a wall has a flat top like anything else. It cannot stay
+   there: as far as the rest of the game is concerned there is no ground under
+   a wall, so it topples off the nearest side, which is what a ball on a wall
+   does. No penalty: it has not gone anywhere. */
+Hole.prototype.offTheWall = function () {
+  var b = this.ball;
+  if (groundUnder(b.pos.x, b.pos.z, this.time)) return false;
+  for (var r = 1; r <= 9; r += 0.5) {
+    for (var a = 0; a < 8; a++) {
+      var th = a * Math.PI / 4;
+      var x = b.pos.x + Math.cos(th) * r, z = b.pos.z + Math.sin(th) * r;
+      if (!onCourse(x, z, this.time)) continue;
+      b.pos.x = x; b.pos.z = z;
+      b.pos.y = restHeight(x, z, this.time);
+      b.vel = { x: 0, y: 0, z: 0 };
+      return true;
+    }
+  }
+  return false;
+};
+
 Hole.prototype.finishShot = function () {
   var b = this.ball;
   b.moving = false;
   if (b.holed) { this.done = true; return 'holed'; }
+  /* perched on a wall, or otherwise standing on nothing the game recognises */
+  if (!b.lost && !groundUnder(b.pos.x, b.pos.z, this.time)) {
+    if (!this.offTheWall()) b.lost = true;
+  }
   if (b.lost) {
     /* a stroke back, and dropped where it last had ground under it on the
        line it went out on - the same rule a real course plays */
@@ -1481,6 +1711,7 @@ if (typeof module !== 'undefined' && module.exports) {
     COURSE: COURSE, HOLES: HOLES, loadHole: loadHole, currentHole: currentHole,
     slab: slab, deck: deck, ramp: ramp, slope: slope, bowl: bowl, moving: moving,
     slabBounds: slabBounds, slabFar: slabFar, slabYaw: slabYaw, slabTilt: slabTilt,
+    slabPos: slabPos,
     rotY: rotY, rotZ: rotZ, toLocal: toLocal, toWorld: toWorld,
     toWorldDir: toWorldDir, slabContact: slabContact, slabTopAt: slabTopAt,
     surfaceVelocity: surfaceVelocity, groundUnder: groundUnder,
@@ -1518,6 +1749,12 @@ var autoWalk = null, message = '', messageUntil = 0;
 var lastTime = 0, predicted = null, predictDirty = true, simAccum = 0;
 var padIndex = null, padWas = {};
 var soundOn = true, audio = null;
+/* Without a stick there is no walking, so on a touch screen the round is:
+   pick a club, hit it, watch it, tap across to the ball, pick a club. One
+   button has to carry that whole loop, and it has to say what it does. */
+var touchPlay = ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0;
+var touchAim = 0;          /* an arrow button being held down */
+var dragId = null, dragX = 0;
 
 var WALK_SPEED = 9;
 var JUMP_SPEED = 7.9;      /* about a metre and a half up */
@@ -1592,8 +1829,11 @@ function buildCourseMeshes() {
 function spinCourse(time) {
   for (var i = 0; i < spinners.length; i++) {
     var s = spinners[i];
+    var c = slabPos(s.slab, time);
+    s.pivot.position.set(c.x, c.y, c.z);
     s.pivot.rotation.y = slabYaw(s.slab, time);
     s.mesh.rotation.z = slabTilt(s.slab, time);
+    if (s.mark) s.mark.position.set(c.x + s.markOff.x, c.y + s.markOff.y, c.z + s.markOff.z);
   }
 }
 
@@ -1606,6 +1846,8 @@ function buildMarkings() {
   for (var i = 0; i < COURSE.length; i++) {
     var sl = COURSE[i];
     var top = sl.pos.y + sl.half.y;
+    var carrier = null;
+    for (var q = 0; q < spinners.length; q++) if (spinners[q].slab === sl) carrier = spinners[q];
     if (sl.belt || sl.beltSide) {
       var v = surfaceVelocity(sl, sl.pos, 0);
       var speed = Math.hypot(v.x, v.z) || 1;
@@ -1631,6 +1873,7 @@ function buildMarkings() {
       ring.rotation.x = -Math.PI / 2;
       ring.position.set(sl.pos.x, top + 0.015, sl.pos.z);
       markings.add(ring);
+      if (carrier) { carrier.mark = ring; carrier.markOff = { x: 0, y: top + 0.015 - sl.pos.y, z: 0 }; }
       var eye = new THREE.Mesh(
         new THREE.CircleGeometry(Math.min(sl.half.x, sl.half.z) * 0.34, 18),
         new THREE.MeshBasicMaterial({ color: 0xd94f57, side: THREE.DoubleSide }));
@@ -1862,6 +2105,38 @@ function aimPower() { return 1; }
 
 /* ------------------------------------------------------------------ input */
 
+/* Aiming with a thumb: drag across the picture to turn, or hold one of the
+   arrows. Both feed the same number the stick would have. */
+function bindTouch() {
+  var stage = el('stage');
+  stage.addEventListener('pointerdown', function (e) {
+    if (phase !== 'aim') return;
+    dragId = e.pointerId; dragX = e.clientX;
+    if (stage.setPointerCapture) stage.setPointerCapture(e.pointerId);
+  });
+  stage.addEventListener('pointermove', function (e) {
+    if (dragId !== e.pointerId || phase !== 'aim') return;
+    var dx = e.clientX - dragX;
+    dragX = e.clientX;
+    aimYaw += dx * 0.0035;
+    predictDirty = true;
+  });
+  ['pointerup', 'pointercancel'].forEach(function (k) {
+    stage.addEventListener(k, function (e) { if (dragId === e.pointerId) dragId = null; });
+  });
+  holdButton('aimLeftBtn', -1);
+  holdButton('aimRightBtn', 1);
+}
+
+function holdButton(id, dir) {
+  var b = el(id);
+  if (!b) return;
+  b.addEventListener('pointerdown', function (e) { touchAim = dir; e.preventDefault(); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (k) {
+    b.addEventListener(k, function () { touchAim = 0; });
+  });
+}
+
 var keys = {};
 function bindKeys() {
   window.addEventListener('keydown', function (e) {
@@ -1916,6 +2191,33 @@ function readPad() {
     padWas[k] = st[k];
   });
   return st;
+}
+
+/* The one big button. On the way round it takes you to your ball rather than
+   hopping on the spot, because that is the step you actually want. */
+function primaryAction() {
+  if (phase === 'walk' && !nearBall()) return jogToBall();
+  return actionButton();
+}
+
+/* what the big button says it will do, which is also what it does */
+function primaryLabel() {
+  if (phase === 'walk') return nearBall() ? 'Address' : 'Go to ball';
+  if (phase === 'aim') return 'Take stance';
+  if (phase === 'swing') {
+    if (stick && !meter) return 'Pull the stick back';
+    if (meter && meter.phase === 'backswing') return 'Set power';
+    if (meter && meter.phase === 'downswing') return 'Hit!';
+    return 'Swing';
+  }
+  if (phase === 'flight') return 'Watch it';
+  if (phase === 'holed') return nextHoleLabel();
+  return 'Swing';
+}
+
+function nextHoleLabel() {
+  var h = currentHole();
+  return h.index + 1 < h.count ? 'Next hole' : 'Play again';
 }
 
 function actionButton() {
@@ -2074,6 +2376,7 @@ function update(dt) {
   var pad = readPad();
   var mx = 0, my = 0;
   if (pad) { mx = pad.lx; my = pad.ly; }
+  mx += touchAim;
   if (keys.KeyA || keys.ArrowLeft) mx -= 1;
   if (keys.KeyD || keys.ArrowRight) mx += 1;
   if (keys.KeyW || keys.ArrowUp) my -= 1;
@@ -2095,7 +2398,7 @@ function update(dt) {
   if (phase === 'flight') updateFlight(dt);
   else {
     /* the windmill keeps turning whether or not a ball is in play */
-    hole.time += dt;
+    hole.tick(dt);
     if (phase === 'walk') updateWalk(dt, mx, my);
     else if (phase === 'aim') updateAim(dt, mx, my);
     else if (phase === 'swing') updateSwing(dt, pad, mx, my);
@@ -2159,7 +2462,21 @@ function jogToBall() {
   flash('On your way');
 }
 
+/* Whatever the golfer is standing on, if it moves, the golfer goes with it.
+   The height looks after itself - the ground is read fresh every frame - but
+   a platform that shuttles sideways would otherwise slide out from under. */
+function rideAlong(dt) {
+  var g = golfer.userData.pos;
+  var under = groundUnder(g.x, g.z, hole.time);
+  if (!under || !under.slab.slide) return;
+  var a = slabPos(under.slab, hole.time - dt), b = slabPos(under.slab, hole.time);
+  g.x += b.x - a.x;
+  g.z += b.z - a.z;
+  if (golfer.userData.vy === 0) golfer.userData.y += b.y - a.y;
+}
+
 function updateWalk(dt, mx, my) {
+  rideAlong(dt);
   var g = golfer.userData.pos;
   var pushing = Math.hypot(mx, my) > 0.05;
   if (pushing) autoWalk = null;
@@ -2354,6 +2671,20 @@ function updateHud() {
     ui.meterFill.style.background = meter && meter.phase === 'downswing' ? '#ffd23f' : '#7fd66b';
   }
   ui.prompt.textContent = promptText();
+
+  /* The bar shows the one thing to do next, and only the extras that mean
+     anything in this part of the shot. */
+  ui.hitBtn.textContent = primaryLabel();
+  ui.hitBtn.disabled = phase === 'flight';
+  ui.hitBtn.style.opacity = phase === 'flight' ? '0.5' : '1';
+  var aiming = phase === 'aim' || phase === 'swing';
+  ui.clubDownBtn.hidden = !aiming;
+  ui.clubUpBtn.hidden = !aiming;
+  ui.cancelBtn.hidden = !aiming;
+  ui.jumpBtn.hidden = phase !== 'walk';
+  el('aimLeftBtn').hidden = phase !== 'aim';
+  el('aimRightBtn').hidden = phase !== 'aim';
+  ui.cardBtn.textContent = nextHoleLabel();
 }
 
 function windArrow(rel) {
@@ -2364,6 +2695,14 @@ function windArrow(rel) {
 
 function promptText() {
   var pad = padIndex !== null;
+  if (!pad && touchPlay) {
+    if (phase === 'walk') return nearBall() ? 'Address the ball to play it'
+                                            : 'Go to ball, then address it';
+    if (phase === 'aim') return 'Drag to aim, or hold an arrow  ·  < > for a club';
+    if (phase === 'swing') return 'Set power, then hit at the bottom of the swing';
+    if (phase === 'holed') return 'Tap anywhere to carry on';
+    return '';
+  }
   if (phase === 'walk') {
     if (nearBall()) return pad ? 'A  address the ball   ·   X  go to the ball'
                                : 'Space  address the ball   ·   X  go to the ball';
@@ -2402,7 +2741,8 @@ function showCard() {
     card += '<b>Round ' + round.total + '</b> ' +
       (rel === 0 ? 'level' : (rel > 0 ? '+' + rel : rel)) + ' to par';
   }
-  card += '<br><span class="soft">' + (padIndex !== null ? 'A' : 'Space') + ' to ' +
+  var how = padIndex !== null ? 'A' : (touchPlay ? 'Tap' : 'Space');
+  card += '<br><span class="soft">' + how + ' to ' +
     (last ? 'play the round again' : 'go on to the next hole') + '</span>';
   ui.cardTitle.textContent = s.name;
   ui.cardBody.innerHTML = card;
@@ -2457,21 +2797,29 @@ function boot() {
   buildAimLine();
 
   ['dist', 'lie', 'club', 'shots', 'wind', 'msg', 'prompt', 'meterWrap',
-    'meterFill', 'card', 'cardTitle', 'cardBody', 'hole'].forEach(function (k) { ui[k] = el(k); });
+    'meterFill', 'card', 'cardTitle', 'cardBody', 'cardBtn', 'hole', 'hitBtn',
+    'clubDownBtn', 'clubUpBtn', 'jumpBtn', 'cancelBtn'].forEach(function (k) { ui[k] = el(k); });
+  /* the card covers the whole screen, so anywhere on it moves you on - there
+     is no keyboard to press Space on */
+  el('card').addEventListener('click', function (e) {
+    if (e.target === el('card')) nextHole();
+  });
 
   bindKeys();
+  bindTouch();
   ['hitBtn', 'cancelBtn', 'clubDownBtn', 'clubUpBtn', 'resetBtn', 'fullBtn',
-    'jogBtn', 'jumpBtn', 'dropBtn'].forEach(function (id) {
+    'jogBtn', 'jumpBtn', 'dropBtn', 'cardBtn'].forEach(function (id) {
     var b = el(id);
     if (!b) return;
     b.addEventListener('click', function () {
-      if (id === 'hitBtn') actionButton();
+      if (id === 'hitBtn') primaryAction();
       else if (id === 'cancelBtn') cancelButton();
       else if (id === 'clubDownBtn') changeClub(-1);
       else if (id === 'clubUpBtn') changeClub(1);
       else if (id === 'resetBtn') replayHole();
       else if (id === 'jogBtn') jogToBall();
       else if (id === 'dropBtn') dropBall();
+      else if (id === 'cardBtn') nextHole();
       else if (id === 'jumpBtn') jump();
       else if (id === 'fullBtn') toggleFullscreen();
     });
