@@ -747,9 +747,9 @@ loadHole(0);
 /* how fast the grass is, how much it gives, how much it grabs at a ball
    skidding along it, and how much of your swing gets to the ball from it */
 var SURFACES = {
-  tee:     { name: 'Tee',      roll: 0.062, bounce: 0.36, skid: 0.70, grab: 1.00 },
-  fairway: { name: 'Fairway',  roll: 0.062, bounce: 0.36, skid: 0.70, grab: 1.00 },
-  green:   { name: 'Green',    roll: 0.048, bounce: 0.26, skid: 0.50, grab: 1.00 },
+  tee:     { name: 'Tee',      roll: 0.052, bounce: 0.36, skid: 0.70, grab: 1.00 },
+  fairway: { name: 'Fairway',  roll: 0.052, bounce: 0.36, skid: 0.70, grab: 1.00 },
+  green:   { name: 'Green',    roll: 0.034, bounce: 0.26, skid: 0.52, grab: 1.00 },
   sand:    { name: 'Bunker',   roll: 1.80, bounce: 0.04, skid: 0.05, grab: 0.42 },
   stone:   { name: 'Stone',    roll: 0.06, bounce: 0.45, skid: 0.80, grab: 0.70 },
   wood:    { name: 'Windmill', roll: 0.08, bounce: 0.22, skid: 0.85, grab: 0.70 },
@@ -955,13 +955,21 @@ var GRAVITY = 9.81;
 var DRAG = 0.0026;
 var LIFT = 0.0042;
 var SPIN_DECAY = 0.11;     /* backspin bleeds off through the flight */
-var BALL_STOP = 0.30;      /* below this it has stopped, in m/s */
+/* Below this it has stopped. A shade higher than it looks like it should be,
+   because a ball that now runs sixty metres spends a long time creeping the
+   last half of one, and nobody is watching that part. */
+var BALL_STOP = 0.40;
 /* Faster than this over the cup and it lips out. The cup here is half a
    metre across - ten times a real one - so the speed a ball can be going and
    still drop has to scale with it, or soft putts horseshoe out of a bucket. */
 var HOLE_SPEED = 4.2;
-var ROLL_SLOPE = 5 / 7;    /* a rolling sphere only gets this much of gravity */
-var ROLL_DRAG = 0.010;     /* air, felt on the ground as well as in it */
+/* How much of a slope a rolling ball actually feels. A sphere rolling
+   without slipping gets five sevenths and the rest goes into spinning it up,
+   but a golf ball on grass slides as much as it rolls, so it gets more of the
+   hill than the textbook says - and a ball that will not run downhill is no
+   fun to play. */
+var ROLL_SLOPE = 0.86;
+var ROLL_DRAG = 0.007;     /* air, felt on the ground as well as in it */
 /* A shot clock. Almost every shot is done inside ten seconds, but a ball can
    find a corner of a course that keeps it alive - swatted by an arm, back
    down a bank, swatted again, creeping down a ramp - and nobody wants to
@@ -1016,7 +1024,12 @@ Ball.prototype.strike = function (club, power, aimYaw, face, windX, windZ) {
   var c = typeof club === 'string' ? clubById(club) : club;
   this.vel = launchVelocity(c, power, aimYaw, face);
   this.bend = face * c.curve;
-  this.backspin = c.spin;
+  /* How much check the shot has depends on how hard it was struck, not just
+     on which club it was. A full wedge rips; a nudge out of a bunker with
+     the same club has almost nothing on it, which is why a bunker shot runs
+     and a pitched one stops. The power here already has the lie's grip in
+     it, so a shot out of sand loses its spin for free. */
+  this.backspin = c.spin * Math.min(1, power);
   this.moving = true;
   this.holed = false;
   this.lost = false;
@@ -1144,7 +1157,7 @@ Ball.prototype.respond = function (ct, time) {
     /* the turf grabs at what is skidding along it, and backspin checks a
        lofted shot up rather than letting it release - which is what keeps a
        wedge stopping dead while a drive runs on */
-    var k = sfc.skid * (1 - Math.min(0.62, this.backspin * 0.42));
+    var k = sfc.skid * (1 - Math.min(0.55, this.backspin * 0.30));
     rx = vn * n.x + tx * k;
     ry = vn * n.y + ty * k;
     rz = vn * n.z + tz * k;
@@ -1500,10 +1513,36 @@ Hole.prototype.settle = function (dt, maxSeconds) {
   return t;
 };
 
+/* A ball can come to rest balanced on top of a wall - the physics is happy
+   to let it, because a wall has a flat top like anything else. It cannot stay
+   there: as far as the rest of the game is concerned there is no ground under
+   a wall, so it topples off the nearest side, which is what a ball on a wall
+   does. No penalty: it has not gone anywhere. */
+Hole.prototype.offTheWall = function () {
+  var b = this.ball;
+  if (groundUnder(b.pos.x, b.pos.z, this.time)) return false;
+  for (var r = 1; r <= 9; r += 0.5) {
+    for (var a = 0; a < 8; a++) {
+      var th = a * Math.PI / 4;
+      var x = b.pos.x + Math.cos(th) * r, z = b.pos.z + Math.sin(th) * r;
+      if (!onCourse(x, z, this.time)) continue;
+      b.pos.x = x; b.pos.z = z;
+      b.pos.y = restHeight(x, z, this.time);
+      b.vel = { x: 0, y: 0, z: 0 };
+      return true;
+    }
+  }
+  return false;
+};
+
 Hole.prototype.finishShot = function () {
   var b = this.ball;
   b.moving = false;
   if (b.holed) { this.done = true; return 'holed'; }
+  /* perched on a wall, or otherwise standing on nothing the game recognises */
+  if (!b.lost && !groundUnder(b.pos.x, b.pos.z, this.time)) {
+    if (!this.offTheWall()) b.lost = true;
+  }
   if (b.lost) {
     /* a stroke back, and dropped where it last had ground under it on the
        line it went out on - the same rule a real course plays */
