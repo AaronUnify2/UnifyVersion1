@@ -745,20 +745,38 @@ function currentHole() {
 loadHole(0);
 
 /* how fast the grass is, how much it gives, how much it grabs at a ball
-   skidding along it, and how much of your swing gets to the ball from it */
+   skidding across it, and how much of your swing gets to the ball from it.
+
+   shear is a friction coefficient at the moment of impact, not a flat share
+   of the speed taken away, and that distinction is the whole character of a
+   bouncing ball: a drive coming down steeply drives hard into the turf and is
+   checked hard on the first contact, while the low skips that follow barely
+   touch it, so the hops get longer in proportion before the ball rolls out.
+
+   hold is how much of that skid the surface will let turn into rolling
+   instead of taking away. Friction can only take a ball down to the speed at
+   which it is rolling rather than skidding - the rest of the ball's pace has
+   gone into spinning it up, and it rolls away with it. Grass lets that
+   happen; sand does not, which is why a ball pitched into a bunker stays in
+   the bunker. */
 var SURFACES = {
-  tee:     { name: 'Tee',      roll: 0.052, bounce: 0.36, skid: 0.70, grab: 1.00 },
-  fairway: { name: 'Fairway',  roll: 0.052, bounce: 0.36, skid: 0.70, grab: 1.00 },
-  green:   { name: 'Green',    roll: 0.034, bounce: 0.26, skid: 0.52, grab: 1.00 },
-  sand:    { name: 'Bunker',   roll: 1.80, bounce: 0.04, skid: 0.05, grab: 0.42 },
-  stone:   { name: 'Stone',    roll: 0.06, bounce: 0.45, skid: 0.80, grab: 0.70 },
-  wood:    { name: 'Windmill', roll: 0.08, bounce: 0.22, skid: 0.85, grab: 0.70 },
-  rail:    { name: 'Rail',     roll: 0.08, bounce: 0.55, skid: 0.86, grab: 0.70 },
-  belt:    { name: 'Conveyor', roll: 1.40, bounce: 0.22, skid: 0.60, grab: 0.90 },
-  spring:  { name: 'Bounce pad', roll: 0.20, bounce: 0.45, skid: 0.88, grab: 0.90,
+  tee:     { name: 'Tee',      roll: 0.052, bounce: 0.47, shear: 0.60, hold: 1.00, grab: 1.00 },
+  fairway: { name: 'Fairway',  roll: 0.052, bounce: 0.47, shear: 0.60, hold: 1.00, grab: 1.00 },
+  green:   { name: 'Green',    roll: 0.024, bounce: 0.32, shear: 0.75, hold: 1.00, grab: 1.00 },
+  sand:    { name: 'Bunker',   roll: 1.80, bounce: 0.04, shear: 3.00, hold: 0.00, grab: 0.42 },
+  stone:   { name: 'Stone',    roll: 0.06, bounce: 0.45, shear: 0.16, hold: 1.00, grab: 0.70 },
+  wood:    { name: 'Windmill', roll: 0.08, bounce: 0.22, shear: 0.12, hold: 1.00, grab: 0.70 },
+  rail:    { name: 'Rail',     roll: 0.08, bounce: 0.55, shear: 0.11, hold: 1.00, grab: 0.70 },
+  belt:    { name: 'Conveyor', roll: 1.40, bounce: 0.22, shear: 0.70, hold: 1.00, grab: 0.90 },
+  spring:  { name: 'Bounce pad', roll: 0.20, bounce: 0.45, shear: 0.09, hold: 1.00, grab: 0.90,
              kick: 12 },
-  'void':  { name: 'Off the course', roll: 0.09, bounce: 0, skid: 0, grab: 1.00 }
+  'void':  { name: 'Off the course', roll: 0.09, bounce: 0, shear: 3.00, hold: 0.00, grab: 1.00 }
 };
+/* what is left of a skid once the ball is rolling rather than sliding: the
+   other two sevenths of it went into spinning the ball up */
+var ROLL_OUT = 5 / 7;
+/* how hard backspin eats into that, per unit of spin still on the ball */
+var CHECK = 0.70;
 
 function gripOf(kind) { return (SURFACES[kind] || SURFACES.fairway).roll; }
 
@@ -970,6 +988,13 @@ var HOLE_SPEED = 4.2;
    fun to play. */
 var ROLL_SLOPE = 0.86;
 var ROLL_DRAG = 0.007;     /* air, felt on the ground as well as in it */
+/* Turf does not drag at a ball evenly. A ball travelling at pace skims the
+   tops of the blades; one down to walking speed is pushing through them and
+   sitting in its own little hollow, so it stops decisively instead of gliding
+   on for ever. LOW_GRIP is how much more the grass holds a ball that has run
+   out of pace, and SETTLE_V is the speed below which it starts to bite. */
+var LOW_GRIP = 1.6;
+var SETTLE_V = 1.4;
 /* A shot clock. Almost every shot is done inside ten seconds, but a ball can
    find a corner of a course that keeps it alive - swatted by an arm, back
    down a bank, swatted again, creeping down a ramp - and nobody wants to
@@ -1082,10 +1107,12 @@ Ball.prototype.fly = function (dt) {
    it up, and then the surface dragging at it. */
 /* how hard the ground is holding the ball, which grows once it has been
    rolling for longer than any shot reasonably takes */
-Ball.prototype.grip = function () {
+Ball.prototype.grip = function (speed) {
   var sfc = SURFACES[this.gkind] || SURFACES.fairway;
   var over = this.age - STALL_AFTER;
-  return sfc.roll + (over > 0 ? over * 0.6 : 0);
+  var v = speed || 0;
+  var bite = 1 + LOW_GRIP * SETTLE_V * SETTLE_V / (SETTLE_V * SETTLE_V + v * v);
+  return sfc.roll * bite + (over > 0 ? over * 0.6 : 0);
 };
 
 Ball.prototype.rollForces = function (dt) {
@@ -1103,7 +1130,7 @@ Ball.prototype.rollForces = function (dt) {
   var vn = rx * n.x + ry * n.y + rz * n.z;
   var tx = rx - vn * n.x, ty = ry - vn * n.y, tz = rz - vn * n.z;
   var tsp = Math.sqrt(tx * tx + ty * ty + tz * tz);
-  var drop = this.grip() * GRAVITY * dt;
+  var drop = this.grip(tsp) * GRAVITY * dt;
   var k = tsp <= drop ? 0 : (tsp - drop) / tsp;
   v.x = gv.x + vn * n.x + tx * k;
   v.y = gv.y + vn * n.y + ty * k;
@@ -1150,14 +1177,21 @@ Ball.prototype.respond = function (ct, time) {
   rz -= (1 + e) * into * n.z;
 
   if (!settling) {
-    /* the turf grabs at whatever is skidding along it, and heavy backspin
-       checks the ball up rather than letting it release */
+    /* The turf grabs at what is skidding across it, by as much as it is being
+       driven into the turf - so a steep landing is checked hard and a shallow
+       skip is hardly touched at all. Backspin bites in on top of that, which
+       is what keeps a wedge stopping dead while a drive runs on. */
     var vn = rx * n.x + ry * n.y + rz * n.z;
     var tx = rx - vn * n.x, ty = ry - vn * n.y, tz = rz - vn * n.z;
-    /* the turf grabs at what is skidding along it, and backspin checks a
-       lofted shot up rather than letting it release - which is what keeps a
-       wedge stopping dead while a drive runs on */
-    var k = sfc.skid * (1 - Math.min(0.55, this.backspin * 0.30));
+    var tsp = Math.sqrt(tx * tx + ty * ty + tz * tz);
+    var take = sfc.shear * (1 + e) * -into;
+    var skid = tsp <= take ? 0 : (tsp - take) / tsp;
+    /* but friction stops taking once the ball has stopped skidding, so a
+       bounce on grass always releases something - unless the ball has
+       backspin on it, which is what checks a wedge up and lets a drive run */
+    var held = (sfc.hold === undefined ? 1 : sfc.hold) *
+               ROLL_OUT * Math.max(0, 1 - Math.min(1, this.backspin * CHECK));
+    var k = Math.max(held, skid);
     rx = vn * n.x + tx * k;
     ry = vn * n.y + ty * k;
     rz = vn * n.z + tz * k;
@@ -1370,7 +1404,11 @@ Ball.prototype.step = function (dt, time) {
 
   if (this.grounded) {
     var slope = Math.sqrt(Math.max(0, 1 - this.gn.y * this.gn.y));
-    var held = GRAVITY * slope * ROLL_SLOPE <= this.grip() * GRAVITY;
+    /* grip(0) on purpose: this asks whether a ball that has run out of pace
+       stays put, and a stopped ball has the grass at its grabbiest. It has to
+       be the same number rollForces winds down to, or a ball on a middling
+       slope grinds to a halt the game then refuses to accept as a stop. */
+    var held = GRAVITY * slope * ROLL_SLOPE <= this.grip(0) * GRAVITY;
     var sp = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
     /* A ball is not normally allowed to settle where something turning will
        come round to it. Once the shot clock has run right out it is, or a
