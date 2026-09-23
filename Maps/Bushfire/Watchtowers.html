@@ -1156,8 +1156,115 @@
             distanceOverlays = [];
         }
 
+        // ── Open-Meteo wind fetching (shared) ─────────────────────
+        // Open-Meteo accepts a comma-separated list of coordinates in one
+        // request and answers with one result per location — an array, or a
+        // bare object when only a single location was asked for.
+        //
+        // Batching matters here. The page used to open one connection per
+        // fire, so a busy ESCAD feed meant a few hundred simultaneous
+        // requests and Open-Meteo's per-minute rate limiter answered 429.
+        // A 429 body is valid JSON with no "current" block, so reading
+        // d.current.wind_speed_10m threw and the empty catch swallowed it:
+        // the button lit up and not a single arrow appeared.
+        var OPEN_METEO_URL  = 'https://api.open-meteo.com/v1/forecast';
+        var WIND_BATCH_SIZE = 100;    // locations per request (API allows 1000)
+        var WIND_TIMEOUT_MS = 20000;
+
+        // points: [{ key: <any>, coords: [x, y] in EPSG:3857, lonLat: [lon, lat] }]
+        // onDone: function(results, errorMessage)
+        //         results: [{ key, coords, windSpeed, windDirection }]
+        function fetchWindForPoints(points, onDone) {
+            if (points.length === 0) { onDone([], null); return; }
+
+            var batches = [];
+            for (var i = 0; i < points.length; i += WIND_BATCH_SIZE) {
+                batches.push(points.slice(i, i + WIND_BATCH_SIZE));
+            }
+
+            var results = [];
+            var errors  = [];
+
+            var jobs = batches.map(function(batch) {
+                var lats = batch.map(function(p) { return p.lonLat[1].toFixed(4); });
+                var lons = batch.map(function(p) { return p.lonLat[0].toFixed(4); });
+                var url  = OPEN_METEO_URL +
+                           '?latitude='  + lats.join(',') +
+                           '&longitude=' + lons.join(',') +
+                           '&current=wind_speed_10m,wind_direction_10m';
+
+                var controller = new AbortController();
+                var timer      = setTimeout(function() { controller.abort(); }, WIND_TIMEOUT_MS);
+
+                return fetch(url, { signal: controller.signal })
+                    .then(function(r) {
+                        clearTimeout(timer);
+                        // Read the body either way — Open-Meteo explains refusals
+                        // (rate limit, bad parameter) in a JSON "reason" field.
+                        return r.json()
+                            .catch(function() { return null; })
+                            .then(function(body) {
+                                if (!r.ok || (body && body.error)) {
+                                    throw new Error((body && body.reason) || ('HTTP ' + r.status));
+                                }
+                                return body;
+                            });
+                    })
+                    .then(function(body) {
+                        var list = Array.isArray(body) ? body : [body];
+                        batch.forEach(function(p, idx) {
+                            var cur = list[idx] && list[idx].current;
+                            if (!cur ||
+                                typeof cur.wind_speed_10m     !== 'number' ||
+                                typeof cur.wind_direction_10m !== 'number') return;
+                            results.push({
+                                key:           p.key,
+                                coords:        p.coords,
+                                windSpeed:     cur.wind_speed_10m,
+                                windDirection: cur.wind_direction_10m
+                            });
+                        });
+                    })
+                    .catch(function(err) {
+                        clearTimeout(timer);
+                        var text = err && err.name === 'AbortError'
+                            ? 'the weather service timed out'
+                            : (err && err.message) || 'unknown error';
+                        errors.push(text.replace(/\.+$/, ''));
+                    });
+            });
+
+            Promise.all(jobs).then(function() {
+                var msg = null;
+                if (results.length === 0 && errors.length > 0) {
+                    msg = 'Could not load wind data — ' + errors[0] + '.';
+                } else if (errors.length > 0) {
+                    msg = 'Some wind readings are missing — ' + errors[0] + '.';
+                }
+                onDone(results, msg);
+            });
+        }
+
+        // Reuse the loading banner to say what the wind fetch did, so a
+        // failure is visible instead of silent.
+        function showWindMessage(msg, isError) {
+            var loading = document.getElementById('loading');
+            loading.textContent = msg;
+            loading.classList.toggle('error', !!isError);
+            loading.style.display = 'block';
+            clearTimeout(showWindMessage.timer);
+            showWindMessage.timer = setTimeout(function() {
+                loading.style.display = 'none';
+                loading.classList.remove('error');
+            }, isError ? 6000 : 2500);
+        }
+
         // ── QFS Wind ──────────────────────────────────────────────
         function toggleWind() {
+            if (!windEnabled && qfsFireMode === 2) {
+                showModal('QFS Fires are hidden — switch them back on to see their wind arrows.');
+                return;
+            }
             windEnabled = !windEnabled;
             var btn = document.getElementById('btn-wind');
             btn.classList.toggle('active', windEnabled);
@@ -1165,51 +1272,101 @@
                 fetchWindDataForFires();
             } else {
                 clearWindOverlay();
+                fireWindData = {};
             }
             updateWarnings();
         }
 
+        // ESCAD publishes the incident category as GroupedType, but the feed
+        // has renamed fields before. Check the likely aliases and fall back to
+        // the headline text so a rename upstream doesn't quietly switch every
+        // arrow off.
+        function getIncidentTypeText(props) {
+            if (!props) return '';
+            var keys = ['GroupedType', 'groupedType', 'GroupedTypeDescription',
+                        'IncidentType', 'incidentType', 'Type', 'type',
+                        'WebHeadline', 'Headline', 'headline'];
+            for (var i = 0; i < keys.length; i++) {
+                var v = props[keys[i]];
+                if (typeof v === 'string' && v !== '') return v;
+            }
+            return '';
+        }
+
         function isWindRelevant(props) {
-            var t = ((props && (props.GroupedType || props.groupedType)) || '').toLowerCase();
-            return t.indexOf('bush') !== -1 || t.indexOf('grass') !== -1 ||
-                   t.indexOf('vegetation') !== -1 || t.indexOf('structure') !== -1 ||
-                   t.indexOf('building') !== -1;
+            var t = getIncidentTypeText(props).toLowerCase();
+            return t.indexOf('bush')      !== -1 || t.indexOf('grass')    !== -1 ||
+                   t.indexOf('vegetation')!== -1 || t.indexOf('structure')!== -1 ||
+                   t.indexOf('building')  !== -1 || t.indexOf('fire')     !== -1;
+        }
+
+        function fireCentre(fire) {
+            var geom = fire.getGeometry();
+            if (!geom) return null;
+            return geom.getType() === 'Point'
+                ? geom.getCoordinates()
+                : geom.getInteriorPoint().getCoordinates();
         }
 
         function fetchWindDataForFires() {
             if (qfsFireMode === 2) return;
             var fires = vectorSource.getFeatures();
-            var promises = [];
+            if (fires.length === 0) {
+                clearWindOverlay();
+                fireWindData = {};
+                return;
+            }
+
+            // If the type filter matches nothing at all while incidents are on
+            // the map, the upstream vocabulary has probably changed — draw wind
+            // for every incident rather than for none.
+            var anyRelevant = fires.some(function(f) { return isWindRelevant(f.get('properties')); });
+
+            // Keys stay indexes into the full feature list, because
+            // updateWarnings() looks up fireWindData by that same index.
+            var points = [];
             fires.forEach(function(fire, idx) {
-                if (!isWindRelevant(fire.get('properties'))) return;
-                var geom = fire.getGeometry();
-                var fc = geom.getType() === 'Point' ? geom.getCoordinates() : geom.getInteriorPoint().getCoordinates();
-                var ll = ol.proj.toLonLat(fc);
-                promises.push(
-                    fetch('https://api.open-meteo.com/v1/forecast?latitude=' + ll[1] + '&longitude=' + ll[0] + '&current=wind_speed_10m,wind_direction_10m')
-                        .then(function(r) { return r.json(); })
-                        .then(function(d) {
-                            fireWindData[idx] = { coords: fc, windSpeed: d.current.wind_speed_10m, windDirection: d.current.wind_direction_10m };
-                        })
-                        .catch(function() {})
-                );
+                if (anyRelevant && !isWindRelevant(fire.get('properties'))) return;
+                var fc = fireCentre(fire);
+                if (!fc) return;
+                points.push({ key: idx, coords: fc, lonLat: ol.proj.toLonLat(fc) });
             });
-            Promise.all(promises).then(function() { drawWindOverlayForFires(); });
+
+            if (points.length === 0) { clearWindOverlay(); fireWindData = {}; return; }
+            showWindMessage('Loading wind for ' + points.length + ' incidents...', false);
+
+            fetchWindForPoints(points, function(results, errMsg) {
+                if (!windEnabled) return;
+                fireWindData = {};
+                results.forEach(function(r) {
+                    fireWindData[r.key] = {
+                        coords:        r.coords,
+                        windSpeed:     r.windSpeed,
+                        windDirection: r.windDirection
+                    };
+                });
+                drawWindOverlayForFires();
+                showWindMessage(errMsg || (results.length + ' wind readings loaded.'), !!errMsg);
+                updateWarnings();
+            });
         }
 
         function fetchWindDataForWatchtowers() {
-            var promises = [];
-            watchtowers.forEach(function(wt) {
-                promises.push(
-                    fetch('https://api.open-meteo.com/v1/forecast?latitude=' + wt.lonLat[1] + '&longitude=' + wt.lonLat[0] + '&current=wind_speed_10m,wind_direction_10m')
-                        .then(function(r) { return r.json(); })
-                        .then(function(d) {
-                            watchtowerWindData[wt.id] = { coords: wt.coordinate, windSpeed: d.current.wind_speed_10m, windDirection: d.current.wind_direction_10m };
-                        })
-                        .catch(function() {})
-                );
+            var points = watchtowers.map(function(wt) {
+                return { key: wt.id, coords: wt.coordinate, lonLat: wt.lonLat };
             });
-            Promise.all(promises).then(function() { drawWindOverlayForWatchtowers(); });
+            fetchWindForPoints(points, function(results, errMsg) {
+                watchtowerWindData = {};
+                results.forEach(function(r) {
+                    watchtowerWindData[r.key] = {
+                        coords:        r.coords,
+                        windSpeed:     r.windSpeed,
+                        windDirection: r.windDirection
+                    };
+                });
+                drawWindOverlayForWatchtowers();
+                if (errMsg) showWindMessage(errMsg, true);
+            });
         }
 
         function drawArrow(coords, windDir, windSpeed, color, overlayArray, arrowType) {
@@ -1240,6 +1397,9 @@
         }
 
         function drawWindOverlayForFires() {
+            // Clear first: a data refresh re-runs this, and without it the old
+            // arrows stay on the map alongside the new ones.
+            clearWindOverlay();
             Object.keys(fireWindData).forEach(function(k) {
                 var d = fireWindData[k];
                 drawArrow(d.coords, d.windDirection, d.windSpeed, 'rgba(33,150,243,0.9)', windOverlays);
@@ -1264,6 +1424,10 @@
 
         // ── NASA Wind ─────────────────────────────────────────────
         function toggleNASAWind() {
+            if (!nasaWindEnabled && !firmsEnabled) {
+                showModal('Enable NASA Satellite Fires first.');
+                return;
+            }
             nasaWindEnabled = !nasaWindEnabled;
             document.getElementById('btn-nasawind').classList.toggle('active', nasaWindEnabled);
             if (nasaWindEnabled) {
@@ -1277,46 +1441,47 @@
         function fetchWindDataForFIRMS() {
             if (!firmsEnabled) return;
             var features = firmsSource.getFeatures();
-            if (features.length === 0) return;
+            if (features.length === 0) {
+                clearNASAWindOverlay();
+                nasaWindData = {};
+                return;
+            }
 
-            // Cluster hotspots into ~0.5° grid cells (~50km) so we only
-            // fetch one wind reading per cell rather than one per hotspot.
+            // Cluster hotspots into ~0.5° grid cells (~50 km) so we only fetch
+            // one wind reading per cell rather than one per hotspot.
             var cells = {};
             features.forEach(function(feature, idx) {
-                var coords = feature.getGeometry().getCoordinates();
-                var ll     = ol.proj.toLonLat(coords);
+                var coords  = feature.getGeometry().getCoordinates();
+                var ll      = ol.proj.toLonLat(coords);
                 var cellKey = Math.round(ll[1] / 0.5) + ',' + Math.round(ll[0] / 0.5);
-                if (!cells[cellKey]) {
-                    cells[cellKey] = { ll: ll, featureIndices: [], coords: coords };
-                }
-                cells[cellKey].featureIndices.push(idx);
-                // Store coords for each feature index so we can draw arrows
-                if (!cells[cellKey].allCoords) cells[cellKey].allCoords = {};
+                if (!cells[cellKey]) cells[cellKey] = { ll: ll, allCoords: {} };
                 cells[cellKey].allCoords[idx] = coords;
             });
 
-            var cellKeys = Object.keys(cells);
-            var promises = cellKeys.map(function(key) {
-                var cell = cells[key];
-                var ll   = cell.ll;
-                return fetch('https://api.open-meteo.com/v1/forecast?latitude=' + ll[1] + '&longitude=' + ll[0] + '&current=wind_speed_10m,wind_direction_10m')
-                    .then(function(r) { return r.json(); })
-                    .then(function(d) {
-                        var windSpeed = d.current.wind_speed_10m;
-                        var windDir   = d.current.wind_direction_10m;
-                        // Apply this reading to every hotspot in the cell
-                        cell.featureIndices.forEach(function(idx) {
-                            nasaWindData[idx] = {
-                                coords:        cell.allCoords[idx],
-                                windSpeed:     windSpeed,
-                                windDirection: windDir
-                            };
-                        });
-                    })
-                    .catch(function() {});
+            var points = Object.keys(cells).map(function(key) {
+                return { key: key, coords: cells[key].ll, lonLat: cells[key].ll };
             });
 
-            Promise.all(promises).then(function() { drawNASAWindOverlay(); });
+            showWindMessage('Loading wind for ' + points.length + ' hotspot areas...', false);
+
+            fetchWindForPoints(points, function(results, errMsg) {
+                if (!nasaWindEnabled) return;
+                nasaWindData = {};
+                results.forEach(function(r) {
+                    var cell = cells[r.key];
+                    if (!cell) return;
+                    // Apply this reading to every hotspot in the cell
+                    Object.keys(cell.allCoords).forEach(function(idx) {
+                        nasaWindData[idx] = {
+                            coords:        cell.allCoords[idx],
+                            windSpeed:     r.windSpeed,
+                            windDirection: r.windDirection
+                        };
+                    });
+                });
+                drawNASAWindOverlay();
+                showWindMessage(errMsg || (Object.keys(nasaWindData).length + ' satellite wind arrows loaded.'), !!errMsg);
+            });
         }
 
         function drawNASAWindOverlay() {
@@ -2036,9 +2201,14 @@
                         content.innerHTML = createPopupContent(props, coordinate, null);
                         popupOverlay.setPosition(coordinate);
 
-                        fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lonLat[1] + '&longitude=' + lonLat[0] + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m')
-                            .then(function(r) { return r.json(); })
+                        fetch(OPEN_METEO_URL + '?latitude=' + lonLat[1].toFixed(4) + '&longitude=' + lonLat[0].toFixed(4) + '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m')
+                            .then(function(r) {
+                                if (!r.ok) throw new Error('HTTP ' + r.status);
+                                return r.json();
+                            })
                             .then(function(d) {
+                                // A rate-limited reply is valid JSON with no "current" block.
+                                if (!d || d.error || !d.current) return;
                                 content.innerHTML = createPopupContent(props, coordinate, {
                                     temp: Math.round(d.current.temperature_2m),
                                     humidity: Math.round(d.current.relative_humidity_2m),
