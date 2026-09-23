@@ -443,6 +443,12 @@ Without this, a stale local draft silently wins forever and can overwrite newer
 repo content on the next export. It is the one failure mode that would actually
 lose work.
 
+*As built:* **Compare** became **Review and merge**. The draft stores a copy of
+the published files it started from (its base), so the merge works item by
+item: a change on one side only is taken automatically, a change on both is
+the user's choice. **Keep mine** adopts the newer version numbers, so the bar
+does not return and the next export supersedes the published files cleanly.
+
 Fetches use a cache-buster, since GitHub Pages responses are cached and a
 just-committed update would otherwise appear not to have landed.
 
