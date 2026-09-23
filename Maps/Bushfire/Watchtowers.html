@@ -802,6 +802,16 @@
                         <div class="legend-item"><div class="legend-color firms-low"></div>Low confidence</div>
                     </div>
 
+                    <!-- Shown when either wind layer is on -->
+                    <div id="legend-wind" style="display:none;">
+                        <div class="legend-divider"></div>
+                        <div class="legend-subtitle">Wind &amp; Embers</div>
+                        <div class="legend-item" style="font-size:11px;color:#718096;line-height:1.4;">
+                            ➤ The arrow points the way the wind is blowing.<br>
+                            The shaded cone is where embers are most likely to be carried. It reaches about as far as the wind travels in an hour — a guide, not a hard edge. Embers can start spot fires well ahead of the fire itself.
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
@@ -846,6 +856,13 @@
         var HOME_LONLAT = [152.0352, -28.2152];
         var HOME_ZOOM   = 10;
 
+        // Ember cone. Wind never holds one exact direction, so embers fan out
+        // either side of it; 25° each way is a middle-of-the-road allowance.
+        // Right beside the fire the cone is narrow, so anything this close to
+        // its centre line also counts (this buffer was the whole rule before).
+        var EMBER_CONE_HALF_ANGLE = 25;     // degrees either side of downwind
+        var EMBER_SHAFT_BUFFER    = 3000;   // metres
+
         var DIST_THRESHOLDS = [0, 10000, 30000, 50000]; // metres
         var DIST_LABELS     = ['Off', '10 km', '30 km', '50 km'];
 
@@ -875,7 +892,8 @@
                 title = '💨 Understanding Wind Arrows';
                 body  = '<p>Wind direction and strength can tell you a lot about where a fire is likely to travel.</p>' +
                         '<p>Each arrow starts at the fire and points the way the wind is blowing — the direction embers will be carried. The label shows where the wind is coming <em>from</em>, the same way weather forecasts describe it (a "north-westerly" blows toward the south-east).</p>' +
-                        '<p>If a wind arrow\'s path passes close to one of your watchtowers, you\'ll see an <strong>Ember Zone warning</strong> — meaning there\'s a risk of embers being carried toward that location.</p>' +
+                        '<p>Wind wavers, so embers spread out as they travel. The <strong>shaded cone</strong> around each arrow shows where they are most likely to land. Embers can start spot fires well ahead of the fire itself, and most homes lost to bushfire are set alight by embers.</p>' +
+                        '<p>If one of your watchtowers is inside a cone, you\'ll see an <strong>Ember Zone warning</strong> — meaning there\'s a risk of embers being carried toward that location.</p>' +
                         '<p>If you\'re concerned, this is a good time to arrange for someone to be present at the watchtower site, or to begin preparing the property.</p>';
             } else if (topic === 'satellite') {
                 title = '🗺️ Satellite View';
@@ -1003,6 +1021,8 @@
                 watchtowers.length > 0 ? '' : 'none';
             document.getElementById('legend-nasa').style.display =
                 firmsEnabled ? '' : 'none';
+            document.getElementById('legend-wind').style.display =
+                (windEnabled || nasaWindEnabled) ? '' : 'none';
         }
 
         // ── QFS fire mode (triple toggle) ─────────────────────────
@@ -1280,6 +1300,7 @@
                 fireWindData = {};
             }
             updateWarnings();
+            updateLegend();
         }
 
         // ESCAD publishes the incident category as GroupedType, but the feed
@@ -1384,14 +1405,77 @@
             return [length * Math.sin(rad), length * Math.cos(rad)];
         }
 
+        // Outline of the ember cone: the fire, then an arc of points
+        // EMBER_CONE_HALF_ANGLE either side of downwind, back to the fire.
+        function emberConeRing(coords, windFromDeg, length) {
+            var ring  = [coords];
+            var steps = 10;
+            for (var i = 0; i <= steps; i++) {
+                var a   = -EMBER_CONE_HALF_ANGLE + (2 * EMBER_CONE_HALF_ANGLE * i / steps);
+                var off = downwindOffset(windFromDeg + a, length);
+                ring.push([coords[0] + off[0], coords[1] + off[1]]);
+            }
+            ring.push(coords);
+            return ring;
+        }
+
+        // Is `point` in the ember zone of a fire at `fc`? That is: inside the
+        // shaded cone, or within EMBER_SHAFT_BUFFER of its centre line.
+        // wind: { windSpeed, windDirection } as stored for each fire.
+        function isInEmberZone(fc, wind, point) {
+            var length = wind.windSpeed * 1000;
+            var dx = point[0] - fc[0], dy = point[1] - fc[1];
+            var dist = Math.sqrt(dx * dx + dy * dy);
+
+            // Inside the cone? Web Mercator keeps angles true, so a bearing
+            // measured in map units is a real compass bearing.
+            if (dist > 0 && dist <= length) {
+                var bearing  = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+                var downwind = (wind.windDirection + 180) % 360;
+                var offAxis  = Math.abs((bearing - downwind + 540) % 360 - 180);
+                if (offAxis <= EMBER_CONE_HALF_ANGLE) return true;
+            }
+
+            // Close to the centre line?
+            var off = downwindOffset(wind.windDirection, length);
+            var segLenSq = off[0] * off[0] + off[1] * off[1];
+            var t = segLenSq > 0 ? Math.max(0, Math.min(1, (dx * off[0] + dy * off[1]) / segLenSq)) : 0;
+            var closest = [fc[0] + t * off[0], fc[1] + t * off[1]];
+            return ol.sphere.getLength(new ol.geom.LineString([closest, point])) <= EMBER_SHAFT_BUFFER;
+        }
+
+        // Same colour, see-through: accepts '#e65100', 'rgba(33,150,243,0.9)'
+        // or [r, g, b, a] and returns an rgba() string with the given opacity.
+        function colorWithAlpha(color, alpha) {
+            var rgb;
+            if (Array.isArray(color)) {
+                rgb = color.slice(0, 3);
+            } else if (color.charAt(0) === '#') {
+                rgb = [parseInt(color.substr(1, 2), 16), parseInt(color.substr(3, 2), 16), parseInt(color.substr(5, 2), 16)];
+            } else {
+                rgb = color.replace(/[^\d,.]/g, '').split(',').slice(0, 3);
+            }
+            return 'rgba(' + rgb.join(',') + ',' + alpha + ')';
+        }
+
         function drawArrow(coords, windDir, windSpeed, color, overlayArray, arrowType) {
             var featureType = arrowType || 'windArrow';
-            var off = downwindOffset(windDir, windSpeed * 1000);
+            var len = windSpeed * 1000;
+            var off = downwindOffset(windDir, len);
             var ex = coords[0] + off[0];
             var ey = coords[1] + off[1];
 
+            // Shaded ember cone, drawn underneath the arrow
+            var cone = new ol.Feature({ geometry: new ol.geom.Polygon([emberConeRing(coords, windDir, len)]), type: featureType });
+            cone.setStyle(new ol.style.Style({
+                fill:   new ol.style.Fill({ color: colorWithAlpha(color, 0.15) }),
+                stroke: new ol.style.Stroke({ color: colorWithAlpha(color, 0.6), width: 1.5, lineDash: [6, 6] }),
+                zIndex: 0
+            }));
+            measureSource.addFeature(cone);
+
             var wf = new ol.Feature({ geometry: new ol.geom.LineString([coords, [ex, ey]]), type: featureType });
-            wf.setStyle(new ol.style.Style({ stroke: new ol.style.Stroke({ color: color, width: 4 }) }));
+            wf.setStyle(new ol.style.Style({ stroke: new ol.style.Stroke({ color: color, width: 4 }), zIndex: 1 }));
             measureSource.addFeature(wf);
 
             var arrowDiv = document.createElement('div');
@@ -1449,7 +1533,9 @@
             } else {
                 clearNASAWindOverlay();
                 nasaWindData = {};
+                updateWarnings();
             }
+            updateLegend();
         }
 
         function fetchWindDataForFIRMS() {
@@ -1500,8 +1586,16 @@
 
         function drawNASAWindOverlay() {
             clearNASAWindOverlay();
+            // One fire often shows up as dozens of neighbouring hotspots, and
+            // dozens of near-identical see-through cones stack into a solid
+            // block. Draw one arrow and cone per ~2 km patch instead; the
+            // ember warnings still check every hotspot.
+            var drawn = {};
             Object.keys(nasaWindData).forEach(function(k) {
-                var d = nasaWindData[k];
+                var d     = nasaWindData[k];
+                var patch = Math.round(d.coords[0] / 2000) + ',' + Math.round(d.coords[1] / 2000);
+                if (drawn[patch]) return;
+                drawn[patch] = true;
                 drawArrow(d.coords, d.windDirection, d.windSpeed, '#e65100', nasaWindOverlays, 'nasaWindArrow');
             });
             updateWarnings();
@@ -1721,7 +1815,8 @@
                     fill:   new ol.style.Fill({ color: [r, g, b, 1] }),
                     stroke: new ol.style.Stroke({ color: 'white', width: 3 })
                 }),
-                text: new ol.style.Text({ text: '🗼', font: '16px sans-serif', offsetY: 0 })
+                text: new ol.style.Text({ text: '🗼', font: '16px sans-serif', offsetY: 0 }),
+                zIndex: 10
             });
         }
 
@@ -1868,49 +1963,31 @@
                         warnings.push({ type: 'fire', message: '🔥 FIRE ALERT: ' + formatDistance(dist) + ' from ' + wt.name + ' — ' + (props.headline || 'Incident') });
                     }
 
-                    if (windEnabled && fireWindData[fireIdx]) {
-                        var d   = fireWindData[fireIdx];
-                        var off = downwindOffset(d.windDirection, d.windSpeed * 1000);
-                        var ep  = [fc[0] + off[0], fc[1] + off[1]];
-
-                        var ax = ep[0] - fc[0], ay = ep[1] - fc[1];
-                        var bx = wt.coordinate[0] - fc[0];
-                        var by = wt.coordinate[1] - fc[1];
-                        var segLenSq = ax * ax + ay * ay;
-                        var t = segLenSq > 0 ? Math.max(0, Math.min(1, (bx * ax + by * ay) / segLenSq)) : 0;
-                        var closestX = fc[0] + t * ax;
-                        var closestY = fc[1] + t * ay;
-                        var distToShaft = ol.sphere.getLength(new ol.geom.LineString([[closestX, closestY], wt.coordinate]));
-
-                        if (distToShaft <= 3000) {
-                            warnings.push({ type: 'ember', message: '⚠️ EMBER ZONE: ' + Math.round(d.windSpeed) + ' km/h QFS wind path passes within ' + formatDistance(distToShaft) + ' of ' + wt.name });
-                        }
+                    var d = windEnabled && fireWindData[fireIdx];
+                    if (d && isInEmberZone(fc, d, wt.coordinate)) {
+                        warnings.push({ type: 'ember', message: '⚠️ EMBER ZONE: ' + wt.name + ' is downwind of a fire ' + formatDistance(dist) + ' away — ' +
+                                        Math.round(d.windSpeed) + ' km/h wind from ' + getCompassDirection(d.windDirection) });
                     }
                 });
             });
 
             // ── NASA satellite wind ember checks ──────────────────
+            // One warning per watchtower rather than one per hotspot: a single
+            // fire often shows up as dozens of neighbouring hotspots.
             if (nasaWindEnabled && Object.keys(nasaWindData).length > 0) {
                 watchtowers.forEach(function(wt) {
+                    var count = 0, nearest = null, nearestWind = null;
                     Object.keys(nasaWindData).forEach(function(k) {
-                        var d   = nasaWindData[k];
-                        var fc  = d.coords;
-                        var off = downwindOffset(d.windDirection, d.windSpeed * 1000);
-                        var ep  = [fc[0] + off[0], fc[1] + off[1]];
-
-                        var ax = ep[0] - fc[0], ay = ep[1] - fc[1];
-                        var bx = wt.coordinate[0] - fc[0];
-                        var by = wt.coordinate[1] - fc[1];
-                        var segLenSq = ax * ax + ay * ay;
-                        var t = segLenSq > 0 ? Math.max(0, Math.min(1, (bx * ax + by * ay) / segLenSq)) : 0;
-                        var closestX = fc[0] + t * ax;
-                        var closestY = fc[1] + t * ay;
-                        var distToShaft = ol.sphere.getLength(new ol.geom.LineString([[closestX, closestY], wt.coordinate]));
-
-                        if (distToShaft <= 3000) {
-                            warnings.push({ type: 'ember', message: '⚠️ SATELLITE EMBER ZONE: ' + Math.round(d.windSpeed) + ' km/h NASA wind path passes within ' + formatDistance(distToShaft) + ' of ' + wt.name });
-                        }
+                        var d = nasaWindData[k];
+                        if (!isInEmberZone(d.coords, d, wt.coordinate)) return;
+                        var dist = ol.sphere.getLength(new ol.geom.LineString([d.coords, wt.coordinate]));
+                        count++;
+                        if (nearest === null || dist < nearest) { nearest = dist; nearestWind = d; }
                     });
+                    if (count === 0) return;
+                    warnings.push({ type: 'ember', message: '⚠️ SATELLITE EMBER ZONE: ' + wt.name + ' is downwind of ' +
+                                    (count === 1 ? 'a satellite hotspot ' : count + ' satellite hotspots, nearest ') + formatDistance(nearest) + ' away — ' +
+                                    Math.round(nearestWind.windSpeed) + ' km/h wind from ' + getCompassDirection(nearestWind.windDirection) });
                 });
             }
 
@@ -2181,7 +2258,10 @@
                     if (addingWatchtower) { addWatchtowerAtLocation(evt.coordinate); return; }
 
                     // Check watchtower features first (they sit on measureLayer)
-                    var wtFeature = map.forEachFeatureAtPixel(evt.pixel, function(f) { return f; }, {
+                    // Cones and arrows share this layer; skip past them to the watchtower.
+                    var wtFeature = map.forEachFeatureAtPixel(evt.pixel, function(f) {
+                        return f.get('type') === 'watchtower' ? f : undefined;
+                    }, {
                         hitTolerance: 14,
                         layerFilter: function(layer) { return layer === measureLayer; }
                     });
