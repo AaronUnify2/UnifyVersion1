@@ -842,6 +842,10 @@
 
         var FIRMS_KEY = '577b0590cbd4f45bb0cfdbfbca871a11';
 
+        // The map opens over Warwick and the Southern Downs.
+        var HOME_LONLAT = [152.0352, -28.2152];
+        var HOME_ZOOM   = 10;
+
         var DIST_THRESHOLDS = [0, 10000, 30000, 50000]; // metres
         var DIST_LABELS     = ['Off', '10 km', '30 km', '50 km'];
 
@@ -870,6 +874,7 @@
             } else if (topic === 'wind') {
                 title = '💨 Understanding Wind Arrows';
                 body  = '<p>Wind direction and strength can tell you a lot about where a fire is likely to travel.</p>' +
+                        '<p>Each arrow starts at the fire and points the way the wind is blowing — the direction embers will be carried. The label shows where the wind is coming <em>from</em>, the same way weather forecasts describe it (a "north-westerly" blows toward the south-east).</p>' +
                         '<p>If a wind arrow\'s path passes close to one of your watchtowers, you\'ll see an <strong>Ember Zone warning</strong> — meaning there\'s a risk of embers being carried toward that location.</p>' +
                         '<p>If you\'re concerned, this is a good time to arrange for someone to be present at the watchtower site, or to begin preparing the property.</p>';
             } else if (topic === 'satellite') {
@@ -1369,19 +1374,28 @@
             });
         }
 
+        // Open-Meteo reports wind the meteorological way: the direction the
+        // wind is blowing FROM (a westerly is 270°). Embers travel the other
+        // way, so everything that draws or measures an ember path turns the
+        // reading around here. Returns the [east, north] offset in map units.
+        function downwindOffset(windFromDeg, length) {
+            var towardDeg = (windFromDeg + 180) % 360;   // compass bearing: 0 = N, 90 = E
+            var rad = towardDeg * Math.PI / 180;
+            return [length * Math.sin(rad), length * Math.cos(rad)];
+        }
+
         function drawArrow(coords, windDir, windSpeed, color, overlayArray, arrowType) {
             var featureType = arrowType || 'windArrow';
-            var len = windSpeed * 1000;
-            var rad = (90 - windDir) * Math.PI / 180;
-            var ex = coords[0] + len * Math.cos(rad);
-            var ey = coords[1] + len * Math.sin(rad);
+            var off = downwindOffset(windDir, windSpeed * 1000);
+            var ex = coords[0] + off[0];
+            var ey = coords[1] + off[1];
 
             var wf = new ol.Feature({ geometry: new ol.geom.LineString([coords, [ex, ey]]), type: featureType });
             wf.setStyle(new ol.style.Style({ stroke: new ol.style.Stroke({ color: color, width: 4 }) }));
             measureSource.addFeature(wf);
 
             var arrowDiv = document.createElement('div');
-            arrowDiv.style.cssText = 'font-size:24px;transform:rotate(' + (windDir - 90) + 'deg);color:' + (Array.isArray(color) ? 'rgba(' + color.join(',') + ')' : color);
+            arrowDiv.style.cssText = 'font-size:24px;transform:rotate(' + (windDir + 90) + 'deg);color:' + (Array.isArray(color) ? 'rgba(' + color.join(',') + ')' : color);
             arrowDiv.textContent = '➤';
             var arrowOv = new ol.Overlay({ element: arrowDiv, position: [ex, ey], positioning: 'center-center' });
             map.addOverlay(arrowOv);
@@ -1390,7 +1404,7 @@
             var labelDiv = document.createElement('div');
             labelDiv.className = 'wind-label';
             if (!Array.isArray(color)) labelDiv.style.background = color;
-            labelDiv.textContent = Math.round(windSpeed) + ' km/h';
+            labelDiv.textContent = Math.round(windSpeed) + ' km/h from ' + getCompassDirection(windDir);
             var labelOv = new ol.Overlay({ element: labelDiv, position: coords, positioning: 'bottom-center', offset: [0, -20] });
             map.addOverlay(labelOv);
             overlayArray.push(labelOv);
@@ -1856,9 +1870,8 @@
 
                     if (windEnabled && fireWindData[fireIdx]) {
                         var d   = fireWindData[fireIdx];
-                        var rad = (90 - d.windDirection) * Math.PI / 180;
-                        var len = d.windSpeed * 1000;
-                        var ep  = [fc[0] + len * Math.cos(rad), fc[1] + len * Math.sin(rad)];
+                        var off = downwindOffset(d.windDirection, d.windSpeed * 1000);
+                        var ep  = [fc[0] + off[0], fc[1] + off[1]];
 
                         var ax = ep[0] - fc[0], ay = ep[1] - fc[1];
                         var bx = wt.coordinate[0] - fc[0];
@@ -1882,9 +1895,8 @@
                     Object.keys(nasaWindData).forEach(function(k) {
                         var d   = nasaWindData[k];
                         var fc  = d.coords;
-                        var rad = (90 - d.windDirection) * Math.PI / 180;
-                        var len = d.windSpeed * 1000;
-                        var ep  = [fc[0] + len * Math.cos(rad), fc[1] + len * Math.sin(rad)];
+                        var off = downwindOffset(d.windDirection, d.windSpeed * 1000);
+                        var ep  = [fc[0] + off[0], fc[1] + off[1]];
 
                         var ax = ep[0] - fc[0], ay = ep[1] - fc[1];
                         var bx = wt.coordinate[0] - fc[0];
@@ -2043,8 +2055,8 @@
             if (weatherData) {
                 html += '<div class="popup-weather"><h4>🌤️ Current Conditions</h4>';
                 html += '<div class="weather-item"><span>💨 Wind: ' + weatherData.windSpeed + ' km/h</span>';
-                html += '<span class="wind-arrow" style="transform:rotate(' + weatherData.windDirection + 'deg);">↑</span>';
-                html += '<span style="margin-left:8px;">(' + weatherData.windDirectionText + ')</span></div>';
+                html += '<span class="wind-arrow" style="transform:rotate(' + (weatherData.windDirection + 180) + 'deg);">↑</span>';
+                html += '<span style="margin-left:8px;">(from ' + weatherData.windDirectionText + ')</span></div>';
                 html += '<div class="weather-item"><span>🌡️ Temperature: ' + weatherData.temp + '°C</span></div>';
                 html += '<div class="weather-item"><span>💧 Humidity: ' + weatherData.humidity + '%</span></div>';
                 html += '</div>';
@@ -2105,11 +2117,6 @@
             if (measureMode > 0) drawDistanceLines();
             if (windEnabled) fetchWindDataForFires();
 
-            var extent = vectorSource.getExtent();
-            if (extent[0] !== Infinity && watchtowers.length === 0) {
-                map.getView().fit(extent, { padding: [50, 50, 50, 300], maxZoom: 12 });
-            }
-
             updateWarnings();
             loading.style.display = 'none';
         }
@@ -2157,7 +2164,7 @@
                 map = new ol.Map({
                     target: 'map',
                     layers: [osmLayer, satelliteLayer, firmsLayer, vectorLayer, measureLayer],
-                    view: new ol.View({ center: ol.proj.fromLonLat([144.5, -22.5]), zoom: 5 })
+                    view: new ol.View({ center: ol.proj.fromLonLat(HOME_LONLAT), zoom: HOME_ZOOM })
                 });
 
                 // Popup
