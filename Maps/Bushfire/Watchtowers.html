@@ -384,6 +384,36 @@
             gap: 6px;
         }
 
+        /* Shown only when incident data is missing or out of date */
+        .data-status {
+            display: none;
+            position: fixed;
+            top: 12px;
+            left: 56px;
+            max-width: min(420px, calc(100vw - 400px));
+            z-index: 1150;
+            padding: 8px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            font-size: 13px;
+            line-height: 1.4;
+            color: white;
+        }
+        .data-status.show { display: block; }
+        .data-status.warn { background: #975a16; }
+        .data-status.bad  { background: #c53030; }
+        .data-status button {
+            margin-left: 6px;
+            background: white;
+            color: #1a202c;
+            border: none;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
         .warning-fire  { background: #d32f2f; color: white; }
         .warning-ember { background: #f57c00; color: white; }
 
@@ -603,6 +633,9 @@
             /* On mobile toggle is always at right edge */
             .sidebar-toggle { right: 12px !important; }
 
+            /* Between the zoom buttons and the menu button */
+            .data-status { left: 56px; right: 66px; max-width: none; }
+
             .sidebar {
                 position: fixed;
                 top: 0;
@@ -653,6 +686,7 @@
 
     <div id="warning-panel" class="warning-panel"></div>
     <div id="loading" class="loading">Loading incident data...</div>
+    <div id="data-status" class="data-status" role="status"></div>
 
     <div id="custom-modal" class="custom-modal">
         <div class="modal-content">
@@ -769,7 +803,7 @@
 
                     <!-- Always shown: QFS basic -->
                     <div class="legend-subtitle">QFS Active Response</div>
-                    <div class="legend-item"><div class="legend-color c-qfs-red"></div>🔴 QFS Fire</div>
+                    <div class="legend-item"><div class="legend-color c-qfs-red"></div>🔴 QFS incident — any type (fires, crashes, rescues…)</div>
 
                     <!-- Shown when qfsFireMode = 1 (typed) -->
                     <div id="legend-qfs-types" style="display:none;">
@@ -862,6 +896,16 @@
         // its centre line also counts (this buffer was the whole rule before).
         var EMBER_CONE_HALF_ANGLE = 25;     // degrees either side of downwind
         var EMBER_SHAFT_BUFFER    = 3000;   // metres
+
+        // Incident refresh. A failed refresh keeps the last good data on the
+        // map and tries again sooner; anything older than STALE_MS is flagged.
+        var REFRESH_MS = 5 * 60 * 1000;
+        var RETRY_MS   = 60 * 1000;
+        var STALE_MS   = 12 * 60 * 1000;
+        var lastIncidentLoad  = null;    // Date of the last good load
+        var incidentLoadError = null;    // why the last attempt failed, or null
+        var incidentLoading   = false;
+        var refreshTimer      = null;
 
         var DIST_THRESHOLDS = [0, 10000, 30000, 50000]; // metres
         var DIST_LABELS     = ['Off', '10 km', '30 km', '50 km'];
@@ -1319,7 +1363,8 @@
             return '';
         }
 
-        function isWindRelevant(props) {
+        // Fire-type incidents: these get wind arrows and FIRE ALERTs.
+        function isFireIncident(props) {
             var t = getIncidentTypeText(props).toLowerCase();
             return t.indexOf('bush')      !== -1 || t.indexOf('grass')    !== -1 ||
                    t.indexOf('vegetation')!== -1 || t.indexOf('structure')!== -1 ||
@@ -1346,13 +1391,13 @@
             // If the type filter matches nothing at all while incidents are on
             // the map, the upstream vocabulary has probably changed — draw wind
             // for every incident rather than for none.
-            var anyRelevant = fires.some(function(f) { return isWindRelevant(f.get('properties')); });
+            var anyRelevant = fires.some(function(f) { return isFireIncident(f.get('properties')); });
 
             // Keys stay indexes into the full feature list, because
             // updateWarnings() looks up fireWindData by that same index.
             var points = [];
             fires.forEach(function(fire, idx) {
-                if (anyRelevant && !isWindRelevant(fire.get('properties'))) return;
+                if (anyRelevant && !isFireIncident(fire.get('properties'))) return;
                 var fc = fireCentre(fire);
                 if (!fc) return;
                 points.push({ key: idx, coords: fc, lonLat: ol.proj.toLonLat(fc) });
@@ -1951,15 +1996,22 @@
 
             // ── QFS fire proximity + QFS wind ember checks ────────
             var fires = vectorSource.getFeatures();
+
+            // Only fires raise a FIRE ALERT: crashes and rescues nearby would
+            // teach people to ignore it. If no incident at all looks like a
+            // fire, the feed's wording has probably changed, so alert on every
+            // incident rather than go quiet.
+            var anyFireTyped = fires.some(function(f) { return isFireIncident(f.get('properties')); });
+
             watchtowers.forEach(function(wt) {
                 fires.forEach(function(fire, fireIdx) {
                     var geom = fire.getGeometry();
                     if (!geom) return;
                     var fc = geom.getType() === 'Point' ? geom.getCoordinates() : geom.getInteriorPoint().getCoordinates();
 
-                    var dist = ol.sphere.getLength(new ol.geom.LineString([wt.coordinate, fc]));
-                    if (dist <= 10000) {
-                        var props = fire.get('properties');
+                    var dist  = ol.sphere.getLength(new ol.geom.LineString([wt.coordinate, fc]));
+                    var props = fire.get('properties');
+                    if (dist <= 10000 && (!anyFireTyped || isFireIncident(props))) {
                         warnings.push({ type: 'fire', message: '🔥 FIRE ALERT: ' + formatDistance(dist) + ' from ' + wt.name + ' — ' + (props.headline || 'Incident') });
                     }
 
@@ -2018,8 +2070,10 @@
             html += wt.lonLat[1].toFixed(5) + ', ' + wt.lonLat[0].toFixed(5) + '</div>';
 
             // Nearest fires
-            if (top3.length > 0) {
-                html += '<div class="detail" style="font-weight:600;margin-bottom:4px;">Nearest active incidents:</div>';
+            if (!lastIncidentLoad) {
+                html += '<div class="detail" style="color:#c53030;">⚠️ Incident data hasn\'t loaded yet, so nearby fires can\'t be checked.</div>';
+            } else if (top3.length > 0) {
+                html += '<div class="detail" style="font-weight:600;margin-bottom:4px;">Nearest active incidents (as of ' + formatClock(lastIncidentLoad) + '):</div>';
                 top3.forEach(function(f) {
                     var type = f.props.GroupedType || f.props.groupedType || 'Incident';
                     var loc  = f.props.LocalityName || f.props.Location || '';
@@ -2157,12 +2211,19 @@
             vectorSource.addFeature(circleFeature);
         }
 
+        // The map keeps showing the last good incidents until a refresh
+        // actually succeeds. Clearing first meant one dropped connection left
+        // an empty map that looked like "no fires".
         function loadBushfireData() {
+            if (incidentLoading) return;
+            incidentLoading = true;
+            clearTimeout(refreshTimer);
+
             var loading = document.getElementById('loading');
             loading.style.display = 'block';
             loading.classList.remove('error');
             loading.textContent = 'Loading QLD incidents from ESCAD...';
-            if (vectorSource) vectorSource.clear();
+            updateDataStatus();
 
             var escadUrl = 'https://services1.arcgis.com/vkTwD8kHw2woKBqV/arcgis/rest/services/' +
                            'ESCAD_Current_Incidents_Public/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson';
@@ -2171,18 +2232,86 @@
 
             fetch(escadUrl, { signal: controller.signal })
                 .then(function(r) { clearTimeout(timer); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-                .then(function(data) { processData(data); })
+                .then(function(data) {
+                    // ArcGIS reports many errors as an ordinary 200 reply with an
+                    // "error" block and no features — that is not "zero incidents".
+                    if (!data || data.error || !Array.isArray(data.features)) {
+                        throw new Error((data && data.error && data.error.message) || 'unexpected reply');
+                    }
+                    processData(data);
+                    lastIncidentLoad  = new Date();
+                    incidentLoadError = null;
+                    scheduleRefresh(REFRESH_MS);
+                })
                 .catch(function(err) {
                     clearTimeout(timer);
-                    loading.classList.add('error');
-                    loading.textContent = 'Error loading ESCAD data. Please refresh.';
-                    setTimeout(function() { loading.style.display = 'none'; }, 5000);
+                    incidentLoadError = err && err.name === 'AbortError' ? 'timed out' : ((err && err.message) || 'unknown error');
+                    loading.style.display = 'none';
+                    scheduleRefresh(RETRY_MS);
+                })
+                .then(function() {
+                    incidentLoading = false;
+                    updateDataStatus();
                 });
+        }
+
+        function scheduleRefresh(ms) {
+            clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(loadBushfireData, ms);
+        }
+
+        function describeAge(ms) {
+            var mins = Math.floor(ms / 60000);
+            if (mins < 1)  return 'just now';
+            if (mins < 60) return mins + ' min ago';
+            var hrs = Math.floor(mins / 60);
+            return hrs + ' h ' + (mins % 60) + ' min ago';
+        }
+
+        function formatClock(date) {
+            return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        }
+
+        // The banner at the top of the map: hidden while data is fresh; says
+        // plainly when incidents are missing or old, with a Retry button.
+        function updateDataStatus() {
+            var el  = document.getElementById('data-status');
+            var age = lastIncidentLoad ? Date.now() - lastIncidentLoad.getTime() : 0;
+            var msg = '', level = 'warn';
+
+            if (!lastIncidentLoad && incidentLoadError) {
+                level = 'bad';
+                msg = '⚠️ Couldn\'t load QFS incidents (' + incidentLoadError + '). Fires may be missing from this map. Retrying automatically.';
+            } else if (incidentLoadError) {
+                if (age > STALE_MS) level = 'bad';
+                msg = '⚠️ Couldn\'t refresh QFS incidents (' + incidentLoadError + '). Showing incidents from ' +
+                      formatClock(lastIncidentLoad) + ' (' + describeAge(age) + '). Retrying automatically.';
+            } else if (lastIncidentLoad && age > STALE_MS) {
+                msg = '⏳ QFS incidents are from ' + formatClock(lastIncidentLoad) + ' (' + describeAge(age) + ')' +
+                      (incidentLoading ? ' — refreshing…' : '.');
+            }
+
+            el.textContent = '';
+            if (!msg) { el.className = 'data-status'; return; }
+            el.className = 'data-status show ' + level;
+            el.appendChild(document.createTextNode(msg));
+            if (!incidentLoading) {
+                var btn = document.createElement('button');
+                btn.textContent = 'Retry now';
+                btn.onclick = loadBushfireData;
+                el.appendChild(btn);
+            }
         }
 
         function processData(data) {
             var loading  = document.getElementById('loading');
             var features = data.features || [];
+
+            // Swap the old incidents for the new ones. Wind readings are stored
+            // by position in the incident list, so they're refetched too rather
+            // than pinned to whichever incident now sits at that position.
+            vectorSource.clear();
+            fireWindData = {};
             features.forEach(function(f) { addFireToMap(f); });
 
             document.getElementById('incident-count').textContent = features.length;
@@ -2344,8 +2473,19 @@
                 });
 
                 loadWatchtowersFromStorage();
-                loadBushfireData();
-                setInterval(loadBushfireData, 5 * 60 * 1000);
+                loadBushfireData();   // schedules its own next refresh
+
+                // Keep the "x min ago" wording current.
+                setInterval(updateDataStatus, 30000);
+
+                // Phones pause background tabs, so data can be hours old when
+                // someone comes back to the page. Refresh straight away.
+                document.addEventListener('visibilitychange', function() {
+                    if (document.visibilityState !== 'visible') return;
+                    var age = lastIncidentLoad ? Date.now() - lastIncidentLoad.getTime() : Infinity;
+                    if (age > RETRY_MS) loadBushfireData();
+                    else updateDataStatus();
+                });
 
             } catch (e) {
                 console.error('Init error:', e);
