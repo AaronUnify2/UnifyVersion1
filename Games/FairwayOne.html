@@ -1952,8 +1952,12 @@ var SLAB_SKIN = {
   spring:  { top: 0xd94f57, side: 0x8f3037 }
 };
 
+/* which kinds are objects rather than ground, for the purpose of casting */
+var CASTS = { stone: true, wood: true, rail: true, spring: true };
+
 var spinners = [];
 var markings = null;
+var ballShadow = null;
 
 function slabSkin(kind) {
   var c = SLAB_SKIN[kind] || SLAB_SKIN.fairway;
@@ -1981,6 +1985,10 @@ function buildCourseMeshes() {
       slabSkin(sl.kind));
     m.rotation.z = sl.tilt;
     m.receiveShadow = true;
+    /* Ground receives a shadow; things standing on the ground cast one too.
+       Decks do not cast: a fairway casting onto itself buys nothing and costs
+       a pass over every triangle on the hole. */
+    m.castShadow = CASTS[sl.kind] === true;
     pivot.add(m);
     terrain.add(pivot);
     if (moving(sl)) spinners.push({ pivot: pivot, mesh: m, slab: sl });
@@ -2159,8 +2167,52 @@ function buildBall() {
     new THREE.SphereGeometry(BALL_R, 14, 10),
     new THREE.MeshLambertMaterial({ color: 0xffffff })
   );
-  ballMesh.castShadow = true;
+  /* No shadow map for the ball. It is drawn up to nine times its real size so
+     you can follow it at two hundred metres, and a shadow map over a course
+     this long cannot resolve a golf ball anyway - it would be one texel. The
+     blob below is both more accurate about where the ball is and far cheaper. */
+  ballMesh.castShadow = false;
   scene.add(ballMesh);
+
+  /* The one shadow that is not decoration. Judging how far out over the
+     fairway a ball in the air actually is, is the hardest thing to read in a
+     three dimensional golf game, and a disc on the ground directly beneath it
+     is the whole answer: it grows and fades with height, and it lies along the
+     ground it is on, so it reads on a bank as well as on a flat deck. */
+  ballShadow = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 20),
+    new THREE.MeshBasicMaterial({
+      color: 0x14240f, transparent: true, opacity: 0.4, depthWrite: false
+    })
+  );
+  ballShadow.renderOrder = 2;
+  scene.add(ballShadow);
+}
+
+/* How high above its own shadow the ball gets before the shadow is gone.
+   Generous on purpose: the big drops on this course are thirty metres before
+   the ball has left the tee, and a shot down off a tower is exactly when
+   knowing where you are over the ground is worth most. */
+var SHADOW_FADE = 80;
+
+function placeBallShadow() {
+  var b = hole.ball, t = hole.time;
+  var g = b.holed ? null : groundUnder(b.pos.x, b.pos.z, t);
+  if (!g) { ballShadow.visible = false; return; }
+  var up = Math.max(0, b.pos.y - BALL_RADIUS - g.y);
+  var fade = 1 - up / SHADOW_FADE;
+  if (fade <= 0.02) { ballShadow.visible = false; return; }
+  /* matched to the ball as it is drawn, not as it is, or a ball lying on the
+     green would sit on a shadow a ninth of its size */
+  var drawn = BALL_R * ballMesh.scale.x;
+  ballShadow.scale.setScalar(drawn * (1 + up * 0.045));
+  ballShadow.material.opacity = 0.42 * fade;
+  var y = g.y + 0.06;
+  ballShadow.position.set(b.pos.x, y, b.pos.z);
+  /* a circle is built facing +z, so pointing it at the ground's own normal
+     lays it flat on whatever it is lying on */
+  ballShadow.lookAt(b.pos.x + g.normal.x, y + g.normal.y, b.pos.z + g.normal.z);
+  ballShadow.visible = true;
 }
 
 function sizeBall() {
@@ -2939,6 +2991,27 @@ function resize() {
 
 function el(id) { return document.getElementById(id); }
 
+/* Where the sun stands relative to whatever it is lighting, and how wide a
+   patch of the world it shadows. The offset is a direction with a length: a
+   directional light only cares which way it points, but its shadow box is
+   pinned to where the light is, so it has to be moved along with its target. */
+/* High rather than low. The ball's own shadow is drawn straight down beneath
+   it, because what you need off the tee is where the ball is over the fairway,
+   not where the sun happens to throw it - but a low sun would then stretch
+   every stone's shadow half a hole sideways while the ball's sat under it,
+   and the two would plainly disagree. At this angle a shadow runs about four
+   tenths of the height of the thing casting it, which is short enough that
+   nothing argues with anything. */
+var SUN_OFF = { x: -123, y: 300, z: 61 };
+var SHADOW_SPAN = 130;
+
+function aimSun(x, y, z) {
+  if (!sun) return;
+  sun.target.position.set(x, y, z);
+  sun.target.updateMatrixWorld();
+  sun.position.set(x + SUN_OFF.x, y + SUN_OFF.y, z + SUN_OFF.z);
+}
+
 function boot() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x8fc7e8);
@@ -2946,12 +3019,34 @@ function boot() {
   camera = new THREE.PerspectiveCamera(58, 1, 0.5, 2200);
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   el('stage').appendChild(renderer.domElement);
 
   scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x3d5a2a, 0.85));
   sun = new THREE.DirectionalLight(0xfff4e0, 0.85);
-  sun.position.set(-120, 180, 60);
+  sun.position.set(SUN_OFF.x, SUN_OFF.y, SUN_OFF.z);
+  sun.castShadow = true;
+  /* A directional light shadows a box, and the box has to be small enough to
+     be worth having. Over a seven hundred metre hole a single map covering the
+     lot gives a third of a metre to the texel, which is mud; so the box is a
+     couple of hundred metres across and follows the ball, which is where you
+     are looking. Half the resolution on a phone. */
+  var lot = window.innerWidth < 700 ? 1024 : 2048;
+  sun.shadow.mapSize.width = lot;
+  sun.shadow.mapSize.height = lot;
+  sun.shadow.camera.left = -SHADOW_SPAN;
+  sun.shadow.camera.right = SHADOW_SPAN;
+  sun.shadow.camera.top = SHADOW_SPAN;
+  sun.shadow.camera.bottom = -SHADOW_SPAN;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 900;
+  /* a flat deck lit at this angle self-shadows into stripes without these */
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.7;
+  sun.shadow.camera.updateProjectionMatrix();
   scene.add(sun);
+  scene.add(sun.target);
 
   buildScenery();
   buildBall();
@@ -3008,6 +3103,8 @@ function frame(now) {
   ballMesh.visible = !hole.ball.holed;
   sizeBall();
   spinCourse(hole.time);
+  aimSun(hole.ball.pos.x, hole.ball.pos.y, hole.ball.pos.z);
+  placeBallShadow();
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
