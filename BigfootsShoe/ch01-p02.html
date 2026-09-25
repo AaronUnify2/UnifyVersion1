@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bigfoot's Shoe · Page 2 · The Ghost</title>
+<style>
+  :root {
+    --bg: #0b0913;
+    --line: #2a2340;
+    --text: #e6e0f0;
+    --muted: #9a90b5;
+    --accent: #f2d98a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    min-height: 100vh;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    font-family: Georgia, "Times New Roman", serif;
+  }
+  .bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    font: 12px/1.3 ui-monospace, Menlo, Consolas, monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .bar a { color: var(--accent); text-decoration: none; }
+  .bar .chapter { text-align: center; flex: 1; }
+  .spread {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 32px;
+    align-items: center;
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+  .stage {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    max-height: calc(100svh - 150px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    touch-action: pan-y;
+  }
+  canvas {
+    display: block;
+    box-shadow: 0 0 0 1px var(--line), 0 10px 40px rgba(0, 0, 0, 0.6);
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+  }
+  .text { max-width: 36em; }
+  .text h1 {
+    margin: 0 0 16px;
+    font: 12px/1.3 ui-monospace, Menlo, Consolas, monospace;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .text p { margin: 0 0 1em; font-size: 1.12rem; line-height: 1.65; }
+  .turn {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--line);
+  }
+  .btn {
+    min-width: 96px;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    color: var(--text);
+    text-decoration: none;
+    text-align: center;
+    font: 13px/1.2 ui-monospace, Menlo, Consolas, monospace;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.off { opacity: 0.35; pointer-events: none; }
+  .hint { color: var(--muted); font: 11px/1.3 ui-monospace, Menlo, Consolas, monospace; text-align: center; }
+  @media (max-width: 820px) {
+    .bar { padding: 10px 16px; font-size: 11px; }
+    .bar .chapter { display: none; }
+    .spread { grid-template-columns: 1fr; gap: 18px; padding: 0 0 8px; align-items: start; }
+    .stage { max-height: none; }
+    .text { padding: 0 16px; }
+    .hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <a href="index.html" data-turn>Bigfoot's Shoe</a>
+  <span class="chapter">Chapter 1 · The Fresh Start</span>
+  <span>Page 2 / 21</span>
+</header>
+<main class="spread">
+  <div class="stage" id="stage"><canvas id="screen" aria-label="A half-transparent young man walks through the dark tunnel and stops beneath a thin shaft of light falling from a crack in the ceiling." role="img"></canvas></div>
+  <section class="text">
+    <h1>2. The Ghost</h1>
+    <p>The second is closer to a ghost. To say he's a secondary identity is overstating it. He has no plan, and it's not clear he is ready to leave the tunnels.</p>
+    <p>However, there are problems in the world above, and more experimental identities are being called forward.</p>
+  </section>
+</main>
+<nav class="turn">
+  <a class="btn" id="prev" href="ch01-p01.html" data-turn>‹ Prev</a>
+  <span class="hint">← → keys or swipe to turn</span>
+  <a class="btn" id="next" href="ch01-p03.html" data-turn>Next ›</a>
+</nav>
+<script>
+// =====================================================================
+//  BIGFOOT'S SHOE — pixel engine (identical on every page of the book)
+// =====================================================================
+// Everything is drawn to a small 128x96 canvas, then copied to the screen
+// scaled up by a whole number of *device* pixels, so every art pixel stays
+// a perfectly crisp square on any screen.
+
+const W = 128, H = 96;
+
+// ---- Book palette: every pixel on screen comes from this list --------
+const P = {
+  ink:     '#07060d',
+  rock0:   '#0f0c1a',
+  rock1:   '#1a1529',
+  wall0:   '#1d1830',
+  wall1:   '#2b2445',
+  wall2:   '#3a3259',
+  wall3:   '#554a7a',
+  haze:    '#6b5a78',
+  floor0:  '#141122',
+  floor1:  '#221c36',
+  floor2:  '#3a3257',
+  fire0:   '#c2451e',
+  fire1:   '#ff8a2b',
+  fire2:   '#ffd35c',
+  white:   '#ffffff',
+  glow:    '#fff6c8',
+  // the Primary
+  jacket0: '#6e2c1c',
+  jacket1: '#b4532a',
+  jacket2: '#e07b3c',
+  pants0:  '#1c182e',
+  pants1:  '#2f2848',
+  shoe:    '#0d0a16',
+  skin0:   '#a8684a',
+  skin1:   '#e0a47a',
+  hair:    '#3a2418',
+  pipe0:   '#6d7285',
+  pipe1:   '#c9ced8',
+  // the Secondary
+  hood0:   '#3c4d66',
+  hood1:   '#5f7896',
+  hood2:   '#9bb3cf',
+  pale0:   '#9a8c95',
+  pale1:   '#cdbfc0',
+  stick:   '#7a5534',
+  // the Animus
+  gold0:   '#c49a45',
+  gold1:   '#f2d98a',
+  dress0:  '#b9a9c9',
+  dress1:  '#f4eee0',
+  // demons
+  imp0:    '#120a1b',
+  imp1:    '#26143a',
+  imp2:    '#7a45a0',
+  eye:     '#ff4d3d',
+  cyst0:   '#5e8a22',
+  cyst1:   '#a8d63e',
+  cyst2:   '#eaff9a',
+  // night sky and desert (cover)
+  sky0:    '#0b0a1c',
+  sky1:    '#15132e',
+  sky2:    '#241d48',
+  moon:    '#f4ecd0',
+  sand0:   '#1f1a33',
+  sand1:   '#2f2748',
+  sand2:   '#473b63',
+  stone0:  '#4a4760',
+  stone1:  '#76728e',
+  stone2:  '#aaa6c0'
+};
+
+// Colour ramps particles step through as they age (bright -> dark).
+const RAMP_SPARK = [P.white, P.fire2, P.fire1, P.fire0];
+const RAMP_CYST  = [P.cyst2, P.cyst1, P.cyst0, P.imp2];
+const RAMP_IMP   = [P.imp2, P.imp2, P.imp1, P.imp0];
+const RAMP_GOLD  = [P.white, P.glow, P.gold1, P.gold0];
+const RAMP_DUST  = [P.hood2, P.pale0, P.wall3, P.wall2];
+const RAMP_STAR  = [P.white, P.glow, P.stone2, P.sky2];
+const RAMPS = [RAMP_SPARK, RAMP_CYST, RAMP_IMP, RAMP_GOLD, RAMP_DUST, RAMP_STAR];
+const SPARK = 0, CYST = 1, IMP = 2, GOLD = 3, DUST = 4, STAR = 5;
+
+// ---- Canvases ---------------------------------------------------------
+const buf = document.createElement('canvas');
+buf.width = W;
+buf.height = H;
+const g = buf.getContext('2d');
+const screenCanvas = document.getElementById('screen');
+const sg = screenCanvas.getContext('2d');
+const stage = document.getElementById('stage');
+let scale = 1;
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const bw = stage.clientWidth;
+  const bh = stage.clientHeight;
+  let s = Math.floor(Math.min(bw * dpr / W, bh * dpr / H));
+  if (s < 1) s = 1;
+  scale = s;
+  screenCanvas.width = W * s;
+  screenCanvas.height = H * s;
+  screenCanvas.style.width = (W * s / dpr) + 'px';
+  screenCanvas.style.height = (H * s / dpr) + 'px';
+  sg.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', resize);
+if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
+resize();
+
+// ---- Drawing helpers (all snap to whole pixels) -----------------------
+// ditherLevel 0 = solid, 1 = 50% checkerboard, 2 = 25% dots.
+// Used for ghosts and light, since pixel art has no real transparency.
+let ditherLevel = 0;
+let ditherPhase = 0;
+
+function keepPixel(x, y) {
+  if (ditherLevel === 1) return ((x + y + ditherPhase) & 1) === 0;
+  return ((x + ditherPhase) & 1) === 0 && (y & 1) === 0;
+}
+
+function rect(x, y, w, h, c) {
+  x = Math.round(x); y = Math.round(y);
+  w = Math.round(w); h = Math.round(h);
+  if (w <= 0 || h <= 0) return;
+  g.fillStyle = c;
+  if (ditherLevel === 0) { g.fillRect(x, y, w, h); return; }
+  for (let j = y; j < y + h; j++) {
+    for (let i = x; i < x + w; i++) {
+      if (keepPixel(i, j)) g.fillRect(i, j, 1, 1);
+    }
+  }
+}
+
+function px(x, y, c) { rect(x, y, 1, 1, c); }
+
+function dither(level, phase) { ditherLevel = level; ditherPhase = phase || 0; }
+
+function line(x0, y0, x1, y1, c) {
+  x0 = Math.round(x0); y0 = Math.round(y0);
+  x1 = Math.round(x1); y1 = Math.round(y1);
+  const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  for (let n = 0; n < 200; n++) {
+    px(x0, y0, c);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+}
+
+// Filled ellipse built from horizontal runs.
+function oval(cx, cy, rx, ry, c) {
+  cx = Math.round(cx); cy = Math.round(cy);
+  for (let dy = -ry; dy <= ry; dy++) {
+    const k = ry === 0 ? 1 : 1 - (dy * dy) / ((ry + 0.5) * (ry + 0.5));
+    const w = Math.round(rx * Math.sqrt(k > 0 ? k : 0));
+    rect(cx - w, cy + dy, w * 2 + 1, 1, c);
+  }
+}
+
+// Soft pool of light: 50% dither in the middle, 25% towards the edge.
+function glowPool(cx, cy, rx, ry, c) {
+  cx = Math.round(cx); cy = Math.round(cy);
+  g.fillStyle = c;
+  for (let y = cy - ry; y <= cy + ry; y++) {
+    for (let x = cx - rx; x <= cx + rx; x++) {
+      const nx = (x - cx) / rx, ny = (y - cy) / ry;
+      const d = nx * nx + ny * ny;
+      if (d > 1) continue;
+      const inner = d < 0.3;
+      const keep = inner ? ((x + y) & 1) === 0 : ((x & 1) === 0 && (y & 1) === 0);
+      if (keep) g.fillRect(x, y, 1, 1);
+    }
+  }
+}
+
+// Cheap repeatable noise: same input, same answer, no allocation.
+function hash(n) {
+  n = Math.imul(n ^ 61 ^ (n >>> 16), 9);
+  n = n ^ (n >>> 4);
+  n = Math.imul(n, 0x27d4eb2d);
+  n = n ^ (n >>> 15);
+  return (n >>> 0) / 4294967296;
+}
+
+// ---- Tiny pixel font for sound effects --------------------------------
+const GLYPHS = {
+  B: ['110', '101', '110', '101', '110'],
+  O: ['010', '101', '101', '101', '010'],
+  I: ['111', '010', '010', '010', '111'],
+  N: ['1001', '1101', '1011', '1001', '1001'],
+  G: ['0111', '1000', '1011', '1001', '0110'],
+  P: ['110', '101', '110', '100', '100'],
+  '!': ['1', '1', '1', '0', '1']
+};
+function drawWord(word, x, y, c) {
+  x = Math.round(x); y = Math.round(y);
+  for (let pass = 0; pass < 2; pass++) {
+    let cx = x;
+    for (let i = 0; i < word.length; i++) {
+      const rows = GLYPHS[word[i]];
+      if (!rows) { cx += 3; continue; }
+      for (let r = 0; r < 5; r++) {
+        for (let b = 0; b < rows[r].length; b++) {
+          if (rows[r][b] !== '1') continue;
+          if (pass === 0) rect(cx + b - 1, y + r - 1, 3, 3, P.ink);   // outline
+          else px(cx + b, y + r, c);
+        }
+      }
+      cx += rows[0].length + 1;
+    }
+  }
+}
+
+// ---- Pooled particles: preallocated, reused, never garbage ------------
+const MAXP = 320;
+const pX = new Float32Array(MAXP), pY = new Float32Array(MAXP);
+const pVX = new Float32Array(MAXP), pVY = new Float32Array(MAXP);
+const pLife = new Float32Array(MAXP), pMax = new Float32Array(MAXP);
+const pGrav = new Float32Array(MAXP);
+const pRamp = new Uint8Array(MAXP), pOn = new Uint8Array(MAXP);
+let pNext = 0;
+
+function spawn(x, y, vx, vy, life, ramp, grav) {
+  let i = pNext;
+  for (let n = 0; n < MAXP; n++) {
+    if (!pOn[i]) break;
+    i = (i + 1) % MAXP;
+  }
+  pNext = (i + 1) % MAXP;
+  pX[i] = x; pY[i] = y; pVX[i] = vx; pVY[i] = vy;
+  pLife[i] = life; pMax[i] = life; pRamp[i] = ramp; pGrav[i] = grav || 0; pOn[i] = 1;
+}
+
+function burst(x, y, count, speed, life, ramp, grav) {
+  for (let n = 0; n < count; n++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = speed * (0.35 + Math.random() * 0.65);
+    spawn(x, y, Math.cos(a) * s, Math.sin(a) * s, life * (0.6 + Math.random() * 0.4), ramp, grav);
+  }
+}
+
+function updateParticles() {
+  for (let i = 0; i < MAXP; i++) {
+    if (!pOn[i]) continue;
+    pVY[i] += pGrav[i];
+    pX[i] += pVX[i];
+    pY[i] += pVY[i];
+    pLife[i] -= 1;
+    if (pLife[i] <= 0) pOn[i] = 0;
+  }
+}
+
+function drawParticles() {
+  for (let i = 0; i < MAXP; i++) {
+    if (!pOn[i]) continue;
+    const ramp = RAMPS[pRamp[i]];
+    let k = Math.floor((1 - pLife[i] / pMax[i]) * ramp.length);
+    if (k >= ramp.length) k = ramp.length - 1;
+    px(pX[i], pY[i], ramp[k]);
+  }
+}
+
+// ---- Timing helpers ---------------------------------------------------
+// The loop runs at a fixed 60 updates a second; poses change at 8-12 fps.
+let tick = 0;
+function step(fps) { return Math.floor(tick * fps / 60); }
+
+// ---- Screen shake and page-turn dissolve ------------------------------
+let shake = 0;
+let fade = 1;            // 1 = fully covered, 0 = clear
+let fadeDir = -1;        // -1 revealing, +1 covering
+let pendingHref = null;
+let leaving = false;
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+function drawDissolve() {
+  if (fade <= 0) return;
+  g.fillStyle = P.ink;
+  for (let cy = 0; cy < H / 4; cy++) {
+    for (let cx = 0; cx < W / 4; cx++) {
+      if (BAYER[(cy & 3) * 4 + (cx & 3)] / 16 < fade) g.fillRect(cx * 4, cy * 4, 4, 4);
+    }
+  }
+}
+
+function turnTo(href) {
+  if (!href || pendingHref) return;
+  pendingHref = href;
+  fadeDir = 1;
+}
+
+window.addEventListener('pageshow', function (e) {
+  if (e.persisted) { fade = 1; fadeDir = -1; pendingHref = null; leaving = false; }
+});
+
+// ---- Page navigation: links, arrow keys, swipes -----------------------
+const turnLinks = document.querySelectorAll('[data-turn]');
+for (let i = 0; i < turnLinks.length; i++) {
+  turnLinks[i].addEventListener('click', function (e) {
+    e.preventDefault();
+    turnTo(this.getAttribute('href'));
+  });
+}
+function hrefOf(id) {
+  const el = document.getElementById(id);
+  return el && el.getAttribute('href');
+}
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'ArrowRight') turnTo(hrefOf('next'));
+  if (e.key === 'ArrowLeft') turnTo(hrefOf('prev'));
+});
+let touchX = 0, touchY = 0;
+document.addEventListener('touchstart', function (e) {
+  touchX = e.changedTouches[0].clientX;
+  touchY = e.changedTouches[0].clientY;
+}, { passive: true });
+document.addEventListener('touchend', function (e) {
+  const dx = e.changedTouches[0].clientX - touchX;
+  const dy = e.changedTouches[0].clientY - touchY;
+  if (Math.abs(dx) > 60 && Math.abs(dy) < Math.abs(dx) * 0.6) {
+    turnTo(hrefOf(dx < 0 ? 'next' : 'prev'));
+  }
+}, { passive: true });
+
+// ---- Main loop: fixed 60 Hz updates, draw on every animation frame ----
+const STEP_MS = 1000 / 60;
+let lastTime = 0, acc = 0;
+
+function update() {
+  tick++;
+  sceneUpdate();
+  updateParticles();
+  if (shake > 0) shake--;
+  fade += fadeDir / 24;
+  if (fade < 0) fade = 0;
+  if (fade > 1) {
+    fade = 1;
+    if (pendingHref && !leaving) {
+      leaving = true;
+      window.location.href = pendingHref;
+    }
+  }
+}
+
+function render() {
+  ditherLevel = 0;
+  sceneDraw();
+  ditherLevel = 0;
+  drawDissolve();
+  sg.fillStyle = P.ink;
+  sg.fillRect(0, 0, screenCanvas.width, screenCanvas.height);
+  let ox = 0, oy = 0;
+  if (shake > 0) {
+    ox = (tick >> 1) & 1 ? 1 : -1;
+    oy = (tick >> 2) & 1 ? 1 : 0;
+  }
+  sg.drawImage(buf, ox * scale, oy * scale, W * scale, H * scale);
+}
+
+function frame(now) {
+  if (!lastTime) lastTime = now;
+  acc += Math.min(250, now - lastTime);
+  lastTime = now;
+  while (acc >= STEP_MS) { update(); acc -= STEP_MS; }
+  render();
+  requestAnimationFrame(frame);
+}
+
+// =====================================================================
+//  CAST — characters and sets shared across the book
+// =====================================================================
+// Characters are built from rectangles relative to a pose: x is the
+// centre line, gy is the ground row under their feet, dir is 1 (facing
+// right) or -1 (facing left). Pose objects are made once and reused.
+
+function makePose(x, gy, dir) {
+  return {
+    x: x, gy: gy, dir: dir,
+    frame: -1,        // -1 standing, 0..3 walk/run cycle
+    run: false,       // run cycle (big strides) or walk cycle
+    bob: 0,           // body lift, set from the cycle
+    look: 0,          // 0 ahead, -1 up
+    swing: -1,        // -1 idle, otherwise frame of the weapon swing
+    swingT: 0,
+    hide: false
+  };
+}
+
+// Draw a rectangle in the pose's own space (mirrored when facing left).
+function part(p, ox, oy, w, h, c) {
+  const x = p.dir > 0 ? p.x + ox : p.x - ox - w;
+  rect(x, p.gy + oy, w, h, c);
+}
+function ppx(p, ox, oy, c) { part(p, ox, oy, 1, 1, c); }
+function worldX(p, ox) { return p.dir > 0 ? p.x + ox : p.x - ox - 1; }
+
+// Walk and run cycles: leg offsets, lifted feet, body bob, arm swing.
+const RUN_A = [3, 0, -3, 0], RUN_B = [-3, 0, 3, 0];
+const RUN_LA = [0, 0, 0, 2], RUN_LB = [0, 2, 0, 0];
+const WALK_A = [2, 0, -2, 0], WALK_B = [-2, 0, 2, 0];
+const WALK_LA = [0, 0, 0, 1], WALK_LB = [0, 1, 0, 0];
+const CYCLE_BOB = [0, -1, 0, -1];
+const ARM_SWING = [-2, 0, 2, 0];
+
+function setCycle(p, frameIndex, moving) {
+  if (!moving) {
+    p.frame = -1;
+    p.bob = (tick >> 5) & 1;              // slow two-frame breathing bob
+  } else {
+    p.frame = frameIndex & 3;
+    p.bob = CYCLE_BOB[p.frame];
+  }
+}
+
+function drawLeg(p, ox, lift, c, cShoe) {
+  const half = Math.round(ox / 2);
+  part(p, -1 + half, -8, 2, lift > 0 ? 3 : 4, c);   // thigh
+  const footY = -1 - lift;
+  part(p, -1 + ox, -4, 2, footY + 4, c);           // shin
+  part(p, -1 + ox, footY, 3, 1, cShoe);             // foot points forward
+}
+
+function drawLegs(p, cBack, cFront, cShoe) {
+  let a = 1, b = -1, la = 0, lb = 0;
+  if (p.frame >= 0) {
+    if (p.run) { a = RUN_A[p.frame]; b = RUN_B[p.frame]; la = RUN_LA[p.frame]; lb = RUN_LB[p.frame]; }
+    else { a = WALK_A[p.frame]; b = WALK_B[p.frame]; la = WALK_LA[p.frame]; lb = WALK_LB[p.frame]; }
+  }
+  drawLeg(p, b, lb, cBack, cShoe);
+  drawLeg(p, a, la, cFront, cShoe);
+}
+
+function armSwing(p) { return p.frame < 0 ? 0 : ARM_SWING[p.frame] * (p.run ? 1 : 0.5); }
+
+function drawArm(p, sw, c, cHand) {
+  const t = -15 + p.bob;
+  part(p, -1 + Math.round(sw / 2), t, 2, 3, c);
+  part(p, -1 + Math.round(sw), t + 3, 2, 3, c);
+  part(p, -1 + Math.round(sw), t + 6, 2, 1, cHand);
+}
+
+function drawTorso(p, c0, c1, c2) {
+  const t = -16 + p.bob;
+  part(p, -3, t, 6, 9, c1);
+  part(p, -3, t, 1, 9, c0);
+  part(p, 2, t + 1, 1, 6, c2);
+}
+
+// The head every version of him shares, including the crown tuft.
+function drawHisHead(p, skin0, skin1, hair, eye) {
+  const t = -22 + p.bob;
+  part(p, -3, t, 6, 6, skin1);
+  part(p, -3, t + 5, 5, 1, skin0);        // jaw shadow
+  part(p, -3, t - 1, 5, 1, hair);
+  part(p, -3, t, 6, 1, hair);
+  part(p, -3, t, 2, 4, hair);
+  ppx(p, -1, t - 2, hair);                 // the tuft
+  ppx(p, -2, t - 3, hair);
+  ppx(p, -1, t + 3, skin0);                // ear
+  ppx(p, 1, t + 2 + p.look, eye);          // eye
+  ppx(p, 3, t + 3 + p.look, skin1);        // nose
+  ppx(p, 2, t + 4, skin0);                 // mouth
+}
+
+// ---- Weapon swing ------------------------------------------------------
+// Each swing frame: weapon angle (degrees, 0 = forward) and hand position.
+const SWING_ANG = [-150, -105, -20, 30, 55, -40];
+const SWING_HX  = [1, 2, 4, 4, 3, 2];
+const SWING_HY  = [2, -1, 2, 4, 5, 4];
+const SWING_HIT = 2;          // frame on which the blow lands
+const SWING_TICKS = 4;        // ticks per swing frame (15 fps)
+
+function startSwing(p) { p.swing = 0; p.swingT = 0; }
+
+// Advances the swing. Returns true on the tick the blow lands.
+function updateSwing(p) {
+  if (p.swing < 0) return false;
+  p.swingT++;
+  const f = Math.floor(p.swingT / SWING_TICKS);
+  const landed = f === SWING_HIT && p.swing !== SWING_HIT;
+  p.swing = f;
+  if (f >= SWING_ANG.length) p.swing = -1;
+  return landed;
+}
+
+// Front arm holding a weapon (pipe or stick). Carried over the shoulder
+// when not swinging.
+function drawWeaponArm(p, len, c0, c1, sleeve, hand) {
+  const t = -15 + p.bob;
+  let ang = -120, hx = 2, hy = 3;
+  if (p.swing >= 0) { ang = SWING_ANG[p.swing]; hx = SWING_HX[p.swing]; hy = SWING_HY[p.swing]; }
+  const sx = worldX(p, 0), sy = p.gy + t + 1;
+  const hxw = worldX(p, hx), hyw = p.gy + t + hy;
+  const r = ang * Math.PI / 180;
+  const ex = hxw + Math.cos(r) * len * p.dir;
+  const ey = hyw + Math.sin(r) * len;
+  line(sx, sy, hxw, hyw, sleeve);
+  line(sx, sy + 1, hxw, hyw + 1, sleeve);
+  line(hxw, hyw, ex, ey, c0);
+  px(ex, ey, c1);
+  px(Math.round((hxw + ex) / 2), Math.round((hyw + ey) / 2) - 1, c1);
+  rect(hxw - (p.dir > 0 ? 0 : 1), hyw, 2, 2, hand);
+  if (p.swing === SWING_HIT) {
+    // motion smear arc
+    for (let a = -100; a <= -30; a += 12) {
+      const rr = a * Math.PI / 180;
+      px(sx + Math.cos(rr) * (len + 3) * p.dir, sy + Math.sin(rr) * (len + 3), P.white);
+    }
+  }
+}
+
+// ---- The Primary: warm, solid, in charge -------------------------------
+function drawPrimary(p) {
+  const sw = armSwing(p);
+  drawArm(p, -sw, P.jacket0, P.skin0);
+  drawLegs(p, P.pants0, P.pants1, P.shoe);
+  drawTorso(p, P.jacket0, P.jacket1, P.jacket2);
+  part(p, -2, -16 + p.bob, 4, 1, P.jacket2);        // collar
+  drawHisHead(p, P.skin0, P.skin1, P.hair, P.ink);
+  drawWeaponArm(p, 10, P.pipe1, P.white, P.jacket1, P.skin1);
+}
+
+// ---- The Secondary: half there, drawn in a checkerboard ----------------
+function drawSecondary(p, withStick) {
+  const phase = ((tick >> 3) & 1);
+  const flicker = hash(tick >> 2) < 0.06;
+  dither(flicker ? 2 : 1, phase);
+  const sw = armSwing(p);
+  drawArm(p, -sw, P.hood0, P.pale0);
+  drawLegs(p, P.hood0, P.pants1, P.shoe);
+  drawTorso(p, P.hood1, P.hood2, P.pale1);
+  part(p, -4, -17 + p.bob, 3, 3, P.hood0);         // hood bunched at the neck
+  drawHisHead(p, P.pale0, P.pale1, P.hair, P.ink);
+  if (withStick) drawWeaponArm(p, 8, P.stick, P.pale1, P.hood1, P.pale1);
+  else drawArm(p, sw, P.hood1, P.pale1);
+  dither(0);
+  // the eyes are the one part of him that is always fully there
+  ppx(p, 1, -20 + p.bob + p.look, P.hood2);
+}
+
+// ---- The Animus: her own light, hair that trails ----------------------
+function drawAnimus(p) {
+  const t = -23 + p.bob;
+  const sway = p.frame >= 0 ? (p.frame & 1) : ((tick >> 5) & 1);
+  // long hair behind her
+  part(p, -4, t + 1, 3, 11, P.gold0);
+  part(p, -5 - sway, t + 3, 1, 8, P.gold0);
+  part(p, -6 - sway, t + 6, 1, 4, P.gold1);
+  // feet under the hem
+  const fa = p.frame < 0 ? 1 : WALK_A[p.frame];
+  part(p, -1 + fa, -1, 2, 1, P.skin0);
+  part(p, -1 - fa, -1, 2, 1, P.skin0);
+  // back arm
+  part(p, -2, -15 + p.bob, 2, 6, P.dress0);
+  // skirt widens towards the hem and trails when she moves
+  for (let r = 0; r < 9; r++) {
+    const w = 6 + (r >> 1);
+    const trail = p.frame >= 0 && r > 5 ? 1 : 0;
+    const x0 = -3 - (r >> 2) - trail;
+    part(p, x0, -10 + r, w, 1, P.dress1);
+    part(p, x0, -10 + r, 1, 1, P.dress0);
+  }
+  part(p, -4 - 1, -2, 10, 1, P.dress0);          // hem
+  // bodice and belt
+  part(p, -3, -16 + p.bob, 6, 6, P.dress1);
+  part(p, -3, -16 + p.bob, 1, 6, P.dress0);
+  part(p, -3, -11 + p.bob, 6, 1, P.gold0);
+  // head
+  part(p, -2, t, 5, 6, P.skin1);
+  part(p, -3, t - 1, 6, 2, P.gold1);
+  part(p, -3, t, 2, 5, P.gold1);
+  ppx(p, 2, t + 1, P.gold1);                      // fringe
+  ppx(p, 1, t + 3 + p.look, P.ink);
+  ppx(p, 3, t + 3 + p.look, P.skin1);
+  ppx(p, 2, t + 5, P.skin0);
+  // front arm
+  const sw = armSwing(p);
+  part(p, -1 + Math.round(sw / 2), -15 + p.bob, 2, 4, P.dress1);
+  part(p, -1 + Math.round(sw), -11 + p.bob, 2, 2, P.skin1);
+}
+
+// Her light: brightens the wall behind her and pools on the floor.
+function addAnimusLight(p) { addLight(p.x, p.gy - 14, 26); }
+
+// ---- Demons: hunched, near-black, with a glowing cyst on the head -----
+function makeDemon() {
+  const d = makePose(-99, 86, -1);
+  d.alive = false;
+  d.speed = 1;
+  d.squash = 0;
+  return d;
+}
+
+function drawDemon(d) {
+  const f = d.frame < 0 ? 0 : d.frame;
+  const legA = (f & 2) ? 1 : -2;
+  const legB = (f & 2) ? -2 : 1;
+  const up = (f & 1) ? -1 : 0;
+  part(d, legB, -4, 2, 4, P.imp0);
+  part(d, legB + 1, -1, 2, 1, P.imp2);
+  // body
+  part(d, -6, -11 + up, 10, 7, P.imp1);
+  part(d, -5, -13 + up, 7, 2, P.imp1);
+  part(d, -7, -9 + up, 1, 4, P.imp1);
+  part(d, -5, -5 + up, 8, 1, P.imp0);
+  part(d, -5, -13 + up, 7, 1, P.imp2);           // rim light along the hump
+  ppx(d, -6, -11 + up, P.imp2);
+  // near leg
+  part(d, legA, -4, 2, 4, P.imp1);
+  part(d, legA + 1, -1, 2, 1, P.imp2);
+  // head thrust forward
+  part(d, 2, -12 + up, 6, 5, P.imp1);
+  part(d, 3, -8 + up, 5, 2, P.imp0);
+  ppx(d, 4, -8 + up, P.white);
+  ppx(d, 6, -8 + up, P.white);
+  const blink = hash((tick >> 3) + d.x * 7) < 0.05;
+  if (!blink) {
+    ppx(d, 4, -11 + up, P.eye);
+    ppx(d, 6, -11 + up, P.eye);
+  }
+  // dangling arm and claws
+  part(d, 1, -9 + up, 2, 5, P.imp1);
+  part(d, 2, -4 + up, 2, 1, P.imp2);
+  // the cyst: pulses, or squashes flat when struck
+  const cx = worldX(d, 4), cy = d.gy - 15 + up;
+  let rx = 2 + ((tick >> 4) & 1), ry = 2;
+  if (d.squash > 0) {
+    const s = d.squash;
+    if (s > 16) { rx = 4; ry = 1; }
+    else if (s > 8) { rx = 2; ry = 3; }
+    else { rx = 3; ry = 2; }
+  }
+  oval(cx, cy, rx, ry, P.cyst1);
+  rect(cx - rx + 1, cy + ry, rx * 2 - 1, 1, P.cyst0);
+  px(cx - 1, cy - ry + 1, P.cyst2);
+}
+
+// Burst a demon apart from its cyst.
+function popDemon(d) {
+  const cx = worldX(d, 4), cy = d.gy - 15;
+  burst(cx, cy, 16, 1.6, 30, CYST, 0.04);
+  burst(d.x, d.gy - 8, 22, 1.1, 40, IMP, 0.06);
+  burst(cx, cy, 8, 2.2, 14, SPARK, 0);
+  d.alive = false;
+}
+
+// ---- Light sources ------------------------------------------------------
+// Walls are lit block by block (brighter palette steps near a light)
+// rather than with gradients. Scenes add lights before drawing the set.
+const MAXL = 8;
+const lightX = new Float32Array(MAXL), lightY = new Float32Array(MAXL);
+const lightR = new Float32Array(MAXL);
+let lightCount = 0;
+function clearLights() { lightCount = 0; }
+function addLight(x, y, r) {
+  if (lightCount >= MAXL) return;
+  lightX[lightCount] = x; lightY[lightCount] = y; lightR[lightCount] = r;
+  lightCount++;
+}
+// 0 = unlit, 1 = in the light, 2 = close to the light
+function lightTier(x, y) {
+  let best = 0;
+  for (let i = 0; i < lightCount; i++) {
+    const dx = (x - lightX[i]) / lightR[i], dy = (y - lightY[i]) / (lightR[i] * 0.8);
+    const d = dx * dx + dy * dy;
+    if (d < 0.3) return 2;
+    if (d < 1) best = 1;
+  }
+  return best;
+}
+
+// ---- The tunnels -------------------------------------------------------
+const WALL_STEPS = [P.rock0, P.wall0, P.wall1, P.wall2, P.wall3, P.haze];
+
+// scroll moves the world; the wall scrolls at half speed for depth.
+function drawTunnel(scroll, torches) {
+  const wallScroll = Math.floor(scroll / 2);
+  const tSpacing = 72;
+  const tStart = -(wallScroll % tSpacing) + 30 - tSpacing;
+  if (torches) {
+    for (let x = tStart; x < W + tSpacing; x += tSpacing) addLight(x, 36, 20);
+  }
+  rect(0, 0, W, H, P.rock0);
+  // back wall of stone blocks
+  for (let r = 0; r < 10; r++) {
+    const y0 = 12 + r * 6;
+    const off = (r & 1) * 7;
+    const start = -((wallScroll + off) % 14) - 14;
+    for (let x = start; x < W; x += 14) {
+      const id = Math.floor((x + wallScroll + off) / 14) * 31 + r * 7;
+      const n = hash(id);
+      let k = n < 0.2 ? 1 : (n > 0.93 ? 3 : 2);
+      k += lightTier(x + 7, y0 + 3);
+      rect(x + 1, y0 + 1, 13, 5, WALL_STEPS[k]);
+      if (n > 0.6) rect(x + 1, y0 + 1, 13, 1, WALL_STEPS[k + 1 < WALL_STEPS.length ? k + 1 : k]);
+      if (n > 0.95) rect(x + 4, y0 + 3, 3, 1, WALL_STEPS[k - 1]);     // crack
+    }
+  }
+  // ceiling rock, ragged underside
+  rect(0, 0, W, 12, P.rock1);
+  for (let x = 0; x < W; x++) {
+    const h = Math.floor(hash(Math.floor((x + wallScroll) / 3) + 500) * 4);
+    rect(x, 12, 1, h, P.rock1);
+    if (hash(x + wallScroll + 900) < 0.08) rect(x, 12 + h, 1, 1, P.rock0);
+  }
+  rect(0, 0, W, 4, P.rock0);
+  // torches: bracket and flickering flame
+  if (torches) {
+    for (let x = tStart; x < W + tSpacing; x += tSpacing) {
+      rect(x - 1, 38, 3, 4, P.rock1);
+      rect(x - 2, 38, 5, 1, P.wall3);
+      const fl = (step(10) + x) % 3;
+      rect(x - 1, 35 - fl, 3, 3 + fl, P.fire1);
+      px(x, 34 - fl, P.fire2);
+      px(x, 36, P.glow);
+      if (fl === 1) px(x + 1, 33, P.fire0);
+    }
+  }
+  // floor
+  rect(0, 72, W, 24, P.floor1);
+  rect(0, 72, W, 1, P.floor2);
+  rect(0, 73, W, 1, P.wall1);
+  rect(0, 84, W, 12, P.floor0);
+  rect(0, 84, W, 1, P.floor1);
+  for (let k = 0; k < 2; k++) {
+    const rowY = k === 0 ? 74 : 85;
+    const rowH = k === 0 ? 10 : 11;
+    const sp = k === 0 ? 20 : 26;
+    const s = Math.floor(scroll * (k === 0 ? 1 : 1.3));
+    const start = -(s % sp);
+    for (let x = start; x < W; x += sp) {
+      rect(x, rowY, 1, rowH, P.floor0);
+      if (hash(Math.floor((x + s) / sp) + k * 100) > 0.6) rect(x + 5, rowY + 3, 4, 1, P.floor0);
+    }
+  }
+}
+
+// A flat pool of light on the floor under a light-giver.
+function floorPool(x, gy, rx) {
+  oval(x, gy - 1, rx, 2, P.floor2);
+  oval(x, gy - 1, rx >> 1, 1, P.wall2);
+}
+
+// =====================================================================
+//  PAGE 2 — the ghost
+// =====================================================================
+// The Secondary wanders in alone, stops under a thin shaft of light
+// falling from a crack in the ceiling, and looks up. The light swells as
+// if something above is calling him, then he drifts on.
+
+const sec = makePose(-10, 84, 1);
+const SHAFT_X = 66;
+let t = 0;                 // time within the loop, in ticks
+const LOOP = 720;
+let shaftPower = 0;        // 0 faint .. 2 bright
+
+function sceneUpdate() {
+  t = (t + 1) % LOOP;
+  let moving = false;
+  sec.look = 0;
+  if (t < 228) {                       // walk in to the light
+    sec.x = -10 + Math.floor(t / 3);
+    moving = true;
+  } else if (t < 420) {                // stop and look up
+    sec.x = 66;
+    sec.look = t > 250 ? -1 : 0;
+  } else if (t < 660) {                // drift on
+    sec.x = 66 + Math.floor((t - 420) / 3);
+    moving = true;
+  } else {
+    sec.x = 150;
+  }
+  setCycle(sec, step(8), moving);
+  shaftPower = (t > 270 && t < 420) ? 2 : ((t > 240 && t < 460) ? 1 : 0);
+
+  // dust motes drifting down the shaft
+  if ((tick % (shaftPower === 2 ? 4 : 10)) === 0) {
+    spawn(SHAFT_X - 8 + Math.random() * 5, 14, 0.03 + Math.random() * 0.02, 0.18 + Math.random() * 0.12, 200, DUST, 0);
+  }
+}
+
+// The shaft slants slightly: its centre at row y.
+function shaftCentre(y) { return SHAFT_X - 6 + Math.floor((y - 12) / 6); }
+
+function drawShaft() {
+  // a slanting ray: a low-contrast haze that thickens as it swells,
+  // with a brighter core line when it is strongest
+  dither(shaftPower === 0 ? 2 : 1, (tick >> 4) & 1);
+  for (let y = 13; y < 86; y++) {
+    const half = 1 + Math.floor((y - 12) / 20);
+    rect(shaftCentre(y) - half, y, half * 2 + 1, 1, P.wall3);
+  }
+  dither(0);
+  if (shaftPower === 2) {
+    for (let y = 13; y < 86; y++) px(shaftCentre(y), y, P.haze);
+  }
+  // the crack it falls from
+  rect(SHAFT_X - 8, 12, 5, 1, P.pale0);
+  px(SHAFT_X - 6, 12, shaftPower === 2 ? P.white : P.pale1);
+  // where it lands on the floor
+  dither(1, 0);
+  oval(shaftCentre(85), 85, 4 + shaftPower * 2, 1, shaftPower === 2 ? P.haze : P.floor2);
+  dither(0);
+}
+
+function sceneDraw() {
+  clearLights();
+  addLight(SHAFT_X + 2, 60, 10 + shaftPower * 6);
+  drawTunnel(40, false);
+  drawShaft();
+  if (sec.x < 140) drawSecondary(sec, false);
+  drawParticles();
+  // when the light is strongest, a faint rim of it catches him
+  if (shaftPower === 2 && sec.x === 66) {
+    ppx(sec, 2, -22 + sec.bob, P.white);
+    ppx(sec, 3, -21 + sec.bob, P.pale1);
+  }
+}
+
+requestAnimationFrame(frame);
+
+</script>
+</body>
+</html>
