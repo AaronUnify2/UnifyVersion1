@@ -978,6 +978,81 @@ function buildHoleNine() {
   return c;
 }
 
+/* Hole ten. The crab.
+
+   A thing the size of a hole, standing over the abyss on eight legs, each leg
+   planted on its own floating platform with a mine sunk in the middle of it.
+   Hole out in a mine and it goes off and takes that leg with it. Four legs and
+   the crab cannot hold itself up any more.
+
+   Each platform is a dish, so anything that lands on one is fed to the mine in
+   the middle rather than having to be threaded into a cup from two hundred
+   metres. The shot is getting it to land there at all - they are thirty-four
+   metres across with nothing whatever around them, at every range from a five
+   iron to a full driver, and the crab breathes in your face while you aim.
+
+   Every shot comes back to the firing platform, holed or not. There is nothing
+   out there to walk to.
+
+   A leg stands on the near rim of each dish, between you and the mine, so the
+   flat shot at it does not work; you have to come down steeply or go round.
+   Take a leg off and its platform stays, which is a kindness: it is somewhere
+   to land that no longer costs you anything. */
+function buildHoleTen() {
+  var c = [];
+
+  /* the firing platform */
+  c.push(deck(0, 0, 0, 36, 32, 'tee'));
+  c.push(slab(0, 1.6, -17, 36, 3.2, 2, { kind: 'rail' }));
+  c.push(slab(0, 1.6, 17, 36, 3.2, 2, { kind: 'rail' }));
+  c.push(slab(-19, 1.6, 0, 2, 3.2, 36, { kind: 'rail' }));
+
+  /* The body, well out over the nothing and high above the legs, with a pair
+     of claws reaching back towards whoever is shooting at it.
+
+     High on purpose. Slung at twenty-two metres it sat exactly where a long
+     iron flies and swallowed every shot at the two outside platforms - the
+     ball came back lost from a hundred and fifty metres with no clue why.
+     A shot at the furthest mine tops out around twenty-five, so the whole
+     animal lives above thirty and you play underneath it. */
+  c.push(slab(178, 44, 0, 84, 15, 56, { kind: 'stone' }));
+  c.push(slope(128, -30, 38, 156, -12, 46, 12, 'stone', 7));
+  c.push(slope(128, 30, 38, 156, 12, 46, 12, 'stone', 7));
+  c.push(slab(214, 48, -20, 26, 9, 16, { kind: 'stone', yaw: 0.3 }));
+  c.push(slab(214, 48, 20, 26, 9, 16, { kind: 'stone', yaw: -0.3 }));
+
+  /* eight legs, four a side, at every range there is a club for */
+  var feet = [[124, 52, 4], [154, 68, -4], [184, 60, 8], [202, 36, -10]];
+  for (var s = 0; s < 2; s++) {
+    var side = s ? 1 : -1;
+    for (var i = 0; i < feet.length; i++) {
+      var fx = feet[i][0], fz = feet[i][1] * side, fy = feet[i][2];
+      push(c, bowl(fx, fz, 12, 34, fy, fy + 5,
+        { pad: 'green', bank: 'fairway' }));
+      /* The leg: a strut rising off the near rim of its own dish. Kept inside
+         that dish on purpose - run all the way back to the body, they lay
+         across whichever platform was inboard of them, and a leg lying over a
+         mine is a mine nobody can ever hole out in. Splayed outward rather
+         than in, too: angled towards the middle they stood square across
+         their own approach, so the post guarding the mine had a second wall
+         behind it and there was no way through at all. */
+      var leg = slope(fx - 8, fz + side * 3, fy + 8,
+                      fx - 22, fz + side * 14, fy + 24, 8, 'stone', 6);
+      c.push(leg);
+      /* And a post on the near rim, in the way of a flat approach. Ten metres,
+         not sixteen: at sixteen it simply swatted the long ones into the
+         abyss, because nothing in the bag comes down steeply enough from two
+         hundred metres to clear it, and a mine no club can reach is not a
+         hard mine, it is a missing one. */
+      var post = slab(fx - 15, fy + 5, fz, 5, 10, 5, { kind: 'stone' });
+      c.push(post);
+      MINES.push({ x: fx, y: fy, z: fz, gone: false, parts: [leg, post] });
+    }
+  }
+
+  return c;
+}
+
 var HOLES = [
   { name: 'The Windmill', build: buildHoleOne, par: 4, greenRadius: 17,
     tee: { x: 0, y: 12, z: 0 }, pin: { x: 400, y: -4, z: 46 } },
@@ -996,7 +1071,12 @@ var HOLES = [
   { name: 'The Ferry', build: buildHoleEight, par: 5, greenRadius: 15,
     tee: { x: 0, y: 10, z: 0 }, pin: { x: 560, y: 18, z: 0 } },
   { name: 'The Staircase', build: buildHoleNine, par: 3, greenRadius: 15,
-    tee: { x: 0, y: 0, z: 0 }, pin: { x: 180, y: 30, z: 0 } }
+    tee: { x: 0, y: 0, z: 0 }, pin: { x: 180, y: 30, z: 0 } },
+  /* Not a hole, and it does not pretend to be: no length worth measuring, a
+     par that counts shots at a monster rather than shots down a fairway, and
+     it ends when the thing falls over. It sits after the nine. */
+  { name: 'The Crab', build: buildHoleTen, par: 5, greenRadius: 17, boss: true,
+    tee: { x: 0, y: 0, z: 0 }, pin: { x: 124, y: 4, z: -52 } }
 ];
 
 /* The one hole that is loaded. TEE and PIN are filled in rather than
@@ -1009,9 +1089,22 @@ var GREEN_RADIUS = 17;
 var CUP_RADIUS = 0.5;
 var HOLE_INDEX = 0;
 
+/* The mines on the boss hole, and the legs they are wired to.
+
+   Each mine is a cup like any other, which is the whole trick: a ball that
+   drops into one is holed by the ordinary rule, so the swing, the aiming line
+   and the cup physics need to know nothing about any of this. All that is new
+   is that there are several of them, that holing one takes a leg off rather
+   than ending the hole, and that the thing loses its balance when four are
+   gone. Empty on every other hole, and then none of it runs at all. */
+var MINES = [];
+var MINE_RADIUS = 5;
+var LEGS_TO_TOPPLE = 4;
+
 function loadHole(i) {
   HOLE_INDEX = ((i % HOLES.length) + HOLES.length) % HOLES.length;
   var h = HOLES[HOLE_INDEX];
+  MINES.length = 0;
   var built = h.build();
   COURSE.length = 0;
   for (var k = 0; k < built.length; k++) COURSE.push(built[k]);
@@ -1023,7 +1116,8 @@ function loadHole(i) {
 }
 function currentHole() {
   return { index: HOLE_INDEX, name: HOLES[HOLE_INDEX].name, par: PAR,
-           count: HOLES.length, tee: TEE, pin: PIN, greenRadius: GREEN_RADIUS };
+           count: HOLES.length, tee: TEE, pin: PIN, greenRadius: GREEN_RADIUS,
+           boss: !!HOLES[HOLE_INDEX].boss };
 }
 loadHole(0);
 
@@ -1717,17 +1811,28 @@ Ball.prototype.step = function (dt, time) {
 
 /* The cup. Too quick over it and it horseshoes out, which is golf. */
 Ball.prototype.cup = function (time) {
+  if (MINES.length) {
+    for (var i = 0; i < MINES.length; i++) {
+      if (MINES[i].gone) continue;
+      if (this.sink(MINES[i], MINE_RADIUS, time)) { this.sank = i; return true; }
+    }
+    return false;
+  }
+  return this.sink(PIN, CUP_RADIUS, time);
+};
+
+Ball.prototype.sink = function (at, radius, time) {
   var p = this.pos, v = this.vel;
-  if (!this.grounded && p.y > restHeight(PIN.x, PIN.z, time) + 0.5) return false;
-  var dx = p.x - PIN.x, dz = p.z - PIN.z;
+  if (!this.grounded && p.y > restHeight(at.x, at.z, time) + 0.5) return false;
+  var dx = p.x - at.x, dz = p.z - at.z;
   var cd = Math.sqrt(dx * dx + dz * dz);
-  if (cd >= CUP_RADIUS) return false;
+  if (cd >= radius) return false;
   var sp = Math.sqrt(v.x * v.x + v.z * v.z);
   if (sp < HOLE_SPEED) {
     this.holed = true;
     this.moving = false;
-    p.x = PIN.x; p.z = PIN.z;
-    p.y = heightAt(PIN.x, PIN.z, time) - 0.12;
+    p.x = at.x; p.z = at.z;
+    p.y = heightAt(at.x, at.z, time) - 0.12;
     v.x = 0; v.y = 0; v.z = 0;
     if (!this.carry) this.carry = Math.sqrt(
       (p.x - this.launchedFrom.x) * (p.x - this.launchedFrom.x) +
@@ -1775,6 +1880,8 @@ function Hole(seed) {
   this.strokes = 0;
   this.penalties = 0;
   this.done = false;
+  this.legsDown = 0;
+  this.toppled = false;
   this.time = 0;
   this.history = [];
   var r = ((seed === undefined ? 7 : seed) * 9301 + 49297) % 233280 / 233280;
@@ -1820,6 +1927,24 @@ Hole.prototype.tick = function (dt) {
   var from = this.time;
   this.time += dt;
   this.ball.drift(from, this.time);
+  this.breathe();
+};
+
+/* The thing breathes. On a hole that has one the wind is not a fixed number
+   set when you teed off: it sits near calm and then the crab lets go of a
+   lungful, and it swings round to blow straight back down your throat.
+
+   Nothing in the flight model changes for this. The wind is still whatever it
+   was at the moment of the strike, and the aiming line is still handed that
+   same wind, so the line stays exactly the shot. What changes is that if you
+   stand there long enough the line moves, and waiting for the lull is a shot
+   you can choose to play. */
+Hole.prototype.breathe = function () {
+  if (!MINES.length) return;
+  var puff = Math.pow(Math.max(0, Math.sin(this.time * 0.9)), 4);
+  var speed = 1.8 + 9 * puff;
+  /* out of the abyss, back towards whoever is shooting at it */
+  this.wind = { x: -speed, z: Math.sin(this.time * 0.31) * speed * 0.35 };
 };
 
 Hole.prototype.settle = function (dt, maxSeconds) {
@@ -1867,6 +1992,7 @@ Hole.prototype.offTheWall = function () {
 Hole.prototype.finishShot = function () {
   var b = this.ball;
   b.moving = false;
+  if (MINES.length) return this.bossShot();
   if (b.holed) { this.done = true; return 'holed'; }
   /* perched on a wall, or otherwise standing on nothing the game recognises */
   if (!b.lost && !groundUnder(b.pos.x, b.pos.z, this.time)) {
@@ -1890,6 +2016,57 @@ Hole.prototype.finishShot = function () {
 
 /* Walk out along the line the ball went out on until the ground runs out, and
    drop a couple of metres back from the edge. */
+/* A shot at the crab. Every one of them ends up back on the firing platform,
+   whatever became of it: there is nothing out there to stand on but the leg
+   platforms themselves, and a hundred metres of abyss between each of them
+   and the next. A boss is not a hole you walk. */
+Hole.prototype.bossShot = function () {
+  var b = this.ball, out = 'rest';
+  if (b.holed) {
+    var m = MINES[b.sank];
+    if (m && !m.gone) {
+      m.gone = true;
+      /* the leg goes with it, into the abyss */
+      for (var i = 0; i < m.parts.length; i++) {
+        var at = COURSE.indexOf(m.parts[i]);
+        if (at >= 0) COURSE.splice(at, 1);
+      }
+      this.legsDown++;
+    }
+    b.holed = false;
+    out = 'leg';
+  } else if (b.lost || !groundUnder(b.pos.x, b.pos.z, this.time)) {
+    this.penalties++;
+    out = 'lost';
+  }
+  b.lost = false;
+  if (this.legsDown >= LEGS_TO_TOPPLE) {
+    this.toppled = true;
+    this.done = true;
+    return 'toppled';
+  }
+  this.reload();
+  return out;
+};
+
+/* back to the firing platform, and the flag moved to whichever leg is nearest */
+Hole.prototype.reload = function () {
+  var b = this.ball;
+  b.pos = { x: TEE.x, y: restHeight(TEE.x, TEE.z, this.time), z: TEE.z };
+  b.vel = { x: 0, y: 0, z: 0 };
+  b.moving = false;
+  b.grounded = true;
+  b.carry = 0;
+  b.sank = -1;
+  var best = null;
+  for (var i = 0; i < MINES.length; i++) {
+    if (MINES[i].gone) continue;
+    var d = Math.hypot(MINES[i].x - TEE.x, MINES[i].z - TEE.z);
+    if (!best || d < best.d) best = { d: d, m: MINES[i] };
+  }
+  if (best) { PIN.x = best.m.x; PIN.y = best.m.y; PIN.z = best.m.z; }
+};
+
 Hole.prototype.dropPoint = function (from, out) {
   var t = this.time;
   var last = null;
@@ -2066,6 +2243,7 @@ if (typeof module !== 'undefined' && module.exports) {
     heightAt: heightAt, normalAt: normalAt, surfaceAt: surfaceAt,
     restHeight: restHeight, onCourse: onCourse, inSweep: inSweep,
     SURFACES: SURFACES, CLUBS: CLUBS, clubById: clubById, suggestClub: suggestClub,
+    MINES: MINES, MINE_RADIUS: MINE_RADIUS, LEGS_TO_TOPPLE: LEGS_TO_TOPPLE,
     GRAVITY: GRAVITY, DRAG: DRAG, LIFT: LIFT, BALL_STOP: BALL_STOP,
     SPIN_DECAY: SPIN_DECAY, ROLL_SLOPE: ROLL_SLOPE, ROLL_DRAG: ROLL_DRAG,
     SIM_DT: SIM_DT,
@@ -2690,16 +2868,43 @@ function strike(power, face) {
   flash(CLUBS[clubIndex].name + '  ' + Math.round(power * 100) + '%');
 }
 
+/* The boss puts the ball back on the firing platform after every shot, so put
+   the player back with it - and rebuild what is drawn, because a leg that has
+   just fallen into the abyss is no longer in the course and must stop being
+   in the picture too. */
+function backToTee(rebuild) {
+  if (rebuild) { buildCourseMeshes(); buildMarkings(); }
+  buildFlag();
+  golfer.userData.pos = { x: TEE.x - 1.4, z: TEE.z + 0.6 };
+  golfer.userData.y = solidY(TEE.x - 1.4, TEE.z + 0.6, TEE.y);
+  golfer.userData.vy = 0;
+  aimYaw = Math.atan2(PIN.z - TEE.z, PIN.x - TEE.x);
+  camYaw = aimYaw;
+  predictDirty = true;
+}
+
 function ballStopped() {
   var what = hole.finishShot();
-  if (what === 'holed') {
+  if (what === 'leg') {
+    backToTee(true);
+    flash('Leg off!  ' + hole.legsDown + ' of ' + LEGS_TO_TOPPLE);
+    beep(90, 0.3); setTimeout(function () { beep(60, 0.4); }, 140);
+    phase = 'walk';
+    return;
+  }
+  if (what === 'toppled' || what === 'holed') {
     phase = 'holed';
     var sc = hole.score();
     round.played.push({ hole: currentHole().index, name: currentHole().name,
       total: sc.total, par: sc.par });
     round.total += sc.total;
     round.par += sc.par;
-    beep(660, 0.12); setTimeout(function () { beep(880, 0.18); }, 110);
+    if (what === 'toppled') {
+      flash('It goes over the edge');
+      beep(70, 0.5); setTimeout(function () { beep(50, 0.7); }, 200);
+    } else {
+      beep(660, 0.12); setTimeout(function () { beep(880, 0.18); }, 110);
+    }
     showCard();
     return;
   }
@@ -2709,6 +2914,7 @@ function ballStopped() {
     if (hole.ball.carry > 5) msg += '  ·  ' + Math.round(hole.ball.carry) + 'm carry';
     flash(msg);
   }
+  if (MINES.length) backToTee(false);
   phase = 'walk';
   /* You walk to your ball yourself now. It used to jog you over after every
      shot whether you wanted it or not, which took the game off you. */
@@ -3057,7 +3263,8 @@ function updateHud() {
   ui.lie.textContent = SURFACES[hole.lie()].name;
   ui.club.textContent = CLUBS[clubIndex].name;
   ui.shots.textContent = (hole.strokes + hole.penalties) + ' / par ' + PAR +
-    (round.played.length ? '   (round ' + round.total + ')' : '');
+    (MINES.length ? '   (' + hole.legsDown + ' of ' + LEGS_TO_TOPPLE + ' legs)'
+                  : round.played.length ? '   (round ' + round.total + ')' : '');
   var wSpeed = Math.hypot(hole.wind.x, hole.wind.z);
   ui.wind.textContent = wSpeed.toFixed(1) + ' m/s ' + windArrow(hole.wind, viewYaw());
   ui.msg.textContent = performance.now() < messageUntil ? message : '';
