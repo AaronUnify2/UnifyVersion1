@@ -630,12 +630,20 @@ function buildHoleFour() {
      anything sitting in the fast lane out onto a bank. */
   c.push(deck(90, 0, 0, 160, 10, 'fairway'));       /* x  10..170, under the tee */
   c.push(deck(180, 0, 0, 20, 10, 'sand'));          /* x 170..190 */
-  /* Set in from the edges of the groove on purpose. Run a sideways belt
-     right up to where the bank starts and a ball rolling back down the bank
-     lands on it, is thrown up again, and pinballs there until the shot clock
-     saves it. */
+  /* A conveyor running down the groove towards the green, not across it. It
+     used to shove sideways, to give you a reason not to sit in the fast lane -
+     but the arrows on it then pointed at the bank rather than at the flag,
+     which reads as a mistake rather than as a hazard. Running with the hole it
+     is the fast lane again rather than the wrong lane - and the stones stand
+     beyond it, so the fast lane is fast and dangerous rather than simply fast.
+     Put beyond the stones instead it delivered the ball onto the green and the
+     hole played a stroke and a half under par, which is a lift, not a hazard.
+
+     Set in from the edges of the groove on purpose. Run a belt right up to
+     where the bank starts and a ball rolling back down lands on it, is thrown
+     along, and pinballs there until the shot clock saves it. */
   push(c, inlay(190, 383, -5, 5, 0, 'fairway',
-    { x0: 232, x1: 260, z0: -3, z1: 3, kind: 'belt', opts: { beltSide: 22 } }));
+    { x0: 240, x1: 270, z0: -3, z1: 3, kind: 'belt', opts: { belt: 13 } }));
 
   /* A stone standing in the middle of the groove where a drive comes down, and
      a pair behind it in the lines either side of it. Aim straight at the flag
@@ -646,8 +654,8 @@ function buildHoleFour() {
      so a ball that stopped in front of it was fed straight back there every
      time it was chipped aside, and the round never ended. At two and a half it
      still stands on the line of play, but there is room to play round it. */
-  push(c, pickets(276, 0, [0], 2.5, 6, 'stone'));
-  push(c, pickets(302, 0, [-3.2, 3.2], 2.5, 5, 'stone'));
+  push(c, pickets(300, 0, [0], 2.5, 6, 'stone'));
+  push(c, pickets(330, 0, [-3.2, 3.2], 2.5, 5, 'stone'));
   /* and three pairs standing on the banks, where a drive that strays rides up
      and runs along before the bank feeds it back down. Staggered up the slope
      and down the hole, so a stray has to get past all three. The bank climbs
@@ -729,7 +737,7 @@ function buildHoleSix() {
 
   /* the bottom shelf, with the pad set where a drive runs out */
   push(c, inlay(15, 250, -35, 35, 0, 'fairway',
-    { x0: 210, x1: 234, z0: -20, z1: 20, kind: 'spring', opts: { kick: 16 } }));
+    { x0: 210, x1: 234, z0: -20, z1: 20, kind: 'spring', opts: { kick: 26 } }));
   c.push(slab(132, 1.6, -36, 235, 3.2, 2, { kind: 'rail' }));
   c.push(slab(132, 1.6, 36, 235, 3.2, 2, { kind: 'rail' }));
   /* The pad catches a drive down the middle. These catch the ones either side
@@ -830,7 +838,7 @@ function buildHoleSeven() {
   push(c, inlay(40, 210, 30, 100, 10, 'fairway',
     { x0: 150, x1: 182, z0: 48, z1: 80, kind: 'sand' }));
   push(c, inlay(210, 344, 30, 100, 10, 'fairway',
-    { x0: 228, x1: 256, z0: 52, z1: 82, kind: 'spring', opts: { kick: 14 } }));
+    { x0: 228, x1: 256, z0: 52, z1: 82, kind: 'spring', opts: { kick: 22 } }));
   c.push(slab(192, 11.6, 29, 304, 3.2, 2, { kind: 'rail' }));
   c.push(slab(192, 11.6, 101, 304, 3.2, 2, { kind: 'rail' }));
 
@@ -994,7 +1002,7 @@ var SURFACES = {
   rail:    { name: 'Rail',     roll: 0.08, bounce: 0.55, shear: 0.11, hold: 1.00, grab: 0.70 },
   belt:    { name: 'Conveyor', roll: 1.40, bounce: 0.22, shear: 0.70, hold: 1.00, grab: 0.90 },
   spring:  { name: 'Bounce pad', roll: 0.20, bounce: 0.45, shear: 0.09, hold: 1.00, grab: 0.90,
-             kick: 12 },
+             kick: 20 },
   'void':  { name: 'Off the course', roll: 0.09, bounce: 0, shear: 3.00, hold: 0.00, grab: 1.00 }
 };
 /* what is left of a skid once the ball is rolling rather than sliding: the
@@ -3001,8 +3009,7 @@ function updateHud() {
   ui.shots.textContent = (hole.strokes + hole.penalties) + ' / par ' + PAR +
     (round.played.length ? '   (round ' + round.total + ')' : '');
   var wSpeed = Math.hypot(hole.wind.x, hole.wind.z);
-  var wDir = Math.atan2(hole.wind.z, hole.wind.x) - aimYaw;
-  ui.wind.textContent = wSpeed.toFixed(1) + ' m/s ' + windArrow(wDir);
+  ui.wind.textContent = wSpeed.toFixed(1) + ' m/s ' + windArrow(hole.wind, viewYaw());
   ui.msg.textContent = performance.now() < messageUntil ? message : '';
 
   var show = phase === 'swing';
@@ -3029,9 +3036,28 @@ function updateHud() {
   ui.cardBtn.textContent = nextHoleLabel();
 }
 
-function windArrow(rel) {
-  var dirs = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
-  var i = Math.round(((rel % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) / (Math.PI / 4)) % 8;
+/* Which way the world is facing on screen. The camera uses the aim line while
+   you are lining a shot up and the free-look angle while you are walking
+   about, so the arrow has to follow whichever one is actually pointing the
+   picture, or it means something different depending on what you are doing. */
+function viewYaw() { return phase === 'walk' ? camYaw : aimYaw; }
+
+/* The wind as you are looking at it: up the screen is straight down the line
+   you are facing, so a tailwind points up and a headwind points down.
+
+   Worked out from the downrange and across components rather than from the
+   raw world angle. The old version fed (windAngle - aimYaw) straight into the
+   arrow table, which measures from the wrong axis and runs the wrong way
+   round, so every arrow came out a quarter turn from the truth: a tailwind
+   read as a crosswind. That is not a thing you can play by. */
+function windArrow(wind, yaw) {
+  var down = wind.x * Math.cos(yaw) + wind.z * Math.sin(yaw);
+  var across = -wind.x * Math.sin(yaw) + wind.z * Math.cos(yaw);
+  if (!down && !across) return '·';
+  /* clockwise from straight up the screen, which is how the table below runs */
+  var a = Math.atan2(across, down);
+  var dirs = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+  var i = Math.round(((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) / (Math.PI / 4)) % 8;
   return dirs[i];
 }
 
