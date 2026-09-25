@@ -109,12 +109,12 @@
       <li><a href="ch01-p03.html" data-turn><span>3</span>The Animus</a></li>
       <li><a href="ch01-p04.html" data-turn><span>4</span>The Weak Spot</a></li>
       <li><a href="ch01-p05.html" data-turn><span>5</span>Invisible</a></li>
-      <li class="soon"><span>6</span>Three Doors</li>
-      <li class="soon"><span>7</span>Dickens and the Boarded Door</li>
-      <li class="soon"><span>8</span>The First Door</li>
-      <li class="soon"><span>9</span>The Meadow Stage</li>
-      <li class="soon"><span>10</span>The Ladder</li>
-      <li class="soon"><span>11</span>Into the Sky</li>
+      <li><a href="ch01-p06.html" data-turn><span>6</span>Three Doors</a></li>
+      <li><a href="ch01-p07.html" data-turn><span>7</span>Dickens and the Boarded Door</a></li>
+      <li><a href="ch01-p08.html" data-turn><span>8</span>The First Door</a></li>
+      <li><a href="ch01-p09.html" data-turn><span>9</span>The Meadow Stage</a></li>
+      <li><a href="ch01-p10.html" data-turn><span>10</span>The Ladder</a></li>
+      <li><a href="ch01-p11.html" data-turn><span>11</span>Into the Sky</a></li>
       <li class="soon"><span>12</span>The Roman Street</li>
       <li class="soon"><span>13</span>Catching Up</li>
       <li class="soon"><span>14</span>The Vision</li>
@@ -199,7 +199,30 @@ const P = {
   sand2:   '#473b63',
   stone0:  '#4a4760',
   stone1:  '#76728e',
-  stone2:  '#aaa6c0'
+  stone2:  '#aaa6c0',
+  // doors, stages and theaters
+  wood0:   '#2e1c16',
+  wood1:   '#4a2e20',
+  wood2:   '#6e4630',
+  wood3:   '#9a6a45',
+  red0:    '#3e0c1a',
+  red1:    '#7d1a2c',
+  red2:    '#b52c3a',
+  toyPink: '#ff7eb6',
+  toyCyan: '#4fd6e8',
+  toyGrn:  '#7ee05a',
+  toyYel:  '#ffe45c',
+  // daylight: meadow and open sky
+  grass0:  '#2f5a2a',
+  grass1:  '#4f8a34',
+  grass2:  '#8cc24a',
+  hill0:   '#3c6e56',
+  hill1:   '#5f9a5a',
+  skyD:    '#2f5fb0',
+  skyA:    '#4a7fd0',
+  skyB:    '#7fb2ec',
+  skyC:    '#b8dcf8',
+  cloud0:  '#d4e2f4'
 };
 
 // Colour ramps particles step through as they age (bright -> dark).
@@ -209,8 +232,10 @@ const RAMP_IMP   = [P.imp2, P.imp2, P.imp1, P.imp0];
 const RAMP_GOLD  = [P.white, P.glow, P.gold1, P.gold0];
 const RAMP_DUST  = [P.hood2, P.pale0, P.wall3, P.wall2];
 const RAMP_STAR  = [P.white, P.glow, P.stone2, P.sky2];
-const RAMPS = [RAMP_SPARK, RAMP_CYST, RAMP_IMP, RAMP_GOLD, RAMP_DUST, RAMP_STAR];
-const SPARK = 0, CYST = 1, IMP = 2, GOLD = 3, DUST = 4, STAR = 5;
+const RAMP_TOY   = [P.white, P.toyYel, P.toyPink, P.toyCyan];
+const RAMP_PUFF  = [P.pale1, P.pale0, P.wall3, P.wall2];
+const RAMPS = [RAMP_SPARK, RAMP_CYST, RAMP_IMP, RAMP_GOLD, RAMP_DUST, RAMP_STAR, RAMP_TOY, RAMP_PUFF];
+const SPARK = 0, CYST = 1, IMP = 2, GOLD = 3, DUST = 4, STAR = 5, TOY = 6, PUFF = 7;
 
 // ---- Canvases ---------------------------------------------------------
 const buf = document.createElement('canvas');
@@ -423,6 +448,10 @@ function turnTo(href) {
   pendingHref = href;
   fadeDir = 1;
 }
+
+// Scenes can dissolve to black and back between loops of their story.
+function loopDissolveOut() { if (!pendingHref) fadeDir = 1; }
+function loopDissolveIn() { if (!pendingHref) fadeDir = -1; }
 
 window.addEventListener('pageshow', function (e) {
   if (e.persisted) { fade = 1; fadeDir = -1; pendingHref = null; leaving = false; }
@@ -874,6 +903,342 @@ function drawTunnel(scroll, torches) {
 function floorPool(x, gy, rx) {
   oval(x, gy - 1, rx, 2, P.floor2);
   oval(x, gy - 1, rx >> 1, 1, P.wall2);
+}
+
+// ---- The three doors ---------------------------------------------------
+// kind 0: cartoon animals (children's theater)
+// kind 1: carved wood (the Dickens and Shakespeare theater)
+// kind 2: divine inspiration, boarded up
+// A doorway is drawn in two parts so a character can stand inside it:
+// drawDoorway (frame and whatever is beyond it), then drawDoorLeaf.
+
+function drawDoorway(x, y, w, h, kind, open) {
+  // stone frame, or a gilded one for the door of divine inspiration
+  const f0 = kind === 2 ? P.gold0 : P.wall3;
+  const f1 = kind === 2 ? P.gold1 : P.haze;
+  rect(x - 2, y - 3, w + 4, h + 3, f0);
+  rect(x - 2, y - 3, w + 4, 1, f1);
+  rect(x - 3, y - 4, w + 6, 2, f0);
+  if (kind === 2) px(x + (w >> 1), y - 5, P.gold1);
+  rect(x, y, w, h, P.ink);
+  if (open <= 0) return;
+  if (kind === 0) drawToyTheater(x, y, w, h);
+  if (kind === 1) drawDickensStage(x, y, w, h);
+}
+
+// Behind the cartoon door: party colours and bobbing animal puppets.
+function drawToyTheater(x, y, w, h) {
+  const bgs = [P.toyPink, P.toyCyan, P.toyYel];
+  const bg = bgs[step(2) % 3];
+  rect(x, y, w, h, bg);
+  rect(x, y + h - 8, w, 8, P.red1);             // little puppet booth
+  rect(x, y + h - 8, w, 1, P.toyYel);
+  for (let i = 0; i < 3; i++) {
+    const hop = ((step(6) + i * 2) % 4) < 2 ? 0 : -3;
+    const cx = x + 3 + i * 6, cy = y + h - 11 + hop;
+    const c = i === 0 ? P.toyYel : (i === 1 ? P.white : P.toyGrn);
+    oval(cx, cy, 2, 2, c);
+    if (i === 0) { px(cx - 2, cy - 2, c); px(cx + 2, cy - 2, c); }          // bear ears
+    if (i === 1) { rect(cx - 1, cy - 5, 1, 3, c); rect(cx + 1, cy - 5, 1, 3, c); } // bunny ears
+    px(cx - 1, cy, P.ink); px(cx + 1, cy, P.ink);
+  }
+}
+
+// Behind the carved door: a candlelit stage, an actor, a drifting quill.
+function drawDickensStage(x, y, w, h) {
+  rect(x, y, w, h, P.red0);
+  rect(x, y, 3, h, P.red1);
+  rect(x + w - 3, y, 3, h, P.red1);
+  rect(x, y, w, 2, P.red2);
+  rect(x, y + h - 6, w, 6, P.wood1);
+  rect(x, y + h - 6, w, 1, P.wood3);
+  for (let i = 0; i < 4; i++) {
+    const cx = x + 3 + i * 4;
+    px(cx, y + h - 7 - ((step(8) + i) % 2), P.fire2);
+    px(cx, y + h - 6, P.fire1);
+  }
+  // an actor in silhouette, arm raised mid-speech
+  const ax = x + (w >> 1), ay = y + h - 6;
+  rect(ax - 1, ay - 9, 3, 6, P.ink);
+  rect(ax - 1, ay - 3, 1, 3, P.ink);
+  rect(ax + 1, ay - 3, 1, 3, P.ink);
+  rect(ax - 1, ay - 12, 3, 3, P.ink);
+  rect(ax - 2, ay - 13, 5, 1, P.ink);
+  rect(ax - 1, ay - 16, 3, 3, P.ink);           // top hat
+  if ((step(3) & 1) === 0) line(ax + 2, ay - 8, ax + 4, ay - 12, P.ink);
+  else line(ax + 2, ay - 8, ax + 5, ay - 8, P.ink);
+  // the quill drifting above, writing on the air
+  const qx = x + 4 + ((step(2) % 8) < 4 ? step(2) % 4 : 4 - (step(2) % 4));
+  const qy = y + 6 + ((step(3) >> 1) & 1);
+  line(qx, qy + 4, qx + 3, qy, P.white);
+  px(qx + 2, qy + 2, P.dress0);
+}
+
+function drawDoorLeaf(x, y, w, h, kind, open) {
+  const lw = Math.round(w * (1 - open));
+  if (lw <= 0) return;
+  if (kind === 0) {
+    rect(x, y, lw, h, P.toyCyan);
+    rect(x, y, lw, 1, P.white);
+    if (lw > w * 0.7) {
+      // painted cartoon bear and bunny
+      const bx = x + 5, by = y + 10;
+      oval(bx, by, 3, 3, P.toyYel);
+      px(bx - 3, by - 3, P.toyYel); px(bx + 3, by - 3, P.toyYel);
+      px(bx - 1, by - 1, P.ink); px(bx + 1, by - 1, P.ink); px(bx, by + 1, P.ink);
+      const nx = x + w - 6, ny = y + 22;
+      oval(nx, ny, 3, 3, P.toyPink);
+      rect(nx - 2, ny - 8, 1, 5, P.toyPink); rect(nx + 2, ny - 8, 1, 5, P.toyPink);
+      px(nx - 1, ny - 1, P.ink); px(nx + 1, ny - 1, P.ink);
+      rect(x + w - 4, y + (h >> 1), 2, 2, P.toyYel);     // knob
+    } else {
+      rect(x + lw - 1, y, 1, h, P.hood0);
+    }
+  } else if (kind === 1) {
+    rect(x, y, lw, h, P.wood1);
+    rect(x, y, 1, h, P.wood0);
+    if (lw > w * 0.7) {
+      rect(x + 3, y + 3, w - 6, 12, P.wood2);
+      rect(x + 3, y + 18, w - 6, 12, P.wood2);
+      rect(x + 4, y + 4, w - 8, 10, P.wood1);
+      rect(x + 4, y + 19, w - 8, 10, P.wood1);
+      rect(x + w - 4, y + (h >> 1), 2, 2, P.gold1);
+    } else {
+      rect(x + lw - 1, y, 1, h, P.wood3);
+    }
+  } else {
+    // divine inspiration: old wood, planks nailed across, light leaking out
+    rect(x, y, w, h, P.wood0);
+    const pulse = step(4) % 4;
+    for (let i = 0; i < 5; i++) {
+      const gx = x + 2 + i * 4;
+      const c = ((i + pulse) & 1) ? P.gold1 : P.glow;
+      rect(gx, y + 1, 1, h - 2, c);
+    }
+    for (let k = 0; k < 3; k++) {
+      const py = y + 5 + k * 11;
+      rect(x - 3, py, w + 6, 3, P.wood2);
+      rect(x - 3, py, w + 6, 1, P.wood3);
+      px(x - 1, py + 1, P.pipe0);
+      px(x + w, py + 1, P.pipe0);
+    }
+    line(x - 2, y + h - 4, x + w + 1, y + 3, P.wood2);
+  }
+}
+
+// A pool of coloured light spilling out of an open door onto the floor.
+function doorSpill(x, w, open, c) {
+  if (open <= 0) return;
+  dither(2, 0);
+  for (let r = 0; r < 10; r++) {
+    const grow = Math.floor(r * 0.6);
+    rect(x - grow, 72 + r, w + grow * 2, 1, c);
+  }
+  dither(0);
+}
+
+// ---- Other people ------------------------------------------------------
+// A plain head for anyone who isn't one of his versions.
+function drawPlainHead(p, skin0, skin1, hair) {
+  const t = -22 + p.bob;
+  part(p, -3, t, 6, 6, skin1);
+  part(p, -3, t + 5, 5, 1, skin0);
+  part(p, -3, t, 6, 1, hair);
+  part(p, -3, t, 2, 3, hair);
+  ppx(p, 1, t + 2 + p.look, P.ink);
+  ppx(p, 3, t + 3 + p.look, skin1);
+}
+
+// Stage performers. style 0: gentleman in a top hat; 1: lady in a bonnet.
+// gesture 0: arms down, 1: beckoning, 2: pointing up.
+function drawPerformer(p, style, gesture) {
+  if (style === 0) {
+    drawArm(p, 0, P.wood0, P.skin0);
+    drawLegs(p, P.pants0, P.pants1, P.shoe);
+    drawTorso(p, P.wood0, P.wood1, P.wood2);
+    part(p, 0, -15 + p.bob, 2, 5, P.red2);                 // waistcoat
+    drawPlainHead(p, P.skin0, P.skin1, P.hair);
+    part(p, -3, -23 + p.bob, 7, 1, P.ink);                 // brim
+    part(p, -2, -28 + p.bob, 5, 5, P.ink);                 // top hat
+    part(p, -2, -25 + p.bob, 5, 1, P.red1);
+  } else {
+    part(p, -2, -15 + p.bob, 2, 6, P.red0);
+    for (let r = 0; r < 9; r++) {
+      const w = 6 + (r >> 1);
+      part(p, -3 - (r >> 2), -10 + r, w, 1, P.red1);
+      part(p, -3 - (r >> 2), -10 + r, 1, 1, P.red0);
+    }
+    part(p, -3, -16 + p.bob, 6, 6, P.red1);
+    part(p, -3, -16 + p.bob, 1, 6, P.red0);
+    part(p, -2, -15 + p.bob, 4, 1, P.dress1);              // lace collar
+    drawPlainHead(p, P.skin0, P.skin1, P.wood1);
+    part(p, -4, -23 + p.bob, 6, 2, P.gold0);               // bonnet
+    part(p, -4, -21 + p.bob, 2, 4, P.gold0);
+    ppx(p, -5, -19 + p.bob, P.wood1);                       // bun
+  }
+  // front arm
+  const sleeve = style === 0 ? P.wood1 : P.red1;
+  const sx = worldX(p, 0), sy = p.gy - 14 + p.bob;
+  let hx = 1, hy = -8;
+  if (gesture === 1) { hx = 5; hy = (step(4) & 1) ? -13 : -15; }
+  if (gesture === 2) { hx = 2; hy = -25; }
+  const ex = worldX(p, hx), ey = p.gy + hy + p.bob;
+  line(sx, sy, ex, ey, sleeve);
+  line(sx, sy + 1, ex, ey + 1, sleeve);
+  rect(ex, ey, 1, 2, P.skin1);
+  if (gesture === 2) px(ex, ey - 1, P.skin1);
+}
+
+// ---- Climbing, seen from behind -----------------------------------------
+// who 0: the Secondary, 1: the Animus. x is the ladder centre, gy the rung
+// under their feet. phase 0..3 alternates hands and feet.
+function drawClimber(x, gy, who, phase) {
+  const reachL = (phase & 2) ? 2 : 0;
+  const reachR = (phase & 2) ? 0 : 2;
+  if (who === 0) dither(1, (tick >> 3) & 1);
+  const body = who === 0 ? P.hood1 : P.dress1;
+  const shade = who === 0 ? P.hood0 : P.dress0;
+  const hand = who === 0 ? P.pale1 : P.skin1;
+  // legs (skirt for her)
+  if (who === 0) {
+    rect(x - 3, gy - 8 - reachR, 2, 8, P.pants1);
+    rect(x + 1, gy - 8 - reachL, 2, 8, P.pants1);
+    rect(x - 3, gy - 1 - reachR, 2, 1, P.shoe);
+    rect(x + 1, gy - 1 - reachL, 2, 1, P.shoe);
+  } else {
+    for (let r = 0; r < 8; r++) rect(x - 3 - (r >> 2), gy - 10 + r, 6 + (r >> 2) * 2, 1, r > 5 ? shade : body);
+    rect(x - 2, gy - 1 - reachR, 2, 1, P.skin0);
+    rect(x + 1, gy - 1 - reachL, 2, 1, P.skin0);
+  }
+  // torso from behind
+  rect(x - 3, gy - 17, 6, 9, body);
+  rect(x - 3, gy - 17, 1, 9, shade);
+  // arms up to the rungs above
+  rect(x - 5, gy - 24 - reachL, 2, 9 + reachL, body);
+  rect(x + 3, gy - 24 - reachR, 2, 9 + reachR, body);
+  rect(x - 5, gy - 25 - reachL, 2, 2, hand);
+  rect(x + 3, gy - 25 - reachR, 2, 2, hand);
+  // back of the head
+  if (who === 0) {
+    rect(x - 3, gy - 23, 6, 6, P.hair);
+    px(x, gy - 24, P.hair);                          // the tuft
+    px(x - 1, gy - 25, P.hair);
+    rect(x - 4, gy - 18, 8, 2, P.hood0);             // hood at the neck
+  } else {
+    rect(x - 3, gy - 24, 6, 7, P.gold1);
+    rect(x - 2, gy - 17, 4, 6, P.gold1);             // long hair down her back
+    rect(x - 1, gy - 11, 2, 2, P.gold0);
+  }
+  dither(0);
+}
+
+// A ladder standing at centre x, from the bottom row up to the top row.
+function drawLadder(x, top, bottom, rungOffset) {
+  rect(x - 5, top, 1, bottom - top, P.wood2);
+  rect(x + 4, top, 1, bottom - top, P.wood2);
+  rect(x - 6, top, 1, bottom - top, P.wood1);
+  rect(x + 5, top, 1, bottom - top, P.wood1);
+  const off = ((rungOffset % 6) + 6) % 6;
+  for (let y = bottom - 3 + off - 6 * Math.ceil((bottom - top) / 6); y < bottom; y += 6) {
+    if (y < top) continue;
+    rect(x - 4, y, 8, 1, P.wood3);
+  }
+}
+
+// ---- The meadow backdrop that turns out to be real ---------------------
+// yOff shifts the whole scene down (used while climbing into the sky).
+function skyColourAt(altitude) {
+  if (altitude < 70) return P.skyC;
+  if (altitude < 130) return P.skyB;
+  if (altitude < 240) return P.skyA;
+  return P.skyD;
+}
+
+function drawSkyBands(yOff) {
+  for (let y = 0; y < H; y++) {
+    const alt = (H - y) + yOff;
+    let c = skyColourAt(alt);
+    // blend band edges with a checkerboard row
+    const next = skyColourAt(alt + 3);
+    if (next !== c && (y & 1) === 0) c = next;
+    rect(0, y, W, 1, c);
+  }
+}
+
+function drawCloud(x, y, size) {
+  oval(x, y, size + 3, size, P.white);
+  oval(x - size - 1, y + 1, size, size - 1, P.white);
+  oval(x + size + 2, y + 1, size, size - 1, P.white);
+  rect(x - size * 2, y + size - 1, size * 4 + 4, 1, P.cloud0);
+}
+
+function drawMeadow(yOff, drift) {
+  // sun
+  oval(98, 16 + yOff, 5, 5, P.fire2);
+  oval(98, 16 + yOff, 4, 4, P.glow);
+  // clouds drifting slowly
+  for (let i = 0; i < 4; i++) {
+    const span = W + 40;
+    const cx = ((Math.floor(drift / (3 + i)) + i * 47) % span) - 20;
+    drawCloud(cx, 10 + i * 9 + yOff, 2 + (i & 1));
+  }
+  // rolling hills
+  for (let x = 0; x < W; x++) {
+    const y1 = 56 + Math.round(Math.sin(x / 14) * 3 + Math.sin(x / 5.3) * 1) + yOff;
+    rect(x, y1, 1, H, P.hill0);
+    const y2 = 64 + Math.round(Math.sin((x + 30) / 19) * 4) + yOff;
+    rect(x, y2, 1, H, P.hill1);
+    px(x, y2, P.grass2);
+  }
+  rect(0, 72 + yOff, W, H, P.grass1);
+  for (let x = 0; x < W; x += 3) {
+    const sway = ((step(4) + (x >> 3)) & 1);
+    px(x + sway, 72 + yOff + (hash(x) * 8 | 0), P.grass2);
+    if (hash(x + 99) > 0.85) px(x, 74 + yOff + (hash(x + 5) * 6 | 0), hash(x) > 0.5 ? P.toyYel : P.white);
+  }
+}
+
+// The theater around the backdrop: stage boards where grass creeps in,
+// footlights, the audience, and the red curtains. yOff moves it all down.
+function drawTheaterFront(yOff, curtainsOnly) {
+  if (!curtainsOnly) {
+    rect(0, 80 + yOff, W, 8, P.wood2);
+    for (let x = 0; x < W; x += 9) rect(x, 80 + yOff, 1, 8, P.wood1);
+    rect(0, 80 + yOff, W, 1, P.wood3);
+    // grass creeping over the boards: you can't tell where the stage ends
+    for (let x = 16; x < 112; x++) {
+      const reach = Math.floor(hash(x * 3) * 6) + (x > 30 && x < 98 ? 2 : 0);
+      rect(x, 80 + yOff, 1, reach, (x & 1) ? P.grass1 : P.grass0);
+      if (hash(x + 7) > 0.7) px(x, 80 + yOff + reach, P.grass1);
+    }
+    rect(0, 88 + yOff, W, 1, P.wood0);
+    rect(0, 89 + yOff, W, H, P.ink);
+    for (let x = 6; x < W; x += 12) {
+      const fl = (step(9) + x) % 2;
+      px(x, 86 + yOff - fl, P.fire2);
+      px(x, 87 + yOff, P.fire1);
+    }
+    // the audience: rows of heads in the dark
+    for (let x = -2; x < W; x += 7) {
+      oval(x + ((x >> 3) & 1), 94 + yOff, 2, 2, P.rock1);
+    }
+  }
+  // curtains and valance
+  const sway = (step(2) & 1);
+  for (let side = 0; side < 2; side++) {
+    const x0 = side === 0 ? 0 : W - 14;
+    rect(x0, yOff, 14, 89, P.red1);
+    for (let k = 0; k < 4; k++) {
+      rect(x0 + 2 + k * 3 + (k === 3 ? sway : 0), yOff, 1, 89, P.red0);
+      rect(x0 + 3 + k * 3, yOff, 1, 89, P.red2);
+    }
+    const hemX = side === 0 ? 14 : W - 16;
+    rect(hemX, yOff + 40, 2, 49, P.red0);
+  }
+  rect(0, yOff, W, 8, P.red2);
+  rect(0, yOff + 7, W, 1, P.gold0);
+  for (let x = 0; x < W; x += 8) oval(x + 4, yOff + 8, 3, 1, P.red2);
+  rect(0, yOff, W, 1, P.gold1);
 }
 
 // =====================================================================

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bigfoot's Shoe · Page 1 · The Tunnels</title>
+<title>Bigfoot's Shoe · Page 8 · The First Door</title>
 <style>
   :root {
     --bg: #0b0913;
@@ -106,20 +106,19 @@
 <header class="bar">
   <a href="index.html" data-turn>Bigfoot's Shoe</a>
   <span class="chapter">Chapter 1 · The Fresh Start</span>
-  <span>Page 1 / 21</span>
+  <span>Page 8 / 21</span>
 </header>
 <main class="spread">
-  <div class="stage" id="stage"><canvas id="screen" aria-label="Three figures run through a torch-lit stone tunnel. The one in front swings a metal pipe and demons burst apart." role="img"></canvas></div>
+  <div class="stage" id="stage"><canvas id="screen" aria-label="The Primary walks through the cartoon door and it slams behind him. The other two look at each other and turn towards the second door." role="img"></canvas></div>
   <section class="text">
-    <h1>1. The Tunnels</h1>
-    <p>Three adventurers are travelling through the tunnels of the unconscious.</p>
-    <p>The first is the emerging primary identity. When they reach the surface he'll be in control. He has a plan to save the world, but first they have to escape the tunnels. His weapon, a metal pipe he found leaning against a wall, tears through the monsters as they rush at them.</p>
+    <h1>8. The First Door</h1>
+    <p>The Primary chose the first door, assuming that the children's play would be shorter and his escape would hasten.</p>
   </section>
 </main>
 <nav class="turn">
-  <a class="btn" id="prev" href="index.html" data-turn>‹ Cover</a>
+  <a class="btn" id="prev" href="ch01-p07.html" data-turn>‹ Prev</a>
   <span class="hint">← → keys or swipe to turn</span>
-  <a class="btn" id="next" href="ch01-p02.html" data-turn>Next ›</a>
+  <a class="btn" id="next" href="ch01-p09.html" data-turn>Next ›</a>
 </nav>
 <script>
 // =====================================================================
@@ -1234,82 +1233,103 @@ function drawTheaterFront(yOff, curtainsOnly) {
 }
 
 // =====================================================================
-//  PAGE 1 — the run through the tunnels
+//  PAGE 8 — the first door
 // =====================================================================
-// The camera follows the three at a run. Demons rush in from ahead and
-// the Primary pops each one with his pipe.
+// The Primary strides to the cartoon door, which swings open on its
+// party colours. He steps inside and it slams behind him. The other two
+// look at each other, then turn towards the second door.
 
-const prim = makePose(80, 88, 1);
-const anim = makePose(58, 85, 1);
-const sec = makePose(36, 82, 1);
-prim.run = true; anim.run = true; sec.run = true;
+const DOOR_Y = 38, DOOR_W = 18, DOOR_H = 34;
+const DOOR_X = [44, 72, 100];
+const sec = makePose(10, 84, 1);
+const anim = makePose(20, 88, 1);
+const prim = makePose(30, 92, 1);
+let t = 0;
+let open1 = 0, open2 = 0;
+let resetting = false;
 
-const demons = [makeDemon(), makeDemon(), makeDemon()];
-let scroll = 0;
-let nextDemon = 50;
-let popTimer = 0, popX = 0, popY = 0;
+function lerp(a, b, u) { return a + (b - a) * u; }
+
+function resetScene() {
+  t = 0;
+  prim.x = 30; prim.gy = 92; prim.hide = false;
+  sec.x = 10; sec.gy = 84; sec.dir = 1;
+  anim.x = 20; anim.gy = 88; anim.dir = 1;
+  open1 = 0; open2 = 0;
+}
 
 function sceneUpdate() {
-  if ((tick & 1) === 0) scroll++;
-  setCycle(prim, step(10), true);
-  setCycle(anim, step(10) + 1, true);
-  setCycle(sec, step(10) + 2, true);
-
-  nextDemon--;
-  if (nextDemon <= 0) {
-    for (let i = 0; i < demons.length; i++) {
-      const d = demons[i];
-      if (!d.alive) {
-        d.alive = true;
-        d.x = 136;
-        d.gy = 88;
-        d.run = true;
-        break;
-      }
-    }
-    nextDemon = 70 + Math.floor(hash(tick) * 70);
+  if (resetting) {
+    if (fade >= 1) { resetScene(); resetting = false; loopDissolveIn(); }
+    return;
   }
+  t++;
+  let primMoving = false, secMoving = false, animMoving = false;
 
-  for (let i = 0; i < demons.length; i++) {
-    const d = demons[i];
-    if (!d.alive) continue;
-    d.x -= 1;
-    setCycle(d, step(12) + i, true);
-    if (prim.swing < 0 && d.x - prim.x < 24) startSwing(prim);
+  // the door swings open as he approaches
+  if (t > 40 && t <= 70) open1 = (t - 40) / 30;
+  // he walks up to it and into the doorway
+  if (t > 50 && t <= 150) {
+    const u = (t - 50) / 100;
+    prim.x = Math.round(lerp(30, DOOR_X[0] + 9, u));
+    prim.gy = Math.round(lerp(92, DOOR_Y + DOOR_H, u));
+    primMoving = true;
   }
-
-  if (updateSwing(prim)) {
-    for (let i = 0; i < demons.length; i++) {
-      const d = demons[i];
-      if (d.alive && d.x - prim.x < 26 && d.x - prim.x > -4) {
-        popX = worldX(d, 4) - 6;
-        popY = d.gy - 26;
-        popDemon(d);
-        popTimer = 28;
-        shake = 6;
-      }
-    }
+  // and it closes behind him
+  if (t > 160 && t <= 176) open1 = 1 - (t - 160) / 16;
+  if (t === 177) {
+    open1 = 0;
+    prim.hide = true;
+    shake = 8;
+    burst(DOOR_X[0] + 9, DOOR_Y + DOOR_H - 1, 16, 0.9, 30, PUFF, 0.02);
   }
-  if (popTimer > 0) popTimer--;
+  // the other two exchange a look...
+  if (t === 215) anim.dir = -1;
+  if (t === 260) anim.dir = 1;
+  // ...then head for the second door, which glows warmer
+  if (t > 290 && t <= 330) open2 = (t - 290) / 40 * 0.25;
+  if (t > 300 && t <= 420) {
+    const u = (t - 300) / 120;
+    anim.x = Math.round(lerp(20, DOOR_X[1] + 6, u));
+    anim.gy = Math.round(lerp(88, 76, u));
+    sec.x = Math.round(lerp(10, DOOR_X[1] - 6, u));
+    sec.gy = Math.round(lerp(84, 75, u));
+    animMoving = secMoving = true;
+  }
+  if (t > 470) { resetting = true; loopDissolveOut(); }
 
-  // the scrolling world carries dust and loose sparks backwards
-  for (let i = 0; i < MAXP; i++) if (pOn[i]) pX[i] -= 0.5;
+  prim.run = false;
+  setCycle(prim, step(8), primMoving);
+  setCycle(sec, step(8) + 1, secMoving);
+  setCycle(anim, step(8) + 2, animMoving);
 
-  // a demon that somehow slips past just fades away behind them
-  for (let i = 0; i < demons.length; i++) if (demons[i].alive && demons[i].x < -16) demons[i].alive = false;
+  if (open1 > 0.3 && (tick % 12) === 0) {
+    spawn(DOOR_X[0] + 9 + Math.random() * 6, DOOR_Y + 14 + Math.random() * 14,
+          0.15 + Math.random() * 0.2, -0.1 - Math.random() * 0.1, 70, TOY, 0);
+  }
 }
 
 function sceneDraw() {
   clearLights();
+  if (open1 > 0) addLight(DOOR_X[0] + 9, 54, 18);
+  addLight(DOOR_X[1] + 9, 70, 8 + open2 * 50);
   addAnimusLight(anim);
-  drawTunnel(scroll, true);
-  floorPool(anim.x, anim.gy, 12);
+  drawTunnel(0, false);
+  doorSpill(DOOR_X[0] + 3, DOOR_W - 6, open1, step(2) % 3 === 0 ? P.toyPink : P.toyCyan);
+  rect(DOOR_X[1], DOOR_Y + DOOR_H, DOOR_W, 1, open2 > 0.1 ? P.fire2 : P.fire1);
+  // door 1, with the Primary able to stand inside its frame
+  drawDoorway(DOOR_X[0], DOOR_Y, DOOR_W, DOOR_H, 0, open1);
+  if (!prim.hide && prim.gy < 80) drawPrimary(prim);
+  drawDoorLeaf(DOOR_X[0], DOOR_Y, DOOR_W, DOOR_H, 0, open1);
+  for (let i = 1; i < 3; i++) {
+    drawDoorway(DOOR_X[i], DOOR_Y, DOOR_W, DOOR_H, i, 0);
+    drawDoorLeaf(DOOR_X[i], DOOR_Y, DOOR_W, DOOR_H, i, 0);
+  }
+  floorPool(anim.x, anim.gy, 10);
   drawSecondary(sec, false);
   drawAnimus(anim);
-  for (let i = 0; i < demons.length; i++) if (demons[i].alive) drawDemon(demons[i]);
-  drawPrimary(prim);
+  if (!prim.hide && prim.gy >= 80) drawPrimary(prim);
   drawParticles();
-  if (popTimer > 0) drawWord('POP!', popX, popY - (popTimer > 20 ? 0 : 1), P.cyst2);
 }
 
 requestAnimationFrame(frame);

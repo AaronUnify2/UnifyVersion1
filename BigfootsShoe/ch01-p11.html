@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bigfoot's Shoe · Page 1 · The Tunnels</title>
+<title>Bigfoot's Shoe · Page 11 · Into the Sky</title>
 <style>
   :root {
     --bg: #0b0913;
@@ -106,20 +106,20 @@
 <header class="bar">
   <a href="index.html" data-turn>Bigfoot's Shoe</a>
   <span class="chapter">Chapter 1 · The Fresh Start</span>
-  <span>Page 1 / 21</span>
+  <span>Page 11 / 21</span>
 </header>
 <main class="spread">
-  <div class="stage" id="stage"><canvas id="screen" aria-label="Three figures run through a torch-lit stone tunnel. The one in front swings a metal pipe and demons burst apart." role="img"></canvas></div>
+  <div class="stage" id="stage"><canvas id="screen" aria-label="The two climb the ladder as the stage and curtains sink away below, and the painted sky becomes a real sky full of clouds." role="img"></canvas></div>
   <section class="text">
-    <h1>1. The Tunnels</h1>
-    <p>Three adventurers are travelling through the tunnels of the unconscious.</p>
-    <p>The first is the emerging primary identity. When they reach the surface he'll be in control. He has a plan to save the world, but first they have to escape the tunnels. His weapon, a metal pipe he found leaning against a wall, tears through the monsters as they rush at them.</p>
+    <h1>11. Into the Sky</h1>
+    <p>As they climbed the ladder they left the theater below. They didn't leave the building.</p>
+    <p>Instead, they ascended into the sky of the backdrop of the stage.</p>
   </section>
 </main>
 <nav class="turn">
-  <a class="btn" id="prev" href="index.html" data-turn>‹ Cover</a>
+  <a class="btn" id="prev" href="ch01-p10.html" data-turn>‹ Prev</a>
   <span class="hint">← → keys or swipe to turn</span>
-  <a class="btn" id="next" href="ch01-p02.html" data-turn>Next ›</a>
+  <span class="btn off">More soon</span>
 </nav>
 <script>
 // =====================================================================
@@ -1234,82 +1234,61 @@ function drawTheaterFront(yOff, curtainsOnly) {
 }
 
 // =====================================================================
-//  PAGE 1 — the run through the tunnels
+//  PAGE 11 — into the sky
 // =====================================================================
-// The camera follows the three at a run. Demons rush in from ahead and
-// the Primary pops each one with his pipe.
+// The camera rises with them. The stage, the audience and the curtains
+// sink away below, but the painted sky doesn't end at the edge of the
+// stage: it just keeps going. Clouds pass behind and in front of them.
 
-const prim = makePose(80, 88, 1);
-const anim = makePose(58, 85, 1);
-const sec = makePose(36, 82, 1);
-prim.run = true; anim.run = true; sec.run = true;
-
-const demons = [makeDemon(), makeDemon(), makeDemon()];
-let scroll = 0;
-let nextDemon = 50;
-let popTimer = 0, popX = 0, popY = 0;
+const LADDER_X = 64;
+const RISE_TICKS = 3;        // ticks per pixel of climbing
+const TOP = 300;             // how far the camera climbs before the loop restarts
+let cam = 0;
+let t = 0;
+let resetting = false;
 
 function sceneUpdate() {
-  if ((tick & 1) === 0) scroll++;
-  setCycle(prim, step(10), true);
-  setCycle(anim, step(10) + 1, true);
-  setCycle(sec, step(10) + 2, true);
-
-  nextDemon--;
-  if (nextDemon <= 0) {
-    for (let i = 0; i < demons.length; i++) {
-      const d = demons[i];
-      if (!d.alive) {
-        d.alive = true;
-        d.x = 136;
-        d.gy = 88;
-        d.run = true;
-        break;
-      }
-    }
-    nextDemon = 70 + Math.floor(hash(tick) * 70);
+  if (resetting) {
+    if (fade >= 1) { t = 0; cam = 0; resetting = false; loopDissolveIn(); }
+    return;
   }
+  t++;
+  if (t > 60) cam = Math.floor((t - 60) / RISE_TICKS);
+  if (cam >= TOP) { resetting = true; loopDissolveOut(); }
+}
 
-  for (let i = 0; i < demons.length; i++) {
-    const d = demons[i];
-    if (!d.alive) continue;
-    d.x -= 1;
-    setCycle(d, step(12) + i, true);
-    if (prim.swing < 0 && d.x - prim.x < 24) startSwing(prim);
+// Clouds placed along the climb; the ones with depth 1 pass in front.
+const CLOUD_ALT = [60, 110, 150, 185, 230, 262, 300, 340, 370];
+const CLOUD_X   = [22, 100, 30, 92, 18, 104, 40, 84, 60];
+const CLOUD_SZ  = [2, 3, 3, 2, 4, 3, 2, 4, 3];
+const CLOUD_FRONT = [0, 0, 1, 0, 0, 1, 0, 1, 0];
+
+function drawClouds(front) {
+  for (let i = 0; i < CLOUD_ALT.length; i++) {
+    if (CLOUD_FRONT[i] !== front) continue;
+    const speed = front ? 1.5 : 0.7;
+    const y = H - CLOUD_ALT[i] + Math.floor(cam * speed);
+    if (y < -12 || y > H + 12) continue;
+    const drift = Math.floor(tick / (front ? 20 : 40)) % 20;
+    drawCloud(CLOUD_X[i] + drift - 10, y, CLOUD_SZ[i]);
   }
-
-  if (updateSwing(prim)) {
-    for (let i = 0; i < demons.length; i++) {
-      const d = demons[i];
-      if (d.alive && d.x - prim.x < 26 && d.x - prim.x > -4) {
-        popX = worldX(d, 4) - 6;
-        popY = d.gy - 26;
-        popDemon(d);
-        popTimer = 28;
-        shake = 6;
-      }
-    }
-  }
-  if (popTimer > 0) popTimer--;
-
-  // the scrolling world carries dust and loose sparks backwards
-  for (let i = 0; i < MAXP; i++) if (pOn[i]) pX[i] -= 0.5;
-
-  // a demon that somehow slips past just fades away behind them
-  for (let i = 0; i < demons.length; i++) if (demons[i].alive && demons[i].x < -16) demons[i].alive = false;
 }
 
 function sceneDraw() {
-  clearLights();
-  addAnimusLight(anim);
-  drawTunnel(scroll, true);
-  floorPool(anim.x, anim.gy, 12);
-  drawSecondary(sec, false);
-  drawAnimus(anim);
-  for (let i = 0; i < demons.length; i++) if (demons[i].alive) drawDemon(demons[i]);
-  drawPrimary(prim);
+  drawSkyBands(cam);
+  drawClouds(0);
+  if (cam < 120) {
+    drawMeadow(cam, tick);
+    drawTheaterFront(cam, false);
+  }
+  drawLadder(LADDER_X, 0, cam < 10 ? 86 + cam : H, cam);
+  // climbing: arms and legs alternate while the camera moves
+  if (cam < 120) drawTheaterFront(cam, true);
+  const phase = t > 60 ? step(6) % 4 : 0;
+  drawClimber(LADDER_X, 50, 1, phase);
+  drawClimber(LADDER_X, 78, 0, (phase + 2) % 4);
+  drawClouds(1);
   drawParticles();
-  if (popTimer > 0) drawWord('POP!', popX, popY - (popTimer > 20 ? 0 : 1), P.cyst2);
 }
 
 requestAnimationFrame(frame);
