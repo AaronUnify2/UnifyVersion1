@@ -34,11 +34,24 @@
     color: var(--muted);
   }
   .bar a { color: var(--accent); text-decoration: none; }
+  .bar .right { display: flex; gap: 8px; align-items: center; }
+  .tog {
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    color: var(--text);
+    padding: 5px 8px;
+    font: inherit;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    cursor: pointer;
+  }
+  .tog[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
   .bar .chapter { text-align: center; flex: 1; }
   .spread {
     flex: 1;
     display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-columns: minmax(0, 5fr) minmax(0, 2fr);
     gap: 32px;
     align-items: center;
     width: 100%;
@@ -48,7 +61,7 @@
   }
   .stage {
     width: 100%;
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 16 / 9;
     max-height: calc(100svh - 150px);
     display: flex;
     align-items: center;
@@ -62,7 +75,8 @@
     image-rendering: crisp-edges;
     image-rendering: pixelated;
   }
-  .text { max-width: 36em; }
+  .text { max-width: 30em; }
+  .text .warn { color: var(--muted); font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace; margin-top: 18px; font-size: 11px; }
   .text h1 {
     margin: 0 0 16px;
     font: 12px/1.3 ui-monospace, Menlo, Consolas, monospace;
@@ -95,7 +109,8 @@
   @media (max-width: 820px) {
     .bar { padding: 10px 16px; font-size: 11px; }
     .bar .chapter { display: none; }
-    .spread { grid-template-columns: 1fr; gap: 18px; padding: 0 0 8px; align-items: start; }
+    .bar .pnum { display: none; }
+    .spread { grid-template-columns: 1fr; gap: 18px; padding: 0 0 8px; align-items: start; align-content: start; }
     .stage { max-height: none; }
     .text { padding: 0 16px; }
     .hint { display: none; }
@@ -106,7 +121,11 @@
 <header class="bar">
   <a href="index.html" data-turn>Bigfoot's Shoe</a>
   <span class="chapter">Chapter 1 · The Fresh Start</span>
-  <span>Page 1 / 21</span>
+  <span class="right">
+    <button class="tog" id="calmBtn" aria-pressed="false" title="Gentler motion, no flashes">Calm mode off</button>
+    <button class="tog" id="soundBtn" aria-pressed="false">♪ Sound off</button>
+    <span class="pnum">Page 1 / 21</span>
+  </span>
 </header>
 <main class="spread">
   <div class="stage" id="stage"><canvas id="screen" aria-label="Three figures run through a torch-lit stone tunnel. The one in front swings a metal pipe and demons burst apart." role="img"></canvas></div>
@@ -114,6 +133,7 @@
     <h1>1. The Tunnels</h1>
     <p>Three adventurers are travelling through the tunnels of the unconscious.</p>
     <p>The first is the emerging primary identity. When they reach the surface he'll be in control. He has a plan to save the world, but first they have to escape the tunnels. His weapon, a metal pipe he found leaning against a wall, tears through the monsters as they rush at them.</p>
+    <p class="warn">This page moves and distorts. Calm mode softens it.</p>
   </section>
 </main>
 <nav class="turn">
@@ -123,117 +143,114 @@
 </nav>
 <script>
 // =====================================================================
-//  BIGFOOT'S SHOE — pixel engine (identical on every page of the book)
+//  BIGFOOT'S SHOE — dream engine (identical on every page of the book)
 // =====================================================================
-// Everything is drawn to a small 128x96 canvas, then copied to the screen
-// scaled up by a whole number of *device* pixels, so every art pixel stays
-// a perfectly crisp square on any screen.
+// The world is drawn as palette indices into a 256x144 framebuffer. Each
+// frame, a "present" pass reads that framebuffer through a lens (waves,
+// zoom, tilt, vignette, colour cycling, tints) and turns it into real
+// colours. The result is scaled up by a whole number of device pixels so
+// every art pixel stays a crisp square.
 
-const W = 128, H = 96;
+const W = 256, H = 144;
 
-// ---- Book palette: every pixel on screen comes from this list --------
-const P = {
-  ink:     '#07060d',
-  rock0:   '#0f0c1a',
-  rock1:   '#1a1529',
-  wall0:   '#1d1830',
-  wall1:   '#2b2445',
-  wall2:   '#3a3259',
-  wall3:   '#554a7a',
-  haze:    '#6b5a78',
-  floor0:  '#141122',
-  floor1:  '#221c36',
-  floor2:  '#3a3257',
-  fire0:   '#c2451e',
-  fire1:   '#ff8a2b',
-  fire2:   '#ffd35c',
-  white:   '#ffffff',
-  glow:    '#fff6c8',
-  // the Primary
-  jacket0: '#6e2c1c',
-  jacket1: '#b4532a',
-  jacket2: '#e07b3c',
-  pants0:  '#1c182e',
-  pants1:  '#2f2848',
-  shoe:    '#0d0a16',
-  skin0:   '#a8684a',
-  skin1:   '#e0a47a',
-  hair:    '#3a2418',
-  pipe0:   '#6d7285',
-  pipe1:   '#c9ced8',
-  // the Secondary
-  hood0:   '#3c4d66',
-  hood1:   '#5f7896',
-  hood2:   '#9bb3cf',
-  pale0:   '#9a8c95',
-  pale1:   '#cdbfc0',
-  stick:   '#7a5534',
-  // the Animus
-  gold0:   '#c49a45',
-  gold1:   '#f2d98a',
-  dress0:  '#b9a9c9',
-  dress1:  '#f4eee0',
-  // demons
-  imp0:    '#120a1b',
-  imp1:    '#26143a',
-  imp2:    '#7a45a0',
-  eye:     '#ff4d3d',
-  cyst0:   '#5e8a22',
-  cyst1:   '#a8d63e',
-  cyst2:   '#eaff9a',
-  // night sky and desert (cover)
-  sky0:    '#0b0a1c',
-  sky1:    '#15132e',
-  sky2:    '#241d48',
-  moon:    '#f4ecd0',
-  sand0:   '#1f1a33',
-  sand1:   '#2f2748',
-  sand2:   '#473b63',
-  stone0:  '#4a4760',
-  stone1:  '#76728e',
-  stone2:  '#aaa6c0',
-  // doors, stages and theaters
-  wood0:   '#2e1c16',
-  wood1:   '#4a2e20',
-  wood2:   '#6e4630',
-  wood3:   '#9a6a45',
-  red0:    '#3e0c1a',
-  red1:    '#7d1a2c',
-  red2:    '#b52c3a',
-  toyPink: '#ff7eb6',
-  toyCyan: '#4fd6e8',
-  toyGrn:  '#7ee05a',
-  toyYel:  '#ffe45c',
-  // daylight: meadow and open sky
-  grass0:  '#2f5a2a',
-  grass1:  '#4f8a34',
-  grass2:  '#8cc24a',
-  hill0:   '#3c6e56',
-  hill1:   '#5f9a5a',
-  skyD:    '#2f5fb0',
-  skyA:    '#4a7fd0',
-  skyB:    '#7fb2ec',
-  skyC:    '#b8dcf8',
-  cloud0:  '#d4e2f4'
-};
+// ---- Palette: every pixel on screen comes from this list --------------
+// Index 0 ('none') is transparent inside sprites and draws as ink.
+const PALETTE = [
+  ['none', '#07060d'], ['ink', '#07060d'],
+  ['rock0', '#0f0c1a'], ['rock1', '#1a1529'],
+  ['wall0', '#1d1830'], ['wall1', '#2b2445'], ['wall2', '#3a3259'], ['wall3', '#554a7a'],
+  ['haze', '#6b5a78'],
+  ['floor0', '#141122'], ['floor1', '#221c36'], ['floor2', '#3a3257'],
+  ['fire0', '#c2451e'], ['fire1', '#ff8a2b'], ['fire2', '#ffd35c'],
+  ['white', '#ffffff'], ['glow', '#fff6c8'],
+  ['jacket0', '#6e2c1c'], ['jacket1', '#b4532a'], ['jacket2', '#e07b3c'],
+  ['pants0', '#1c182e'], ['pants1', '#2f2848'], ['shoe', '#0d0a16'],
+  ['skin0', '#a8684a'], ['skin1', '#e0a47a'], ['hair', '#3a2418'],
+  ['pipe0', '#6d7285'], ['pipe1', '#c9ced8'],
+  ['hood0', '#3c4d66'], ['hood1', '#5f7896'], ['hood2', '#9bb3cf'],
+  ['pale0', '#9a8c95'], ['pale1', '#cdbfc0'], ['stick', '#7a5534'],
+  ['gold0', '#c49a45'], ['gold1', '#f2d98a'],
+  ['dress0', '#b9a9c9'], ['dress1', '#f4eee0'],
+  ['imp0', '#120a1b'], ['imp1', '#26143a'], ['imp2', '#7a45a0'], ['imp3', '#a76acb'], ['imp4', '#d7a8ec'],
+  ['eye', '#ff4d3d'], ['cyst0', '#5e8a22'], ['cyst1', '#a8d63e'], ['cyst2', '#eaff9a'],
+  ['sky0', '#0b0a1c'], ['sky1', '#15132e'], ['sky2', '#241d48'], ['moon', '#f4ecd0'],
+  ['wood0', '#2e1c16'], ['wood1', '#4a2e20'], ['wood2', '#6e4630'], ['wood3', '#9a6a45'],
+  ['red0', '#3e0c1a'], ['red1', '#7d1a2c'], ['red2', '#b52c3a'],
+  ['toyPink', '#ff7eb6'], ['toyCyan', '#4fd6e8'], ['toyGrn', '#7ee05a'], ['toyYel', '#ffe45c'],
+  ['grass0', '#2f5a2a'], ['grass1', '#4f8a34'], ['grass2', '#8cc24a'],
+  ['hill0', '#3c6e56'], ['hill1', '#5f9a5a'],
+  ['skyD', '#2f5fb0'], ['skyA', '#4a7fd0'], ['skyB', '#7fb2ec'], ['skyC', '#b8dcf8'], ['cloud0', '#d4e2f4']
+];
+const NCOL = PALETTE.length;
+const P = {};
+const PAL_R = new Uint8Array(NCOL), PAL_G = new Uint8Array(NCOL), PAL_B = new Uint8Array(NCOL);
+const PAL32 = new Uint32Array(256);
+for (let i = 0; i < NCOL; i++) {
+  const hex = PALETTE[i][1];
+  const r = parseInt(hex.substr(1, 2), 16), gg = parseInt(hex.substr(3, 2), 16), b = parseInt(hex.substr(5, 2), 16);
+  P[PALETTE[i][0]] = i;
+  PAL_R[i] = r; PAL_G[i] = gg; PAL_B[i] = b;
+  PAL32[i] = (255 << 24 | b << 16 | gg << 8 | r) >>> 0;
+}
 
-// Colour ramps particles step through as they age (bright -> dark).
+// Brightness of each colour on a 0..7 scale (used by tints).
+const LUMA = new Uint8Array(256);
+for (let i = 0; i < NCOL; i++) {
+  const l = (0.3 * PAL_R[i] + 0.59 * PAL_G[i] + 0.11 * PAL_B[i]) / 255;
+  LUMA[i] = Math.min(7, Math.round(Math.sqrt(l) * 7.4));
+}
+
+// DIM[k][c]: colour c darkened k steps, picked from the palette.
+const DIM = [];
+for (let k = 0; k < 5; k++) {
+  const t = new Uint8Array(256);
+  const f = 1 - k * 0.22;
+  for (let i = 0; i < NCOL; i++) {
+    const r = PAL_R[i] * f, gg = PAL_G[i] * f, b = PAL_B[i] * f;
+    let best = 1, bestD = 1e9;
+    for (let j = 1; j < NCOL; j++) {
+      const d = (PAL_R[j] - r) * (PAL_R[j] - r) + (PAL_G[j] - gg) * (PAL_G[j] - gg) + (PAL_B[j] - b) * (PAL_B[j] - b);
+      if (d < bestD) { bestD = d; best = j; }
+    }
+    t[i] = k === 0 ? i : best;
+  }
+  DIM.push(t);
+}
+
+// Eight-step ramps, dark to light, for shading and tinting.
+const R_STONE  = [P.ink, P.rock0, P.rock1, P.wall0, P.wall1, P.wall2, P.wall3, P.haze];
+const R_FLOOR  = [P.ink, P.rock0, P.floor0, P.floor1, P.wall1, P.floor2, P.wall3, P.haze];
+const R_ROCK   = [P.ink, P.ink, P.rock0, P.rock0, P.rock1, P.rock1, P.wall0, P.wall1];
+const R_FIRE   = [P.ink, P.wood0, P.jacket0, P.fire0, P.jacket1, P.fire1, P.fire2, P.glow];
+const R_GOLD   = [P.ink, P.wood0, P.wood1, P.gold0, P.wood3, P.gold1, P.glow, P.white];
+const R_PURPLE = [P.ink, P.imp0, P.imp1, P.wall1, P.imp2, P.imp3, P.imp4, P.white];
+const R_GREEN  = [P.ink, P.imp0, P.grass0, P.cyst0, P.grass1, P.cyst1, P.cyst2, P.white];
+const R_SKY    = [P.ink, P.sky1, P.sky2, P.skyD, P.skyA, P.skyB, P.skyC, P.white];
+const R_WOOD   = [P.ink, P.wood0, P.wood1, P.wood2, P.wood3, P.gold0, P.gold1, P.glow];
+const R_RED    = [P.ink, P.red0, P.red0, P.red1, P.red1, P.red2, P.red2, P.toyPink];
+const SHADE = [R_STONE, R_FLOOR, R_ROCK, R_FIRE, R_GOLD, R_PURPLE, R_GREEN, R_SKY, R_WOOD, R_RED];
+
+// Particle colour ramps (bright -> dark as they age).
 const RAMP_SPARK = [P.white, P.fire2, P.fire1, P.fire0];
 const RAMP_CYST  = [P.cyst2, P.cyst1, P.cyst0, P.imp2];
-const RAMP_IMP   = [P.imp2, P.imp2, P.imp1, P.imp0];
+const RAMP_IMP   = [P.imp3, P.imp2, P.imp1, P.imp0];
 const RAMP_GOLD  = [P.white, P.glow, P.gold1, P.gold0];
 const RAMP_DUST  = [P.hood2, P.pale0, P.wall3, P.wall2];
-const RAMP_STAR  = [P.white, P.glow, P.stone2, P.sky2];
+const RAMP_STAR  = [P.white, P.glow, P.skyC, P.skyB];
 const RAMP_TOY   = [P.white, P.toyYel, P.toyPink, P.toyCyan];
 const RAMP_PUFF  = [P.pale1, P.pale0, P.wall3, P.wall2];
-const RAMPS = [RAMP_SPARK, RAMP_CYST, RAMP_IMP, RAMP_GOLD, RAMP_DUST, RAMP_STAR, RAMP_TOY, RAMP_PUFF];
-const SPARK = 0, CYST = 1, IMP = 2, GOLD = 3, DUST = 4, STAR = 5, TOY = 6, PUFF = 7;
+const RAMP_CLOUD = [P.white, P.white, P.cloud0, P.skyC];
+const RAMPS = [RAMP_SPARK, RAMP_CYST, RAMP_IMP, RAMP_GOLD, RAMP_DUST, RAMP_STAR, RAMP_TOY, RAMP_PUFF, RAMP_CLOUD];
+const SPARK = 0, CYST = 1, IMP = 2, GOLD = 3, DUST = 4, STAR = 5, TOY = 6, PUFF = 7, CLOUD = 8;
 
-// ---- Canvases ---------------------------------------------------------
-const buf = document.createElement('canvas');
-buf.width = W;
-buf.height = H;
-const g = buf.getContext('2d');
+// ---- Framebuffer, output canvas, screen canvas ------------------------
+const fb = new Uint8Array(W * H);
+const outCanvas = document.createElement('canvas');
+outCanvas.width = W;
+outCanvas.height = H;
+const octx = outCanvas.getContext('2d');
+const imgData = octx.createImageData(W, H);
+const img32 = new Uint32Array(imgData.data.buffer);
 const screenCanvas = document.getElementById('screen');
 const sg = screenCanvas.getContext('2d');
 const stage = document.getElementById('stage');
@@ -241,9 +258,7 @@ let scale = 1;
 
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  const bw = stage.clientWidth;
-  const bh = stage.clientHeight;
-  let s = Math.floor(Math.min(bw * dpr / W, bh * dpr / H));
+  let s = Math.floor(Math.min(stage.clientWidth * dpr / W, stage.clientHeight * dpr / H));
   if (s < 1) s = 1;
   scale = s;
   screenCanvas.width = W * s;
@@ -256,33 +271,48 @@ window.addEventListener('resize', resize);
 if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
 resize();
 
-// ---- Drawing helpers (all snap to whole pixels) -----------------------
-// ditherLevel 0 = solid, 1 = 50% checkerboard, 2 = 25% dots.
-// Used for ghosts and light, since pixel art has no real transparency.
-let ditherLevel = 0;
-let ditherPhase = 0;
+// ---- Drawing state ----------------------------------------------------
+// Drawing goes to a target buffer (the framebuffer, or a sprite being
+// built). camX/camY scroll the world; set them to 0 for screen overlays.
+let tgt = fb, tgtW = W, tgtH = H;
+let camX = 0, camY = 0;
+function drawTo(buf, w, h) { tgt = buf; tgtW = w; tgtH = h; }
+function drawToScreen() { tgt = fb; tgtW = W; tgtH = H; }
+function camera(x, y) { camX = Math.round(x); camY = Math.round(y); }
+
+// ditherLevel 0 = solid, 1 = 50% checkerboard, 2 = 25% dots (ghosts, light)
+// cover 0..16 = ordered-dither coverage for soft fades (16 = solid)
+let ditherLevel = 0, ditherPhase = 0, cover = 16;
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+function dither(level, phase) { ditherLevel = level; ditherPhase = phase || 0; }
+function setCover(n) { cover = n; }
 
 function keepPixel(x, y) {
   if (ditherLevel === 1) return ((x + y + ditherPhase) & 1) === 0;
-  return ((x + ditherPhase) & 1) === 0 && (y & 1) === 0;
+  if (ditherLevel === 2) return ((x + ditherPhase) & 1) === 0 && (y & 1) === 0;
+  return BAYER[((y & 3) << 2) | (x & 3)] < cover;
 }
 
 function rect(x, y, w, h, c) {
-  x = Math.round(x); y = Math.round(y);
+  x = Math.round(x) - camX; y = Math.round(y) - camY;
   w = Math.round(w); h = Math.round(h);
-  if (w <= 0 || h <= 0) return;
-  g.fillStyle = c;
-  if (ditherLevel === 0) { g.fillRect(x, y, w, h); return; }
-  for (let j = y; j < y + h; j++) {
-    for (let i = x; i < x + w; i++) {
-      if (keepPixel(i, j)) g.fillRect(i, j, 1, 1);
-    }
+  let x0 = x < 0 ? 0 : x, y0 = y < 0 ? 0 : y;
+  let x1 = x + w > tgtW ? tgtW : x + w, y1 = y + h > tgtH ? tgtH : y + h;
+  if (x1 <= x0 || y1 <= y0) return;
+  const solid = ditherLevel === 0 && cover >= 16;
+  for (let j = y0; j < y1; j++) {
+    const row = j * tgtW;
+    if (solid) { tgt.fill(c, row + x0, row + x1); continue; }
+    for (let i = x0; i < x1; i++) if (keepPixel(i, j)) tgt[row + i] = c;
   }
 }
 
-function px(x, y, c) { rect(x, y, 1, 1, c); }
-
-function dither(level, phase) { ditherLevel = level; ditherPhase = phase || 0; }
+function px(x, y, c) {
+  x = Math.round(x) - camX; y = Math.round(y) - camY;
+  if (x < 0 || y < 0 || x >= tgtW || y >= tgtH) return;
+  if ((ditherLevel !== 0 || cover < 16) && !keepPixel(x, y)) return;
+  tgt[y * tgtW + x] = c;
+}
 
 function line(x0, y0, x1, y1, c) {
   x0 = Math.round(x0); y0 = Math.round(y0);
@@ -290,7 +320,7 @@ function line(x0, y0, x1, y1, c) {
   const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
   const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
   let err = dx + dy;
-  for (let n = 0; n < 200; n++) {
+  for (let n = 0; n < 1000; n++) {
     px(x0, y0, c);
     if (x0 === x1 && y0 === y1) break;
     const e2 = 2 * err;
@@ -299,9 +329,9 @@ function line(x0, y0, x1, y1, c) {
   }
 }
 
-// Filled ellipse built from horizontal runs.
 function oval(cx, cy, rx, ry, c) {
   cx = Math.round(cx); cy = Math.round(cy);
+  rx = Math.round(rx); ry = Math.round(ry);
   for (let dy = -ry; dy <= ry; dy++) {
     const k = ry === 0 ? 1 : 1 - (dy * dy) / ((ry + 0.5) * (ry + 0.5));
     const w = Math.round(rx * Math.sqrt(k > 0 ? k : 0));
@@ -309,21 +339,7 @@ function oval(cx, cy, rx, ry, c) {
   }
 }
 
-// Soft pool of light: 50% dither in the middle, 25% towards the edge.
-function glowPool(cx, cy, rx, ry, c) {
-  cx = Math.round(cx); cy = Math.round(cy);
-  g.fillStyle = c;
-  for (let y = cy - ry; y <= cy + ry; y++) {
-    for (let x = cx - rx; x <= cx + rx; x++) {
-      const nx = (x - cx) / rx, ny = (y - cy) / ry;
-      const d = nx * nx + ny * ny;
-      if (d > 1) continue;
-      const inner = d < 0.3;
-      const keep = inner ? ((x + y) & 1) === 0 : ((x & 1) === 0 && (y & 1) === 0);
-      if (keep) g.fillRect(x, y, 1, 1);
-    }
-  }
-}
+function clear(c) { fb.fill(c); }
 
 // Cheap repeatable noise: same input, same answer, no allocation.
 function hash(n) {
@@ -332,6 +348,42 @@ function hash(n) {
   n = Math.imul(n, 0x27d4eb2d);
   n = n ^ (n >>> 15);
   return (n >>> 0) / 4294967296;
+}
+
+// ---- Sprites: small index buffers built once with the drawing tools ---
+function makeSprite(w, h, drawFn, arg) {
+  const s = { w: w, h: h, data: new Uint8Array(w * h) };
+  const saveX = camX, saveY = camY;
+  drawTo(s.data, w, h);
+  camX = 0; camY = 0;
+  drawFn(arg);
+  drawToScreen();
+  camX = saveX; camY = saveY;
+  dither(0);
+  return s;
+}
+
+// Draw a sprite scaled to dw x dh at screen position (x, y) = top-left.
+// If zb is given, each column is hidden behind anything nearer than depth.
+function drawSpriteScaled(s, x, y, dw, dh, flip, dim, zb, depth) {
+  if (dw < 1 || dh < 1) return;
+  const x0 = Math.max(0, Math.floor(x)), x1 = Math.min(W, Math.floor(x + dw));
+  const y0 = Math.max(0, Math.floor(y)), y1 = Math.min(H, Math.floor(y + dh));
+  const dt = DIM[dim > 4 ? 4 : dim];
+  for (let sx = x0; sx < x1; sx++) {
+    if (zb && zb[sx] < depth) continue;
+    let tx = Math.floor((sx - x) * s.w / dw);
+    if (flip) tx = s.w - 1 - tx;
+    if (tx < 0 || tx >= s.w) continue;
+    for (let sy = y0; sy < y1; sy++) {
+      const ty = Math.floor((sy - y) * s.h / dh);
+      if (ty < 0 || ty >= s.h) continue;
+      const c = s.data[ty * s.w + tx];
+      if (c === 0) continue;
+      if ((ditherLevel !== 0 || cover < 16) && !keepPixel(sx, sy)) continue;
+      fb[sy * W + sx] = dt[c];
+    }
+  }
 }
 
 // ---- Tiny pixel font for sound effects --------------------------------
@@ -354,7 +406,7 @@ function drawWord(word, x, y, c) {
       for (let r = 0; r < 5; r++) {
         for (let b = 0; b < rows[r].length; b++) {
           if (rows[r][b] !== '1') continue;
-          if (pass === 0) rect(cx + b - 1, y + r - 1, 3, 3, P.ink);   // outline
+          if (pass === 0) rect(cx + b - 1, y + r - 1, 3, 3, P.ink);
           else px(cx + b, y + r, c);
         }
       }
@@ -364,15 +416,15 @@ function drawWord(word, x, y, c) {
 }
 
 // ---- Pooled particles: preallocated, reused, never garbage ------------
-const MAXP = 320;
+const MAXP = 400;
 const pX = new Float32Array(MAXP), pY = new Float32Array(MAXP);
 const pVX = new Float32Array(MAXP), pVY = new Float32Array(MAXP);
 const pLife = new Float32Array(MAXP), pMax = new Float32Array(MAXP);
 const pGrav = new Float32Array(MAXP);
-const pRamp = new Uint8Array(MAXP), pOn = new Uint8Array(MAXP);
+const pRamp = new Uint8Array(MAXP), pOn = new Uint8Array(MAXP), pBig = new Uint8Array(MAXP);
 let pNext = 0;
 
-function spawn(x, y, vx, vy, life, ramp, grav) {
+function spawn(x, y, vx, vy, life, ramp, grav, big) {
   let i = pNext;
   for (let n = 0; n < MAXP; n++) {
     if (!pOn[i]) break;
@@ -380,16 +432,19 @@ function spawn(x, y, vx, vy, life, ramp, grav) {
   }
   pNext = (i + 1) % MAXP;
   pX[i] = x; pY[i] = y; pVX[i] = vx; pVY[i] = vy;
-  pLife[i] = life; pMax[i] = life; pRamp[i] = ramp; pGrav[i] = grav || 0; pOn[i] = 1;
+  pLife[i] = life; pMax[i] = life; pRamp[i] = ramp; pGrav[i] = grav || 0;
+  pBig[i] = big ? 1 : 0; pOn[i] = 1;
 }
 
-function burst(x, y, count, speed, life, ramp, grav) {
+function burst(x, y, count, speed, life, ramp, grav, big) {
   for (let n = 0; n < count; n++) {
     const a = Math.random() * Math.PI * 2;
     const s = speed * (0.35 + Math.random() * 0.65);
-    spawn(x, y, Math.cos(a) * s, Math.sin(a) * s, life * (0.6 + Math.random() * 0.4), ramp, grav);
+    spawn(x, y, Math.cos(a) * s, Math.sin(a) * s, life * (0.6 + Math.random() * 0.4), ramp, grav, big);
   }
 }
+
+function clearParticles() { pOn.fill(0); }
 
 function updateParticles() {
   for (let i = 0; i < MAXP; i++) {
@@ -408,29 +463,242 @@ function drawParticles() {
     const ramp = RAMPS[pRamp[i]];
     let k = Math.floor((1 - pLife[i] / pMax[i]) * ramp.length);
     if (k >= ramp.length) k = ramp.length - 1;
-    px(pX[i], pY[i], ramp[k]);
+    if (pBig[i]) rect(pX[i] - 1, pY[i] - 1, 2, 2, ramp[k]);
+    else px(pX[i], pY[i], ramp[k]);
   }
 }
 
 // ---- Timing helpers ---------------------------------------------------
-// The loop runs at a fixed 60 updates a second; poses change at 8-12 fps.
+// Updates run at a fixed 60 per second; poses change at 8-12 fps.
 let tick = 0;
 function step(fps) { return Math.floor(tick * fps / 60); }
+function clamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+function lerp(a, b, u) { return a + (b - a) * u; }
+function ease(u) { u = clamp01(u); return u * u * (3 - 2 * u); }
 
-// ---- Screen shake and page-turn dissolve ------------------------------
+// ---- The lens: how the framebuffer is shown ---------------------------
+// Scenes set these every frame; they reset to neutral before each draw.
+const post = {
+  zoom: 1, cx: W / 2, cy: H / 2, rot: 0,
+  wave: 0, waveLen: 18, waveSpeed: 0.06,   // sideways ripple per row
+  vwave: 0,                                  // up-down ripple per column
+  vignette: 0,                               // 0..1 darkening of the edges
+  dim: 0,                                    // 0..5 darkening of everything (5 = black)
+  flash: -1                                  // a ramp index to tint the frame, -1 none
+};
+function resetPost() {
+  post.zoom = 1; post.cx = W / 2; post.cy = H / 2; post.rot = 0;
+  post.wave = 0; post.waveLen = 18; post.waveSpeed = 0.06; post.vwave = 0;
+  post.vignette = 0; post.dim = 0; post.flash = -1;
+}
+
+// remap[c] swaps colours at present time: colour cycling and tints.
+const remap = new Uint8Array(256);
+function resetRemap() { for (let i = 0; i < 256; i++) remap[i] = i; }
+// Rotate a list of colours by shift steps (palette cycling).
+function cycleColours(list, shift) {
+  const n = list.length;
+  for (let k = 0; k < n; k++) remap[list[k]] = list[(((k + shift) % n) + n) % n];
+}
+// Map every colour through a ramp by brightness (optionally inverted).
+function tintAll(ramp, invert) {
+  for (let i = 0; i < NCOL; i++) {
+    const l = LUMA[remap[i]];
+    remap[i] = ramp[invert ? 7 - l : l];
+  }
+}
+
+const rowOff = new Int16Array(H), colOff = new Int16Array(W);
+const VIG = new Float32Array(W * H);
+for (let y = 0; y < H; y++) {
+  for (let x = 0; x < W; x++) {
+    const nx = (x - W / 2) / (W / 2), ny = (y - H / 2) / (H / 2);
+    VIG[y * W + x] = Math.min(1, (nx * nx * 0.8 + ny * ny) * 0.8);
+  }
+}
+
+let calm = false;       // "calm mode": gentler lens, no flashes
+
+function present() {
+  let wave = post.wave, vw = post.vwave, rot = post.rot, vig = post.vignette;
+  let dimAll = post.dim;
+  if (calm) { wave *= 0.2; vw *= 0.2; rot *= 0.3; }
+  // page turns: the picture warps and sinks through darker colours
+  if (fade > 0) { wave += fade * 9; if (fade * 5 > dimAll) dimAll = fade * 5; }
+  if (dimAll >= 4.8) { img32.fill(PAL32[P.ink]); octx.putImageData(imgData, 0, 0); return; }
+  const dimBase = Math.floor(dimAll);
+  for (let y = 0; y < H; y++) {
+    rowOff[y] = wave ? Math.round(Math.sin(y / post.waveLen + tick * post.waveSpeed) * wave) : 0;
+  }
+  for (let x = 0; x < W; x++) {
+    colOff[x] = vw ? Math.round(Math.sin(x / (post.waveLen * 1.4) + tick * post.waveSpeed * 1.7) * vw) : 0;
+  }
+  if (post.flash >= 0 && !calm) tintAll(SHADE[post.flash], false);
+  const plain = post.zoom === 1 && rot === 0;
+  const inv = 1 / post.zoom;
+  const ca = Math.cos(rot) * inv, sa = Math.sin(rot) * inv;
+  let i = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let sx, sy;
+      if (plain) {
+        sx = x + rowOff[y];
+        sy = y + colOff[x];
+      } else {
+        const dx = x - W / 2 + rowOff[y], dy = y - H / 2 + colOff[x];
+        sx = Math.floor(post.cx + dx * ca - dy * sa);
+        sy = Math.floor(post.cy + dx * sa + dy * ca);
+      }
+      // past the edge, repeat the edge pixels rather than show black
+      if (sx < 0) sx = 0; else if (sx >= W) sx = W - 1;
+      if (sy < 0) sy = 0; else if (sy >= H) sy = H - 1;
+      let c = remap[fb[sy * W + sx]];
+      let k = dimBase;
+      if (vig > 0) k += Math.floor(VIG[i] * vig * 5);
+      if (k > 0) c = DIM[k > 4 ? 4 : k][c];
+      img32[i++] = PAL32[c];
+    }
+  }
+  octx.putImageData(imgData, 0, 0);
+}
+
+// ---- Sound: everything is synthesised, nothing is downloaded ----------
+const Snd = { ctx: null, master: null, noise: null, amb: null, on: false };
+let audioIntensity = 0;       // scenes set 0..1; ambience follows it
+let heartBpm = 0, heartT = 0;
+
+function audioInit() {
+  if (Snd.ctx) return true;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return false;
+  const ctx = new AC();
+  Snd.ctx = ctx;
+  Snd.master = ctx.createGain();
+  Snd.master.gain.value = 0;
+  Snd.master.connect(ctx.destination);
+  const len = ctx.sampleRate * 2;
+  Snd.noise = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = Snd.noise.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  if (typeof AMBIENCE === 'function') Snd.amb = AMBIENCE(ctx, Snd.master);
+  return true;
+}
+
+function setSound(on) {
+  Snd.on = on;
+  try { localStorage.setItem('bigfoot-sound', on ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+  const btn = document.getElementById('soundBtn');
+  if (btn) { btn.textContent = on ? '♪ Sound on' : '♪ Sound off'; btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  if (on) {
+    if (!audioInit()) return;
+    if (Snd.ctx.state === 'suspended') Snd.ctx.resume();
+    Snd.master.gain.setTargetAtTime(0.8, Snd.ctx.currentTime, 0.3);
+  } else if (Snd.ctx) {
+    Snd.master.gain.setTargetAtTime(0, Snd.ctx.currentTime, 0.1);
+  }
+}
+
+function tone(type, f0, f1, dur, vol, delay) {
+  if (!Snd.on || !Snd.ctx) return;
+  const ctx = Snd.ctx, t = ctx.currentTime + (delay || 0);
+  const o = ctx.createOscillator();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+  const gn = ctx.createGain();
+  gn.gain.setValueAtTime(0.0001, t);
+  gn.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+  gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(gn); gn.connect(Snd.master);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+
+function noiseHit(ftype, f0, f1, q, dur, vol, delay) {
+  if (!Snd.on || !Snd.ctx) return;
+  const ctx = Snd.ctx, t = ctx.currentTime + (delay || 0);
+  const src = ctx.createBufferSource();
+  src.buffer = Snd.noise;
+  const f = ctx.createBiquadFilter();
+  f.type = ftype; f.Q.value = q;
+  f.frequency.setValueAtTime(f0, t);
+  f.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+  const gn = ctx.createGain();
+  gn.gain.setValueAtTime(0.0001, t);
+  gn.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+  gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f); f.connect(gn); gn.connect(Snd.master);
+  src.start(t, Math.random() * 1.5); src.stop(t + dur + 0.05);
+}
+
+function sfxPop() { noiseHit('bandpass', 2400, 250, 2, 0.22, 0.6); tone('square', 520, 60, 0.14, 0.12); }
+function sfxWhoosh(v) { noiseHit('bandpass', 250, 2800, 1.2, 0.55, v || 0.35); tone('sine', 90, 45, 0.5, 0.2); }
+function sfxThump(v) { tone('sine', 72, 38, 0.2, v || 0.6); }
+function sfxStep() { noiseHit('lowpass', 900, 180, 1, 0.07, 0.18); }
+function sfxCreak() { noiseHit('bandpass', 700, 520, 9, 0.16, 0.25); }
+function sfxSpark() { noiseHit('highpass', 5000, 7000, 1, 0.12, 0.18); }
+function sfxChime(f) { tone('sine', f, f * 0.998, 1.6, 0.12); tone('sine', f * 2.01, f * 2, 1.1, 0.05); }
+function sfxBoing() {
+  if (!Snd.on || !Snd.ctx) return;
+  const ctx = Snd.ctx, t = ctx.currentTime;
+  const o = ctx.createOscillator(), lfo = ctx.createOscillator();
+  const lg = ctx.createGain(), gn = ctx.createGain();
+  o.type = 'triangle'; o.frequency.value = 240;
+  lfo.frequency.value = 16; lg.gain.setValueAtTime(90, t); lg.gain.exponentialRampToValueAtTime(1, t + 0.6);
+  lfo.connect(lg); lg.connect(o.frequency);
+  gn.gain.setValueAtTime(0.3, t); gn.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+  o.connect(gn); gn.connect(Snd.master);
+  o.start(t); lfo.start(t); o.stop(t + 0.65); lfo.stop(t + 0.65);
+}
+
+// Building blocks for a page's AMBIENCE function.
+function ambDrone(ctx, out, freq, type, vol) {
+  const o = ctx.createOscillator();
+  o.type = type; o.frequency.value = freq;
+  const gn = ctx.createGain(); gn.gain.value = vol;
+  o.connect(gn); gn.connect(out); o.start();
+  return { osc: o, gain: gn };
+}
+function ambNoise(ctx, out, ftype, freq, q, vol) {
+  const src = ctx.createBufferSource();
+  src.buffer = Snd.noise; src.loop = true;
+  const f = ctx.createBiquadFilter(); f.type = ftype; f.frequency.value = freq; f.Q.value = q;
+  const gn = ctx.createGain(); gn.gain.value = vol;
+  src.connect(f); f.connect(gn); gn.connect(out); src.start();
+  return { filter: f, gain: gn };
+}
+function ambSet(param, value) { param.setTargetAtTime(value, Snd.ctx.currentTime, 0.25); }
+
+function updateAudio() {
+  if (!Snd.on || !Snd.ctx) return;
+  if ((tick % 6) === 0 && Snd.amb && Snd.amb.update) Snd.amb.update(calm ? audioIntensity * 0.5 : audioIntensity);
+  if (heartBpm > 0) {
+    heartT += heartBpm / 3600;
+    if (heartT >= 1) { heartT -= 1; sfxThump(0.55); sfxThump(0.35); tone('sine', 64, 36, 0.16, 0.4, 0.16); }
+  }
+}
+
+// ---- Calm mode --------------------------------------------------------
+function setCalm(on) {
+  calm = on;
+  try { localStorage.setItem('bigfoot-calm', on ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+  const btn = document.getElementById('calmBtn');
+  if (btn) { btn.textContent = on ? 'Calm mode on' : 'Calm mode off'; btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+}
+
+// ---- Page turns: warp and dissolve ------------------------------------
 let shake = 0;
 let fade = 1;            // 1 = fully covered, 0 = clear
 let fadeDir = -1;        // -1 revealing, +1 covering
 let pendingHref = null;
 let leaving = false;
-const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
-function drawDissolve() {
-  if (fade <= 0) return;
-  g.fillStyle = P.ink;
+function drawDissolve(amount) {
+  if (amount <= 0) return;
   for (let cy = 0; cy < H / 4; cy++) {
     for (let cx = 0; cx < W / 4; cx++) {
-      if (BAYER[(cy & 3) * 4 + (cx & 3)] / 16 < fade) g.fillRect(cx * 4, cy * 4, 4, 4);
+      if (BAYER[(cy & 3) * 4 + (cx & 3)] / 16 < amount) {
+        for (let j = 0; j < 4; j++) fb.fill(P.ink, (cy * 4 + j) * W + cx * 4, (cy * 4 + j) * W + cx * 4 + 4);
+      }
     }
   }
 }
@@ -439,9 +707,9 @@ function turnTo(href) {
   if (!href || pendingHref) return;
   pendingHref = href;
   fadeDir = 1;
+  sfxWhoosh(0.2);
 }
-
-// Scenes can dissolve to black and back between loops of their story.
+// Scenes can also dissolve to black and back between loops.
 function loopDissolveOut() { if (!pendingHref) fadeDir = 1; }
 function loopDissolveIn() { if (!pendingHref) fadeDir = -1; }
 
@@ -449,7 +717,7 @@ window.addEventListener('pageshow', function (e) {
   if (e.persisted) { fade = 1; fadeDir = -1; pendingHref = null; leaving = false; }
 });
 
-// ---- Page navigation: links, arrow keys, swipes -----------------------
+// ---- Page navigation and controls -------------------------------------
 const turnLinks = document.querySelectorAll('[data-turn]');
 for (let i = 0; i < turnLinks.length; i++) {
   turnLinks[i].addEventListener('click', function (e) {
@@ -478,6 +746,14 @@ document.addEventListener('touchend', function (e) {
   }
 }, { passive: true });
 
+// Browsers only allow sound after the reader touches the page, so if sound
+// was left on, it starts again on the first tap or key press.
+function wakeAudio() {
+  if (Snd.on) setSound(true);
+  document.removeEventListener('pointerdown', wakeAudio);
+  document.removeEventListener('keydown', wakeAudio);
+}
+
 // ---- Main loop: fixed 60 Hz updates, draw on every animation frame ----
 const STEP_MS = 1000 / 60;
 let lastTime = 0, acc = 0;
@@ -486,6 +762,7 @@ function update() {
   tick++;
   sceneUpdate();
   updateParticles();
+  updateAudio();
   if (shake > 0) shake--;
   fade += fadeDir / 24;
   if (fade < 0) fade = 0;
@@ -499,18 +776,22 @@ function update() {
 }
 
 function render() {
-  ditherLevel = 0;
+  resetPost();
+  resetRemap();
+  camX = 0; camY = 0;
+  dither(0); cover = 16;
   sceneDraw();
-  ditherLevel = 0;
-  drawDissolve();
-  sg.fillStyle = P.ink;
+  camX = 0; camY = 0;
+  dither(0); cover = 16;
+  present();
+  sg.fillStyle = '#07060d';
   sg.fillRect(0, 0, screenCanvas.width, screenCanvas.height);
   let ox = 0, oy = 0;
-  if (shake > 0) {
+  if (shake > 0 && !calm) {
     ox = (tick >> 1) & 1 ? 1 : -1;
     oy = (tick >> 2) & 1 ? 1 : 0;
   }
-  sg.drawImage(buf, ox * scale, oy * scale, W * scale, H * scale);
+  sg.drawImage(outCanvas, ox * scale, oy * scale, W * scale, H * scale);
 }
 
 function frame(now) {
@@ -519,6 +800,25 @@ function frame(now) {
   lastTime = now;
   while (acc >= STEP_MS) { update(); acc -= STEP_MS; }
   render();
+  requestAnimationFrame(frame);
+}
+
+// Called at the very end of each page, once the scene is defined.
+function startBook() {
+  let wantSound = false, wantCalm = false;
+  try {
+    wantSound = localStorage.getItem('bigfoot-sound') === '1';
+    wantCalm = localStorage.getItem('bigfoot-calm') === '1';
+  } catch (e) { /* storage unavailable */ }
+  setCalm(wantCalm);
+  Snd.on = wantSound;
+  setSound(wantSound);
+  document.addEventListener('pointerdown', wakeAudio);
+  document.addEventListener('keydown', wakeAudio);
+  const sb = document.getElementById('soundBtn');
+  if (sb) sb.addEventListener('click', function () { setSound(!Snd.on); });
+  const cb = document.getElementById('calmBtn');
+  if (cb) cb.addEventListener('click', function () { setCalm(!calm); });
   requestAnimationFrame(frame);
 }
 
@@ -825,78 +1125,6 @@ function lightTier(x, y) {
   return best;
 }
 
-// ---- The tunnels -------------------------------------------------------
-const WALL_STEPS = [P.rock0, P.wall0, P.wall1, P.wall2, P.wall3, P.haze];
-
-// scroll moves the world; the wall scrolls at half speed for depth.
-function drawTunnel(scroll, torches) {
-  const wallScroll = Math.floor(scroll / 2);
-  const tSpacing = 72;
-  const tStart = -(wallScroll % tSpacing) + 30 - tSpacing;
-  if (torches) {
-    for (let x = tStart; x < W + tSpacing; x += tSpacing) addLight(x, 36, 20);
-  }
-  rect(0, 0, W, H, P.rock0);
-  // back wall of stone blocks
-  for (let r = 0; r < 10; r++) {
-    const y0 = 12 + r * 6;
-    const off = (r & 1) * 7;
-    const start = -((wallScroll + off) % 14) - 14;
-    for (let x = start; x < W; x += 14) {
-      const id = Math.floor((x + wallScroll + off) / 14) * 31 + r * 7;
-      const n = hash(id);
-      let k = n < 0.2 ? 1 : (n > 0.93 ? 3 : 2);
-      k += lightTier(x + 7, y0 + 3);
-      rect(x + 1, y0 + 1, 13, 5, WALL_STEPS[k]);
-      if (n > 0.6) rect(x + 1, y0 + 1, 13, 1, WALL_STEPS[k + 1 < WALL_STEPS.length ? k + 1 : k]);
-      if (n > 0.95) rect(x + 4, y0 + 3, 3, 1, WALL_STEPS[k - 1]);     // crack
-    }
-  }
-  // ceiling rock, ragged underside
-  rect(0, 0, W, 12, P.rock1);
-  for (let x = 0; x < W; x++) {
-    const h = Math.floor(hash(Math.floor((x + wallScroll) / 3) + 500) * 4);
-    rect(x, 12, 1, h, P.rock1);
-    if (hash(x + wallScroll + 900) < 0.08) rect(x, 12 + h, 1, 1, P.rock0);
-  }
-  rect(0, 0, W, 4, P.rock0);
-  // torches: bracket and flickering flame
-  if (torches) {
-    for (let x = tStart; x < W + tSpacing; x += tSpacing) {
-      rect(x - 1, 38, 3, 4, P.rock1);
-      rect(x - 2, 38, 5, 1, P.wall3);
-      const fl = (step(10) + x) % 3;
-      rect(x - 1, 35 - fl, 3, 3 + fl, P.fire1);
-      px(x, 34 - fl, P.fire2);
-      px(x, 36, P.glow);
-      if (fl === 1) px(x + 1, 33, P.fire0);
-    }
-  }
-  // floor
-  rect(0, 72, W, 24, P.floor1);
-  rect(0, 72, W, 1, P.floor2);
-  rect(0, 73, W, 1, P.wall1);
-  rect(0, 84, W, 12, P.floor0);
-  rect(0, 84, W, 1, P.floor1);
-  for (let k = 0; k < 2; k++) {
-    const rowY = k === 0 ? 74 : 85;
-    const rowH = k === 0 ? 10 : 11;
-    const sp = k === 0 ? 20 : 26;
-    const s = Math.floor(scroll * (k === 0 ? 1 : 1.3));
-    const start = -(s % sp);
-    for (let x = start; x < W; x += sp) {
-      rect(x, rowY, 1, rowH, P.floor0);
-      if (hash(Math.floor((x + s) / sp) + k * 100) > 0.6) rect(x + 5, rowY + 3, 4, 1, P.floor0);
-    }
-  }
-}
-
-// A flat pool of light on the floor under a light-giver.
-function floorPool(x, gy, rx) {
-  oval(x, gy - 1, rx, 2, P.floor2);
-  oval(x, gy - 1, rx >> 1, 1, P.wall2);
-}
-
 // ---- The three doors ---------------------------------------------------
 // kind 0: cartoon animals (children's theater)
 // kind 1: carved wood (the Dickens and Shakespeare theater)
@@ -1137,182 +1365,750 @@ function drawLadder(x, top, bottom, rungOffset) {
   }
 }
 
-// ---- The meadow backdrop that turns out to be real ---------------------
-// yOff shifts the whole scene down (used while climbing into the sky).
-function skyColourAt(altitude) {
-  if (altitude < 70) return P.skyC;
-  if (altitude < 130) return P.skyB;
-  if (altitude < 240) return P.skyA;
-  return P.skyD;
-}
 
-function drawSkyBands(yOff) {
-  for (let y = 0; y < H; y++) {
-    const alt = (H - y) + yOff;
-    let c = skyColourAt(alt);
-    // blend band edges with a checkerboard row
-    const next = skyColourAt(alt + 3);
-    if (next !== c && (y & 1) === 0) c = next;
-    rect(0, y, W, 1, c);
+// =====================================================================
+//  SETS — places and first-person views (256x144)
+// =====================================================================
+
+// ---- Side view: the tunnels, widescreen -------------------------------
+const WALL_STEPS = [P.rock0, P.wall0, P.wall1, P.wall2, P.wall3, P.haze];
+const T_WALL_TOP = 22, T_FLOOR = 106;
+
+// scroll moves the world; the wall scrolls at half speed for depth.
+function drawTunnelWide(scroll, torches) {
+  const wallScroll = Math.floor(scroll / 2);
+  const tSpacing = 96;
+  const tStart = -(wallScroll % tSpacing) + 40 - tSpacing;
+  if (torches) {
+    for (let x = tStart; x < W + tSpacing; x += tSpacing) addLight(x, 58, 26);
   }
-}
-
-function drawCloud(x, y, size) {
-  oval(x, y, size + 3, size, P.white);
-  oval(x - size - 1, y + 1, size, size - 1, P.white);
-  oval(x + size + 2, y + 1, size, size - 1, P.white);
-  rect(x - size * 2, y + size - 1, size * 4 + 4, 1, P.cloud0);
-}
-
-function drawMeadow(yOff, drift) {
-  // sun
-  oval(98, 16 + yOff, 5, 5, P.fire2);
-  oval(98, 16 + yOff, 4, 4, P.glow);
-  // clouds drifting slowly
-  for (let i = 0; i < 4; i++) {
-    const span = W + 40;
-    const cx = ((Math.floor(drift / (3 + i)) + i * 47) % span) - 20;
-    drawCloud(cx, 10 + i * 9 + yOff, 2 + (i & 1));
+  rect(0, 0, W, H, P.rock0);
+  for (let r = 0; r < 14; r++) {
+    const y0 = T_WALL_TOP + r * 6;
+    const off = (r & 1) * 7;
+    const start = -((wallScroll + off) % 14) - 14;
+    for (let x = start; x < W; x += 14) {
+      const id = Math.floor((x + wallScroll + off) / 14) * 31 + r * 7;
+      const n = hash(id);
+      let k = n < 0.2 ? 1 : (n > 0.93 ? 3 : 2);
+      k += lightTier(x + 7, y0 + 3);
+      rect(x + 1, y0 + 1, 13, 5, WALL_STEPS[k]);
+      if (n > 0.6) rect(x + 1, y0 + 1, 13, 1, WALL_STEPS[k + 1 < WALL_STEPS.length ? k + 1 : k]);
+      if (n > 0.95) rect(x + 4, y0 + 3, 3, 1, WALL_STEPS[k - 1]);
+    }
   }
-  // rolling hills
+  rect(0, 0, W, T_WALL_TOP, P.rock1);
   for (let x = 0; x < W; x++) {
-    const y1 = 56 + Math.round(Math.sin(x / 14) * 3 + Math.sin(x / 5.3) * 1) + yOff;
-    rect(x, y1, 1, H, P.hill0);
-    const y2 = 64 + Math.round(Math.sin((x + 30) / 19) * 4) + yOff;
-    rect(x, y2, 1, H, P.hill1);
-    px(x, y2, P.grass2);
+    const h = Math.floor(hash(Math.floor((x + wallScroll) / 3) + 500) * 5);
+    rect(x, T_WALL_TOP, 1, h, P.rock1);
+    if (hash(x + wallScroll + 900) < 0.08) rect(x, T_WALL_TOP + h, 1, 1, P.rock0);
   }
-  rect(0, 72 + yOff, W, H, P.grass1);
-  for (let x = 0; x < W; x += 3) {
-    const sway = ((step(4) + (x >> 3)) & 1);
-    px(x + sway, 72 + yOff + (hash(x) * 8 | 0), P.grass2);
-    if (hash(x + 99) > 0.85) px(x, 74 + yOff + (hash(x + 5) * 6 | 0), hash(x) > 0.5 ? P.toyYel : P.white);
+  rect(0, 0, W, 6, P.rock0);
+  if (torches) {
+    for (let x = tStart; x < W + tSpacing; x += tSpacing) {
+      rect(x - 1, 60, 3, 5, P.rock1);
+      rect(x - 2, 60, 5, 1, P.wall3);
+      const fl = (step(10) + x) % 3;
+      rect(x - 1, 56 - fl, 3, 4 + fl, P.fire1);
+      px(x, 55 - fl, P.fire2);
+      px(x, 58, P.glow);
+    }
+  }
+  rect(0, T_FLOOR, W, H - T_FLOOR, P.floor1);
+  rect(0, T_FLOOR, W, 1, P.floor2);
+  rect(0, T_FLOOR + 1, W, 1, P.wall1);
+  rect(0, 124, W, 20, P.floor0);
+  rect(0, 124, W, 1, P.floor1);
+  for (let k = 0; k < 2; k++) {
+    const rowY = k === 0 ? 108 : 125;
+    const rowH = k === 0 ? 16 : 19;
+    const sp = k === 0 ? 22 : 30;
+    const s = Math.floor(scroll * (k === 0 ? 1 : 1.35));
+    const start = -(s % sp);
+    for (let x = start; x < W; x += sp) {
+      rect(x, rowY, 1, rowH, P.floor0);
+      if (hash(Math.floor((x + s) / sp) + k * 100) > 0.6) rect(x + 5, rowY + 4, 5, 1, P.floor0);
+    }
   }
 }
 
-// The theater around the backdrop: stage boards where grass creeps in,
-// footlights, the audience, and the red curtains. yOff moves it all down.
-function drawTheaterFront(yOff, curtainsOnly) {
-  if (!curtainsOnly) {
-    rect(0, 80 + yOff, W, 8, P.wood2);
-    for (let x = 0; x < W; x += 9) rect(x, 80 + yOff, 1, 8, P.wood1);
-    rect(0, 80 + yOff, W, 1, P.wood3);
-    // grass creeping over the boards: you can't tell where the stage ends
-    for (let x = 16; x < 112; x++) {
-      const reach = Math.floor(hash(x * 3) * 6) + (x > 30 && x < 98 ? 2 : 0);
-      rect(x, 80 + yOff, 1, reach, (x & 1) ? P.grass1 : P.grass0);
-      if (hash(x + 7) > 0.7) px(x, 80 + yOff + reach, P.grass1);
-    }
-    rect(0, 88 + yOff, W, 1, P.wood0);
-    rect(0, 89 + yOff, W, H, P.ink);
-    for (let x = 6; x < W; x += 12) {
-      const fl = (step(9) + x) % 2;
-      px(x, 86 + yOff - fl, P.fire2);
-      px(x, 87 + yOff, P.fire1);
-    }
-    // the audience: rows of heads in the dark
-    for (let x = -2; x < W; x += 7) {
-      oval(x + ((x >> 3) & 1), 94 + yOff, 2, 2, P.rock1);
+function floorPoolWide(x, gy, rx) {
+  oval(x, gy - 1, rx, 2, P.floor2);
+  oval(x, gy - 1, rx >> 1, 1, P.wall2);
+}
+
+// ---- First person: a raycast tunnel -----------------------------------
+// Textures store a shading ramp and a brightness level per texel, so the
+// same stone can be lit by torches and swallowed by the dark.
+const TEX = 32;
+function texel(ramp, level, emissive) { return (emissive ? 128 : 0) | (ramp << 3) | (level < 0 ? 0 : (level > 7 ? 7 : level)); }
+const TX_WALL = new Uint8Array(TEX * TEX), TX_TORCH = new Uint8Array(TEX * TEX);
+const TX_FLOOR = new Uint8Array(TEX * TEX), TX_CEIL = new Uint8Array(TEX * TEX);
+
+(function buildTextures() {
+  for (let y = 0; y < TEX; y++) {
+    for (let x = 0; x < TEX; x++) {
+      // stone blocks, mortar lines between
+      const row = y >> 3, off = (row & 1) * 8;
+      const bx = (x + off) & 31;
+      const mortar = (y & 7) === 7 || (bx & 15) === 15;
+      const id = row * 5 + ((x + off) >> 4);
+      let lv = 3 + Math.floor(hash(id + 17) * 2);
+      if ((y & 7) === 0) lv++;
+      if (hash(x * 31 + y * 7 + 3) > 0.86) lv++;
+      if (hash(x * 13 + y * 29 + 5) < 0.08) lv--;
+      TX_WALL[y * TEX + x] = mortar ? texel(0, 1) : texel(0, lv);
+      // flagstones
+      const fm = (x & 15) === 0 || (y & 15) === 0;
+      const fid = (x >> 4) + (y >> 4) * 2;
+      let fl = 3 + Math.floor(hash(fid + 40) * 2);
+      if (hash(x * 7 + y * 57 + 9) > 0.9) fl++;
+      TX_FLOOR[y * TEX + x] = fm ? texel(1, 1) : texel(1, fl);
+      // rough rock
+      const n = hash((x >> 1) * 97 + (y >> 1) * 13 + 7);
+      TX_CEIL[y * TEX + x] = texel(2, 3 + Math.floor(n * 3));
     }
   }
-  // curtains and valance
-  const sway = (step(2) & 1);
+  TX_TORCH.set(TX_WALL);
+  for (let y = 19; y < 24; y++) for (let x = 12; x < 20; x++) TX_TORCH[y * TEX + x] = texel(8, y === 19 ? 4 : 2);
+  for (let y = 15; y < 19; y++) for (let x = 15; x < 17; x++) TX_TORCH[y * TEX + x] = texel(8, 3);
+  for (let y = 5; y < 15; y++) {
+    const half = y < 8 ? 1 : (y < 12 ? 3 : 2);
+    for (let x = 16 - half; x < 16 + half; x++) {
+      const core = Math.abs(x - 15.5) < half - 1;
+      TX_TORCH[y * TEX + x] = texel(3, core ? 7 : (y < 9 ? 5 : 6), true);
+    }
+  }
+})();
+
+// The corridor: open cells where 1 <= y <= 3, walls either side.
+// Torches every 6 cells, staggered between the two walls.
+function mapCell(mx, my) {
+  if (my <= 0) return (((mx % 6) + 6) % 6) === 2 ? 2 : 1;
+  if (my >= 4) return (((mx % 6) + 6) % 6) === 5 ? 2 : 1;
+  return 0;
+}
+
+// Moving lights (the Animus, sparks). Torches are added automatically.
+const FPL_MAX = 6;
+const fplX = new Float32Array(FPL_MAX), fplY = new Float32Array(FPL_MAX), fplS = new Float32Array(FPL_MAX);
+let fplCount = 0;
+let torchPower = 3.2;
+function clearFPLights() { fplCount = 0; }
+function addFPLight(x, y, s) {
+  if (fplCount >= FPL_MAX) return;
+  fplX[fplCount] = x; fplY[fplCount] = y; fplS[fplCount] = s; fplCount++;
+}
+function fpLight(x, y) {
+  let k = Math.round((x - 2.5) / 6);
+  let dx = x - (6 * k + 2.5), dy = y - 1.0;
+  let b = torchPower / (1 + (dx * dx + dy * dy) * 0.7);
+  k = Math.round((x - 5.5) / 6);
+  dx = x - (6 * k + 5.5); dy = y - 4.0;
+  b += torchPower / (1 + (dx * dx + dy * dy) * 0.7);
+  for (let i = 0; i < fplCount; i++) {
+    dx = x - fplX[i]; dy = y - fplY[i];
+    b += fplS[i] / (1 + (dx * dx + dy * dy) * 0.9);
+  }
+  return b | 0;
+}
+
+const PLANE = 0.75, FOCAL = (W / 2) / PLANE;
+const zbuf = new Float32Array(W);
+const fpCam = { x: 1, y: 2, ang: 0, horizon: H / 2, height: 0.5, dark: 0.55 };
+
+function renderFP() {
+  const dirX = Math.cos(fpCam.ang), dirY = Math.sin(fpCam.ang);
+  const plX = -dirY * PLANE, plY = dirX * PLANE;
+  const hz = Math.round(fpCam.horizon);
+  const camH = fpCam.height;
+  const rx0 = dirX - plX, ry0 = dirY - plY, rx1 = dirX + plX, ry1 = dirY + plY;
+  // floor and ceiling, row by row
+  for (let y = 0; y < H; y++) {
+    const p = y - hz;
+    const row = y * W;
+    if (p === 0) { fb.fill(P.ink, row, row + W); continue; }
+    const isFloor = p > 0;
+    const rowDist = (isFloor ? camH : (1 - camH)) * FOCAL / Math.abs(p);
+    const sx = rowDist * (rx1 - rx0) / W, sy = rowDist * (ry1 - ry0) / W;
+    let fx = fpCam.x + rowDist * rx0, fy = fpCam.y + rowDist * ry0;
+    const dark = Math.floor(rowDist * fpCam.dark);
+    const tex = isFloor ? TX_FLOOR : TX_CEIL;
+    let lit = 0;
+    for (let x = 0; x < W; x++) {
+      const tx = ((fx - Math.floor(fx)) * TEX) | 0, ty = ((fy - Math.floor(fy)) * TEX) | 0;
+      const t = tex[(ty & 31) * TEX + (tx & 31)];
+      if ((x & 3) === 0) lit = fpLight(fx, fy);      // light changes slowly: sample every 4 px
+      const lv = (t & 7) - dark + lit;
+      fb[row + x] = SHADE[(t >> 3) & 15][lv < 0 ? 0 : (lv > 7 ? 7 : lv)];
+      fx += sx; fy += sy;
+    }
+  }
+  // walls, column by column
+  for (let x = 0; x < W; x++) {
+    const cx = 2 * x / W - 1;
+    const rdx = dirX + plX * cx, rdy = dirY + plY * cx;
+    let mx = Math.floor(fpCam.x), my = Math.floor(fpCam.y);
+    const ddx = rdx === 0 ? 1e30 : Math.abs(1 / rdx), ddy = rdy === 0 ? 1e30 : Math.abs(1 / rdy);
+    let stepX, stepY, sdx, sdy;
+    if (rdx < 0) { stepX = -1; sdx = (fpCam.x - mx) * ddx; } else { stepX = 1; sdx = (mx + 1 - fpCam.x) * ddx; }
+    if (rdy < 0) { stepY = -1; sdy = (fpCam.y - my) * ddy; } else { stepY = 1; sdy = (my + 1 - fpCam.y) * ddy; }
+    let hit = 0, side = 0;
+    for (let n = 0; n < 48 && !hit; n++) {
+      if (sdx < sdy) { sdx += ddx; mx += stepX; side = 0; } else { sdy += ddy; my += stepY; side = 1; }
+      hit = mapCell(mx, my);
+    }
+    if (!hit) { zbuf[x] = 1e9; continue; }
+    const perp = side === 0 ? sdx - ddx : sdy - ddy;
+    zbuf[x] = perp;
+    const top = hz - (1 - camH) * FOCAL / perp, bot = hz + camH * FOCAL / perp;
+    let wallX = side === 0 ? fpCam.y + perp * rdy : fpCam.x + perp * rdx;
+    wallX -= Math.floor(wallX);
+    const tx = (wallX * TEX) | 0;
+    const tex = hit === 2 ? TX_TORCH : TX_WALL;
+    const hx = fpCam.x + perp * rdx, hy = fpCam.y + perp * rdy;
+    const bright = fpLight(hx, hy + (stepY > 0 ? -0.05 : 0.05)) - Math.floor(perp * fpCam.dark) - (side === 0 ? 1 : 0);
+    const y0 = Math.max(0, Math.ceil(top)), y1 = Math.min(H, Math.ceil(bot));
+    const span = bot - top;
+    for (let y = y0; y < y1; y++) {
+      const ty = (((y - top) / span) * TEX) | 0;
+      const t = tex[(ty & 31) * TEX + tx];
+      let lv = (t & 128) ? (t & 7) : (t & 7) + bright;
+      fb[y * W + x] = SHADE[(t >> 3) & 15][lv < 0 ? 0 : (lv > 7 ? 7 : lv)];
+    }
+  }
+}
+
+// ---- Billboards in the first-person view ------------------------------
+const MAXS = 16;
+const sprX = new Float32Array(MAXS), sprY = new Float32Array(MAXS), sprH = new Float32Array(MAXS);
+const sprZ = new Float32Array(MAXS), sprDepth = new Float32Array(MAXS);
+const sprFlip = new Uint8Array(MAXS), sprGhost = new Uint8Array(MAXS), sprOn = new Uint8Array(MAXS);
+const sprImg = [];
+for (let i = 0; i < MAXS; i++) sprImg.push(null);
+const sprOrder = new Int16Array(MAXS);
+// screen position of the last drawn billboard's top (for effects)
+const sprScreenX = new Float32Array(MAXS), sprScreenTop = new Float32Array(MAXS), sprScreenH = new Float32Array(MAXS);
+
+function setBillboard(i, x, y, img, h, flip, ghost, z) {
+  sprOn[i] = 1; sprX[i] = x; sprY[i] = y; sprImg[i] = img; sprH[i] = h;
+  sprFlip[i] = flip ? 1 : 0; sprGhost[i] = ghost ? 1 : 0; sprZ[i] = z || 0;
+}
+function hideBillboard(i) { sprOn[i] = 0; }
+
+function renderBillboards() {
+  const dirX = Math.cos(fpCam.ang), dirY = Math.sin(fpCam.ang);
+  const plX = -dirY * PLANE, plY = dirX * PLANE;
+  const invDet = 1 / (plX * dirY - dirX * plY);
+  const hz = Math.round(fpCam.horizon);
+  let n = 0;
+  for (let i = 0; i < MAXS; i++) {
+    if (!sprOn[i]) continue;
+    const dx = sprX[i] - fpCam.x, dy = sprY[i] - fpCam.y;
+    sprDepth[i] = invDet * (-plY * dx + plX * dy);
+    // insert, farthest first
+    let j = n++;
+    while (j > 0 && sprDepth[sprOrder[j - 1]] < sprDepth[i]) { sprOrder[j] = sprOrder[j - 1]; j--; }
+    sprOrder[j] = i;
+  }
+  for (let k = 0; k < n; k++) {
+    const i = sprOrder[k];
+    const ty = sprDepth[i];
+    sprScreenH[i] = 0;
+    if (ty < 0.12) continue;
+    const dx = sprX[i] - fpCam.x, dy = sprY[i] - fpCam.y;
+    const tx = invDet * (dirY * dx - dirX * dy);
+    const img = sprImg[i];
+    const sxc = (W / 2) * (1 + tx / ty);
+    const hPix = FOCAL * sprH[i] / ty;
+    const wPix = hPix * img.w / img.h;
+    const bottom = hz + (fpCam.height - sprZ[i]) * FOCAL / ty;
+    sprScreenX[i] = sxc; sprScreenTop[i] = bottom - hPix; sprScreenH[i] = hPix;
+    let dim = Math.floor(ty * fpCam.dark * 0.8) - fpLight(sprX[i], sprY[i]) + 1;
+    if (dim < 0) dim = 0;
+    if (sprGhost[i]) dither(1, (tick >> 3) & 1);
+    drawSpriteScaled(img, sxc - wPix / 2, bottom - hPix, wPix, hPix, sprFlip[i], dim, zbuf, ty);
+    dither(0);
+  }
+}
+
+// ---- Sprite art ---------------------------------------------------------
+// A demon charging straight at you.
+function artDemonFront(f) {
+  const cx = 13, gy = 24;
+  const la = (f & 1) ? 2 : 0, lb = (f & 1) ? 0 : 2;
+  rect(cx - 7, gy - 7 - la, 3, 7, P.imp1);
+  rect(cx - 8, gy - 1 - la, 5, 1, P.imp2);
+  rect(cx + 4, gy - 7 - lb, 3, 7, P.imp1);
+  rect(cx + 3, gy - 1 - lb, 5, 1, P.imp2);
+  oval(cx, gy - 12, 9, 6, P.imp1);
+  oval(cx, gy - 8, 6, 2, P.imp0);
+  oval(cx, gy - 16, 10, 3, P.imp1);
+  rect(cx - 8, gy - 19, 17, 1, P.imp2);
+  // arms reaching, alternating
+  rect(cx - 12, gy - 16 - lb, 3, 10, P.imp1);
+  rect(cx + 10, gy - 16 - la, 3, 10, P.imp1);
+  rect(cx - 13, gy - 6 - lb, 1, 2, P.imp3); rect(cx - 11, gy - 6 - lb, 1, 2, P.imp3);
+  rect(cx + 10, gy - 6 - la, 1, 2, P.imp3); rect(cx + 12, gy - 6 - la, 1, 2, P.imp3);
+  // face
+  oval(cx, gy - 13, 5, 3, P.imp0);
+  rect(cx - 4, gy - 15, 2, 1, P.eye);
+  rect(cx + 3, gy - 15, 2, 1, P.eye);
+  rect(cx - 3, gy - 11, 7, 2, P.ink);
+  px(cx - 2, gy - 11, P.white); px(cx, gy - 11, P.white); px(cx + 2, gy - 11, P.white);
+  px(cx - 1, gy - 10, P.white); px(cx + 1, gy - 10, P.white);
+  // the cyst
+  oval(cx, gy - 21, 4, 3, P.cyst1);
+  rect(cx - 3, gy - 18, 7, 1, P.cyst0);
+  px(cx - 2, gy - 23, P.cyst2); px(cx - 1, gy - 23, P.cyst2);
+}
+
+// A demon running away from you.
+function artDemonBack(f) {
+  const cx = 13, gy = 24;
+  const la = (f & 1) ? 2 : 0, lb = (f & 1) ? 0 : 2;
+  rect(cx - 7, gy - 7 - la, 3, 7, P.imp1);
+  rect(cx + 4, gy - 7 - lb, 3, 7, P.imp1);
+  rect(cx - 8, gy - 1 - la, 4, 1, P.imp2);
+  rect(cx + 4, gy - 1 - lb, 4, 1, P.imp2);
+  oval(cx, gy - 12, 9, 6, P.imp1);
+  oval(cx, gy - 16, 10, 3, P.imp1);
+  for (let y = gy - 18; y < gy - 7; y += 2) px(cx, y, P.imp2);     // spine
+  rect(cx - 8, gy - 19, 17, 1, P.imp2);
+  rect(cx - 12, gy - 15 - la, 3, 8, P.imp1);
+  rect(cx + 10, gy - 15 - lb, 3, 8, P.imp1);
+  oval(cx, gy - 21, 4, 3, P.cyst1);
+  rect(cx - 3, gy - 18, 7, 1, P.cyst0);
+  px(cx - 2, gy - 23, P.cyst2);
+}
+
+// The Primary from behind. pose 0 running, 1 pipe raised, 2 pipe swung down.
+function artPrimaryBack(arg) {
+  const f = arg & 3, pose = arg >> 2;
+  const cx = 11, gy = 39;
+  const la = (f === 1) ? 3 : 0, lb = (f === 3) ? 3 : 0;
+  rect(cx - 4, gy - 10 + la, 3, 10 - la, P.pants1);
+  rect(cx + 1, gy - 10 + lb, 3, 10 - lb, P.pants1);
+  rect(cx - 4, gy - 1, 3, 1, P.shoe);
+  rect(cx + 1, gy - 1, 3, 1, P.shoe);
+  rect(cx - 4, gy - 21, 8, 11, P.jacket1);
+  rect(cx - 4, gy - 21, 1, 11, P.jacket0);
+  rect(cx + 3, gy - 21, 1, 11, P.jacket2);
+  rect(cx - 3, gy - 12, 6, 1, P.jacket0);
+  rect(cx - 1, gy - 22, 2, 1, P.skin0);
+  rect(cx - 3, gy - 29, 6, 7, P.hair);
+  px(cx - 4, gy - 25, P.skin0); px(cx + 3, gy - 25, P.skin0);
+  px(cx, gy - 30, P.hair); px(cx + 1, gy - 31, P.hair);            // the tuft
+  if (pose === 0) {
+    const sw = (f & 2) ? 2 : -2;
+    rect(cx - 6, gy - 20 + sw, 2, 7, P.jacket1);
+    rect(cx - 6, gy - 13 + sw, 2, 2, P.skin1);
+    rect(cx + 4, gy - 20, 2, 5, P.jacket1);
+    line(cx + 5, gy - 16, cx + 9, gy - 33, P.pipe1);
+    px(cx + 9, gy - 33, P.white);
+  } else if (pose === 1) {
+    rect(cx - 5, gy - 33, 2, 12, P.jacket1);
+    rect(cx + 3, gy - 33, 2, 12, P.jacket1);
+    rect(cx - 5, gy - 35, 10, 2, P.skin1);
+    line(cx - 8, gy - 37, cx + 9, gy - 36, P.pipe1);
+  } else {
+    rect(cx - 6, gy - 20, 2, 6, P.jacket1);
+    rect(cx + 4, gy - 20, 2, 6, P.jacket1);
+    line(cx + 2, gy - 16, cx + 10, gy - 6, P.pipe1);
+    line(cx - 9, gy - 34, cx + 10, gy - 30, P.white);             // smear
+  }
+}
+
+// The Animus from behind: hair to her waist, a dress that flares.
+function artAnimusBack(f) {
+  const cx = 11, gy = 39;
+  for (let r = 0; r < 12; r++) {
+    const w = 8 + (r >> 1);
+    const sway = (f & 1) && r > 6 ? 1 : 0;
+    rect(cx - (w >> 1) + sway, gy - 13 + r, w, 1, r > 9 ? P.dress0 : P.dress1);
+  }
+  rect(cx - 3 + ((f & 2) ? 0 : 3), gy - 1, 2, 1, P.skin0);
+  rect(cx - 3, gy - 22, 6, 10, P.dress1);
+  rect(cx - 3, gy - 22, 1, 10, P.dress0);
+  const sw = (f & 2) ? 1 : -1;
+  rect(cx - 5, gy - 21 + sw, 2, 8, P.dress1);
+  rect(cx + 3, gy - 21 - sw, 2, 8, P.dress1);
+  rect(cx - 5, gy - 13 + sw, 2, 2, P.skin1);
+  rect(cx + 3, gy - 13 - sw, 2, 2, P.skin1);
+  rect(cx - 3, gy - 30, 6, 8, P.gold1);
+  rect(cx - 3, gy - 22, 6, 4, P.gold1);
+  rect(cx - 2, gy - 18, 4, 4, P.gold1);
+  rect(cx - 1 + (f & 1), gy - 14, 2, 3, P.gold0);
+  rect(cx - 3, gy - 31, 6, 1, P.gold0);
+  px(cx - 1, gy - 28, P.white);
+  for (let y = gy - 26; y < gy - 14; y += 3) px(cx + 1 - ((y >> 1) & 1), y, P.gold0);
+}
+
+// Animation frames, built once.
+const IMG_DEMON_F = [], IMG_DEMON_B = [], IMG_PRIM = [], IMG_ANIM = [];
+for (let f = 0; f < 4; f++) {
+  IMG_DEMON_F.push(makeSprite(27, 25, artDemonFront, f));
+  IMG_DEMON_B.push(makeSprite(27, 25, artDemonBack, f));
+  IMG_ANIM.push(makeSprite(22, 40, artAnimusBack, f));
+}
+for (let k = 0; k < 12; k++) IMG_PRIM.push(makeSprite(22, 40, artPrimaryBack, k));
+
+// ---- His own hands, seen through his eyes ------------------------------
+// Drawn in screen space, half-there like the rest of him.
+// lx/ly and rx/ry: where each hand is.
+function drawGhostHands(lx, ly, rx, ry) {
   for (let side = 0; side < 2; side++) {
-    const x0 = side === 0 ? 0 : W - 14;
-    rect(x0, yOff, 14, 89, P.red1);
-    for (let k = 0; k < 4; k++) {
-      rect(x0 + 2 + k * 3 + (k === 3 ? sway : 0), yOff, 1, 89, P.red0);
-      rect(x0 + 3 + k * 3, yOff, 1, 89, P.red2);
+    const hx = side === 0 ? lx : rx, hy = side === 0 ? ly : ry;
+    const baseX = side === 0 ? hx - 30 : hx + 30;
+    const inner = side === 0 ? 1 : -1;       // which way the thumb points
+    // sleeve and forearm, from the bottom edge up to the wrist
+    dither(1, (tick >> 3) & 1);
+    for (let y = Math.round(hy + 7); y < H; y++) {
+      const u = (y - hy) / (H - hy);
+      const x = lerp(hx, baseX, u);
+      const w = 12 + u * 12;
+      rect(x - w / 2, y, w, 1, P.hood1);
     }
-    const hemX = side === 0 ? 14 : W - 16;
-    rect(hemX, yOff + 40, 2, 49, P.red0);
+    dither(0);
+    // a loose fist: solid edge, see-through middle
+    oval(hx, hy, 9, 8, P.pale0);
+    dither(1, (tick >> 3) & 1);
+    oval(hx, hy, 8, 7, P.pale1);
+    dither(0);
+    // curled fingers along the top, knuckle lines between them
+    for (let k = 0; k < 4; k++) {
+      rect(hx - 7 + k * 4, hy - 8, 3, 3, P.pale1);
+      rect(hx - 7 + k * 4, hy - 5, 3, 1, P.pale0);
+    }
+    rect(hx + inner * 3, hy - 1, 5, 3, P.pale1);                       // thumb
+    rect(hx + inner * 3, hy + 2, 5, 1, P.pale0);
+    rect(hx - 8, hy + 7, 17, 2, P.hood0);                               // cuff
+    for (let y = Math.round(hy + 7); y < H; y += 2) {
+      const u = (y - hy) / (H - hy);
+      const x = lerp(hx, baseX, u), w = 12 + u * 12;
+      px(x - w / 2, y, P.hood2);
+      px(x + w / 2, y, P.hood0);
+    }
   }
-  rect(0, yOff, W, 8, P.red2);
-  rect(0, yOff + 7, W, 1, P.gold0);
-  for (let x = 0; x < W; x += 8) oval(x + 4, yOff + 8, 3, 1, P.red2);
-  rect(0, yOff, W, 1, P.gold1);
+}
+
+// ---- Clouds -------------------------------------------------------------
+function drawCloudBlob(x, y, s) {
+  if (s < 1) { px(x, y, P.white); return; }
+  oval(x, y, s * 2 + 1, s, P.white);
+  oval(x - s * 2, y + (s >> 1), s + 1, s * 0.7, P.white);
+  oval(x + s * 2, y + (s >> 1), s + 1, s * 0.7, P.white);
+  rect(x - s * 3, y + s - 1, s * 6, 1, P.cloud0);
+}
+
+// Sky seen straight up or straight down: rings from a vanishing point.
+function drawSkyWell(vx, vy, inner, outer, spin) {
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const dx = x - vx, dy = (y - vy) * 1.4;
+      const d = Math.sqrt(dx * dx + dy * dy) + Math.sin(Math.atan2(dy, dx) * 5 + spin) * 3;
+      let k = Math.floor(lerp(inner, outer, Math.min(1, d / 150)) * 4);
+      const frac = k & 3;
+      k = k >> 2;
+      if (frac >= 2 && BAYER[((y & 3) << 2) | (x & 3)] < (frac - 1) * 6) k++;
+      fb[y * W + x] = R_SKY[k > 7 ? 7 : k];
+    }
+  }
+}
+
+// A ladder in perspective, both rails converging on (vx, vy).
+// bx0/bx1: rails where they leave the bottom of the screen. offset slides
+// the rungs along the ladder (climbing). far = direction of travel.
+function drawLadderPerspective(vx, vy, bx0, bx1, by, offset, reverse) {
+  line(bx0, by, vx - 1, vy, P.wood2);
+  line(bx0 + 1, by, vx - 1, vy, P.wood1);
+  line(bx1, by, vx + 1, vy, P.wood2);
+  line(bx1 - 1, by, vx + 1, vy, P.wood1);
+  for (let k = 0; k < 40; k++) {
+    let z = (k + (reverse ? -offset : offset)) % 40;
+    if (z < 0) z += 40;
+    const depth = 0.6 + z * 0.35;
+    const u = 0.6 / depth;
+    if (u < 0.04) continue;
+    const y = lerp(vy, by, u);
+    const xa = lerp(vx, bx0, u), xb = lerp(vx, bx1, u);
+    const th = Math.max(1, Math.round(u * 5));
+    rect(xa, y, xb - xa, th, u > 0.3 ? P.wood3 : P.wood2);
+    if (th > 2) rect(xa, y + th - 1, xb - xa, 1, P.wood1);
+  }
+}
+
+// The whole theater, tiny, seen from far above.
+function drawTinyTheater(cx, cy, s) {
+  const w = Math.max(3, Math.round(34 * s)), h = Math.max(2, Math.round(20 * s));
+  const x = Math.round(cx - w / 2), y = Math.round(cy - h / 2);
+  rect(x - 2, y - 2, w + 4, h + 4, P.ink);
+  rect(x, y, w, h, P.wood2);
+  if (w > 8) {
+    rect(x, y, w, Math.max(1, h >> 2), P.grass1);
+    rect(x, y, Math.max(1, w >> 3), h, P.red1);
+    rect(x + w - Math.max(1, w >> 3), y, Math.max(1, w >> 3), h, P.red1);
+    for (let i = 0; i < w; i += 3) {
+      px(x + i, y + h + 1, (step(8) + i) % 4 === 0 ? P.fire2 : P.fire0);
+    }
+    for (let i = 1; i < w; i += 2) px(x + i, y + h + 3, P.rock1);
+  }
+  // a thin shaft of stage light rising back up at them
+  px(cx, cy, P.glow);
 }
 
 // =====================================================================
-//  PAGE 1 — the run through the tunnels
+//  PAGE 1 — the tunnels
 // =====================================================================
-// The camera follows the three at a run. Demons rush in from ahead and
-// the Primary pops each one with his pipe.
+// Shot 1: a wide tracking shot. The three run through the torch-lit
+//         tunnel; the Primary pops demons with his pipe.
+// Shot 2: a warp cut into the Secondary's eyes. We run behind the other
+//         two. The Primary pops what comes at him, but some demons ignore
+//         him and charge straight at us, and pass through.
 
-const prim = makePose(80, 88, 1);
-const anim = makePose(58, 85, 1);
-const sec = makePose(36, 82, 1);
+const LOOP = 1500;
+const SHOT2 = 420, SHOT2_END = 1380;
+let t = 0;
+let trans = 0;             // 0..1 warp between shots
+let afterglow = 0;         // calm that follows a pass-through
+let throughFx = 0;         // ticks of the pass-through distortion
+let flashFx = 0;           // ticks of the green pop flash
+let word = '', wordX = 0, wordY = 0, wordTimer = 0, wordColor = P.white;
+
+function say(w, x, y, c) { word = w; wordX = x; wordY = y; wordTimer = 30; wordColor = c; }
+
+// ---- Shot 1: side view -------------------------------------------------
+const prim = makePose(150, 124, 1);
+const anim = makePose(124, 121, 1);
+const sec = makePose(98, 118, 1);
 prim.run = true; anim.run = true; sec.run = true;
+const sideDemons = [makeDemon(), makeDemon(), makeDemon()];
+let scroll = 0, nextSide = 40, punch = 0;
 
-const demons = [makeDemon(), makeDemon(), makeDemon()];
-let scroll = 0;
-let nextDemon = 50;
-let popTimer = 0, popX = 0, popY = 0;
-
-function sceneUpdate() {
+function updateSide() {
   if ((tick & 1) === 0) scroll++;
   setCycle(prim, step(10), true);
   setCycle(anim, step(10) + 1, true);
   setCycle(sec, step(10) + 2, true);
-
-  nextDemon--;
-  if (nextDemon <= 0) {
-    for (let i = 0; i < demons.length; i++) {
-      const d = demons[i];
-      if (!d.alive) {
-        d.alive = true;
-        d.x = 136;
-        d.gy = 88;
-        d.run = true;
-        break;
-      }
+  if (--nextSide <= 0) {
+    for (let i = 0; i < 3; i++) {
+      const d = sideDemons[i];
+      if (d.alive) continue;
+      d.alive = true; d.x = 270; d.gy = 124; d.run = true;
+      break;
     }
-    nextDemon = 70 + Math.floor(hash(tick) * 70);
+    nextSide = 90 + Math.floor(hash(tick) * 60);
   }
-
-  for (let i = 0; i < demons.length; i++) {
-    const d = demons[i];
+  for (let i = 0; i < 3; i++) {
+    const d = sideDemons[i];
     if (!d.alive) continue;
-    d.x -= 1;
+    d.x -= 1.5;
     setCycle(d, step(12) + i, true);
-    if (prim.swing < 0 && d.x - prim.x < 24) startSwing(prim);
+    if (prim.swing < 0 && d.x - prim.x < 26) startSwing(prim);
+    if (d.x < -20) d.alive = false;
   }
-
   if (updateSwing(prim)) {
-    for (let i = 0; i < demons.length; i++) {
-      const d = demons[i];
-      if (d.alive && d.x - prim.x < 26 && d.x - prim.x > -4) {
-        popX = worldX(d, 4) - 6;
-        popY = d.gy - 26;
+    for (let i = 0; i < 3; i++) {
+      const d = sideDemons[i];
+      if (d.alive && d.x - prim.x < 30 && d.x - prim.x > -6) {
+        say('POP!', worldX(d, 4) - 8, d.gy - 30, P.cyst2);
         popDemon(d);
-        popTimer = 28;
-        shake = 6;
+        punch = 14; shake = 6; flashFx = 4;
+        sfxPop();
       }
     }
   }
-  if (popTimer > 0) popTimer--;
-
-  // the scrolling world carries dust and loose sparks backwards
   for (let i = 0; i < MAXP; i++) if (pOn[i]) pX[i] -= 0.5;
+  if (punch > 0) punch--;
+  if ((tick % 12) === 0) sfxStep();
+}
 
-  // a demon that somehow slips past just fades away behind them
-  for (let i = 0; i < demons.length; i++) if (demons[i].alive && demons[i].x < -16) demons[i].alive = false;
+function drawSide() {
+  clearLights();
+  addLight(anim.x, anim.gy - 14, 30);
+  drawTunnelWide(scroll, true);
+  floorPoolWide(anim.x, anim.gy, 14);
+  drawSecondary(sec, false);
+  drawAnimus(anim);
+  for (let i = 0; i < 3; i++) if (sideDemons[i].alive) drawDemon(sideDemons[i]);
+  drawPrimary(prim);
+  drawParticles();
+  if (wordTimer > 0) drawWord(word, wordX, wordY, wordColor);
+  // the shot opens close on the three and slowly pulls back to show how
+  // small they are in the dark; each pop punches back in
+  post.zoom = lerp(2, 1, ease(t / 320));
+  post.cx = lerp(128, W / 2, ease(t / 320));
+  post.cy = lerp(104, H / 2, ease(t / 320));
+  if (punch > 0) { post.zoom = 2; post.cx = prim.x + 10; post.cy = prim.gy - 16; }
+}
+
+// ---- Shot 2: through his eyes -----------------------------------------
+// Billboard slots: 0 Primary, 1 Animus, 2..7 demons.
+const FP_SPEED = 0.045;
+const DEMON_SPEED = 0.06;
+const dmX = new Float32Array(6), dmY = new Float32Array(6);
+const dmOn = new Uint8Array(6), dmThrough = new Uint8Array(6);
+// when each demon appears (ticks into shot 2), its lane, and whether it
+// ignores the Primary and runs through us
+const DM_AT = [60, 220, 400, 480, 630, 740];
+const DM_LANE = [1.7, 2.05, 1.6, 2.4, 2.0, 1.75];
+const DM_THRU = [0, 1, 0, 0, 1, 0];
+let primSwingT = -1;
+let fpBob = 0;
+
+function resetFP() {
+  fpCam.x = 1; fpCam.y = 2.05; fpCam.ang = 0;
+  dmOn.fill(0);
+  primSwingT = -1;
+}
+
+function updateFP(s) {
+  fpCam.x += FP_SPEED;
+  fpBob = step(10) & 1;
+  fpCam.ang = Math.sin(tick / 70) * 0.04;
+  const primX = fpCam.x + 2.8, primY = 1.7;
+  // spawn the scheduled demons
+  for (let i = 0; i < 6; i++) {
+    if (s === DM_AT[i]) { dmOn[i] = 1; dmX[i] = fpCam.x + 11; dmY[i] = DM_LANE[i]; dmThrough[i] = DM_THRU[i]; }
+    if (!dmOn[i]) continue;
+    dmX[i] -= DEMON_SPEED;
+    // the Primary swings at anything meant for him
+    if (!dmThrough[i] && primSwingT < 0 && dmX[i] - primX < 1.3) primSwingT = 0;
+    // a demon that reaches us passes straight through
+    if (dmThrough[i] && dmX[i] < fpCam.x + 0.18) {
+      dmOn[i] = 0;
+      throughFx = 40;
+      afterglow = 120;
+      shake = 8;
+      sfxWhoosh(0.5);
+      heartBpm = 118;
+    }
+    if (dmX[i] < fpCam.x - 1) dmOn[i] = 0;
+  }
+  if (primSwingT >= 0) {
+    primSwingT++;
+    if (primSwingT === 14) {
+      for (let i = 0; i < 6; i++) {
+        if (dmOn[i] && !dmThrough[i] && dmX[i] - primX < 1.6) {
+          dmOn[i] = 0;
+          const bi = 2 + i;
+          const sx = sprScreenX[bi], sy = sprScreenTop[bi] + sprScreenH[bi] * 0.1;
+          burst(sx, sy, 26, 2.4, 34, CYST, 0.05, true);
+          burst(sx, sy + sprScreenH[bi] * 0.4, 30, 1.8, 40, IMP, 0.07, true);
+          burst(sx, sy, 10, 3, 14, SPARK, 0);
+          say('POP!', sx - 8, sy - 16, P.cyst2);
+          flashFx = 4; shake = 5;
+          sfxPop();
+        }
+      }
+    }
+    if (primSwingT > 26) primSwingT = -1;
+  }
+  if ((tick % 15) === 0) sfxStep();
+  // particles drift towards us as we run past them
+  for (let i = 0; i < MAXP; i++) if (pOn[i]) pY[i] += 0.15;
+}
+
+function drawFP() {
+  fpCam.horizon = H / 2 + (fpBob ? 2 : 0);
+  clearFPLights();
+  const animX = fpCam.x + 1.9, animY = 2.6;
+  const primX = fpCam.x + 2.8, primY = 1.7;
+  addFPLight(animX, animY, 3.2);
+  renderFP();
+  const f = step(10) & 3;
+  let pose = 0;
+  if (primSwingT >= 0) pose = primSwingT < 14 ? 1 : 2;
+  setBillboard(0, primX, primY, IMG_PRIM[pose * 4 + (pose ? 0 : f)], 0.92, false, false);
+  setBillboard(1, animX, animY, IMG_ANIM[(f + 1) & 3], 0.95, false, false);
+  for (let i = 0; i < 6; i++) {
+    if (dmOn[i]) setBillboard(2 + i, dmX[i], dmY[i], IMG_DEMON_F[(step(12) + i) & 3], 0.62, false, false);
+    else hideBillboard(2 + i);
+  }
+  renderBillboards();
+  drawParticles();
+  if (wordTimer > 0) drawWord(word, wordX, wordY, wordColor);
+  // his own hands, pumping as he runs
+  const swing = fpBob ? 4 : -4;
+  drawGhostHands(54, 118 + swing, 202, 118 - swing);
+}
+
+// ---- Loop control -----------------------------------------------------
+function sceneUpdate() {
+  t = (t + 1) % LOOP;
+  if (t === 0) { scroll = 0; clearParticles(); for (let i = 0; i < 3; i++) sideDemons[i].alive = false; heartBpm = 0; }
+  if (t === SHOT2) { resetFP(); clearParticles(); }
+  if (t < SHOT2) updateSide(); else if (t < SHOT2_END + 20) updateFP(t - SHOT2);
+
+  // the warp cuts between shots
+  trans = 0;
+  if (t > SHOT2 - 40 && t < SHOT2) trans = (t - (SHOT2 - 40)) / 40;
+  if (t >= SHOT2 && t < SHOT2 + 30) trans = 1 - (t - SHOT2) / 30;
+  if (t > SHOT2_END - 40 && t <= SHOT2_END) trans = (t - (SHOT2_END - 40)) / 40;
+  if (t > SHOT2_END) trans = 1;
+  if (t > LOOP - 60) trans = 1 - (t - (LOOP - 60)) / 60;
+  if (t === SHOT2 - 30 || t === SHOT2_END - 30) sfxWhoosh(0.3);
+
+  if (wordTimer > 0) wordTimer--;
+  if (throughFx > 0) throughFx--;
+  if (flashFx > 0) flashFx--;
+  if (afterglow > 0) afterglow--;
+  if (afterglow === 1) heartBpm = 64;
+  audioIntensity = 0.3 + (throughFx > 0 ? 0.7 : 0) + trans * 0.3;
 }
 
 function sceneDraw() {
-  clearLights();
-  addAnimusLight(anim);
-  drawTunnel(scroll, true);
-  floorPool(anim.x, anim.gy, 12);
-  drawSecondary(sec, false);
-  drawAnimus(anim);
-  for (let i = 0; i < demons.length; i++) if (demons[i].alive) drawDemon(demons[i]);
-  drawPrimary(prim);
-  drawParticles();
-  if (popTimer > 0) drawWord('POP!', popX, popY - (popTimer > 20 ? 0 : 1), P.cyst2);
+  // the torches flicker by cycling their colours; the walls breathe
+  cycleColours([P.fire1, P.fire2, P.fire1, P.fire0], step(9));
+  if (!calm && Math.sin(tick / 45) > 0.75) { remap[P.wall1] = P.wall2; remap[P.wall0] = P.wall1; }
+
+  if (t < SHOT2 || t > SHOT2_END + 20) drawSide(); else drawFP();
+
+  // a demon passing through him: the world turns inside out, then settles
+  if (throughFx > 0) {
+    post.wave = throughFx * 0.3;
+    post.vwave = throughFx * 0.12;
+    post.vignette = 0.6;
+    if (throughFx > 30) post.flash = 5;
+    if (throughFx > 34 && !calm) tintAll(R_PURPLE, true);
+  } else if (afterglow > 0) {
+    // the strange peace afterwards: a slow gold breath
+    post.wave = Math.sin(tick / 9) * 1.2;
+    if (afterglow < 100) tintAll(R_GOLD, false);
+    post.vignette = 0.3;
+  }
+  if (flashFx > 0) post.flash = 6;
+  if (trans > 0) {
+    post.dim = trans * 5;
+    post.wave += trans * 10;
+    post.zoom = 1 + trans * 0.25;
+    post.rot = trans * 0.08;
+  }
 }
 
-requestAnimationFrame(frame);
+// ---- Sound: a low tunnel drone, air moving, a far-off singing tone ----
+function AMBIENCE(ctx, out) {
+  const d1 = ambDrone(ctx, out, 49, 'sawtooth', 0.0);
+  const d2 = ambDrone(ctx, out, 49.4, 'sawtooth', 0.0);
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 160;
+  d1.gain.disconnect(); d2.gain.disconnect();
+  d1.gain.connect(lp); d2.gain.connect(lp); lp.connect(out);
+  d1.gain.gain.value = 0.16; d2.gain.gain.value = 0.16;
+  const air = ambNoise(ctx, out, 'bandpass', 420, 0.8, 0.05);
+  const sing = ambDrone(ctx, out, 392, 'sine', 0.0);
+  return {
+    update: function (i) {
+      ambSet(lp.frequency, 140 + i * 700);
+      ambSet(air.gain.gain, 0.04 + i * 0.12);
+      ambSet(air.filter.frequency, 380 + i * 900);
+      ambSet(sing.gain.gain, i > 0.6 ? 0.03 : 0.004);
+      ambSet(sing.osc.frequency, 392 + Math.sin(tick / 40) * 6);
+    }
+  };
+}
+
+startBook();
 
 </script>
 </body>
