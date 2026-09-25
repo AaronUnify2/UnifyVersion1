@@ -128,7 +128,7 @@
   </span>
 </header>
 <main class="spread">
-  <div class="stage" id="stage"><canvas id="screen" aria-label="Three figures run through a torch-lit stone tunnel. The one in front swings a metal pipe and demons burst apart." role="img"></canvas></div>
+  <div class="stage" id="stage"><canvas id="screen" aria-label="Three figures run through a torch-lit tunnel; then, through the Secondary's eyes, demons charge at him and pass straight through." role="img"></canvas></div>
   <section class="text">
     <h1>1. The Tunnels</h1>
     <p>Three adventurers are travelling through the tunnels of the unconscious.</p>
@@ -179,7 +179,9 @@ const PALETTE = [
   ['toyPink', '#ff7eb6'], ['toyCyan', '#4fd6e8'], ['toyGrn', '#7ee05a'], ['toyYel', '#ffe45c'],
   ['grass0', '#2f5a2a'], ['grass1', '#4f8a34'], ['grass2', '#8cc24a'],
   ['hill0', '#3c6e56'], ['hill1', '#5f9a5a'],
-  ['skyD', '#2f5fb0'], ['skyA', '#4a7fd0'], ['skyB', '#7fb2ec'], ['skyC', '#b8dcf8'], ['cloud0', '#d4e2f4']
+  ['skyD', '#2f5fb0'], ['skyA', '#4a7fd0'], ['skyB', '#7fb2ec'], ['skyC', '#b8dcf8'], ['cloud0', '#d4e2f4'],
+  ['sand0', '#1f1a33'], ['sand1', '#2f2748'], ['sand2', '#473b63'],
+  ['stone0', '#4a4760'], ['stone1', '#76728e'], ['stone2', '#aaa6c0']
 ];
 const NCOL = PALETTE.length;
 const P = {};
@@ -510,6 +512,14 @@ function tintAll(ramp, invert) {
   for (let i = 0; i < NCOL; i++) {
     const l = LUMA[remap[i]];
     remap[i] = ramp[invert ? 7 - l : l];
+  }
+}
+
+// Brighten every colour k steps up a ramp (k = 7 turns everything white).
+function brightenAll(ramp, k) {
+  for (let i = 0; i < NCOL; i++) {
+    const l = LUMA[remap[i]] + k;
+    remap[i] = ramp[l > 7 ? 7 : l];
   }
 }
 
@@ -1593,8 +1603,10 @@ function renderFP() {
       const z = camH + (hz - y) * zPerPx;            // height of this pixel on the wall
       let t, lv;
       if (hit === 20) {
-        // pure light: a glowing wall at the end of the tunnel
-        t = texel(4, 6 + (((y + x + (tick >> 3)) >> 2) & 1), true);
+        // pure light at the end of the tunnel, rising up into the dark
+        const edge = z > wallH - 0.8 ? 5 : (z > wallH - 1.4 ? 6 : 7);
+        fb[y * W + x] = SHADE[4][((x + y) & 1) && edge < 7 ? edge - 1 : edge];
+        continue;
       } else if (hit >= 10 && z < DOOR_TOP) {
         const dt = FP_DOOR_TEX[hit - 10];
         const ty = ((DOOR_TOP - z) / DOOR_TOP * TEX) | 0;
@@ -1657,7 +1669,7 @@ function renderBillboards() {
     const wPix = hPix * img.w / img.h;
     const bottom = hz + (fpCam.height - sprZ[i]) * FOCAL / ty;
     sprScreenX[i] = sxc; sprScreenTop[i] = bottom - hPix; sprScreenH[i] = hPix;
-    let dim = Math.floor(ty * fpCam.dark * 0.8) - fpLight(sprX[i], sprY[i]) + 1;
+    let dim = Math.floor(ty * fpCam.dark * 0.8) - fpLight(sprX[i], sprY[i]) + (fpCam.abyss ? 1 : 0);
     if (dim < 0) dim = 0;
     if (sprGhost[i]) dither(1, (tick >> 3) & 1);
     drawSpriteScaled(img, sxc - wPix / 2, bottom - hPix, wPix, hPix, sprFlip[i], dim, zbuf, ty);
@@ -1852,43 +1864,53 @@ function drawGhostHands(lx, ly, rx, ry) {
 // Open hands, palms up, as if he's looking at them. fadeLevel 0 solid,
 // 1 half there, 2 barely there.
 function drawOpenHand(hx, hy, inner, fadeLevel) {
+  const S = 1.4;
   hx = Math.round(hx); hy = Math.round(hy);
+  drawForearm(hx, hy + 8 * S, hx + (inner > 0 ? -34 : 34));
   if (fadeLevel > 0) dither(fadeLevel, (tick >> 3) & 1);
   // palm
-  for (let r = 0; r < 14; r++) {
-    const w = Math.round(lerp(18, 14, r / 13));
-    rect(hx - (w >> 1), hy - 6 + r, w, 1, P.pale1);
+  const rows = Math.round(14 * S);
+  for (let r = 0; r < rows; r++) {
+    const w = Math.round(lerp(18, 14, r / (rows - 1)) * S);
+    rect(hx - (w >> 1), hy - 6 * S + r, w, 1, P.pale1);
+    px(hx - (w >> 1), hy - 6 * S + r, P.pale0);
+    px(hx - (w >> 1) + w - 1, hy - 6 * S + r, P.pale0);
   }
   // four long fingers
   const lens = [13, 16, 15, 12];
+  const fw = Math.round(3 * S);
   for (let k = 0; k < 4; k++) {
-    const fx = hx - 8 + k * 4 + (inner < 0 ? 1 : 0);
-    const L = lens[inner > 0 ? k : 3 - k];
-    rect(fx, hy - 6 - L, 3, L, P.pale1);
-    rect(fx, hy - 6 - L, 3, 1, P.pale0);
-    px(fx + 1, hy - 6 - Math.floor(L * 0.4), P.pale0);   // finger joints
-    px(fx + 1, hy - 6 - Math.floor(L * 0.75), P.pale0);
+    const fx = Math.round(hx - 9 * S + k * 4.4 * S);
+    const L = Math.round(lens[inner > 0 ? k : 3 - k] * S);
+    rect(fx, hy - 6 * S - L, fw, L, P.pale1);
+    rect(fx, hy - 6 * S - L, fw, 1, P.pale0);
+    rect(fx, hy - 6 * S - L, 1, L, P.pale0);
+    rect(fx + 1, hy - 6 * S - Math.floor(L * 0.4), fw - 2, 1, P.pale0);     // finger joints
+    rect(fx + 1, hy - 6 * S - Math.floor(L * 0.72), fw - 2, 1, P.pale0);
   }
   // thumb out to the side
-  line(hx + inner * 8, hy + 2, hx + inner * 15, hy - 7, P.pale1);
-  line(hx + inner * 9, hy + 3, hx + inner * 16, hy - 6, P.pale1);
-  line(hx + inner * 9, hy + 4, hx + inner * 16, hy - 5, P.pale0);
+  for (let k = 0; k < 4; k++) line(hx + inner * (8 + k * 0.4) * S, hy + (2 + k) * 0.8 * S, hx + inner * 15 * S + inner * k, hy - 7 * S + k, k === 3 ? P.pale0 : P.pale1);
   // palm lines
-  line(hx - 6, hy - 1, hx + 5, hy + 1, P.pale0);
-  line(hx - 5, hy + 3, hx + 3, hy + 2, P.pale0);
+  line(hx - 7 * S, hy - 1 * S, hx + 5 * S, hy + 1 * S, P.pale0);
+  line(hx - 5 * S, hy + 3 * S, hx + 3 * S, hy + 2 * S, P.pale0);
+  line(hx - 1 * S, hy + 7 * S, hx + 2 * S, hy - 2 * S, P.pale0);
   dither(0);
-  drawForearm(hx, hy + 8, hx + (inner > 0 ? -30 : 30));
 }
 
-// His right hand holding a stick. ang: 0 = raised back, 1 = struck forward.
-function drawStickHand(ang, bx, by) {
-  const a = lerp(-2.2, -1.2, ang);
-  const L = 70;
+// His right hand holding a stick, from (bx, by). ang 0 = raised, 1 = the
+// stick's tip at (tx, ty). Values below 0 recoil past raised.
+function drawStickHand(ang, bx, by, tx, ty) {
+  const raised = -1.25;
+  const struck = Math.atan2(ty - by, tx - bx);
+  const L = Math.sqrt((tx - bx) * (tx - bx) + (ty - by) * (ty - by));
+  const a = lerp(raised, struck, ang);
   const ex = bx + Math.cos(a) * L, ey = by + Math.sin(a) * L;
-  for (let k = -1; k <= 1; k++) line(bx + k, by, ex + k, ey, k === 1 ? P.wood1 : P.stick);
+  line(bx + 1, by, ex + 1, ey, P.wood1);
+  line(bx, by, ex, ey, P.stick);
+  line(bx - 1, by, ex - 1, ey, P.stick);
   line(bx - 1, by - 1, ex - 1, ey - 1, P.wood3);
-  drawForearm(bx + 4, by + 9, bx + 40);
-  drawFist(bx + 4, by + 2, -1);
+  drawForearm(bx + 6, by + 10 * FIST_S, bx + 44);
+  drawFist(bx + 6, by + 4, -1);
 }
 
 // ---- Clouds -------------------------------------------------------------
@@ -2071,11 +2093,11 @@ function artAnimusFront(f) {
   rect(cx + 2, gy - 18, 2, 4, P.gold0);
   // face
   rect(cx - 2, gy - 28, 5, 6, P.skin1);
-  rect(cx - 2, gy - 23, 5, 1, P.skin0);
+  rect(cx - 1, gy - 22, 3, 1, P.skin1);
   const blink = (f & 3) === 3;
   px(cx - 1, gy - 26, blink ? P.skin0 : P.ink);
   px(cx + 1, gy - 26, blink ? P.skin0 : P.ink);
-  px(cx, gy - 24, P.skin0);
+  px(cx, gy - 23, P.skin0);
   rect(cx - 3, gy - 30, 7, 2, P.gold1);
   px(cx - 1, gy - 29, P.white);
 }
@@ -2126,6 +2148,299 @@ for (let f = 0; f < 4; f++) {
 }
 const IMG_DEMON_SQUASH = [makeSprite(26, 21, artDemonSquash, 20), makeSprite(26, 21, artDemonSquash, 12), makeSprite(26, 21, artDemonSquash, 4)];
 for (let k = 0; k < 8; k++) IMG_PERF.push(makeSprite(20, 32, artPerformer, k));
+
+// The Primary side-on, for first-person shots where he crosses the view.
+// k 0..3: running frames; 4..9: the six frames of a pipe swing.
+function artPrimarySide(k) {
+  const p = makePose(12, 33, 1);
+  p.run = true;
+  if (k < 4) { p.frame = k; p.bob = CYCLE_BOB[k]; p.swing = -1; }
+  else { p.frame = -1; p.bob = 0; p.swing = k - 4; }
+  drawPrimary(p);
+}
+const IMG_PRIM_SIDE = [];
+for (let k = 0; k < 10; k++) IMG_PRIM_SIDE.push(makeSprite(30, 34, artPrimarySide, k));
+
+// ---- The three doors, side view (widescreen) ------------------------------
+const WD_Y = T_FLOOR - 34, WD_W = 18, WD_H = 34;
+const WD_X = [128, 160, 192];
+
+function doorSpillWide(x, w, c) {
+  dither(2, 0);
+  for (let r = 0; r < 12; r++) {
+    const grow = Math.floor(r * 0.6);
+    rect(x - grow, T_FLOOR + r, w + grow * 2, 1, c);
+  }
+  dither(0);
+}
+
+// open: how open each door is (0..1). person: optional pose to draw inside
+// door 0's frame (someone stepping through), drawn between frame and leaf.
+function drawDoorWallWide(open0, open1, drawInside) {
+  if (open0 > 0) doorSpillWide(WD_X[0] + 4, WD_W - 8, step(2) % 3 === 0 ? P.toyPink : P.toyCyan);
+  if (open1 > 0) doorSpillWide(WD_X[1] + 4, WD_W - 8, P.fire1);
+  else rect(WD_X[1], WD_Y + WD_H, WD_W, 1, P.fire1);
+  doorSpillWide(WD_X[2] + 4, WD_W - 8, P.gold0);
+  for (let i = 0; i < 3; i++) {
+    const o = i === 0 ? open0 : (i === 1 ? open1 : 0);
+    drawDoorway(WD_X[i], WD_Y, WD_W, WD_H, i, o);
+    if (i === 0 && drawInside) drawInside();
+    drawDoorLeaf(WD_X[i], WD_Y, WD_W, WD_H, i, o);
+  }
+}
+
+// A quill pen, drifting on its own.
+function artQuill() {
+  line(2, 15, 9, 2, P.pale1);
+  line(3, 15, 10, 2, P.white);
+  for (let k = 0; k < 7; k++) {
+    line(4 + k, 12 - k * 1.6, 8 + k, 13 - k * 1.6, k & 1 ? P.white : P.pale1);
+  }
+  px(1, 16, P.ink); px(2, 16, P.ink);
+}
+const IMG_QUILL = makeSprite(14, 18, artQuill, 0);
+
+// A music-box note (thin, a little out of tune).
+function sfxNote(f) { tone('triangle', f, f * 0.995, 0.5, 0.05); tone('sine', f * 2.01, f * 2, 0.25, 0.02); }
+const MUSIC_BOX = [523.3, 659.3, 784, 659.3, 698.5, 587.3, 523.3, 0, 392, 523.3, 587.3, 659.3, 523.3, 0, 0, 0];
+
+// Where a point in the first-person world lands on screen.
+// Sets projX, projY (screen) and projD (depth; <= 0 means behind us).
+let projX = 0, projY = 0, projD = 0;
+function project(wx, wy, wz) {
+  const dirX = Math.cos(fpCam.ang), dirY = Math.sin(fpCam.ang);
+  const dx = wx - fpCam.x, dy = wy - fpCam.y;
+  projD = dirX * dx + dirY * dy;
+  const lat = dirX * dy - dirY * dx;
+  if (projD <= 0.01) { projX = -999; projY = -999; return; }
+  projX = W / 2 + FOCAL * lat / projD;
+  projY = fpCam.horizon + (fpCam.height - wz) * FOCAL / projD;
+}
+
+// ---- The meadow stage in first person ----------------------------------------
+// A flat world: stage boards for x < STAGE_D, then grass forever. Where
+// they meet, the boards dissolve into the grass. Behind the stage front
+// (x < 0) is the orchestra pit and the dark auditorium.
+const TX_BOARDS = new Uint8Array(TEX * TEX), TX_GRASS = new Uint8Array(TEX * TEX);
+(function buildStageTextures() {
+  for (let y = 0; y < TEX; y++) {
+    for (let x = 0; x < TEX; x++) {
+      const seam = (y & 7) === 0 || ((x + (y >> 3) * 11) & 31) === 0;
+      let lv = 3 + (hash((y >> 3) * 7 + 3) > 0.5 ? 1 : 0);
+      if (hash(x * 3 + y * 101) > 0.9) lv--;
+      TX_BOARDS[y * TEX + x] = seam ? texel(8, 1) : texel(8, lv);
+      const n = hash(x * 57 + y * 13);
+      let g = 4;
+      if (n > 0.7) g = 5;
+      if (n > 0.93) g = 6;
+      if (n < 0.12) g = 3;
+      TX_GRASS[y * TEX + x] = texel(13, g);
+    }
+  }
+})();
+let STAGE_D = 4.5;
+let meadowSun = 0.35;              // the sun's direction (radians)
+
+function skyRow(y, hz) {
+  const up = hz - y;
+  if (up < 10) return P.skyC;
+  if (up < 34) return (up < 14 && (y & 1)) ? P.skyC : P.skyB;
+  if (up < 80) return (up < 38 && (y & 1)) ? P.skyB : P.skyA;
+  return (up < 84 && (y & 1)) ? P.skyA : P.skyD;
+}
+
+function renderMeadowFP() {
+  const dirX = Math.cos(fpCam.ang), dirY = Math.sin(fpCam.ang);
+  const plX = -dirY * PLANE, plY = dirX * PLANE;
+  const hz = Math.round(fpCam.horizon);
+  const camH = fpCam.height;
+  const rx0 = dirX - plX, ry0 = dirY - plY, rx1 = dirX + plX, ry1 = dirY + plY;
+  const sway = Math.sin(tick / 30) * 0.06;
+  for (let x = 0; x < W; x++) zbuf[x] = 1e9;
+  // sky, sun, hills and the dark hall, column by column above the horizon
+  for (let x = 0; x < W; x++) {
+    const cx = 2 * x / W - 1;
+    const th = fpCam.ang + Math.atan(cx * PLANE);
+    const toHall = Math.cos(th) < -0.15;
+    const hill1 = Math.round(8 + Math.sin(th * 3 + 1) * 4 + Math.sin(th * 7) * 2);
+    const hill2 = Math.round(4 + Math.sin(th * 5 + 2) * 2 + Math.sin(th * 11) * 1);
+    for (let y = 0; y <= hz && y < H; y++) {
+      let c;
+      if (toHall) c = (y > hz - 30 && ((x * 7 + y * 3) % 23) === 0) ? P.rock1 : P.ink;
+      else {
+        c = skyRow(y, hz);
+        if (y >= hz - hill1) c = P.hill0;
+        if (y >= hz - hill2) c = P.hill1;
+      }
+      fb[y * W + x] = c;
+    }
+  }
+  // the sun and clouds hang at fixed directions in the sky
+  let da = meadowSun - fpCam.ang;
+  if (Math.cos(da) > 0.3) {
+    const sx = W / 2 + FOCAL * Math.tan(da);
+    oval(sx, hz - 60, 7, 7, P.fire2);
+    oval(sx, hz - 60, 5, 5, P.glow);
+  }
+  for (let i = 0; i < 7; i++) {
+    const ca = -0.9 + i * 0.3 + Math.sin(tick / 900 + i) * 0.05;
+    da = ca - fpCam.ang;
+    if (Math.cos(da) < 0.3) continue;
+    const sx = W / 2 + FOCAL * Math.tan(da);
+    drawCloudBlob(sx, hz - 34 - (i % 3) * 14, 2 + (i % 3));
+  }
+  // the ground
+  for (let y = Math.max(0, hz + 1); y < H; y++) {
+    const p = y - hz;
+    const row = y * W;
+    const rowDist = camH * FOCAL / p;
+    const sx = rowDist * (rx1 - rx0) / W, sy = rowDist * (ry1 - ry0) / W;
+    let fx = fpCam.x + rowDist * rx0, fy = fpCam.y + rowDist * ry0;
+    const haze = Math.floor(rowDist / 9);
+    let lit = 0;
+    for (let x = 0; x < W; x++) {
+      let c;
+      if (fx < 0) c = P.ink;                                   // the pit
+      else {
+        // boards give way to grass, dissolving over a stretch
+        const blend = (fx - STAGE_D) / 1.8;
+        const grass = blend > 1 || (blend > 0 && BAYER[((y & 3) << 2) | (x & 3)] / 16 < blend);
+        if ((x & 3) === 0) lit = fpLight(fx, fy);
+        if (grass) {
+          const tx = (((fx + sway * (1 / (1 + rowDist))) * 2 - Math.floor((fx + sway) * 2)) * TEX) | 0;
+          const t = TX_GRASS[(((fy * 2 - Math.floor(fy * 2)) * TEX) & 31) * TEX + (tx & 31)];
+          let lv = (t & 7) + lit;
+          if (rowDist > 14) lv = 5 - Math.min(2, haze - 1);
+          c = SHADE[13][lv < 0 ? 0 : (lv > 7 ? 7 : lv)];
+        } else {
+          const tx = ((fx - Math.floor(fx)) * TEX) | 0, ty = ((fy - Math.floor(fy)) * TEX) | 0;
+          const t = TX_BOARDS[(ty & 31) * TEX + (tx & 31)];
+          const lv = (t & 7) + lit;
+          c = SHADE[8][lv < 0 ? 0 : (lv > 7 ? 7 : lv)];
+        }
+      }
+      fb[row + x] = c;
+      fx += sx; fy += sy;
+    }
+  }
+}
+
+// Sprites for the stage: a curtain wing, the ladder, a head in the dark,
+// a footlight flame.
+function artCurtain() {
+  rect(0, 0, 16, 64, P.red1);
+  for (let k = 0; k < 5; k++) { rect(1 + k * 3, 0, 1, 64, P.red0); rect(2 + k * 3, 0, 1, 64, P.red2); }
+  rect(0, 60, 16, 4, P.red0);
+}
+function artLadder() {
+  rect(1, 0, 2, 160, P.wood2);
+  rect(13, 0, 2, 160, P.wood2);
+  rect(0, 0, 1, 160, P.wood1);
+  rect(15, 0, 1, 160, P.wood1);
+  for (let y = 3; y < 160; y += 6) { rect(3, y, 10, 2, P.wood3); rect(3, y + 2, 10, 1, P.wood1); }
+}
+function artHead(f) {
+  oval(4, 4, 3, 3, P.rock1);
+  rect(1, 7, 7, 3, P.rock1);
+  if (f) { px(3, 4, P.pale0); px(5, 4, P.pale0); }        // eyes catching the light
+}
+function artFlame() {
+  rect(1, 3, 2, 3, P.fire1);
+  px(1, 2, P.fire2); px(2, 1, P.glow);
+  rect(0, 6, 4, 2, P.wood1);
+}
+const IMG_CURTAIN = makeSprite(16, 64, artCurtain, 0);
+const IMG_LADDER = makeSprite(16, 160, artLadder, 0);
+const IMG_HEAD = [makeSprite(9, 10, artHead, 0), makeSprite(9, 10, artHead, 1)];
+const IMG_FLAME = makeSprite(4, 8, artFlame, 0);
+
+// Standard stage furniture as billboards, starting at slot `first`:
+// two curtain wings, a row of footlights, and the audience.
+// Returns the next free slot.
+function stageBillboards(first) {
+  let i = first;
+  setBillboard(i++, 0.4, -0.3, IMG_CURTAIN, 3.2, false, false);
+  setBillboard(i++, 1.3, -0.5, IMG_CURTAIN, 3.2, false, false);
+  setBillboard(i++, 0.4, 8.3, IMG_CURTAIN, 3.2, true, false);
+  setBillboard(i++, 1.3, 8.5, IMG_CURTAIN, 3.2, true, false);
+  for (let k = 0; k < 8; k++) setBillboard(i++, 0.05, 0.5 + k, IMG_FLAME, 0.12, false, false);
+  for (let k = 0; k < 14; k++) {
+    const row = k % 3, col = Math.floor(k / 3);
+    const eyes = hash(k * 13 + (tick >> 5)) > 0.8 ? 1 : 0;
+    setBillboard(i++, -1.5 - row * 0.9, 0.8 + col * 1.6 + row * 0.5, IMG_HEAD[eyes], 0.55, false, false, -0.2 + row * 0.12);
+  }
+  return i;
+}
+
+// ---- The theater stage, side view (widescreen) ---------------------------------
+function drawSkyWide(yOff) {
+  for (let y = 0; y < H; y++) {
+    const alt = (H - y) + yOff;
+    let k = alt < 90 ? 6 : (alt < 150 ? 5 : (alt < 260 ? 4 : 3));
+    const k2 = alt + 4 < 90 ? 6 : (alt + 4 < 150 ? 5 : (alt + 4 < 260 ? 4 : 3));
+    if (k2 !== k && (y & 1)) k = k2;
+    fb.fill(R_SKY[k], y * W, y * W + W);
+  }
+}
+
+function drawMeadowWide(yOff, drift) {
+  oval(196, 30 + yOff, 8, 8, P.fire2);
+  oval(196, 30 + yOff, 6, 6, P.glow);
+  for (let i = 0; i < 6; i++) {
+    const span = W + 60;
+    const cx = ((Math.floor(drift / (4 + i)) + i * 61) % span) - 30;
+    drawCloudBlob(cx, 16 + i * 9 + yOff, 2 + (i % 3));
+  }
+  for (let x = 0; x < W; x++) {
+    const y1 = 78 + Math.round(Math.sin(x / 20) * 5 + Math.sin(x / 7.3) * 2) + yOff;
+    rect(x, y1, 1, H, P.hill0);
+    const y2 = 90 + Math.round(Math.sin((x + 40) / 26) * 6) + yOff;
+    rect(x, y2, 1, H, P.hill1);
+    px(x, y2, P.grass2);
+  }
+  rect(0, 102 + yOff, W, H, P.grass1);
+  for (let x = 0; x < W; x += 3) {
+    const sway = ((step(4) + (x >> 3)) & 1);
+    px(x + sway, 102 + yOff + (hash(x) * 12 | 0), P.grass2);
+    if (hash(x + 99) > 0.85) px(x, 105 + yOff + (hash(x + 5) * 8 | 0), hash(x) > 0.5 ? P.toyYel : P.white);
+  }
+}
+
+// The theater frame: boards where grass creeps in, footlights, audience,
+// curtains, valance. curtainsOnly draws just the curtains and valance.
+function drawTheaterWide(yOff, curtainsOnly) {
+  const floorY = 116 + yOff;
+  if (!curtainsOnly) {
+    rect(0, floorY, W, 10, P.wood2);
+    for (let x = 0; x < W; x += 11) rect(x, floorY, 1, 10, P.wood1);
+    rect(0, floorY, W, 1, P.wood3);
+    for (let x = 24; x < W - 24; x++) {
+      const reach = Math.floor(hash(x * 3) * 7) + (x > 50 && x < W - 50 ? 2 : 0);
+      rect(x, floorY, 1, reach, (x & 1) ? P.grass1 : P.grass0);
+    }
+    rect(0, floorY + 10, W, 1, P.wood0);
+    rect(0, floorY + 11, W, H, P.ink);
+    for (let x = 8; x < W; x += 14) {
+      const fl = (step(9) + x) % 2;
+      px(x, floorY + 8 - fl, P.fire2);
+      px(x, floorY + 9, P.fire1);
+    }
+    for (let x = -2; x < W; x += 8) oval(x + ((x >> 3) & 1) * 2, floorY + 23, 3, 3, P.rock1);
+  }
+  const sway = step(2) & 1;
+  for (let side = 0; side < 2; side++) {
+    const x0 = side === 0 ? 0 : W - 24;
+    rect(x0, yOff, 24, floorY + 11 - yOff, P.red1);
+    for (let k = 0; k < 7; k++) {
+      rect(x0 + 2 + k * 3 + (k === 6 ? sway : 0), yOff, 1, floorY + 11 - yOff, P.red0);
+      rect(x0 + 3 + k * 3, yOff, 1, floorY + 11 - yOff, P.red2);
+    }
+  }
+  rect(0, yOff, W, 12, P.red2);
+  rect(0, yOff + 11, W, 1, P.gold0);
+  for (let x = 0; x < W; x += 10) oval(x + 5, yOff + 12, 4, 1, P.red2);
+  rect(0, yOff, W, 1, P.gold1);
+}
 
 // =====================================================================
 //  PAGE 1 — the tunnels
