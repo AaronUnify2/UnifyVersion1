@@ -246,6 +246,7 @@ function slab(x, y, z, w, h, d, opts) {
     spin: opts.spin || 0,        /* radians a second about the upright */
     roll: opts.roll || 0,        /* radians a second end over end */
     kick: opts.kick || 0,        /* a pad of its own strength, if it wants one */
+    ghost: !!opts.ghost,         /* drawn, but nothing ever touches it */
     slide: opts.slide || null,   /* how far it shuttles, and about which way */
     slideRate: opts.slideRate || 0,  /* radians a second of that shuttle */
     belt: opts.belt || 0,        /* metres a second along its own length */
@@ -333,7 +334,7 @@ function inlay(x0, x1, z0, z1, top, kind, patch) {
    another, at any angle across the course. Getting this wrong leaves a lip
    where the slope meets a deck, and a lip stops a ball dead - which is the
    single most annoying thing a golf course can do. */
-function slope(x0, z0, y0, x1, z1, y1, width, kind, thick) {
+function slope(x0, z0, y0, x1, z1, y1, width, kind, thick, ghost) {
   var t = thick === undefined ? 2.4 : thick;
   var dx = x1 - x0, dz = z1 - z0, dy = y1 - y0;
   var run = Math.sqrt(dx * dx + dz * dz);
@@ -345,7 +346,7 @@ function slope(x0, z0, y0, x1, z1, y1, width, kind, thick) {
   return slab((x0 + x1) / 2 + (t / 2) * st * Math.cos(yaw),
               (y0 + y1) / 2 - (t / 2) * ct,
               (z0 + z1) / 2 - (t / 2) * st * Math.sin(yaw),
-              len, t, width, { tilt: tilt, yaw: yaw, kind: kind });
+              len, t, width, { tilt: tilt, yaw: yaw, kind: kind, ghost: ghost });
 }
 /* the common case: a ramp running straight down the x axis */
 function ramp(x0, y0, x1, y1, z, d, kind, thick) {
@@ -987,19 +988,24 @@ function buildHoleNine() {
 
    Each platform is a dish, so anything that lands on one is fed to the mine in
    the middle rather than having to be threaded into a cup from two hundred
-   metres. The shot is getting it to land there at all - they are thirty-four
-   metres across with nothing whatever around them, at every range from a five
-   iron to a full driver, and the crab breathes in your face while you aim.
+   metres. The shot is getting it to land there at all - they are forty metres
+   across with nothing whatever around them, at every range from a five
+   iron to a full wood, and the crab breathes in your face while you aim.
 
    Every shot comes back to the firing platform, holed or not. There is nothing
    out there to walk to.
 
-   A leg stands on the near rim of each dish, between you and the mine, so the
-   flat shot at it does not work; you have to come down steeply or go round.
-   Take a leg off and its platform stays, which is a kindness: it is somewhere
-   to land that no longer costs you anything. */
+   Almost all of the animal is scenery. The first build made the whole of it
+   solid and it was unplayable and unrecognisable at the same time: legs that
+   reached the body lay across the platform inboard of them, the body sat where
+   a long iron flies and swallowed every shot at the outside legs, and what was
+   left after cutting all that back read as a pile of planks floating in the
+   sky rather than as a crab. So the shape is ghost - drawn, never touched -
+   and the only solid things out there are the eight platforms and a post on
+   the near rim of each, which is what stops the flat approach working. */
 function buildHoleTen() {
   var c = [];
+  var bodyX = 178, bodyY = 44;
 
   /* the firing platform */
   c.push(deck(0, 0, 0, 36, 32, 'tee'));
@@ -1007,46 +1013,51 @@ function buildHoleTen() {
   c.push(slab(0, 1.6, 17, 36, 3.2, 2, { kind: 'rail' }));
   c.push(slab(-19, 1.6, 0, 2, 3.2, 36, { kind: 'rail' }));
 
-  /* The body, well out over the nothing and high above the legs, with a pair
-     of claws reaching back towards whoever is shooting at it.
-
-     High on purpose. Slung at twenty-two metres it sat exactly where a long
-     iron flies and swallowed every shot at the two outside platforms - the
-     ball came back lost from a hundred and fifty metres with no clue why.
-     A shot at the furthest mine tops out around twenty-five, so the whole
-     animal lives above thirty and you play underneath it. */
-  c.push(slab(178, 44, 0, 84, 15, 56, { kind: 'stone' }));
-  c.push(slope(128, -30, 38, 156, -12, 46, 12, 'stone', 7));
-  c.push(slope(128, 30, 38, 156, 12, 46, 12, 'stone', 7));
-  c.push(slab(214, 48, -20, 26, 9, 16, { kind: 'stone', yaw: 0.3 }));
-  c.push(slab(214, 48, 20, 26, 9, 16, { kind: 'stone', yaw: -0.3 }));
+  /* The shell, high above everything and every bit of it ghost: the body, a
+     dome on top of it, two eyes on stalks looking back down the range, and a
+     pair of arms with claws on the end reaching towards whoever is shooting. */
+  var G = { kind: 'shell', ghost: true };
+  c.push(slab(bodyX, bodyY, 0, 84, 13, 58, G));
+  c.push(slab(bodyX + 4, bodyY + 9, 0, 58, 9, 40, G));
+  c.push(slab(bodyX - 40, bodyY + 4, -11, 10, 4, 5, G));
+  c.push(slab(bodyX - 40, bodyY + 4, 11, 10, 4, 5, G));
+  c.push(slab(bodyX - 46, bodyY + 7, -11, 5, 7, 5, { kind: 'stone', ghost: true }));
+  c.push(slab(bodyX - 46, bodyY + 7, 11, 5, 7, 5, { kind: 'stone', ghost: true }));
+  [-1, 1].forEach(function (side) {
+    c.push(slope(bodyX - 34, side * 26, bodyY, 112, side * 54, bodyY - 6, 11, 'shell', 9, true));
+    c.push(slab(104, bodyY - 8, side * 60, 26, 11, 15, G));
+    c.push(slab(94, bodyY - 3, side * 60, 18, 6, 11, G));
+  });
 
   /* eight legs, four a side, at every range there is a club for */
   var feet = [[124, 52, 4], [154, 68, -4], [184, 60, 8], [202, 36, -10]];
-  for (var s = 0; s < 2; s++) {
-    var side = s ? 1 : -1;
+  for (var sgn = 0; sgn < 2; sgn++) {
+    var side = sgn ? 1 : -1;
     for (var i = 0; i < feet.length; i++) {
       var fx = feet[i][0], fz = feet[i][1] * side, fy = feet[i][2];
-      push(c, bowl(fx, fz, 12, 34, fy, fy + 5,
-        { pad: 'green', bank: 'fairway' }));
-      /* The leg: a strut rising off the near rim of its own dish. Kept inside
-         that dish on purpose - run all the way back to the body, they lay
-         across whichever platform was inboard of them, and a leg lying over a
-         mine is a mine nobody can ever hole out in. Splayed outward rather
-         than in, too: angled towards the middle they stood square across
-         their own approach, so the post guarding the mine had a second wall
-         behind it and there was no way through at all. */
-      var leg = slope(fx - 8, fz + side * 3, fy + 8,
-                      fx - 22, fz + side * 14, fy + 24, 8, 'stone', 6);
-      c.push(leg);
-      /* And a post on the near rim, in the way of a flat approach. Ten metres,
-         not sixteen: at sixteen it simply swatted the long ones into the
-         abyss, because nothing in the bag comes down steeply enough from two
-         hundred metres to clear it, and a mine no club can reach is not a
-         hard mine, it is a missing one. */
-      var post = slab(fx - 15, fy + 5, fz, 5, 10, 5, { kind: 'stone' });
+      push(c, bowl(fx, fz, 20, 40, fy, fy + 8, { pad: 'green', bank: 'fairway' }));
+
+      /* a plinth under it, so a platform floating in the sky reads as an
+         island rather than as a stack of planks seen edge on */
+      c.push(slab(fx, fy - 10, fz, 31, 16, 31, { kind: 'stone', ghost: true }));
+      c.push(slab(fx, fy - 23, fz, 18, 12, 18, { kind: 'stone', ghost: true }));
+
+      /* The leg, in two pieces with a knee: out and up from the platform, then
+         back in and up to the body. Ghost, both of them - a leg long enough to
+         look like a leg crosses half the hole. */
+      var kneeX = fx - 22, kneeZ = fz + side * 22, kneeY = fy + 40;
+      var thigh = slope(fx - 8, fz, fy + 9, kneeX, kneeZ, kneeY, 9, 'shell', 7, true);
+      var shin = slope(kneeX, kneeZ, kneeY, 150 + i * 16, side * 27, bodyY - 2,
+        8, 'shell', 6, true);
+      c.push(thigh);
+      c.push(shin);
+
+      /* and the one solid piece of the animal: a post on the near rim, in the
+         way of a flat approach, so the mine has to be come at from above */
+      var post = slab(fx - 19, fy + 6, fz, 5, 11, 5, { kind: 'shell' });
       c.push(post);
-      MINES.push({ x: fx, y: fy, z: fz, gone: false, parts: [leg, post] });
+
+      MINES.push({ x: fx, y: fy, z: fz, gone: false, parts: [thigh, shin, post] });
     }
   }
 
@@ -1097,8 +1108,14 @@ var HOLE_INDEX = 0;
    is that there are several of them, that holing one takes a leg off rather
    than ending the hole, and that the thing loses its balance when four are
    gone. Empty on every other hole, and then none of it runs at all. */
+/* Nine metres, not half of one. A mine is not a golf cup: land on the dish at
+   all and the thing under you goes off. Measured with a wobbly swing, a five
+   metre mine on a sixteen metre pad took six and a half shots to bring the
+   crab down and sometimes nineteen, because balls kept settling on the pad
+   next to the mine rather than in it; at nine on a twenty metre pad it is five
+   and never worse than ten, and a clean striker still needs four. */
 var MINES = [];
-var MINE_RADIUS = 5;
+var MINE_RADIUS = 9;
 var LEGS_TO_TOPPLE = 4;
 
 function loadHole(i) {
@@ -1147,6 +1164,7 @@ var SURFACES = {
   belt:    { name: 'Conveyor', roll: 1.40, bounce: 0.22, shear: 0.70, hold: 1.00, grab: 0.90 },
   spring:  { name: 'Bounce pad', roll: 0.20, bounce: 0.45, shear: 0.09, hold: 1.00, grab: 0.90,
              kick: 20 },
+  shell:   { name: 'Crab',     roll: 0.09, bounce: 0.30, shear: 0.30, hold: 1.00, grab: 0.70 },
   'void':  { name: 'Off the course', roll: 0.09, bounce: 0, shear: 3.00, hold: 0.00, grab: 1.00 }
 };
 /* what is left of a skid once the ball is rolling rather than sliding: the
@@ -1182,7 +1200,7 @@ function toWorld(sl, l, time) {
 /* The closest point on a slab to a ball, and how deep it is in. Null when
    they are not touching. The normal points out of the slab at the ball. */
 function slabContact(sl, p, r, time) {
-  if (slabFar(sl, p, r, time)) return null;
+  if (sl.ghost || slabFar(sl, p, r, time)) return null;
   var l = toLocal(sl, p, time);
   var h = sl.half;
   var cx = Math.max(-h.x, Math.min(h.x, l.x));
@@ -1244,13 +1262,20 @@ function slabTopAt(sl, x, z, time) {
    of. Used for standing the golfer up, for the camera, and for telling you
    your lie. Rails and anything that is turning are not floors. Null over the
    void. */
+/* A slab that is drawn but never touched. The crab is mostly made of these:
+   a thing that reads as an animal wants a body, legs with a bend in them and
+   claws, and every one of those in the way of a shot is a shot that comes back
+   lost with no clue why. So the shape is scenery and the platforms it stands
+   on are the hole. */
+function ghostly(sl) { return !!sl.ghost; }
+
 function groundUnder(x, z, time) {
   var best = null;
   for (var i = 0; i < COURSE.length; i++) {
     var sl = COURSE[i];
     /* a platform that only shuttles is still a floor - it is the turning
-       things that cannot be stood on */
-    if (sl.kind === 'rail' || sl.spin || sl.roll) continue;
+       things, and the ones that are only scenery, that cannot be stood on */
+    if (sl.ghost || sl.kind === 'rail' || sl.spin || sl.roll) continue;
     var top = slabTopAt(sl, x, z, time);
     if (top === null) continue;
     if (!best) { best = top; continue; }
@@ -1285,7 +1310,7 @@ function inSweep(x, y, z) {
   var r = BALL_RADIUS;
   for (var i = 0; i < COURSE.length; i++) {
     var sl = COURSE[i], h = sl.half;
-    if (!sl.spin && !sl.roll) continue;
+    if (sl.ghost || (!sl.spin && !sl.roll)) continue;
     var c = slabPos(sl, 0);
     var dx = x - c.x, dy = y - c.y, dz = z - c.z;
     if (sl.spin) {
@@ -2313,7 +2338,8 @@ var SLAB_SKIN = {
   wood:    { top: 0xb5793f, side: 0x8f5c2c },
   rail:    { top: 0xd8d2b6, side: 0xbdb694 },
   belt:    { top: 0xe0952f, side: 0x8a6428 },
-  spring:  { top: 0xd94f57, side: 0x8f3037 }
+  spring:  { top: 0xd94f57, side: 0x8f3037 },
+  shell:   { top: 0xd2603a, side: 0x933c22 }
 };
 
 /* which kinds are objects rather than ground, for the purpose of casting */
@@ -2883,6 +2909,11 @@ function backToTee(rebuild) {
   predictDirty = true;
 }
 
+/* The nine holes are a round and are scored as one. The crab is a fight you
+   pick afterwards: it keeps its own count of legs and shots, and it stays off
+   the card, because a front nine is par 36 and 41 is not a number golf has. */
+function scored() { return !currentHole().boss; }
+
 function ballStopped() {
   var what = hole.finishShot();
   if (what === 'leg') {
@@ -2895,10 +2926,12 @@ function ballStopped() {
   if (what === 'toppled' || what === 'holed') {
     phase = 'holed';
     var sc = hole.score();
-    round.played.push({ hole: currentHole().index, name: currentHole().name,
-      total: sc.total, par: sc.par });
-    round.total += sc.total;
-    round.par += sc.par;
+    if (scored()) {
+      round.played.push({ hole: currentHole().index, name: currentHole().name,
+        total: sc.total, par: sc.par });
+      round.total += sc.total;
+      round.par += sc.par;
+    }
     if (what === 'toppled') {
       flash('It goes over the edge');
       beep(70, 0.5); setTimeout(function () { beep(50, 0.7); }, 200);
@@ -3355,8 +3388,14 @@ function showCard() {
   var s = hole.score();
   var h = currentHole();
   var last = h.index + 1 >= h.count;
-  var card = '<b>' + s.total + '</b> strokes on a par ' + s.par +
-    (s.penalties ? '<br>including ' + s.penalties + ' penalty stroke' + (s.penalties > 1 ? 's' : '') : '');
+  var card;
+  if (h.boss) {
+    card = '<b>' + s.total + '</b> shots to take four legs off it' +
+      (s.penalties ? '<br>including ' + s.penalties + ' into the abyss' : '');
+  } else {
+    card = '<b>' + s.total + '</b> strokes on a par ' + s.par +
+      (s.penalties ? '<br>including ' + s.penalties + ' penalty stroke' + (s.penalties > 1 ? 's' : '') : '');
+  }
   if (round.played.length > 1 || last) {
     card += '<br><br>';
     for (var i = 0; i < round.played.length; i++) {
@@ -3365,11 +3404,13 @@ function showCard() {
     var rel = round.total - round.par;
     card += '<b>Round ' + round.total + '</b> ' +
       (rel === 0 ? 'level' : (rel > 0 ? '+' + rel : rel)) + ' to par';
+    if (h.boss) card += '<br><span class="soft">and the crab in ' + s.total + '</span>';
   }
   var how = padIndex !== null ? 'A' : (touchPlay ? 'Tap' : 'Space');
   card += '<br><span class="soft">' + how + ' to ' +
     (last ? 'play the round again' : 'go on to the next hole') + '</span>';
-  ui.cardTitle.textContent = s.name;
+  ui.cardTitle.textContent = currentHole().boss
+    ? (hole.toppled ? 'Toppled' : s.name) : s.name;
   ui.cardBody.innerHTML = card;
   ui.card.classList.add('show');
 }
