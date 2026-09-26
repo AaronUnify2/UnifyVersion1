@@ -130,6 +130,44 @@
   }
   .soft { color: var(--muted); }
 
+  /* the hole picker: ten holes is a lot to play through to see the tenth */
+  #menu {
+    position: fixed; inset: 0; display: none; z-index: 5;
+    align-items: center; justify-content: center;
+    background: rgba(6, 14, 11, 0.72); backdrop-filter: blur(4px);
+    overflow-y: auto; padding: 16px;
+  }
+  #menu.show { display: flex; }
+  #menuInner {
+    background: var(--panel); border: 1px solid var(--edge);
+    border-radius: 20px; padding: 20px; text-align: center;
+    width: min(680px, 92vw); max-height: 88vh; overflow-y: auto;
+  }
+  #menuTitle {
+    font-size: clamp(20px, 4.4vw, 30px); font-weight: 800; color: var(--accent);
+    margin-bottom: 14px;
+  }
+  #menuList {
+    display: grid; gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  }
+  #menuList button {
+    font: inherit; text-align: left; cursor: pointer; color: var(--text);
+    background: var(--panel-soft); border: 1px solid var(--edge);
+    border-radius: 14px; padding: 12px 14px; line-height: 1.35;
+  }
+  #menuList button .n { color: var(--muted); font-size: 12px; font-weight: 600; }
+  #menuList button .t { display: block; font-weight: 800; font-size: 16px; }
+  #menuList button .d { color: var(--muted); font-size: 12px; }
+  #menuList button.here {
+    border-color: var(--accent); background: rgba(255, 210, 63, 0.16);
+  }
+  #menuClose {
+    margin-top: 16px; font: inherit; font-weight: 800; color: #0c1814;
+    background: var(--accent); border: none; border-radius: 999px;
+    padding: 13px 28px; font-size: clamp(14px, 3vw, 17px); cursor: pointer;
+  }
+
   @media (max-width: 560px) {
     #meterWrap { height: 150px; bottom: 120px; }
     #touch button { padding: 12px 18px; }
@@ -169,6 +207,7 @@
     </div>
     <div class="tools">
       <button id="fullBtn" type="button" hidden>Full screen</button>
+      <button id="menuBtn" type="button">Holes</button>
       <button id="jogBtn" type="button">Go to ball</button>
       <button id="dropBtn" type="button">Drop +1</button>
       <button id="resetBtn" type="button">Replay hole</button>
@@ -189,6 +228,12 @@
   <button class="small" id="cancelBtn" type="button">Back</button>
   <button id="hitBtn" type="button">Go to ball</button>
 </div>
+
+<div id="menu"><div id="menuInner">
+  <div id="menuTitle">Pick a hole</div>
+  <div id="menuList"></div>
+  <button id="menuClose" type="button">Back to the game</button>
+</div></div>
 
 <div id="card"><div id="cardInner">
   <div id="cardTitle"></div>
@@ -2753,6 +2798,13 @@ function bindKeys() {
 }
 
 function onPress(code) {
+  /* The picker is a modal. While it is up nothing else on the keyboard plays
+     the game, or you swing at a ball you are not looking at. */
+  if (menuOpen()) {
+    if (code === 'KeyH' || code === 'Escape') holeMenu(false);
+    return;
+  }
+  if (code === 'KeyH') return holeMenu(true);
   if (code === 'Space' || code === 'Enter') return actionButton();
   if (code === 'Escape' || code === 'Backspace') return cancelButton();
   if (code === 'KeyQ') return changeClub(-1);
@@ -2958,6 +3010,49 @@ function startRound() {
   startHole(0);
 }
 
+/* ------------------------------------------------------------ hole picker */
+
+/* Ten holes is a lot to play through to see the tenth. Picking one starts the
+   card again from there rather than pretending the holes before it happened:
+   what the card adds up is what you actually played. */
+function menuOpen() { return el('menu').classList.contains('show'); }
+
+function holeMenu(show) {
+  var m = el('menu');
+  if (show) buildMenuList();
+  m.classList.toggle('show', !!show);
+}
+
+function buildMenuList() {
+  var list = el('menuList');
+  list.innerHTML = '';
+  var at = hole ? currentHole().index : -1;
+  for (var i = 0; i < HOLES.length; i++) {
+    (function (i) {
+      var h = HOLES[i];
+      var len = Math.round(Math.hypot(h.pin.x - h.tee.x, h.pin.z - h.tee.z));
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = i === at ? 'here' : '';
+      b.setAttribute('data-hole', i);
+      b.innerHTML = '<span class="n">' + (i + 1) + '</span>' +
+        '<span class="t">' + h.name + '</span>' +
+        '<span class="d">' + (h.boss ? 'the boss &middot; four legs'
+                                     : 'par ' + h.par + ' &middot; ' + len + 'm') + '</span>';
+      b.addEventListener('click', function () { jumpToHole(i); });
+      list.appendChild(b);
+    })(i);
+  }
+}
+
+function jumpToHole(i) {
+  holeMenu(false);
+  round = { played: [], total: 0, par: 0 };
+  ui.card.classList.remove('show');
+  startHole(i);
+  flash(HOLES[i].name);
+}
+
 /* Lay out a hole and stand the player on its tee. The course itself changes
    here, so everything drawn from it is thrown away and built again. */
 function startHole(index) {
@@ -3012,6 +3107,10 @@ function hideAim() { if (aimLine) { aimLine.visible = false; landMark.visible = 
 /* ------------------------------------------------------------------- loop */
 
 function update(dt) {
+  /* Everything the player can do goes through here, so one gate holds the
+     lot: while the picker is up the pad and the keys do nothing, the golfer
+     stays put, and the course stops turning. */
+  if (menuOpen()) return;
   var pad = readPad();
   var mx = 0, my = 0;
   if (pad) { mx = pad.lx; my = pad.ly; }
@@ -3402,7 +3501,12 @@ function showCard() {
       card += round.played[i].name + '  ' + round.played[i].total + '<br>';
     }
     var rel = round.total - round.par;
-    card += '<b>Round ' + round.total + '</b> ' +
+    /* "Round" only when the whole round is on it. Jump in at the seventh and
+       three holes is three holes, not a round. */
+    var scoredHoles = HOLES.filter(function (x) { return !x.boss; }).length;
+    var label = round.played.length >= scoredHoles
+      ? 'Round' : round.played.length + ' holes';
+    card += '<b>' + label + ' ' + round.total + '</b> ' +
       (rel === 0 ? 'level' : (rel > 0 ? '+' + rel : rel)) + ' to par';
     if (h.boss) card += '<br><span class="soft">and the crab in ' + s.total + '</span>';
   }
@@ -3516,6 +3620,11 @@ function boot() {
 
   bindKeys();
   bindTouch();
+  el('menuBtn').addEventListener('click', function () { holeMenu(true); });
+  el('menuClose').addEventListener('click', function () { holeMenu(false); });
+  el('menu').addEventListener('click', function (e) {
+    if (e.target === el('menu')) holeMenu(false);
+  });
   ['hitBtn', 'cancelBtn', 'clubDownBtn', 'clubUpBtn', 'resetBtn', 'fullBtn',
     'jogBtn', 'jumpBtn', 'dropBtn', 'cardBtn'].forEach(function (id) {
     var b = el(id);
