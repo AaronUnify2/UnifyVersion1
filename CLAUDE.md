@@ -51,6 +51,14 @@ https://aaronunify2.github.io/UnifyVersion1/<path>/<file>.html
 
 Files on other branches are **not** published. Only `main` is deployed.
 
+## Process Hub
+
+Process Hub and the public FAQ content no longer live here. The app is in the
+**AaronUnify2/ProcessHub** repository and its content in the private
+**AaronUnify2/ProcessHub-data** repository — work there, and read that
+repository's `CLAUDE.md` first. Writing or editing FAQ questions is done in
+ProcessHub-data.
+
 ## Workflow
 
 - Develop on the assigned working branch and commit with a clear message.
