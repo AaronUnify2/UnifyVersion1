@@ -27,10 +27,12 @@ ProcessHub  index.html   edits everything, exports the files below
                 ↓
             data/        processes.json · library.json · variables.json
             exports/     FAQ.json  ← the single source for published FAQ content
-                ↓
-UnifyVersion1  FAQ.html  the public page, reads
-                         https://aaronunify2.github.io/ProcessHub/exports/FAQ.json
+            FAQ.html     the public page, reads exports/FAQ.json beside it
 ```
+
+The public FAQ page is https://aaronunify2.github.io/ProcessHub/FAQ.html. The
+copy that used to be served from this repository, `FAQ.html`, was removed in
+October 2026, so its old address no longer works.
 
 `processhub/index.html` and `processhub/live.html` in this repository are
 redirects, so old links still arrive.
