@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tommy's Monster Truck Jump</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #7ec8f0;
+    font-family: "Trebuchet MS", Arial, sans-serif;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .top-bar {
+    position: fixed;
+    top: 10px;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px;
+    pointer-events: none;
+  }
+  .title {
+    color: #fff;
+    font-size: clamp(18px, 4vw, 32px);
+    font-weight: bold;
+    text-shadow: 2px 2px 0 #c0392b, 4px 4px 0 rgba(0, 0, 0, 0.25);
+    width: 100%;
+    text-align: center;
+  }
+  .top-bar button {
+    pointer-events: auto;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 8px 14px;
+    border: 3px solid #fff;
+    border-radius: 999px;
+    background: #e67e22;
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
+  }
+  .top-bar button:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  }
+  .counter {
+    background: rgba(255, 255, 255, 0.85);
+    color: #333;
+    font-weight: bold;
+    font-size: 16px;
+    padding: 8px 14px;
+    border-radius: 999px;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<div class="top-bar">
+  <div class="title">Tommy's Monster Truck Jump!</div>
+  <div class="counter">Jumps: <span id="jumpCount">0</span></div>
+  <button id="slowBtn">Slow motion</button>
+  <button id="colorBtn">New colour</button>
+</div>
+
+<script>
+// ------------------------------------------------------------
+// The scene is drawn in a "world" that is 1000 units wide and
+// 560 units tall. We scale it to fit whatever screen we are on.
+// ------------------------------------------------------------
+const WORLD_W = 1000;
+const WORLD_H = 560;
+const GROUND_Y = 440;
+
+// Ramps: each ramp is a curve that gets steeper at the top (a "kicker").
+const RAMP_LEN = 150;      // how long each ramp is
+const RAMP_HEIGHT = 120;   // how tall the top of each ramp is
+const LIP_LEFT = 330;      // where the truck leaves the left ramp
+const LIP_RIGHT = 670;     // where the truck lands on the right ramp
+const RAMP_LEFT_START = LIP_LEFT - RAMP_LEN;
+const RAMP_RIGHT_END = LIP_RIGHT + RAMP_LEN;
+const LIP_Y = GROUND_Y - RAMP_HEIGHT;
+const SPAN = LIP_RIGHT - LIP_LEFT;
+
+// The steepness of the ramp at its very top. We make the jump arc
+// start at exactly the same steepness so the take-off looks smooth.
+const LIP_SLOPE = 2 * RAMP_HEIGHT / RAMP_LEN;
+const JUMP_HEIGHT = LIP_SLOPE * SPAN / 4;
+
+const HOUSE_X = 500;       // middle of the house
+
+const canvas = document.getElementById("scene");
+const ctx = canvas.getContext("2d");
+
+let scale = 1;
+let offsetX = 0;
+let offsetY = 0;
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(window.innerWidth * dpr);
+  canvas.height = Math.floor(window.innerHeight * dpr);
+  // Fit the world inside the screen, keeping its shape.
+  scale = Math.min(canvas.width / WORLD_W, canvas.height / WORLD_H);
+  offsetY = (canvas.height - WORLD_H * scale) / 2;
+  // On a tall phone screen, zoom in so the ramps and house fill the
+  // width, and push the scene down a bit so the title has room.
+  if (canvas.height > canvas.width) {
+    scale = Math.min(canvas.width / 700, canvas.height / WORLD_H);
+    offsetY = canvas.height * 0.6 - GROUND_Y * scale;
+  }
+  offsetX = canvas.width / 2 - (WORLD_W / 2) * scale;
+}
+window.addEventListener("resize", resize);
+resize();
+
+// The left and right edges of the screen, measured in world units.
+function worldLeft() { return -offsetX / scale; }
+function worldRight() { return (canvas.width - offsetX) / scale; }
+
+// ------------------------------------------------------------
+// The path the truck follows. Given an x position, tell us how
+// high the truck's wheels are and how steep the path is there.
+// ------------------------------------------------------------
+function pathAt(x) {
+  if (x <= RAMP_LEFT_START || x >= RAMP_RIGHT_END) {
+    return { y: GROUND_Y, slope: 0, inAir: false };
+  }
+  if (x < LIP_LEFT) {
+    // Going up the left ramp.
+    const u = (x - RAMP_LEFT_START) / RAMP_LEN;
+    return { y: GROUND_Y - RAMP_HEIGHT * u * u, slope: -2 * RAMP_HEIGHT * u / RAMP_LEN, inAir: false };
+  }
+  if (x > LIP_RIGHT) {
+    // Rolling down the right ramp.
+    const u = (RAMP_RIGHT_END - x) / RAMP_LEN;
+    return { y: GROUND_Y - RAMP_HEIGHT * u * u, slope: 2 * RAMP_HEIGHT * u / RAMP_LEN, inAir: false };
+  }
+  // Flying through the air! This curve is a parabola, the same
+  // shape a ball makes when you throw it.
+  const s = (x - LIP_LEFT) / SPAN;
+  return {
+    y: LIP_Y - JUMP_HEIGHT * 4 * s * (1 - s),
+    slope: -JUMP_HEIGHT * 4 * (1 - 2 * s) / SPAN,
+    inAir: true
+  };
+}
+
+// ------------------------------------------------------------
+// Truck state
+// ------------------------------------------------------------
+const TRUCK_SPEED = 330;   // world units per second
+const WHEEL_R = 28;
+const truckColors = ["#e74c3c", "#2980b9", "#27ae60", "#8e44ad", "#f1c40f", "#e67e22", "#1abc9c", "#ff69b4"];
+let colorIndex = 0;
+
+const truck = {
+  x: 0,
+  wheelSpin: 0,
+  bounce: 0,         // how far the body is squished down by the springs
+  bounceSpeed: 0,
+  wasInAir: false,
+  waiting: 0         // pause between runs
+};
+
+function startRun() {
+  truck.x = worldLeft() - 130;
+  truck.wasInAir = false;
+  truck.bounce = 0;
+  truck.bounceSpeed = 0;
+}
+startRun();
+
+let jumps = 0;
+let slowMotion = false;
+let shake = 0;
+
+// ------------------------------------------------------------
+// Little puffs of dust and smoke
+// ------------------------------------------------------------
+const particles = [];
+
+function addPuff(x, y, vx, vy, size, color, life) {
+  particles.push({ x: x, y: y, vx: vx, vy: vy, size: size, color: color, life: life, maxLife: life });
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life -= dt;
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+      continue;
+    }
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= 0.97;
+    p.vy *= 0.97;
+    p.size += 12 * dt;
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life / p.maxLife) * 0.7;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ------------------------------------------------------------
+// Clouds drift slowly across the sky
+// ------------------------------------------------------------
+const clouds = [
+  { x: 120, y: 90, s: 1.0, speed: 12 },
+  { x: 480, y: 60, s: 0.7, speed: 8 },
+  { x: 800, y: 110, s: 1.2, speed: 15 }
+];
+
+let chimneyTimer = 0;
+let exhaustTimer = 0;
+let dustTimer = 0;
+let time = 0;
+
+// ------------------------------------------------------------
+// Update: move everything forward by dt seconds
+// ------------------------------------------------------------
+function update(dt) {
+  time += dt;
+
+  for (const c of clouds) {
+    c.x += c.speed * dt;
+    if (c.x > worldRight() + 150) c.x = worldLeft() - 150;
+  }
+
+  // Chimney smoke
+  chimneyTimer -= dt;
+  if (chimneyTimer <= 0) {
+    chimneyTimer = 0.35;
+    addPuff(HOUSE_X + 50, 280, 6 + Math.random() * 6, -25, 6, "#dddddd", 2.5);
+  }
+
+  if (truck.waiting > 0) {
+    truck.waiting -= dt;
+    if (truck.waiting <= 0) startRun();
+  } else {
+    const move = TRUCK_SPEED * dt;
+    truck.x += move;
+    truck.wheelSpin += move / WHEEL_R;
+
+    const here = pathAt(truck.x);
+
+    // Just landed? Make a big dust cloud and shake the screen.
+    if (truck.wasInAir && !here.inAir) {
+      jumps++;
+      document.getElementById("jumpCount").textContent = jumps;
+      shake = 10;
+      truck.bounceSpeed = 260;
+      for (let i = 0; i < 18; i++) {
+        const angle = Math.PI + Math.random() * Math.PI;
+        const power = 60 + Math.random() * 120;
+        addPuff(truck.x, here.y - 4, Math.cos(angle) * power, Math.sin(angle) * power * 0.6, 8 + Math.random() * 8, "#c8a165", 1.0);
+      }
+    }
+    truck.wasInAir = here.inAir;
+
+    // Exhaust smoke from the pipe at the back
+    exhaustTimer -= dt;
+    if (exhaustTimer <= 0) {
+      exhaustTimer = 0.12;
+      const angle = Math.atan(here.slope);
+      const px = truck.x + Math.cos(angle) * -70 - Math.sin(angle) * -128;
+      const py = here.y + Math.sin(angle) * -70 + Math.cos(angle) * -128;
+      addPuff(px, py, -40, -30, 4, "#666666", 0.8);
+    }
+
+    // Dust kicked up by the back wheels while on the ground
+    dustTimer -= dt;
+    if (!here.inAir && dustTimer <= 0) {
+      dustTimer = 0.06;
+      addPuff(truck.x - 50, here.y - 4, -80 - Math.random() * 60, -20 - Math.random() * 30, 4 + Math.random() * 4, "#d2b48c", 0.6);
+    }
+
+    // When the truck is off the right side, wait a moment and go again.
+    if (truck.x > worldRight() + 130) {
+      truck.waiting = 1.0;
+    }
+  }
+
+  // Springs: the body bounces up and down after a landing.
+  const springForce = -180 * truck.bounce - 10 * truck.bounceSpeed;
+  truck.bounceSpeed += springForce * dt;
+  truck.bounce += truck.bounceSpeed * dt;
+
+  shake *= Math.pow(0.02, dt);
+  if (shake < 0.2) shake = 0;
+
+  updateParticles(dt);
+}
+
+// ------------------------------------------------------------
+// Drawing helpers
+// ------------------------------------------------------------
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawCloud(x, y, s) {
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(x, y, 28 * s, 0, Math.PI * 2);
+  ctx.arc(x + 30 * s, y - 14 * s, 34 * s, 0, Math.PI * 2);
+  ctx.arc(x + 64 * s, y, 26 * s, 0, Math.PI * 2);
+  ctx.arc(x + 32 * s, y + 8 * s, 28 * s, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawBackground() {
+  const left = worldLeft();
+  const right = worldRight();
+  const top = -offsetY / scale;
+  const bottom = (canvas.height - offsetY) / scale;
+
+  // Sky
+  const sky = ctx.createLinearGradient(0, top, 0, GROUND_Y);
+  sky.addColorStop(0, "#4aa8e8");
+  sky.addColorStop(1, "#bfe6ff");
+  ctx.fillStyle = sky;
+  ctx.fillRect(left, top, right - left, GROUND_Y - top);
+
+  // Sun
+  ctx.fillStyle = "#ffe066";
+  ctx.beginPath();
+  ctx.arc(860, 80, 40, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#ffe066";
+  ctx.lineWidth = 5;
+  for (let i = 0; i < 12; i++) {
+    const a = i * Math.PI / 6 + time * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(860 + Math.cos(a) * 50, 80 + Math.sin(a) * 50);
+    ctx.lineTo(860 + Math.cos(a) * 64, 80 + Math.sin(a) * 64);
+    ctx.stroke();
+  }
+
+  for (const c of clouds) drawCloud(c.x, c.y, c.s);
+
+  // Rolling hills
+  ctx.fillStyle = "#8fd17a";
+  ctx.beginPath();
+  ctx.moveTo(left, GROUND_Y);
+  for (let x = left; x <= right + 20; x += 20) {
+    ctx.lineTo(x, GROUND_Y - 70 - Math.sin(x / 140) * 30 - Math.sin(x / 57) * 10);
+  }
+  ctx.lineTo(right + 20, GROUND_Y);
+  ctx.closePath();
+  ctx.fill();
+
+  // Trees on the hills
+  const trees = [90, 240, 760, 930];
+  for (const tx of trees) {
+    ctx.fillStyle = "#7a4b25";
+    ctx.fillRect(tx - 5, GROUND_Y - 60, 10, 30);
+    ctx.fillStyle = "#3e9b4f";
+    ctx.beginPath();
+    ctx.arc(tx, GROUND_Y - 70, 24, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Grass
+  ctx.fillStyle = "#5cb85c";
+  ctx.fillRect(left, GROUND_Y, right - left, bottom - GROUND_Y);
+
+  // Dirt track
+  ctx.fillStyle = "#b5865a";
+  ctx.fillRect(left, GROUND_Y, right - left, 14);
+  ctx.fillStyle = "#9c6f45";
+  ctx.fillRect(left, GROUND_Y + 14, right - left, 4);
+
+  // Flowers
+  const flowerColors = ["#ff6b6b", "#ffd93d", "#ffffff", "#c56cf0"];
+  for (let i = 0; i < 30; i++) {
+    const fx = left + ((i * 137) % Math.max(1, Math.floor(right - left)));
+    const fy = GROUND_Y + 34 + ((i * 53) % 60);
+    ctx.fillStyle = flowerColors[i % flowerColors.length];
+    ctx.beginPath();
+    ctx.arc(fx, fy, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawHouse() {
+  const x = HOUSE_X;
+  const wallLeft = x - 70;
+  const wallTop = 345;
+  const wallW = 140;
+  const wallH = GROUND_Y - wallTop;
+
+  // Chimney (behind the roof)
+  ctx.fillStyle = "#a0522d";
+  ctx.fillRect(x + 38, 280, 24, 50);
+  ctx.fillStyle = "#7f3f1f";
+  ctx.fillRect(x + 34, 276, 32, 8);
+
+  // Walls
+  ctx.fillStyle = "#fff3c4";
+  ctx.fillRect(wallLeft, wallTop, wallW, wallH);
+  ctx.strokeStyle = "#c9b27a";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(wallLeft, wallTop, wallW, wallH);
+
+  // Roof
+  ctx.fillStyle = "#c0392b";
+  ctx.beginPath();
+  ctx.moveTo(x - 85, wallTop + 2);
+  ctx.lineTo(x, 265);
+  ctx.lineTo(x + 85, wallTop + 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#922b21";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Door
+  ctx.fillStyle = "#6d4c41";
+  roundRect(x - 14, GROUND_Y - 50, 28, 50, 4);
+  ctx.fill();
+  ctx.fillStyle = "#ffd54f";
+  ctx.beginPath();
+  ctx.arc(x + 8, GROUND_Y - 25, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Windows
+  const windows = [x - 52, x + 26];
+  for (const wx of windows) {
+    ctx.fillStyle = "#aee3ff";
+    ctx.fillRect(wx, wallTop + 22, 26, 26);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(wx, wallTop + 22, 26, 26);
+    ctx.beginPath();
+    ctx.moveTo(wx + 13, wallTop + 22);
+    ctx.lineTo(wx + 13, wallTop + 48);
+    ctx.moveTo(wx, wallTop + 35);
+    ctx.lineTo(wx + 26, wallTop + 35);
+    ctx.stroke();
+  }
+}
+
+function drawRamp(startX, endX) {
+  // Fill the ramp shape by walking along its curve.
+  ctx.fillStyle = "#c68642";
+  ctx.beginPath();
+  ctx.moveTo(startX, GROUND_Y);
+  const steps = 30;
+  for (let i = 0; i <= steps; i++) {
+    const x = startX + (endX - startX) * i / steps;
+    ctx.lineTo(x, pathAt(x).y);
+  }
+  // Back side straight down to the ground
+  const lipX = Math.abs(pathAt(startX).y - GROUND_Y) < 1 ? endX : startX;
+  ctx.lineTo(lipX, GROUND_Y);
+  ctx.closePath();
+  ctx.fill();
+
+  // Wooden support beams
+  ctx.strokeStyle = "#8b5a2b";
+  ctx.lineWidth = 4;
+  for (let i = 1; i < 6; i++) {
+    const x = startX + (endX - startX) * i / 6;
+    ctx.beginPath();
+    ctx.moveTo(x, GROUND_Y);
+    ctx.lineTo(x, pathAt(x).y);
+    ctx.stroke();
+  }
+
+  // Top surface
+  ctx.strokeStyle = "#6b3f1a";
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const x = startX + (endX - startX) * i / steps;
+    if (i === 0) ctx.moveTo(x, pathAt(x).y);
+    else ctx.lineTo(x, pathAt(x).y);
+  }
+  ctx.stroke();
+
+  // Back edge
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(lipX, LIP_Y);
+  ctx.lineTo(lipX, GROUND_Y);
+  ctx.stroke();
+}
+
+function drawWheel(cx, cy) {
+  // Tyre
+  ctx.fillStyle = "#222222";
+  ctx.beginPath();
+  ctx.arc(cx, cy, WHEEL_R, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Chunky treads that spin with the wheel
+  ctx.fillStyle = "#111111";
+  for (let i = 0; i < 12; i++) {
+    const a = truck.wheelSpin + i * Math.PI / 6;
+    ctx.save();
+    ctx.translate(cx + Math.cos(a) * WHEEL_R, cy + Math.sin(a) * WHEEL_R);
+    ctx.rotate(a);
+    ctx.fillRect(-4, -5, 8, 10);
+    ctx.restore();
+  }
+
+  // Hub
+  ctx.fillStyle = "#bbbbbb";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#777777";
+  ctx.lineWidth = 3;
+  for (let i = 0; i < 5; i++) {
+    const a = truck.wheelSpin + i * Math.PI * 2 / 5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(a) * 11, cy + Math.sin(a) * 11);
+    ctx.stroke();
+  }
+}
+
+function drawTruck() {
+  if (truck.waiting > 0) return;
+
+  const here = pathAt(truck.x);
+  const angle = Math.atan(here.slope);
+
+  ctx.save();
+  ctx.translate(truck.x, here.y);
+  ctx.rotate(angle);
+
+  // Everything below is drawn with (0, 0) on the ground between the wheels.
+  const body = Math.max(-10, Math.min(14, truck.bounce)); // springs squish
+  const color = truckColors[colorIndex];
+
+  // Springs connecting wheels to body
+  ctx.strokeStyle = "#555555";
+  ctx.lineWidth = 4;
+  const wheelsX = [-48, 48];
+  for (const wx of wheelsX) {
+    ctx.beginPath();
+    const top = -78 + body;
+    const bottom = -WHEEL_R;
+    for (let i = 0; i <= 6; i++) {
+      const y = bottom + (top - bottom) * i / 6;
+      const x = wx + (i % 2 === 0 ? -6 : 6);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  for (const wx of wheelsX) drawWheel(wx, -WHEEL_R);
+
+  // Exhaust pipe
+  ctx.fillStyle = "#888888";
+  ctx.fillRect(-74, -128 + body, 7, 48);
+
+  // Main body
+  ctx.fillStyle = color;
+  roundRect(-80, -100 + body, 162, 32, 8);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Cab
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(-22, -100 + body);
+  ctx.lineTo(-16, -138 + body);
+  ctx.lineTo(28, -138 + body);
+  ctx.lineTo(46, -100 + body);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Window
+  ctx.fillStyle = "#bde9ff";
+  ctx.beginPath();
+  ctx.moveTo(4, -104 + body);
+  ctx.lineTo(6, -132 + body);
+  ctx.lineTo(25, -132 + body);
+  ctx.lineTo(38, -104 + body);
+  ctx.closePath();
+  ctx.fill();
+
+  // Driver's helmet
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(14, -116 + body, 8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Lights on the roof
+  ctx.fillStyle = "#ffdd33";
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.arc(-8 + i * 13, -142 + body, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Headlight
+  ctx.fillStyle = "#fff6a8";
+  ctx.beginPath();
+  ctx.arc(78, -88 + body, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Name on the side
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 18px 'Trebuchet MS', Arial, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("TOMMY", 0, -83 + body);
+
+  ctx.restore();
+}
+
+// ------------------------------------------------------------
+// Draw one whole frame
+// ------------------------------------------------------------
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "#7ec8f0";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const shakeX = (Math.random() - 0.5) * shake;
+  const shakeY = (Math.random() - 0.5) * shake;
+  ctx.setTransform(scale, 0, 0, scale, offsetX + shakeX * scale, offsetY + shakeY * scale);
+
+  drawBackground();
+  drawHouse();
+  drawRamp(RAMP_LEFT_START, LIP_LEFT);
+  drawRamp(LIP_RIGHT, RAMP_RIGHT_END);
+  drawParticles();
+  drawTruck();
+}
+
+// ------------------------------------------------------------
+// Animation loop
+// ------------------------------------------------------------
+let lastTime = performance.now();
+
+function frame(now) {
+  let dt = (now - lastTime) / 1000;
+  lastTime = now;
+  if (dt > 0.05) dt = 0.05; // don't jump ahead if the tab was hidden
+  if (slowMotion) dt *= 0.3;
+
+  update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ------------------------------------------------------------
+// Buttons
+// ------------------------------------------------------------
+document.getElementById("slowBtn").addEventListener("click", function () {
+  slowMotion = !slowMotion;
+  this.textContent = slowMotion ? "Normal speed" : "Slow motion";
+});
+
+document.getElementById("colorBtn").addEventListener("click", function () {
+  colorIndex = (colorIndex + 1) % truckColors.length;
+});
+</script>
+</body>
+</html>
