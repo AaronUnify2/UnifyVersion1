@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Tommy's Breakfast Catch</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #fdf0d5;
+    font-family: "Trebuchet MS", Arial, sans-serif;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .top-bar {
+    position: fixed;
+    top: 8px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    padding: 0 16px;
+    pointer-events: none;
+  }
+  .pill {
+    background: rgba(255, 255, 255, 0.9);
+    color: #6b3f1a;
+    font-weight: bold;
+    font-size: clamp(15px, 3.5vw, 22px);
+    padding: 6px 14px;
+    border-radius: 999px;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15);
+  }
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 16px;
+    background: rgba(255, 236, 200, 0.85);
+    cursor: pointer;
+  }
+  .overlay h1 {
+    margin: 0 0 12px;
+    color: #e67e22;
+    font-size: clamp(30px, 8vw, 60px);
+    text-shadow: 3px 3px 0 #fff, 5px 5px 0 rgba(0, 0, 0, 0.15);
+  }
+  .overlay p {
+    margin: 6px 0;
+    color: #6b3f1a;
+    font-size: clamp(16px, 4vw, 24px);
+    max-width: 520px;
+  }
+  .overlay .go {
+    margin-top: 20px;
+    font-size: clamp(22px, 6vw, 34px);
+    font-weight: bold;
+    color: #fff;
+    background: #e74c3c;
+    border: 4px solid #fff;
+    border-radius: 999px;
+    padding: 12px 32px;
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25);
+  }
+  .hidden {
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<div class="top-bar">
+  <div class="pill">Caught: <span id="score">0</span></div>
+  <div class="pill">Breakfast: <span id="plate">0</span>/10</div>
+</div>
+
+<div class="overlay" id="startScreen">
+  <h1>Tommy's Breakfast Catch!</h1>
+  <p>The silly chicken is dropping breakfast!</p>
+  <p>Move the frying pan to catch the eggs, toast, bacon, pancakes and strawberries.</p>
+  <p>Drag your finger, move the mouse, or use the arrow keys.</p>
+  <div class="go">Tap to play!</div>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+// Screen size in CSS pixels. S is our "size unit" so things look
+// the same on a phone and on a big screen.
+let W = 0;
+let H = 0;
+let S = 1;
+let floorY = 0;
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = Math.floor(W * dpr);
+  canvas.height = Math.floor(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  S = Math.min(W, H) / 100;
+  floorY = H - 12 * S;
+  pan.y = floorY - 4 * S;
+  pan.x = Math.max(panHalfWidth(), Math.min(W - panHalfWidth(), pan.x || W / 2));
+  pan.targetX = pan.x;
+}
+
+// ------------------------------------------------------------
+// Game state
+// ------------------------------------------------------------
+const PLATE_SIZE = 10;     // catch this many for a full breakfast
+
+const pan = { x: 0, y: 0, targetX: 0, sizzle: 0, contents: null };
+const chicken = { x: 0, targetX: 0, bob: 0, layTimer: 1.0, squawk: 0 };
+const foods = [];          // things falling down
+const splats = [];         // broken eggs on the floor
+const sparkles = [];       // little bits of confetti and steam
+const popups = [];         // "+1" and "Yum!" words
+
+let playing = false;
+let score = 0;
+let plateCount = 0;
+let level = 1;
+let celebrate = 0;         // seconds left of the "Breakfast is ready" party
+let time = 0;
+
+const keys = { left: false, right: false };
+
+function panHalfWidth() { return 14 * S; }
+
+resize();
+window.addEventListener("resize", resize);
+chicken.x = W / 2;
+chicken.targetX = W / 2;
+
+// ------------------------------------------------------------
+// Sounds (made with the Web Audio API, no files needed)
+// ------------------------------------------------------------
+let audio = null;
+
+function beep(freq, duration, type, volume) {
+  if (!audio) return;
+  const osc = audio.createOscillator();
+  const gain = audio.createGain();
+  osc.type = type || "sine";
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(volume || 0.15, audio.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + duration);
+  osc.connect(gain);
+  gain.connect(audio.destination);
+  osc.start();
+  osc.stop(audio.currentTime + duration);
+}
+
+function soundCatch() {
+  beep(660, 0.12, "triangle", 0.2);
+  setTimeout(function () { beep(990, 0.15, "triangle", 0.2); }, 80);
+}
+
+function soundSplat() {
+  beep(140, 0.25, "sawtooth", 0.12);
+}
+
+function soundParty() {
+  const notes = [523, 659, 784, 1047];
+  notes.forEach(function (n, i) {
+    setTimeout(function () { beep(n, 0.25, "triangle", 0.2); }, i * 130);
+  });
+}
+
+// ------------------------------------------------------------
+// Foods
+// ------------------------------------------------------------
+const FOOD_TYPES = ["egg", "egg", "egg", "toast", "bacon", "pancake", "strawberry"];
+
+function dropFood() {
+  const type = FOOD_TYPES[Math.floor(Math.random() * FOOD_TYPES.length)];
+  foods.push({
+    type: type,
+    x: chicken.x,
+    y: chickenY() + 6 * S,
+    vy: 0,
+    spin: (Math.random() - 0.5) * 3,
+    angle: 0
+  });
+  chicken.squawk = 0.3;
+}
+
+function fallSpeed() {
+  // Gets a little faster each level, but never too fast for little hands.
+  return Math.min(34 + level * 6, 70) * S;
+}
+
+function layInterval() {
+  return Math.max(1.6 - level * 0.12, 0.7);
+}
+
+function chickenY() { return 16 * S + 40; }
+
+// ------------------------------------------------------------
+// Effects
+// ------------------------------------------------------------
+function addPopup(x, y, text, color) {
+  popups.push({ x: x, y: y, text: text, color: color, life: 1.0 });
+}
+
+function addConfetti() {
+  const colors = ["#e74c3c", "#f1c40f", "#2ecc71", "#3498db", "#9b59b6", "#ff69b4"];
+  for (let i = 0; i < 80; i++) {
+    sparkles.push({
+      x: Math.random() * W,
+      y: -20 - Math.random() * H * 0.3,
+      vx: (Math.random() - 0.5) * 60,
+      vy: 80 + Math.random() * 140,
+      size: 3 + Math.random() * 4,
+      color: colors[i % colors.length],
+      life: 3,
+      spin: Math.random() * 6
+    });
+  }
+}
+
+function addSteam(x, y) {
+  sparkles.push({
+    x: x + (Math.random() - 0.5) * 10 * S,
+    y: y,
+    vx: (Math.random() - 0.5) * 10,
+    vy: -30 - Math.random() * 20,
+    size: 2 * S,
+    color: "steam",
+    life: 1.0,
+    spin: 0
+  });
+}
+
+// ------------------------------------------------------------
+// Update
+// ------------------------------------------------------------
+function update(dt) {
+  time += dt;
+
+  // Chicken wanders across the top of the kitchen.
+  const chickenSpeed = 30 * S;
+  if (Math.abs(chicken.targetX - chicken.x) < 2) {
+    const margin = 12 * S;
+    chicken.targetX = margin + Math.random() * (W - margin * 2);
+  }
+  const dir = Math.sign(chicken.targetX - chicken.x);
+  chicken.x += dir * Math.min(chickenSpeed * dt, Math.abs(chicken.targetX - chicken.x));
+  chicken.facing = dir === 0 ? (chicken.facing || 1) : dir;
+  chicken.bob += dt * 10;
+  chicken.squawk = Math.max(0, chicken.squawk - dt);
+
+  if (playing && celebrate <= 0) {
+    chicken.layTimer -= dt;
+    if (chicken.layTimer <= 0) {
+      dropFood();
+      chicken.layTimer = layInterval() * (0.8 + Math.random() * 0.4);
+    }
+  }
+
+  // Move the pan: with keys, or smoothly toward the finger / mouse.
+  const panSpeed = 90 * S;
+  if (keys.left) pan.targetX -= panSpeed * dt;
+  if (keys.right) pan.targetX += panSpeed * dt;
+  const half = panHalfWidth();
+  pan.targetX = Math.max(half, Math.min(W - half, pan.targetX));
+  pan.x += (pan.targetX - pan.x) * Math.min(1, dt * 18);
+
+  // Falling foods
+  const catchTop = pan.y - 3 * S;
+  for (let i = foods.length - 1; i >= 0; i--) {
+    const f = foods[i];
+    const prevY = f.y;
+    f.vy = fallSpeed();
+    f.y += f.vy * dt;
+    f.angle += f.spin * dt;
+
+    // Did it land in the pan?
+    if (prevY < catchTop && f.y >= catchTop && Math.abs(f.x - pan.x) < half + 3 * S) {
+      foods.splice(i, 1);
+      catchFood(f);
+      continue;
+    }
+
+    // Did it hit the floor?
+    if (f.y >= floorY) {
+      foods.splice(i, 1);
+      if (f.type === "egg") {
+        splats.push({ x: f.x, life: 4 });
+        addPopup(f.x, floorY - 8 * S, "SPLAT!", "#e67e22");
+        soundSplat();
+      } else {
+        addPopup(f.x, floorY - 8 * S, "Oops!", "#999999");
+      }
+    }
+  }
+
+  // Sizzling food in the pan
+  if (pan.sizzle > 0) {
+    pan.sizzle -= dt;
+    if (Math.random() < dt * 20) addSteam(pan.x, pan.y - 4 * S);
+    if (pan.sizzle <= 0) pan.contents = null;
+  }
+
+  // Party time
+  if (celebrate > 0) {
+    celebrate -= dt;
+    if (celebrate <= 0) {
+      plateCount = 0;
+      level++;
+      document.getElementById("plate").textContent = plateCount;
+    }
+  }
+
+  for (let i = splats.length - 1; i >= 0; i--) {
+    splats[i].life -= dt;
+    if (splats[i].life <= 0) splats.splice(i, 1);
+  }
+
+  for (let i = sparkles.length - 1; i >= 0; i--) {
+    const p = sparkles[i];
+    p.life -= dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    if (p.life <= 0 || p.y > H + 20) sparkles.splice(i, 1);
+  }
+
+  for (let i = popups.length - 1; i >= 0; i--) {
+    popups[i].life -= dt;
+    popups[i].y -= 30 * dt;
+    if (popups[i].life <= 0) popups.splice(i, 1);
+  }
+}
+
+function catchFood(f) {
+  score++;
+  plateCount++;
+  pan.contents = f.type;
+  pan.sizzle = 1.2;
+  document.getElementById("score").textContent = score;
+  document.getElementById("plate").textContent = plateCount;
+
+  const words = ["Yum!", "Great catch!", "Nice!", "Yummy!", "Wow!"];
+  addPopup(pan.x, pan.y - 12 * S, words[Math.floor(Math.random() * words.length)], "#27ae60");
+  soundCatch();
+
+  if (plateCount >= PLATE_SIZE) {
+    celebrate = 3.5;
+    foods.length = 0;
+    addConfetti();
+    soundParty();
+  }
+}
+
+// ------------------------------------------------------------
+// Drawing the foods
+// ------------------------------------------------------------
+function drawEgg(x, y, r, angle) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = "#fffaf0";
+  ctx.strokeStyle = "#d8c8a8";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r * 0.78, r, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.3, -r * 0.4, r * 0.15, r * 0.25, -0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFriedEgg(x, y, r) {
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.ellipse(x, y, r * 1.4, r * 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffc107";
+  ctx.beginPath();
+  ctx.ellipse(x, y - r * 0.1, r * 0.5, r * 0.32, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+  ctx.beginPath();
+  ctx.arc(x - r * 0.15, y - r * 0.2, r * 0.1, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawToast(x, y, r, angle) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = "#a0642d";
+  ctx.beginPath();
+  ctx.moveTo(-r, r);
+  ctx.lineTo(-r, -r * 0.3);
+  ctx.arc(-r * 0.45, -r * 0.4, r * 0.6, Math.PI, Math.PI * 1.6);
+  ctx.arc(r * 0.45, -r * 0.4, r * 0.6, Math.PI * 1.4, 0);
+  ctx.lineTo(r, r);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#f4c27a";
+  ctx.beginPath();
+  ctx.rect(-r * 0.75, -r * 0.35, r * 1.5, r * 1.15);
+  ctx.fill();
+  // Butter
+  ctx.fillStyle = "#fff59d";
+  ctx.fillRect(-r * 0.3, -r * 0.05, r * 0.6, r * 0.4);
+  ctx.restore();
+}
+
+function drawBacon(x, y, r, angle) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#b03a2e";
+  ctx.lineWidth = r * 0.7;
+  ctx.beginPath();
+  for (let i = 0; i <= 12; i++) {
+    const px = -r * 1.2 + (r * 2.4) * i / 12;
+    const py = Math.sin(i * 1.1) * r * 0.25;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = "#f5b7b1";
+  ctx.lineWidth = r * 0.18;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPancake(x, y, r) {
+  for (let i = 2; i >= 0; i--) {
+    ctx.fillStyle = "#c98a3d";
+    ctx.beginPath();
+    ctx.ellipse(x, y + i * r * 0.28, r * 1.1, r * 0.35, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#e8b064";
+    ctx.beginPath();
+    ctx.ellipse(x, y + i * r * 0.28 - r * 0.06, r * 1.05, r * 0.28, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Syrup and butter on top
+  ctx.fillStyle = "#8d4b14";
+  ctx.beginPath();
+  ctx.ellipse(x, y - r * 0.05, r * 0.6, r * 0.16, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff59d";
+  ctx.fillRect(x - r * 0.2, y - r * 0.25, r * 0.4, r * 0.2);
+}
+
+function drawStrawberry(x, y, r, angle) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = "#e53935";
+  ctx.beginPath();
+  ctx.moveTo(0, r);
+  ctx.bezierCurveTo(-r * 1.1, r * 0.2, -r * 0.9, -r * 0.8, 0, -r * 0.6);
+  ctx.bezierCurveTo(r * 0.9, -r * 0.8, r * 1.1, r * 0.2, 0, r);
+  ctx.fill();
+  ctx.fillStyle = "#fff59d";
+  const seeds = [[-0.35, -0.2], [0.35, -0.2], [0, 0], [-0.25, 0.35], [0.25, 0.35], [0, -0.4]];
+  for (const s of seeds) {
+    ctx.beginPath();
+    ctx.arc(s[0] * r, s[1] * r, r * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "#2e7d32";
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.6);
+  ctx.lineTo(-r * 0.5, -r * 0.9);
+  ctx.lineTo(-r * 0.15, -r * 0.65);
+  ctx.lineTo(0, -r * 1.0);
+  ctx.lineTo(r * 0.15, -r * 0.65);
+  ctx.lineTo(r * 0.5, -r * 0.9);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFood(type, x, y, r, angle) {
+  if (type === "egg") drawEgg(x, y, r, angle);
+  else if (type === "toast") drawToast(x, y, r, angle);
+  else if (type === "bacon") drawBacon(x, y, r, angle);
+  else if (type === "pancake") drawPancake(x, y, r);
+  else if (type === "strawberry") drawStrawberry(x, y, r, angle);
+}
+
+// ------------------------------------------------------------
+// Drawing the kitchen, chicken and pan
+// ------------------------------------------------------------
+function drawKitchen() {
+  // Wall
+  ctx.fillStyle = "#fdf0d5";
+  ctx.fillRect(0, 0, W, floorY);
+
+  // Checked tiles
+  const tile = 10 * S;
+  for (let y = 0; y < floorY; y += tile) {
+    for (let x = 0; x < W; x += tile) {
+      if ((Math.floor(x / tile) + Math.floor(y / tile)) % 2 === 0) {
+        ctx.fillStyle = "#f8e2b8";
+        ctx.fillRect(x, y, tile, tile);
+      }
+    }
+  }
+
+  // Window with the sun outside
+  const winW = Math.min(30 * S, W * 0.3);
+  const winH = winW * 0.75;
+  const winX = W * 0.78 - winW / 2;
+  const winY = chickenY() + 14 * S;
+  ctx.fillStyle = "#9fd8ff";
+  ctx.fillRect(winX, winY, winW, winH);
+  ctx.fillStyle = "#ffe066";
+  ctx.beginPath();
+  ctx.arc(winX + winW * 0.7, winY + winH * 0.35, winW * 0.13, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#7cc96e";
+  ctx.fillRect(winX, winY + winH * 0.75, winW, winH * 0.25);
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = Math.max(3, S);
+  ctx.strokeRect(winX, winY, winW, winH);
+  ctx.beginPath();
+  ctx.moveTo(winX + winW / 2, winY);
+  ctx.lineTo(winX + winW / 2, winY + winH);
+  ctx.moveTo(winX, winY + winH / 2);
+  ctx.lineTo(winX + winW, winY + winH / 2);
+  ctx.stroke();
+
+  // Shelf that the chicken walks on
+  ctx.fillStyle = "#a0642d";
+  ctx.fillRect(0, chickenY() + 6 * S, W, 2 * S);
+
+  // Counter / floor
+  ctx.fillStyle = "#8d5a2b";
+  ctx.fillRect(0, floorY, W, H - floorY);
+  ctx.fillStyle = "#b07a45";
+  ctx.fillRect(0, floorY, W, 2 * S);
+}
+
+function drawSplats() {
+  for (const s of splats) {
+    ctx.globalAlpha = Math.min(1, s.life);
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.ellipse(s.x, floorY + S, 8 * S, 2.2 * S, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#ffc107";
+    ctx.beginPath();
+    ctx.ellipse(s.x + S, floorY + S * 0.6, 2.6 * S, 1.2 * S, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Bits of shell
+    ctx.fillStyle = "#e8dcc0";
+    ctx.fillRect(s.x - 7 * S, floorY - S, 2 * S, 1.2 * S);
+    ctx.fillRect(s.x + 6 * S, floorY - 0.6 * S, 1.6 * S, 1 * S);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawChicken() {
+  const x = chicken.x;
+  const y = chickenY() + Math.abs(Math.sin(chicken.bob)) * -1.2 * S;
+  const f = chicken.facing || 1;
+  const r = 6 * S;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(f, 1);
+
+  // Legs
+  ctx.strokeStyle = "#f39c12";
+  ctx.lineWidth = Math.max(2, 0.6 * S);
+  const step = Math.sin(chicken.bob) * S;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.3, r * 0.7);
+  ctx.lineTo(-r * 0.3 + step, r * 1.05);
+  ctx.moveTo(r * 0.3, r * 0.7);
+  ctx.lineTo(r * 0.3 - step, r * 1.05);
+  ctx.stroke();
+
+  // Tail feathers
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.8, -r * 0.1);
+  ctx.lineTo(-r * 1.4, -r * 0.8);
+  ctx.lineTo(-r * 1.2, -r * 0.1);
+  ctx.lineTo(-r * 1.45, r * 0.2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Body
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#e0d6c8";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r, r * 0.8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Wing
+  ctx.fillStyle = "#f2ece2";
+  ctx.beginPath();
+  const flap = chicken.squawk > 0 ? -0.6 : 0;
+  ctx.ellipse(-r * 0.1, r * 0.05, r * 0.5, r * 0.32, flap, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Head
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(r * 0.75, -r * 0.7, r * 0.45, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Comb
+  ctx.fillStyle = "#e74c3c";
+  ctx.beginPath();
+  ctx.arc(r * 0.6, -r * 1.15, r * 0.14, 0, Math.PI * 2);
+  ctx.arc(r * 0.78, -r * 1.2, r * 0.15, 0, Math.PI * 2);
+  ctx.arc(r * 0.95, -r * 1.12, r * 0.13, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Beak (opens when she squawks)
+  ctx.fillStyle = "#f39c12";
+  ctx.beginPath();
+  const open = chicken.squawk > 0 ? r * 0.12 : 0;
+  ctx.moveTo(r * 1.15, -r * 0.78 - open);
+  ctx.lineTo(r * 1.5, -r * 0.7);
+  ctx.lineTo(r * 1.15, -r * 0.6 + open);
+  ctx.closePath();
+  ctx.fill();
+
+  // Wattle
+  ctx.fillStyle = "#e74c3c";
+  ctx.beginPath();
+  ctx.arc(r * 1.1, -r * 0.45, r * 0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eye
+  ctx.fillStyle = "#222222";
+  ctx.beginPath();
+  ctx.arc(r * 0.88, -r * 0.8, r * 0.08, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  if (chicken.squawk > 0) {
+    ctx.fillStyle = "#6b3f1a";
+    ctx.font = "bold " + Math.round(3.5 * S) + "px 'Trebuchet MS', Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Bawk!", x + f * 9 * S, y - 8 * S);
+  }
+}
+
+function drawPan() {
+  const x = pan.x;
+  const y = pan.y;
+  const half = panHalfWidth();
+
+  // Handle
+  ctx.fillStyle = "#3b2a1a";
+  ctx.save();
+  ctx.translate(x + half, y);
+  ctx.rotate(-0.15);
+  ctx.fillRect(0, -1.2 * S, 12 * S, 2.6 * S);
+  ctx.restore();
+
+  // Pan body
+  ctx.fillStyle = "#2f3640";
+  ctx.beginPath();
+  ctx.moveTo(x - half, y - 2 * S);
+  ctx.lineTo(x + half, y - 2 * S);
+  ctx.lineTo(x + half * 0.85, y + 3 * S);
+  ctx.lineTo(x - half * 0.85, y + 3 * S);
+  ctx.closePath();
+  ctx.fill();
+
+  // Inside of the pan
+  ctx.fillStyle = "#57606f";
+  ctx.beginPath();
+  ctx.ellipse(x, y - 2 * S, half, 1.6 * S, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Food sizzling in the pan
+  if (pan.contents) {
+    const r = 5 * S;
+    if (pan.contents === "egg") drawFriedEgg(x, y - 2.5 * S, r);
+    else drawFood(pan.contents, x, y - 4 * S, r * 0.9, 0);
+  }
+}
+
+function drawSparkles() {
+  for (const p of sparkles) {
+    if (p.color === "steam") {
+      ctx.globalAlpha = Math.max(0, p.life) * 0.5;
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * (2 - p.life), 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.globalAlpha = Math.min(1, p.life);
+      ctx.fillStyle = p.color;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.spin * p.life);
+      ctx.fillRect(-p.size, -p.size / 2, p.size * 2, p.size);
+      ctx.restore();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawPopups() {
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const p of popups) {
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.font = "bold " + Math.round(5 * S) + "px 'Trebuchet MS', Arial, sans-serif";
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#ffffff";
+    ctx.strokeText(p.text, p.x, p.y);
+    ctx.fillStyle = p.color;
+    ctx.fillText(p.text, p.x, p.y);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawCelebration() {
+  if (celebrate <= 0) return;
+
+  // A big plate with the whole breakfast on it
+  const cx = W / 2;
+  const cy = H * 0.5;
+  const r = Math.min(W * 0.4, 32 * S);
+  const pop = Math.min(1, (3.5 - celebrate) * 4);
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(pop, pop);
+
+  ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+  ctx.beginPath();
+  ctx.ellipse(0, r * 0.12, r, r * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r, r * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#a6d8f0";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r * 0.8, r * 0.34, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const u = r / 6;
+  drawFriedEgg(-r * 0.35, -u * 0.3, u * 1.1);
+  drawToast(r * 0.3, -u * 0.9, u * 1.2, 0.15);
+  drawBacon(-r * 0.15, u * 1.2, u * 0.9, -0.1);
+  drawStrawberry(r * 0.55, u * 0.8, u * 0.7, 0.3);
+
+  ctx.restore();
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "bold " + Math.round(Math.min(9 * S, W / 11)) + "px 'Trebuchet MS', Arial, sans-serif";
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = "#ffffff";
+  ctx.fillStyle = "#e67e22";
+  const textY = cy - r * 0.45 - 8 * S;
+  ctx.strokeText("Breakfast is ready!", cx, textY);
+  ctx.fillText("Breakfast is ready!", cx, textY);
+  ctx.fillStyle = "#e74c3c";
+  ctx.strokeText("YUM!", cx, cy + r * 0.45 + 8 * S);
+  ctx.fillText("YUM!", cx, cy + r * 0.45 + 8 * S);
+}
+
+function draw() {
+  drawKitchen();
+  drawSplats();
+  drawChicken();
+  for (const f of foods) drawFood(f.type, f.x, f.y, 5 * S, f.angle);
+  drawPan();
+  drawSparkles();
+  drawPopups();
+  drawCelebration();
+}
+
+// ------------------------------------------------------------
+// Main loop
+// ------------------------------------------------------------
+let lastTime = performance.now();
+
+function frame(now) {
+  let dt = (now - lastTime) / 1000;
+  lastTime = now;
+  if (dt > 0.05) dt = 0.05;
+  update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ------------------------------------------------------------
+// Controls
+// ------------------------------------------------------------
+function startGame() {
+  if (playing) return;
+  playing = true;
+  document.getElementById("startScreen").classList.add("hidden");
+  chicken.layTimer = 0.8;
+  try {
+    audio = new (window.AudioContext || window.webkitAudioContext)();
+  } catch (e) {
+    audio = null; // no sound, the game still works
+  }
+}
+
+document.getElementById("startScreen").addEventListener("pointerdown", startGame);
+
+canvas.addEventListener("pointerdown", function (e) {
+  pan.targetX = e.clientX;
+});
+canvas.addEventListener("pointermove", function (e) {
+  // Follow the mouse always, and a finger while it's touching.
+  if (e.pointerType === "mouse" || e.buttons > 0 || e.pressure > 0) {
+    pan.targetX = e.clientX;
+  }
+});
+
+window.addEventListener("keydown", function (e) {
+  if (e.key === "ArrowLeft" || e.key === "a") keys.left = true;
+  if (e.key === "ArrowRight" || e.key === "d") keys.right = true;
+  if (e.key === " " || e.key === "Enter") startGame();
+});
+window.addEventListener("keyup", function (e) {
+  if (e.key === "ArrowLeft" || e.key === "a") keys.left = false;
+  if (e.key === "ArrowRight" || e.key === "d") keys.right = false;
+});
+</script>
+</body>
+</html>
