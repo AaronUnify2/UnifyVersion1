@@ -28,7 +28,7 @@
     right: 0;
     display: flex;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     padding: 0 16px;
     pointer-events: none;
   }
@@ -36,10 +36,11 @@
     background: rgba(255, 255, 255, 0.9);
     color: #2c3e50;
     font-weight: bold;
-    font-size: clamp(15px, 3.5vw, 22px);
-    padding: 6px 14px;
+    font-size: clamp(14px, 3.4vw, 22px);
+    padding: 6px 12px;
     border-radius: 999px;
     box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15);
+    white-space: nowrap;
   }
   #knockBtn {
     position: fixed;
@@ -68,6 +69,7 @@
 
 <div class="top-bar">
   <div class="pill">Blocks: <span id="count">0</span></div>
+  <div class="pill">Tallest: <span id="tallest">0</span></div>
   <div class="pill">Best: <span id="best">0</span></div>
 </div>
 
@@ -93,7 +95,6 @@ function resize() {
   H = window.innerHeight;
   canvas.width = Math.floor(W * dpr);
   canvas.height = Math.floor(H * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   B = Math.round(Math.max(44, Math.min(W * 0.2, H * 0.1, 84)));
   groundY = H - 80;
   hookY = 70 + B * 1.3;
@@ -101,7 +102,7 @@ function resize() {
 resize();
 window.addEventListener("resize", resize);
 
-// Turn a world height into a y position on the screen.
+// Turn a world height into a y position on the screen (before zooming).
 function screenY(worldY) {
   return groundY - worldY + camY;
 }
@@ -112,18 +113,23 @@ function screenY(worldY) {
 const COLORS = ["#e74c3c", "#e67e22", "#f1c40f", "#2ecc71", "#3498db", "#9b59b6", "#ff69b4", "#1abc9c"];
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-const tower = [];        // blocks that are part of the tower: { x, color, letter, squash }
+// Each tower is a list of blocks from the bottom up: { x, color, letter, squash }
+const towers = [];
 const debris = [];       // blocks that fell off and are tumbling
 const popups = [];
 const sparkles = [];
 
 let camY = 0;            // how far the camera has moved up
-let state = "ready";     // "ready" (block hanging), "falling", "wait", "knocked"
+let zoom = 1;            // 1 = normal, smaller = zoomed out
+let knockZoom = 1;       // how far to zoom out to see the whole tower fall
+let state = "ready";     // "ready", "falling", "wait", "zoomOut", "knocked", "zoomIn"
 let waitTimer = 0;
 let swingPhase = 0;
 let time = 0;
 let hasDropped = false;
 let best = 0;
+let dropCount = 0;       // used to pick the next letter and colour
+let milestonesShown = {};
 
 // The block currently hanging from the crane or falling.
 const current = { x: 0, y: 0, vy: 0, color: COLORS[0], letter: "A", pop: 1 };
@@ -204,30 +210,53 @@ function soundCheer() {
 }
 
 // ------------------------------------------------------------
+// Towers
+// ------------------------------------------------------------
+function tallestHeight() {
+  let most = 0;
+  for (const t of towers) most = Math.max(most, t.length);
+  return most;
+}
+
+function totalBlocks() {
+  let total = 0;
+  for (const t of towers) total += t.length;
+  return total;
+}
+
+// Find the tower the falling block will land on: the highest tower
+// whose top block is underneath it. Returns null for the ground.
+function towerBelow(x) {
+  let found = null;
+  for (const t of towers) {
+    const top = t[t.length - 1];
+    if (Math.abs(x - top.x) < B) {
+      if (found === null || t.length > found.length) found = t;
+    }
+  }
+  return found;
+}
+
+// ------------------------------------------------------------
 // The crane
 // ------------------------------------------------------------
 function swingAmount() {
-  return Math.max(0, Math.min(W / 2 - B * 0.7, B * 3.2));
+  return Math.max(0, Math.min(W / 2 - B * 0.7, B * 4));
 }
 
 function swingSpeed() {
-  // Starts gentle and speeds up a little as the tower grows.
-  return Math.min(1.5 + tower.length * 0.03, 2.6);
+  // Starts gentle and speeds up a little as the tallest tower grows.
+  return Math.min(1.5 + tallestHeight() * 0.03, 2.6);
 }
 
 function newBlock() {
-  const n = tower.length;
-  current.color = COLORS[n % COLORS.length];
-  current.letter = LETTERS[n % LETTERS.length];
+  current.color = COLORS[dropCount % COLORS.length];
+  current.letter = LETTERS[dropCount % LETTERS.length];
   current.vy = 0;
   current.pop = 0;
   state = "ready";
 }
 newBlock();
-
-function towerTop() {
-  return tower.length * B;
-}
 
 // ------------------------------------------------------------
 // Dropping and landing
@@ -238,6 +267,7 @@ function drop() {
   hasDropped = true;
   state = "falling";
   current.vy = 0;
+  dropCount++;
   // Remember where the block is in the world when we let go.
   current.y = groundY + camY - hookY - B / 2; // world height of the block's bottom
 }
@@ -254,7 +284,7 @@ function addStars(x, worldY) {
   }
 }
 
-function makeDebris(x, bottomY, vx, vy, spin, color, letter) {
+function makeDebris(x, bottomY, vx, vy, spin, color, letter, life) {
   debris.push({
     x: x,
     y: bottomY + B / 2,   // debris uses the block's centre
@@ -264,65 +294,54 @@ function makeDebris(x, bottomY, vx, vy, spin, color, letter) {
     spin: spin,
     color: color,
     letter: letter,
-    life: 3.5
+    life: life || 3.5
   });
 }
 
-function land() {
-  const supportY = towerTop();
-  current.y = supportY;
+function land(tower) {
+  if (tower === null) {
+    // Nothing underneath - start a brand new tower on the ground.
+    current.y = 0;
+    towers.push([{ x: current.x, color: current.color, letter: current.letter, squash: 1 }]);
+    if (towers.length > 1) addPopup("New tower!", "#2980b9", false);
+    soundThunk();
+    afterLanding(towers[towers.length - 1]);
+    return;
+  }
 
-  if (tower.length > 0) {
-    const top = tower[tower.length - 1];
-    const dx = current.x - top.x;
+  const top = tower[tower.length - 1];
+  const dx = current.x - top.x;
+  current.y = tower.length * B;
 
-    if (Math.abs(dx) >= B) {
-      // Missed the tower completely - keep falling past it.
-      makeDebris(current.x, current.y, 0, current.vy, (Math.random() - 0.5) * 2, current.color, current.letter);
-      addPopup("Missed!", "#7f8c8d", false);
-      soundWhoops();
-      afterLanding();
-      return;
-    }
+  if (Math.abs(dx) > B / 2) {
+    // Too far over the edge - it tips over and tumbles off.
+    const side = Math.sign(dx);
+    makeDebris(current.x, current.y, side * 90, 100, side * 4, current.color, current.letter);
+    addPopup("Whoops!", "#e67e22", false);
+    soundWhoops();
+    afterLanding(null);
+    return;
+  }
 
-    if (Math.abs(dx) > B / 2) {
-      // Too far over the edge - it tips over and tumbles off.
-      const side = Math.sign(dx);
-      makeDebris(current.x, current.y, side * 90, 100, side * 4, current.color, current.letter);
-      addPopup("Whoops!", "#e67e22", false);
-      soundWhoops();
-      afterLanding();
-      return;
-    }
-
-    if (Math.abs(dx) < B * 0.1) {
-      // Nearly perfect - snap it right into place.
-      current.x = top.x;
-      addPopup("Perfect!", "#27ae60", false);
-      addStars(current.x, supportY + B);
-      soundPerfect();
-    } else {
-      soundThunk();
-    }
+  if (Math.abs(dx) < B * 0.1) {
+    // Nearly perfect - snap it right into place.
+    current.x = top.x;
+    addPopup("Perfect!", "#27ae60", false);
+    addStars(current.x, current.y + B);
+    soundPerfect();
   } else {
     soundThunk();
   }
 
   tower.push({ x: current.x, color: current.color, letter: current.letter, squash: 1 });
-  checkBalance();
-  afterLanding();
-
-  const count = tower.length;
-  if (MILESTONES[count]) {
-    addPopup(MILESTONES[count], "#8e44ad", true);
-    soundCheer();
-  }
+  checkBalance(tower);
+  afterLanding(tower);
 }
 
 // Real blocks fall over if the blocks above lean too far out.
 // For every block, the middle (centre of mass) of all the blocks
 // sitting on it must be over the top of it.
-function checkBalance() {
+function checkBalance(tower) {
   for (let i = 0; i < tower.length - 1; i++) {
     let sum = 0;
     let n = 0;
@@ -347,10 +366,13 @@ function checkBalance() {
   }
 }
 
-function afterLanding() {
-  document.getElementById("count").textContent = tower.length;
-  if (tower.length > best) {
-    best = tower.length;
+function afterLanding(tower) {
+  const tallest = tallestHeight();
+  document.getElementById("count").textContent = totalBlocks();
+  document.getElementById("tallest").textContent = tallest;
+
+  if (tallest > best) {
+    best = tallest;
     document.getElementById("best").textContent = best;
     try {
       localStorage.setItem("tommyTowerBest", String(best));
@@ -358,31 +380,66 @@ function afterLanding() {
       // Saving isn't possible here - that's fine.
     }
   }
+
+  // Cheer when the tallest tower reaches a new height for the first time.
+  if (tower && tower.length === tallest && MILESTONES[tallest] && !milestonesShown[tallest]) {
+    milestonesShown[tallest] = true;
+    addPopup(MILESTONES[tallest], "#8e44ad", true);
+    soundCheer();
+  }
+
   state = "wait";
   waitTimer = 0.45;
 }
 
+// ------------------------------------------------------------
+// Knocking everything down
+// ------------------------------------------------------------
 function knockDown() {
   initAudio();
-  if (tower.length === 0 || state === "knocked") return;
+  if (totalBlocks() === 0) return;
+  if (state === "zoomOut" || state === "knocked" || state === "zoomIn") return;
+
+  // Work out how far to zoom out so the whole tallest tower fits on
+  // the screen, from the ground right up to the top block.
+  const towerPixels = tallestHeight() * B + B * 1.5;
+  const roomOnScreen = groundY - 60;
+  knockZoom = Math.min(1, roomOnScreen / towerPixels);
+
+  // If we need to zoom out or come back down, do that first so we
+  // can watch it fall. A short tower just falls straight away.
+  if (knockZoom < 0.98 || camY > 5) {
+    state = "zoomOut";
+    waitTimer = 0.9;
+  } else {
+    crash();
+  }
+}
+
+function crash() {
   const side = Math.random() < 0.5 ? -1 : 1;
-  tower.forEach(function (b, i) {
-    makeDebris(
-      b.x,
-      i * B,
-      side * (80 + i * 25 + Math.random() * 80) + (Math.random() - 0.5) * 120,
-      150 + Math.random() * 200,
-      (Math.random() - 0.5) * 8,
-      b.color,
-      b.letter
-    );
-  });
-  tower.length = 0;
+  for (const t of towers) {
+    t.forEach(function (b, i) {
+      makeDebris(
+        b.x,
+        i * B,
+        side * (80 + i * 25 + Math.random() * 80) + (Math.random() - 0.5) * 120,
+        150 + Math.random() * 200,
+        (Math.random() - 0.5) * 8,
+        b.color,
+        b.letter,
+        4.5
+      );
+    });
+  }
+  towers.length = 0;
   document.getElementById("count").textContent = 0;
+  document.getElementById("tallest").textContent = 0;
   addPopup("CRASH!", "#e74c3c", true);
   soundCrash();
   state = "knocked";
-  waitTimer = 2.5;
+  // Tall towers take longer to land, so watch for longer.
+  waitTimer = 2.5 + Math.min(1.5, (1 - knockZoom) * 2);
 }
 
 // ------------------------------------------------------------
@@ -399,18 +456,45 @@ function update(dt) {
   } else if (state === "falling") {
     current.vy -= 2600 * dt;
     current.y += current.vy * dt;
-    if (current.y <= towerTop()) land();
-  } else {
+    const tower = towerBelow(current.x);
+    const supportY = tower ? tower.length * B : 0;
+    if (current.y <= supportY) land(tower);
+  } else if (state === "wait") {
     waitTimer -= dt;
     if (waitTimer <= 0) newBlock();
+  } else if (state === "zoomOut") {
+    waitTimer -= dt;
+    if (waitTimer <= 0) crash();
+  } else if (state === "knocked") {
+    waitTimer -= dt;
+    if (waitTimer <= 0) {
+      state = "zoomIn";
+      dropCount = 0;
+      milestonesShown = {};
+    }
+  } else if (state === "zoomIn") {
+    if (zoom > 0.99) {
+      zoom = 1;
+      newBlock();
+    }
   }
 
-  // Move the camera so the top of the tower stays in a nice place.
-  const wantTopOnScreen = Math.max(hookY + B * 2.2, H * 0.55);
-  const targetCam = Math.max(0, towerTop() - (groundY - wantTopOnScreen));
+  // Camera: zoomed out at the ground while knocking down, otherwise
+  // keep the top of the tallest tower in a nice place.
+  let targetCam = 0;
+  let targetZoom = 1;
+  if (state === "zoomOut" || state === "knocked") {
+    targetZoom = knockZoom;
+  } else {
+    const wantTopOnScreen = Math.max(hookY + B * 2.2, H * 0.55);
+    targetCam = Math.max(0, tallestHeight() * B - (groundY - wantTopOnScreen));
+  }
   camY += (targetCam - camY) * Math.min(1, dt * 3);
+  zoom += (targetZoom - zoom) * Math.min(1, dt * 4);
 
-  for (const b of tower) b.squash = Math.max(0, b.squash - dt * 4);
+  for (const t of towers) {
+    for (const b of t) b.squash = Math.max(0, b.squash - dt * 4);
+  }
 
   // Tumbling blocks
   for (let i = debris.length - 1; i >= 0; i--) {
@@ -477,7 +561,7 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
-// Draw a toy block with its centre at (cx, cy) on the screen.
+// Draw a toy block with its centre at (cx, cy).
 function drawBlock(cx, cy, color, letter, angle, scaleX, scaleY, alpha) {
   ctx.save();
   ctx.globalAlpha = alpha === undefined ? 1 : alpha;
@@ -536,7 +620,6 @@ function drawSky() {
 
 function drawCloud(x, worldY, s) {
   const y = screenY(worldY);
-  if (y < -100 || y > H + 100) return;
   ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
   ctx.beginPath();
   ctx.arc(x, y, 30 * s, 0, Math.PI * 2);
@@ -548,7 +631,6 @@ function drawCloud(x, worldY, s) {
 
 function drawBird(x, worldY) {
   const y = screenY(worldY);
-  if (y < -50 || y > H + 50) return;
   const flap = Math.sin(time * 8 + x) * 6;
   ctx.strokeStyle = "#2c3e50";
   ctx.lineWidth = 3;
@@ -561,7 +643,6 @@ function drawBird(x, worldY) {
 
 function drawPlane(worldY) {
   const y = screenY(worldY);
-  if (y < -80 || y > H + 80) return;
   const x = ((time * 70) % (W + 300)) - 150;
   ctx.fillStyle = "#ecf0f1";
   ctx.beginPath();
@@ -591,7 +672,6 @@ function drawPlane(worldY) {
 
 function drawMoon(worldY) {
   const y = screenY(worldY);
-  if (y < -120 || y > H + 120) return;
   const x = W * 0.25;
   ctx.fillStyle = "#f5f3ce";
   ctx.beginPath();
@@ -618,12 +698,11 @@ function drawScenery() {
   drawMoon(B * 100);
 
   const gy = screenY(0);
-  if (gy > H + 400) return;
 
   // The house and tree shrink a bit on narrow phone screens.
   const U = Math.min(B, W / 9);
 
-  // House on the left (about 4 blocks tall)
+  // House on the left
   const baseX = W / 2;
   const houseW = U * 2.6;
   const houseX = Math.max(8, baseX - U * 2.2 - houseW);
@@ -643,7 +722,7 @@ function drawScenery() {
   ctx.fillRect(houseX + U * 0.25, gy - wallH + U * 0.4, U * 0.55, U * 0.55);
   ctx.fillRect(houseX + houseW - U * 0.8, gy - wallH + U * 0.4, U * 0.55, U * 0.55);
 
-  // Tree on the right (about 7 blocks tall)
+  // Tree on the right
   const treeX = Math.min(W - U * 1.2, baseX + U * 3.3);
   ctx.fillStyle = "#7a4b25";
   ctx.fillRect(treeX - U * 0.25, gy - U * 4.5, U * 0.5, U * 4.5);
@@ -654,11 +733,11 @@ function drawScenery() {
   ctx.arc(treeX + U * 0.9, gy - U * 4.6, U * 0.9, 0, Math.PI * 2);
   ctx.fill();
 
-  // Grass
+  // Grass - extra wide and deep so it still fills the screen when zoomed out
   ctx.fillStyle = "#5cb85c";
-  ctx.fillRect(0, gy, W, Math.max(0, H - gy + 10));
+  ctx.fillRect(-W * 4, gy, W * 9, H * 6);
   ctx.fillStyle = "#4cae4c";
-  ctx.fillRect(0, gy, W, 6);
+  ctx.fillRect(-W * 4, gy, W * 9, 6);
 }
 
 function drawCrane() {
@@ -669,7 +748,7 @@ function drawCrane() {
   ctx.fillStyle = "#f39c12";
   ctx.fillRect(0, railY - 6, W, 12);
   ctx.fillStyle = "#d35400";
-  for (let x = -((time * 0) % 30); x < W; x += 30) {
+  for (let x = 0; x < W; x += 30) {
     ctx.fillRect(x, railY - 6, 4, 12);
   }
 
@@ -678,11 +757,11 @@ function drawCrane() {
   roundRect(hookX - 22, railY - 12, 44, 20, 5);
   ctx.fill();
 
+  ctx.strokeStyle = "#2c3e50";
+  ctx.lineWidth = 3;
   if (state === "ready") {
     // Rope and hook down to the block
     const blockTop = hookY - B / 2;
-    ctx.strokeStyle = "#2c3e50";
-    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(hookX, railY + 8);
     ctx.lineTo(hookX, blockTop - 6);
@@ -694,8 +773,6 @@ function drawCrane() {
     drawBlock(current.x, hookY, current.color, current.letter, Math.sin(swingPhase) * -0.06, pop, pop);
   } else {
     // Empty hook
-    ctx.strokeStyle = "#2c3e50";
-    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(hookX, railY + 8);
     ctx.lineTo(hookX, railY + 40);
@@ -707,15 +784,26 @@ function drawCrane() {
 }
 
 function draw() {
+  const dpr = canvas.width / W;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   drawSky();
+
+  // Everything in the world is drawn zoomed around the middle of the ground.
+  ctx.save();
+  ctx.translate(W / 2, groundY);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-W / 2, -groundY);
+
   drawScenery();
 
-  // Tower
-  for (let i = 0; i < tower.length; i++) {
-    const b = tower[i];
-    const squashY = 1 - b.squash * 0.12;
-    const squashX = 1 + b.squash * 0.08;
-    drawBlock(b.x, screenY(i * B + B / 2) + (B * (1 - squashY)) / 2, b.color, b.letter, 0, squashX, squashY);
+  // Towers
+  for (const t of towers) {
+    for (let i = 0; i < t.length; i++) {
+      const b = t[i];
+      const squashY = 1 - b.squash * 0.12;
+      const squashX = 1 + b.squash * 0.08;
+      drawBlock(b.x, screenY(i * B + B / 2) + (B * (1 - squashY)) / 2, b.color, b.letter, 0, squashX, squashY);
+    }
   }
 
   // Falling block
@@ -737,6 +825,8 @@ function draw() {
     ctx.fill();
   }
   ctx.globalAlpha = 1;
+
+  ctx.restore();
 
   drawCrane();
 
